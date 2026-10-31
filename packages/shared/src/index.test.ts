@@ -3,7 +3,9 @@ import {
   COUNTRIES,
   COUNTRY_INFO,
   ChildProfileSchema,
+  ClientErrorReportSchema,
   CreateBookSchema,
+  JournalCallsQuerySchema,
   METHODOLOGIES,
   ageBand,
   defaultMethodology,
@@ -157,5 +159,29 @@ describe("book prices", () => {
     expect(PurchaseSchema.parse({ kind: "custom" })).toEqual({ kind: "custom" });
     expect(PurchaseSchema.safeParse({}).success).toBe(false);
     expect(PurchaseSchema.safeParse({ kind: "print" }).success).toBe(false);
+  });
+});
+
+describe("ClientErrorReportSchema", () => {
+  it("takes a short report, refuses long texts and unknown kinds", () => {
+    const report = { kind: "api", message: "Internal server error", path: "/create", status: 500, code: "x" };
+    expect(ClientErrorReportSchema.parse(report)).toEqual(report);
+    expect(ClientErrorReportSchema.safeParse({ ...report, kind: "form" }).success).toBe(false);
+    expect(ClientErrorReportSchema.safeParse({ ...report, message: "m".repeat(501) }).success).toBe(false);
+    expect(ClientErrorReportSchema.safeParse({ ...report, path: "/" + "p".repeat(200) }).success).toBe(false);
+    expect(ClientErrorReportSchema.safeParse({ ...report, message: "  " }).success).toBe(false);
+  });
+
+  it("drops fields it does not know, such as form values", () => {
+    const parsed = ClientErrorReportSchema.parse({ kind: "js", message: "boom", path: "/", childName: "Алия" });
+    expect(parsed).not.toHaveProperty("childName");
+  });
+});
+
+describe("JournalCallsQuerySchema", () => {
+  it("defaults the period to a day and checks the filters", () => {
+    expect(JournalCallsQuerySchema.parse({})).toEqual({ period: "24h" });
+    expect(JournalCallsQuerySchema.parse({ kind: "story", status: "error", period: "7d" })).toMatchObject({ kind: "story" });
+    expect(JournalCallsQuerySchema.safeParse({ kind: "poem" }).success).toBe(false);
   });
 });

@@ -5,6 +5,11 @@ import {
   AdminOrderSchema,
   AdminStatsSchema,
   AdminTemplateSchema,
+  ClientErrorGroupSchema,
+  JournalStatsSchema,
+  ModelCallDetailSchema,
+  ModelCallPageSchema,
+  ModelCallSchema,
   type AdminBook,
   type AdminBookRow,
   type AdminLogin,
@@ -12,6 +17,13 @@ import {
   type AdminOrder,
   type AdminStats,
   type AdminTemplate,
+  type ClientErrorGroup,
+  type JournalCallsQuery,
+  type JournalPeriod,
+  type JournalStats,
+  type ModelCall,
+  type ModelCallDetail,
+  type ModelCallPage,
   type OrderStatus,
   type UpdateTemplate,
 } from "@fabulka/shared";
@@ -67,4 +79,26 @@ export async function adminTemplate(slug: string): Promise<AdminTemplate> {
 
 export async function updateTemplate(slug: string, patch: UpdateTemplate): Promise<AdminTemplate> {
   return AdminTemplateSchema.parse(await request(`/api/admin/templates/${slug}`, json("PATCH", patch)));
+}
+
+export async function journalStats(period: JournalPeriod): Promise<JournalStats> {
+  return JournalStatsSchema.parse(await request(`/api/admin/journal/stats?period=${period}`));
+}
+
+export async function journalCalls(query: JournalCallsQuery): Promise<ModelCallPage> {
+  const params = new URLSearchParams(Object.entries(query).filter((entry): entry is [string, string] => !!entry[1]));
+  return ModelCallPageSchema.parse(await request(`/api/admin/journal/calls?${params}`));
+}
+
+export async function journalCall(id: string): Promise<ModelCallDetail> {
+  return ModelCallDetailSchema.parse(await request(`/api/admin/journal/calls/${id}`));
+}
+
+export async function journalErrors(period: JournalPeriod): Promise<ClientErrorGroup[]> {
+  return ClientErrorGroupSchema.array().parse(await request(`/api/admin/journal/errors?period=${period}`));
+}
+
+/** A book's model calls in the order they were made. */
+export async function bookCalls(id: string): Promise<ModelCall[]> {
+  return ModelCallSchema.array().parse(await request(`/api/admin/books/${id}/calls`));
 }

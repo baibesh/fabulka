@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import { MockGateway } from '../meta/mock.gateway';
+import { JournalService } from '../journal/journal.service';
 import type { PdfService } from '../pdf/pdf.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { StorageService } from '../storage/storage.service';
@@ -36,6 +37,7 @@ function makeService(prisma: unknown, models = new MockGateway(0)) {
     {} as PdfService,
     templates,
     models,
+    new JournalService(prisma as PrismaService),
     { get: () => 2 } as unknown as ConfigService,
   );
 }

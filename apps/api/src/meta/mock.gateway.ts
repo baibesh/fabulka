@@ -1,4 +1,5 @@
-import type { Language, Story } from '@fabulka/shared';
+import type { Language, ModelCallKind, Story } from '@fabulka/shared';
+import { type CallJournal, NO_JOURNAL } from '../journal/journal.service';
 import type {
   GeneratedImage,
   GeneratedStory,
@@ -79,7 +80,17 @@ export const MOCK_TRANSCRIPT =
 
 /** Canned model output: no network, no cost, same result every run. */
 export class MockGateway implements ModelGateway {
-  constructor(private readonly delayMs: number) {}
+  constructor(
+    private readonly delayMs: number,
+    private readonly journal: CallJournal = NO_JOURNAL,
+  ) {}
+
+  /** Takes as long as the mock is told to and records the call, so the journal works offline too. */
+  private async pretend(kind: ModelCallKind, images = 0): Promise<void> {
+    const call = this.journal.start({ kind, model: 'mock' });
+    await sleep(this.delayMs);
+    call.ok({ costUsd: 0, images });
+  }
 
   async writeStory({
     child,
@@ -87,7 +98,7 @@ export class MockGateway implements ModelGateway {
     template,
     toy,
   }: StoryBrief): Promise<GeneratedStory> {
-    await sleep(this.delayMs);
+    await this.pretend('story');
     const text = MOCK_TEXT[child.language];
     const story: Story = {
       title: template
@@ -106,17 +117,17 @@ export class MockGateway implements ModelGateway {
   }
 
   async reviewStory() {
-    await sleep(this.delayMs);
+    await this.pretend('review');
     return { safe: true, reason: 'mock review', costUsd: 0 };
   }
 
   async findToy(photo: Buffer) {
-    await sleep(this.delayMs);
+    await this.pretend('toy-cutout', 1);
     return { cutout: photo, costUsd: 0 };
   }
 
   async describeToy() {
-    await sleep(this.delayMs);
+    await this.pretend('toy-describe');
     return {
       description: 'a small plush bunny with a red knitted scarf',
       costUsd: 0,
@@ -124,7 +135,7 @@ export class MockGateway implements ModelGateway {
   }
 
   async drawToy(): Promise<GeneratedImage> {
-    await sleep(this.delayMs);
+    await this.pretend('toy-sheet', 1);
     return {
       data: placeholder('toy', '#FFFFFF'),
       ext: 'svg',
@@ -134,7 +145,7 @@ export class MockGateway implements ModelGateway {
   }
 
   async drawHero(): Promise<GeneratedImage> {
-    await sleep(this.delayMs);
+    await this.pretend('hero', 1);
     return {
       data: placeholder('hero', '#FFFFFF'),
       ext: 'svg',
@@ -144,7 +155,7 @@ export class MockGateway implements ModelGateway {
   }
 
   async drawPet(): Promise<GeneratedImage> {
-    await sleep(this.delayMs);
+    await this.pretend('pet', 1);
     return {
       data: placeholder('pet', '#FFFFFF'),
       ext: 'svg',
@@ -154,7 +165,7 @@ export class MockGateway implements ModelGateway {
   }
 
   async transcribe() {
-    await sleep(this.delayMs);
+    await this.pretend('voice-transcribe');
     return { text: MOCK_TRANSCRIPT, costUsd: 0 };
   }
 
@@ -163,7 +174,7 @@ export class MockGateway implements ModelGateway {
     questions = [],
     theme,
   }: PrefillBrief): Promise<{ fields: PrefillFields; costUsd: number }> {
-    await sleep(this.delayMs);
+    await this.pretend('voice-extract');
     const answers = Object.fromEntries(
       questions.flatMap((q) =>
         q.kind === 'choice' && q.options?.length ? [[q.key, q.options[0]]] : [],
@@ -187,7 +198,7 @@ export class MockGateway implements ModelGateway {
   }
 
   async drawPage(scenePrompt: string): Promise<GeneratedImage> {
-    await sleep(this.delayMs);
+    await this.pretend('page', 1);
     const n = Number(/scene (\d+)/.exec(scenePrompt)?.[1] ?? 1);
     return {
       data: placeholder(`page ${n}`, COLORS[(n - 1) % COLORS.length]),

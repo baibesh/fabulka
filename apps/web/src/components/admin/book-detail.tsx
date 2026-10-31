@@ -5,9 +5,41 @@ import { methodology } from "@fabulka/shared";
 import { Download, ExternalLink, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use } from "react";
-import { adminBook, deleteBook, setFeatured } from "@/lib/admin-api";
+import { use, useState } from "react";
+import { adminBook, bookCalls, deleteBook, setFeatured } from "@/lib/admin-api";
+import { CALL_KIND, CallDetail, CallStatus, formatMs } from "./journal";
 import { Badge, BOOK_STATUS, Card, formatDate, formatUsd, ghostButton, PageTitle } from "./ui";
+
+/** The book's model calls in order, timed from the first: where generation spent its time and money. */
+function BookCalls({ id, generating }: { id: string; generating: boolean }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const calls = useQuery({ queryKey: ["admin", "book", id, "calls"], queryFn: () => bookCalls(id), refetchInterval: generating ? 3000 : false });
+  const start = calls.data?.[0] ? new Date(calls.data[0].createdAt).getTime() : 0;
+  return (
+    <Card title="Запросы к моделям">
+      {calls.isError && <p role="alert" className="text-red-600">{calls.error.message}</p>}
+      <ol data-testid="book-calls" className="flex flex-col text-sm">
+        {calls.data?.map((call) => (
+          <li key={call.id} className="border-t border-border first:border-t-0">
+            <button type="button" onClick={() => setOpen(call.id)} className="grid w-full grid-cols-[3.5rem_1fr_auto] items-center gap-3 py-2 text-left hover:bg-background/60 sm:grid-cols-[3.5rem_1fr_auto_5rem_4.5rem]">
+              <span className="tabular-nums text-muted">+{((new Date(call.createdAt).getTime() - start) / 1000).toFixed(1)} с</span>
+              <span className="min-w-0">
+                <span className="font-semibold">{CALL_KIND[call.kind]}</span>
+                {call.attempt > 1 && <span className="text-muted"> · попытка {call.attempt}</span>}
+                {call.errorMessage && <span className="block truncate text-xs text-red-600">{call.errorMessage}</span>}
+              </span>
+              <CallStatus status={call.status} />
+              <span className="hidden text-right tabular-nums sm:block">{formatMs(call.latencyMs)}</span>
+              <span className="hidden text-right tabular-nums text-muted sm:block">{formatUsd(call.costUsd)}</span>
+            </button>
+          </li>
+        ))}
+        {calls.data?.length === 0 && <li className="py-4 text-muted">Запросов нет: книга создана до журнала или ещё в очереди</li>}
+      </ol>
+      {open && <CallDetail id={open} onClose={() => setOpen(null)} />}
+    </Card>
+  );
+}
 
 export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -130,6 +162,7 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
           </ol>
         </Card>
       </div>
+      <BookCalls id={b.id} generating={b.status !== "done" && b.status !== "failed"} />
     </>
   );
 }

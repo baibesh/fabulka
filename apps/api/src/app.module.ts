@@ -20,6 +20,9 @@ import { BooksService } from './books/books.service';
 import { GeoController } from './geo/geo.controller';
 import { GeoGuard } from './geo/geo.guard';
 import { GeoService } from './geo/geo.service';
+import { JournalAdminService } from './journal/journal-admin.service';
+import { JournalModule } from './journal/journal.service';
+import { TelemetryController } from './journal/telemetry.controller';
 import { MailService } from './mail/mail.service';
 import { TestMailsController } from './mail/test-mails.controller';
 import { MetaModule } from './meta/meta.module';
@@ -57,6 +60,7 @@ class HealthController {
     PrismaModule,
     StorageModule,
     PdfModule,
+    JournalModule,
     MetaModule,
   ],
   controllers: [
@@ -73,6 +77,7 @@ class HealthController {
     AuthController,
     TestMailsController,
     VoiceController,
+    TelemetryController,
   ],
   providers: [
     GeoService,
@@ -85,6 +90,7 @@ class HealthController {
     ToyUploadsCleaner,
     AdminAuthService,
     AdminService,
+    JournalAdminService,
     AuthService,
     MailService,
     VoiceService,

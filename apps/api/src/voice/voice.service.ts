@@ -12,6 +12,7 @@ import {
   type VoicePrefill,
   type VoiceRequest,
 } from '@fabulka/shared';
+import { WindowLimiter } from '../common/limiter';
 import { MODEL_GATEWAY, type ModelGateway } from '../meta/model-gateway';
 import { TemplatesService } from '../templates/templates.service';
 
@@ -21,15 +22,16 @@ const HOUR_MS = 60 * 60 * 1000;
 @Injectable()
 export class VoiceService {
   private readonly logger = new Logger(VoiceService.name);
-  private readonly limiter: HourlyLimiter;
+  private readonly limiter: WindowLimiter;
 
   constructor(
     @Inject(MODEL_GATEWAY) private readonly models: ModelGateway,
     private readonly templates: TemplatesService,
     config: ConfigService,
   ) {
-    this.limiter = new HourlyLimiter(
+    this.limiter = new WindowLimiter(
       Number(config.get('VOICE_HOURLY_LIMIT', 20)),
+      HOUR_MS,
     );
   }
 
@@ -73,36 +75,6 @@ export class VoiceService {
         },
         HttpStatus.BAD_GATEWAY,
       );
-    }
-  }
-}
-
-/** At most `limit` uses per key in any sliding hour; kept in memory, so it resets on restart. */
-export class HourlyLimiter {
-  private readonly uses = new Map<string, number[]>();
-
-  constructor(
-    private readonly limit: number,
-    private readonly now = () => Date.now(),
-  ) {}
-
-  take(key: string): boolean {
-    const now = this.now();
-    const recent = (this.uses.get(key) ?? []).filter((t) => now - t < HOUR_MS);
-    if (recent.length >= this.limit) {
-      this.uses.set(key, recent);
-      return false;
-    }
-    recent.push(now);
-    this.uses.set(key, recent);
-    if (this.uses.size > 10_000) this.forgetIdle(now);
-    return true;
-  }
-
-  /** Drops keys with no use in the last hour, so the map does not grow without bound. */
-  private forgetIdle(now: number) {
-    for (const [key, times] of this.uses) {
-      if (times.every((t) => now - t >= HOUR_MS)) this.uses.delete(key);
     }
   }
 }

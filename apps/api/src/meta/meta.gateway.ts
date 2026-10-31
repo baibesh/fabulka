@@ -1,13 +1,23 @@
 import OpenAI from 'openai';
 import type { Response, Tool } from 'openai/resources/responses/responses';
-import { StorySchema, type Language, type Story } from '@fabulka/shared';
 import { z } from 'zod';
+import {
+  StorySchema,
+  type Language,
+  type ModelCallKind,
+  type Story,
+} from '@fabulka/shared';
 import type {
   GeneratedImage,
   GeneratedStory,
   ModelGateway,
   PrefillFields,
 } from './model-gateway';
+import {
+  type CallJournal,
+  type CallOutcome,
+  NO_JOURNAL,
+} from '../journal/journal.service';
 import { cutout } from '../toy/cutout';
 import { sanitizePrefill } from '../voice/prefill';
 import {
@@ -60,7 +70,11 @@ export interface MetaGatewayOptions {
 export class MetaGateway implements ModelGateway {
   private readonly client: OpenAI;
 
-  constructor(private readonly options: MetaGatewayOptions) {
+  /** Every request, each of our own retries too, goes into the journal (JournalService). */
+  constructor(
+    private readonly options: MetaGatewayOptions,
+    private readonly journal: CallJournal = NO_JOURNAL,
+  ) {
     this.client = new OpenAI({
       apiKey: options.apiKey,
       baseURL: options.baseURL,
@@ -73,19 +87,34 @@ export class MetaGateway implements ModelGateway {
     let costUsd = 0;
     let error = '';
     for (let attempt = 0; attempt < STORY_ATTEMPTS; attempt++) {
-      const response = await this.client.responses.create({
+      const input =
+        storyPrompt(brief) +
+        (error ? `\nYour previous output was invalid: ${error}` : '');
+      const call = this.journal.start({
+        kind: 'story',
         model: this.options.storyModel,
-        instructions: STORY_INSTRUCTIONS,
-        input:
-          storyPrompt(brief) +
-          (error ? `\nYour previous output was invalid: ${error}` : ''),
-        text: { format: { type: 'json_object' } },
+        prompt: input,
+        attempt: attempt + 1,
       });
+      const response = await call.request(
+        this.client.responses.create({
+          model: this.options.storyModel,
+          instructions: STORY_INSTRUCTIONS,
+          input,
+          text: { format: { type: 'json_object' } },
+        }),
+      );
       costUsd += tokenCost(response);
       try {
         const story = StorySchema.parse(JSON.parse(response.output_text));
+        call.ok(spend(response));
         return { story, costUsd };
       } catch (problem) {
+        call.fail(problem, {
+          ...spend(response),
+          code: 'invalid_output',
+          output: response.output_text,
+        });
         error =
           problem instanceof Error
             ? problem.message.slice(0, 500)
@@ -101,19 +130,38 @@ export class MetaGateway implements ModelGateway {
     story: Story,
     age: number,
   ): Promise<{ safe: boolean; reason: string; costUsd: number }> {
-    const response = await this.client.responses.create({
+    const input = reviewPrompt(JSON.stringify(story), age);
+    const call = this.journal.start({
+      kind: 'review',
       model: this.options.storyModel,
-      instructions: REVIEW_INSTRUCTIONS,
-      input: reviewPrompt(JSON.stringify(story), age),
-      text: { format: { type: 'json_object' } },
+      prompt: input,
     });
-    const parsed = ReviewSchema.safeParse(
-      JSON.parse(response.output_text || '{}'),
+    const response = await call.request(
+      this.client.responses.create({
+        model: this.options.storyModel,
+        instructions: REVIEW_INSTRUCTIONS,
+        input,
+        text: { format: { type: 'json_object' } },
+      }),
     );
+    const unreadable = {
+      ...spend(response),
+      code: 'invalid_output',
+      output: response.output_text,
+    };
+    let parsed: ReturnType<typeof ReviewSchema.safeParse>;
+    try {
+      parsed = ReviewSchema.safeParse(JSON.parse(response.output_text || '{}'));
+    } catch (problem) {
+      call.fail(problem, unreadable);
+      throw problem;
+    }
     // An unreadable verdict is not a pass.
     const verdict = parsed.success
       ? parsed.data
       : { safe: false, reason: 'the safety review returned no verdict' };
+    if (parsed.success) call.ok(spend(response));
+    else call.fail(new Error(verdict.reason), unreadable);
     return { ...verdict, costUsd: tokenCost(response) };
   }
 
@@ -121,8 +169,36 @@ export class MetaGateway implements ModelGateway {
     photo: Buffer,
   ): Promise<{ cutout: Buffer | null; costUsd: number }> {
     // ESM-only package; loaded on first use.
-    const { parseImageStream, recordsOfKind, decodeMaskToRaster } =
-      await import('@meta-sam/parser');
+    const sam = await import('@meta-sam/parser');
+    const { recordsOfKind, decodeMaskToRaster } = sam;
+    const call = this.journal.start({
+      kind: 'toy-cutout',
+      model: this.options.samModel,
+      prompt: TOY_CONCEPT,
+    });
+    const { records } = await call.request(this.segment(sam, photo));
+    call.ok({ costUsd: SAM_PRICE, images: 1 });
+    // Several matches: the biggest one is the toy the photo is of.
+    const largest = [...recordsOfKind(records, 'mask')].sort(
+      (a, b) => area(b.bounds) - area(a.bounds),
+    )[0];
+    if (!largest) return { cutout: null, costUsd: SAM_PRICE };
+    return {
+      cutout: cutout(photo, {
+        box: largest.bounds,
+        mask: decodeMaskToRaster(largest.mask),
+        maskWidth: largest.mask.width,
+        maskHeight: largest.mask.height,
+      }),
+      costUsd: SAM_PRICE,
+    };
+  }
+
+  /** Streams SAM's answer for the photo and returns the parsed masks. */
+  private async segment(
+    { parseImageStream }: typeof import('@meta-sam/parser'),
+    photo: Buffer,
+  ) {
     const events = await this.client.responses.create({
       model: this.options.samModel,
       input: [
@@ -140,40 +216,46 @@ export class MetaGateway implements ModelGateway {
     });
     const parsed = parseImageStream(events as never);
     for await (const snapshot of parsed) void snapshot;
-    const { records } = await parsed.finalResult;
-    // Several matches: the biggest one is the toy the photo is of.
-    const largest = [...recordsOfKind(records, 'mask')].sort(
-      (a, b) => area(b.bounds) - area(a.bounds),
-    )[0];
-    if (!largest) return { cutout: null, costUsd: SAM_PRICE };
-    return {
-      cutout: cutout(photo, {
-        box: largest.bounds,
-        mask: decodeMaskToRaster(largest.mask),
-        maskWidth: largest.mask.width,
-        maskHeight: largest.mask.height,
-      }),
-      costUsd: SAM_PRICE,
-    };
+    return parsed.finalResult;
   }
 
   async describeToy(
     image: Buffer,
   ): Promise<{ description: string; costUsd: number }> {
-    const response = await this.client.responses.create({
+    const call = this.journal.start({
+      kind: 'toy-describe',
       model: this.options.storyModel,
-      input: [
-        {
-          role: 'user',
-          content: [
-            { type: 'input_text', text: TOY_DESCRIPTION_PROMPT },
-            { type: 'input_image', image_url: dataUrl(image), detail: 'auto' },
-          ],
-        },
-      ],
+      prompt: TOY_DESCRIPTION_PROMPT,
     });
+    const response = await call.request(
+      this.client.responses.create({
+        model: this.options.storyModel,
+        input: [
+          {
+            role: 'user',
+            content: [
+              { type: 'input_text', text: TOY_DESCRIPTION_PROMPT },
+              {
+                type: 'input_image',
+                image_url: dataUrl(image),
+                detail: 'auto',
+              },
+            ],
+          },
+        ],
+      }),
+    );
     const description = response.output_text.trim().replace(/\.$/, '');
-    if (!description) throw new Error('Muse Spark returned no toy description');
+    if (!description) {
+      const error = new Error('Muse Spark returned no toy description');
+      call.fail(error, {
+        ...spend(response),
+        code: 'empty_output',
+        output: response.output_text,
+      });
+      throw error;
+    }
+    call.ok(spend(response));
     return { description, costUsd: tokenCost(response) };
   }
 
@@ -184,6 +266,7 @@ export class MetaGateway implements ModelGateway {
     style?: string,
   ): Promise<GeneratedImage> {
     return this.draw(
+      'toy-sheet',
       toyPrompt(toyDescription, style),
       '1024x1024',
       anchorRef,
@@ -192,7 +275,7 @@ export class MetaGateway implements ModelGateway {
   }
 
   drawHero(heroDescription: string, style?: string): Promise<GeneratedImage> {
-    return this.draw(heroPrompt(heroDescription, style), '1024x1024');
+    return this.draw('hero', heroPrompt(heroDescription, style), '1024x1024');
   }
 
   drawPet(
@@ -200,7 +283,12 @@ export class MetaGateway implements ModelGateway {
     heroRef: string,
     style?: string,
   ): Promise<GeneratedImage> {
-    return this.draw(petPrompt(petDescription, style), '1024x1024', heroRef);
+    return this.draw(
+      'pet',
+      petPrompt(petDescription, style),
+      '1024x1024',
+      heroRef,
+    );
   }
 
   drawPage(
@@ -210,6 +298,7 @@ export class MetaGateway implements ModelGateway {
     style?: string,
   ): Promise<GeneratedImage> {
     return this.draw(
+      'page',
       pagePrompt(scenePrompt, companions, style),
       '1536x1024',
       anchorRef,
@@ -241,42 +330,67 @@ export class MetaGateway implements ModelGateway {
       new Blob([new Uint8Array(wav)], { type: 'audio/wav' }),
       'recording.wav',
     );
-    const response = await fetch(`${this.options.baseURL}/asr/transcribe`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.options.apiKey}`,
-        Accept: 'application/json',
-      },
-      body: form,
-      signal: AbortSignal.timeout(60_000),
+    // The recording itself never goes into the journal, not even when the call fails.
+    const call = this.journal.start({
+      kind: 'voice-transcribe',
+      model: TRANSCRIBE_MODEL,
     });
+    const response = await call.request(
+      fetch(`${this.options.baseURL}/asr/transcribe`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.options.apiKey}`,
+          Accept: 'application/json',
+        },
+        body: form,
+        signal: AbortSignal.timeout(60_000),
+      }),
+    );
     if (!response.ok) {
       const detail = (await response.text().catch(() => '')).slice(0, 300);
-      throw new Error(
+      const error = new Error(
         `Muse Voice Transcribe answered ${response.status}: ${detail}`,
       );
+      call.fail(error, { code: `http_${response.status}` });
+      throw error;
     }
-    const body = TranscribeResponseSchema.parse(await response.json());
-    return {
-      text: body.transcript.trim(),
-      costUsd: Math.floor(body.audioDurationMs / 1000) * TRANSCRIBE_PER_SECOND,
-    };
+    const body = await call.request(
+      response.json().then((json) => TranscribeResponseSchema.parse(json)),
+    );
+    const costUsd =
+      Math.floor(body.audioDurationMs / 1000) * TRANSCRIBE_PER_SECOND;
+    call.ok({ costUsd });
+    return { text: body.transcript.trim(), costUsd };
   }
 
   async extractPrefill(
     brief: PrefillBrief,
   ): Promise<{ fields: PrefillFields; costUsd: number }> {
-    const response = await this.client.responses.create({
+    const input = prefillPrompt(brief);
+    const call = this.journal.start({
+      kind: 'voice-extract',
       model: this.options.storyModel,
-      instructions: PREFILL_INSTRUCTIONS,
-      input: prefillPrompt(brief),
-      text: { format: { type: 'json_object' } },
+      prompt: input,
     });
+    const response = await call.request(
+      this.client.responses.create({
+        model: this.options.storyModel,
+        instructions: PREFILL_INSTRUCTIONS,
+        input,
+        text: { format: { type: 'json_object' } },
+      }),
+    );
     let raw: unknown = {};
     try {
       raw = JSON.parse(response.output_text || '{}');
-    } catch {
+      call.ok(spend(response));
+    } catch (problem) {
       // Unreadable JSON fills in nothing; the transcript is still shown.
+      call.fail(problem, {
+        ...spend(response),
+        code: 'invalid_output',
+        output: response.output_text,
+      });
     }
     return {
       fields: sanitizePrefill(raw, brief.questions, brief.theme),
@@ -285,6 +399,7 @@ export class MetaGateway implements ModelGateway {
   }
 
   private async draw(
+    kind: ModelCallKind,
     prompt: string,
     size: '1024x1024' | '1536x1024',
     previousResponseId?: string,
@@ -299,39 +414,53 @@ export class MetaGateway implements ModelGateway {
       enable_web_search: false,
       enable_image_search: false,
     } as unknown as Tool;
-    const response = await this.client.responses.create({
+    const call = this.journal.start({
+      kind,
       model: this.options.imageModel,
-      // A reference photo goes in as an image part next to the prompt.
-      input: reference
-        ? [
-            {
-              role: 'user',
-              content: [
-                { type: 'input_text', text: prompt },
-                {
-                  type: 'input_image',
-                  image_url: dataUrl(reference),
-                  detail: 'auto',
-                },
-              ],
-            },
-          ]
-        : prompt,
-      tools: [tool],
-      ...(previousResponseId
-        ? { previous_response_id: previousResponseId }
-        : {}),
+      prompt,
     });
-    const call = response.output.find(
+    const response = await call.request(
+      this.client.responses.create({
+        model: this.options.imageModel,
+        // A reference photo goes in as an image part next to the prompt.
+        input: reference
+          ? [
+              {
+                role: 'user',
+                content: [
+                  { type: 'input_text', text: prompt },
+                  {
+                    type: 'input_image',
+                    image_url: dataUrl(reference),
+                    detail: 'auto',
+                  },
+                ],
+              },
+            ]
+          : prompt,
+        tools: [tool],
+        ...(previousResponseId
+          ? { previous_response_id: previousResponseId }
+          : {}),
+      }),
+    );
+    const image = response.output.find(
       (item) => item.type === 'image_generation_call',
     );
-    if (!call || call.type !== 'image_generation_call' || !call.result) {
-      throw new Error(
+    if (!image || image.type !== 'image_generation_call' || !image.result) {
+      const error = new Error(
         `Muse Image returned no image (response ${response.id}, status ${response.status})`,
       );
+      call.fail(error, {
+        ...usage(response),
+        code: 'no_image',
+        output: response.output_text,
+      });
+      throw error;
     }
+    call.ok({ ...usage(response), costUsd: IMAGE_PRICE, images: 1 });
     return {
-      data: Buffer.from(call.result, 'base64'),
+      data: Buffer.from(image.result, 'base64'),
       ext: 'jpeg',
       ref: response.id,
       costUsd: IMAGE_PRICE,
@@ -347,6 +476,20 @@ function tokenCost(response: Response): number {
       usage.output_tokens * SPARK_OUTPUT_PER_M) /
     1_000_000
   );
+}
+
+/** Tokens and the response id of a call, for the journal. */
+function usage(response: Response): Omit<CallOutcome, 'costUsd'> {
+  return {
+    inputTokens: response.usage?.input_tokens ?? null,
+    outputTokens: response.usage?.output_tokens ?? null,
+    responseId: response.id,
+  };
+}
+
+/** A Muse Spark call for the journal: its tokens and what they cost. */
+function spend(response: Response): CallOutcome {
+  return { ...usage(response), costUsd: tokenCost(response) };
 }
 
 const ReviewSchema = z.object({ safe: z.boolean(), reason: z.string() });

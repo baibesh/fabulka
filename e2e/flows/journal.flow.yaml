@@ -1,0 +1,80 @@
+# The admin's journal: a book's model calls and an error a visitor saw, on the journal page and the book's.
+appId: ${WEB}
+tags: [admin]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Journal ${Date.now()}"
+  errorMessage: "E2E journal error ${Date.now()}"
+commands:
+  # A mock book: every model call it makes goes into the journal.
+  - request:
+      method: POST
+      url: ${API}/books
+      headers: { X-Client-Key: "e2e-${childName}", X-Demo-Code: E2E-DEMO }
+      json: { child: { name: "${childName}", age: 6, gender: girl, interests: [космос], city: Алматы } }
+      extract: { bookId: "$.id" }
+      assert: { status: 201 }
+  - request:
+      url: ${API}/books/${bookId}
+      retryUntil:
+        status: 200
+        json: { "$.status": done }
+      timeout: 30000
+
+  # What the web app's reporter sends when a visitor hits an error.
+  - request:
+      method: POST
+      url: ${API}/telemetry/error
+      headers: { X-Client-Key: "e2e-${childName}" }
+      json: { kind: api, message: "${errorMessage}", path: /create, status: 500, locale: ru }
+      assert: { status: 204 }
+  - request:
+      method: POST
+      url: ${API}/telemetry/error
+      headers: { X-Client-Key: "e2e-${childName}" }
+      json: { kind: api, message: "", path: /create }
+      assert: { status: 400 }
+  - request:
+      url: ${API}/admin/journal/stats
+      assert: { status: 401 }
+
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "admin@e2e.test"
+  - tapOn: { testId: admin-password }
+  - inputText: "e2e-admin-password"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+
+  # The journal: the summary, the story calls, one call's details.
+  - tapOn: { testId: admin-nav-journal }
+  - waitForVisible: { testId: journal-summary }
+  - assertVisible: "Доля ошибок"
+  - selectOption: { testId: journal-filter-kind, option: "Сказка" }
+  - waitForVisible: { testId: journal-calls, containsDescendants: { text: "Сказка" } }
+  - tapOn: { testId: journal-call-row, index: 0 }
+  - waitForVisible: { testId: journal-call-detail }
+  - assertVisible: { contains: "${childName}" }
+  - tapOn: { role: button, name: "Закрыть" }
+  - assertNotVisible: { testId: journal-call-detail }
+
+  # The visitor's error, grouped with its count.
+  - tapOn: { testId: journal-tab-errors }
+  - waitForVisible: { testId: journal-errors }
+  - waitForVisible: "${errorMessage}"
+  - tapOn: "${errorMessage}"
+  - assertVisible: { contains: "ответ API · 500" }
+
+  # The book's own timeline of model calls.
+  - openLink: "${WEB}/admin/books/${bookId}"
+  - waitForVisible: { testId: book-calls, containsDescendants: { text: "Сказка" } }
+  - assertVisible: { testId: book-calls, containsDescendants: { text: "Страница" } }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }
+  - sql: { exec: "delete from \"ClientError\" where message = $1", params: ["${errorMessage}"] }

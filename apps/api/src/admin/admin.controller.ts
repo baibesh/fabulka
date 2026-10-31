@@ -13,12 +13,15 @@ import {
 } from '@nestjs/common';
 import {
   AdminLoginSchema,
+  JournalCallsQuerySchema,
+  JournalPeriodQuerySchema,
   PauseSchema,
   UpdateBookSchema,
   UpdateOrderStatusSchema,
   UpdateTemplateSchema,
   type AdminLogin,
   type AdminLoginOptions,
+  type JournalCallsQuery,
   type UpdateBook,
   type UpdateTemplate,
 } from '@fabulka/shared';
@@ -27,6 +30,7 @@ import type { z } from 'zod';
 import { AuthService } from '../auth/auth.service';
 import { CurrentClient, type Client } from '../common/client';
 import { ZodPipe } from '../common/zod.pipe';
+import { JournalAdminService } from '../journal/journal-admin.service';
 import { OrdersService } from '../orders/orders.service';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminGuard } from './admin.guard';
@@ -73,6 +77,7 @@ export class AdminController {
   constructor(
     private readonly admin: AdminService,
     private readonly orders: OrdersService,
+    private readonly journal: JournalAdminService,
   ) {}
 
   @Get('me')
@@ -101,6 +106,12 @@ export class AdminController {
     return this.admin.book(id);
   }
 
+  /** The book's model calls in order: the timeline on its admin page. */
+  @Get('books/:id/calls')
+  bookCalls(@Param('id') id: string) {
+    return this.journal.bookCalls(id);
+  }
+
   @Patch('books/:id')
   updateBook(
     @Param('id') id: string,
@@ -127,6 +138,34 @@ export class AdminController {
     body: z.infer<typeof UpdateOrderStatusSchema>,
   ) {
     return this.orders.setStatus(id, body.status);
+  }
+
+  @Get('journal/stats')
+  journalStats(
+    @Query(new ZodPipe(JournalPeriodQuerySchema))
+    query: z.infer<typeof JournalPeriodQuerySchema>,
+  ) {
+    return this.journal.stats(query.period);
+  }
+
+  @Get('journal/calls')
+  journalCalls(
+    @Query(new ZodPipe(JournalCallsQuerySchema)) query: JournalCallsQuery,
+  ) {
+    return this.journal.calls(query);
+  }
+
+  @Get('journal/calls/:id')
+  journalCall(@Param('id') id: string) {
+    return this.journal.call(id);
+  }
+
+  @Get('journal/errors')
+  journalErrors(
+    @Query(new ZodPipe(JournalPeriodQuerySchema))
+    query: z.infer<typeof JournalPeriodQuerySchema>,
+  ) {
+    return this.journal.errors(query.period);
   }
 
   @Get('templates')

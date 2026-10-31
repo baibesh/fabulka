@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { countryChosen, setCountry, setLocale, useI18n } from "@/i18n/i18n";
 import { UI_LOCALES, type UiLocale } from "@/i18n/messages";
 import { whereAmI } from "@/lib/api";
+import { installErrorReporting } from "@/lib/telemetry";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(() => new QueryClient());
@@ -14,6 +15,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
+
+  // Errors visitors run into go to the admin's journal (message and page only, no form values).
+  useEffect(() => installErrorReporting(), []);
 
   // A link can choose the language: ?lang=kk, ?lang=en (and it sticks, like the header switch).
   useEffect(() => {

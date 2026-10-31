@@ -21,6 +21,7 @@ import {
   type MyBook,
 } from '@fabulka/shared';
 import { basename } from 'node:path';
+import { JournalService } from '../journal/journal.service';
 import { MODEL_GATEWAY, type ModelGateway } from '../meta/model-gateway';
 import type { StoryBrief } from '../meta/prompts';
 import {
@@ -100,6 +101,7 @@ export class BooksService implements OnModuleInit {
     private readonly pdf: PdfService,
     private readonly templates: TemplatesService,
     @Inject(MODEL_GATEWAY) private readonly models: ModelGateway,
+    private readonly journal: JournalService,
     config: ConfigService,
   ) {
     this.pageCount = Number(config.get('PAGE_COUNT', 10));
@@ -170,9 +172,14 @@ export class BooksService implements OnModuleInit {
       include: withTemplate,
     });
     // Generation runs in the background, a few books at a time; the client polls GET /books/:id.
+    // Inside journal.run every model call is recorded against this book.
     const spent: Spend = { usd: 0 };
     void this.slots
-      .run(() => this.generate(row.id, job, spent))
+      .run(() =>
+        this.journal.run({ bookId: row.id }, () =>
+          this.generate(row.id, job, spent),
+        ),
+      )
       .catch((error: unknown) => this.fail(row.id, error, spent.usd));
     return this.toDto(row);
   }

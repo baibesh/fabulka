@@ -22,6 +22,7 @@ import {
   type TemplateSummary,
   type VoicePrefill,
 } from "@fabulka/shared";
+import { reportApiError, reportNetworkError } from "./telemetry";
 
 const CLIENT_KEY = "wishbook.clientKey";
 const DEMO_CODE = "wishbook.demoCode";
@@ -75,9 +76,30 @@ export class ApiError extends Error {
   }
 }
 
+/** fetch, with failures the visitor sees reported to the journal (lib/telemetry). */
+async function send(path: string, init: RequestInit): Promise<unknown> {
+  const method = init.method ?? "GET";
+  let response: Response;
+  try {
+    response = await fetch(path, init);
+  } catch (error) {
+    reportNetworkError(method, path, error);
+    throw error;
+  }
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = (body ?? {}) as { code?: string; message?: unknown };
+    const message = typeof error.message === "string" ? error.message : response.statusText;
+    const failure = new ApiError(response.status, error.code, message);
+    reportApiError(method, path, failure);
+    throw failure;
+  }
+  return body;
+}
+
 export async function request(path: string, init?: RequestInit): Promise<unknown> {
   const code = demoCode();
-  const response = await fetch(path, {
+  return send(path, {
     ...init,
     headers: {
       "content-type": "application/json",
@@ -86,13 +108,6 @@ export async function request(path: string, init?: RequestInit): Promise<unknown
       ...init?.headers,
     },
   });
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const error = (body ?? {}) as { code?: string; message?: unknown };
-    const message = typeof error.message === "string" ? error.message : response.statusText;
-    throw new ApiError(response.status, error.code, message);
-  }
-  return body;
 }
 
 export async function createBook(input: CreateBookInput): Promise<Book> {
@@ -116,17 +131,11 @@ export async function transcribeVoice(audio: Blob, language: Language, template?
   form.append("language", language);
   if (template) form.append("template", template);
   const code = demoCode();
-  const response = await fetch("/api/voice", {
+  const body = await send("/api/voice", {
     method: "POST",
     body: form,
     headers: { "x-client-key": clientKey(), ...(code ? { "x-demo-code": code } : {}) },
   });
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const error = (body ?? {}) as { code?: string; message?: unknown };
-    const message = typeof error.message === "string" ? error.message : response.statusText;
-    throw new ApiError(response.status, error.code, message);
-  }
   return VoicePrefillSchema.parse(body);
 }
 

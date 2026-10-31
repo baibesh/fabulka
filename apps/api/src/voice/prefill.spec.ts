@@ -1,8 +1,8 @@
 import { VoicePrefillSchema, type TemplateQuestion } from '@fabulka/shared';
+import { WindowLimiter } from '../common/limiter';
 import { MockGateway, MOCK_TRANSCRIPT } from '../meta/mock.gateway';
 import { prefillPrompt } from '../meta/prompts';
 import { sanitizePrefill } from './prefill';
-import { HourlyLimiter } from './voice.service';
 import { wavSeconds } from './wav';
 
 const questions: TemplateQuestion[] = [
@@ -124,10 +124,10 @@ describe('prefillPrompt', () => {
   });
 });
 
-describe('HourlyLimiter', () => {
+describe('WindowLimiter', () => {
   it('allows the limit per key within an hour, then again an hour later', () => {
     let now = 0;
-    const limiter = new HourlyLimiter(2, () => now);
+    const limiter = new WindowLimiter(2, 60 * 60 * 1000, () => now);
     expect(limiter.take('a')).toBe(true);
     expect(limiter.take('a')).toBe(true);
     expect(limiter.take('a')).toBe(false);

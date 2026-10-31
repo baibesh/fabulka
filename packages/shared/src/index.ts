@@ -568,6 +568,140 @@ export const UpdateTemplateSchema = z
   .partial();
 export type UpdateTemplate = z.infer<typeof UpdateTemplateSchema>;
 
+// ---- Journal (admin) ---------------------------------------------------------------
+
+/** What a model call was for: one per ModelGateway method. */
+export const MODEL_CALL_KINDS = [
+  "story",
+  "review",
+  "toy-cutout",
+  "toy-describe",
+  "toy-sheet",
+  "hero",
+  "pet",
+  "page",
+  "voice-transcribe",
+  "voice-extract",
+] as const;
+export const ModelCallKindSchema = z.enum(MODEL_CALL_KINDS);
+export type ModelCallKind = z.infer<typeof ModelCallKindSchema>;
+
+export const MODEL_CALL_STATUSES = ["ok", "error"] as const;
+export const ModelCallStatusSchema = z.enum(MODEL_CALL_STATUSES);
+export type ModelCallStatus = z.infer<typeof ModelCallStatusSchema>;
+
+/** How far back the journal looks. */
+export const JOURNAL_PERIODS = ["24h", "7d", "30d"] as const;
+export const JournalPeriodSchema = z.enum(JOURNAL_PERIODS);
+export type JournalPeriod = z.infer<typeof JournalPeriodSchema>;
+
+export const ModelCallSchema = z.object({
+  id: z.string(),
+  bookId: z.string().nullable(),
+  kind: ModelCallKindSchema,
+  model: z.string(),
+  status: ModelCallStatusSchema,
+  /** 1 for the first try; our own retries (a story that was not valid JSON) count up. */
+  attempt: z.number().int(),
+  latencyMs: z.number().int(),
+  inputTokens: z.number().int().nullable(),
+  outputTokens: z.number().int().nullable(),
+  images: z.number().int(),
+  costUsd: z.number(),
+  responseId: z.string().nullable(),
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type ModelCall = z.infer<typeof ModelCallSchema>;
+
+/** GET /admin/journal/calls/:id. The prompt and output are kept for failed calls only, for 30 days. */
+export const ModelCallDetailSchema = ModelCallSchema.extend({
+  prompt: z.string().nullable(),
+  output: z.string().nullable(),
+  bookTitle: z.string().nullable(),
+});
+export type ModelCallDetail = z.infer<typeof ModelCallDetailSchema>;
+
+/** Query of GET /admin/journal/calls. */
+export const JournalCallsQuerySchema = z.object({
+  kind: ModelCallKindSchema.optional(),
+  status: ModelCallStatusSchema.optional(),
+  period: JournalPeriodSchema.default("24h"),
+  /** The last call id of the previous page. */
+  cursor: z.string().min(1).max(40).optional(),
+});
+export type JournalCallsQuery = z.infer<typeof JournalCallsQuerySchema>;
+
+/** GET /admin/journal/calls: newest first; `nextCursor` is null on the last page. */
+export const ModelCallPageSchema = z.object({
+  calls: z.array(ModelCallSchema),
+  nextCursor: z.string().nullable(),
+});
+export type ModelCallPage = z.infer<typeof ModelCallPageSchema>;
+
+export const JournalPeriodQuerySchema = z.object({ period: JournalPeriodSchema.default("24h") });
+
+/** GET /admin/journal/stats. Latencies are in milliseconds; null when there were no calls. */
+export const JournalStatsSchema = z.object({
+  period: JournalPeriodSchema,
+  calls: z.number().int(),
+  errors: z.number().int(),
+  costUsd: z.number(),
+  clientErrors: z.number().int(),
+  byModel: z.array(
+    z.object({
+      kind: ModelCallKindSchema,
+      model: z.string(),
+      calls: z.number().int(),
+      errors: z.number().int(),
+      p50Ms: z.number().nullable(),
+      p95Ms: z.number().nullable(),
+      avgCostUsd: z.number(),
+    }),
+  ),
+});
+export type JournalStats = z.infer<typeof JournalStatsSchema>;
+
+export const CLIENT_ERROR_KINDS = ["js", "api", "unhandled"] as const;
+export const ClientErrorKindSchema = z.enum(CLIENT_ERROR_KINDS);
+export type ClientErrorKind = z.infer<typeof ClientErrorKindSchema>;
+
+/**
+ * Body of POST /telemetry/error: an error a visitor saw. Never form values, names or the query
+ * string: the message, the page path and the API's error code are enough to find the bug.
+ */
+export const ClientErrorReportSchema = z.object({
+  kind: ClientErrorKindSchema,
+  message: z.string().trim().min(1).max(500),
+  /** location.pathname, without the query string. */
+  path: z.string().trim().min(1).max(200),
+  code: z.string().trim().min(1).max(60).optional(),
+  status: z.number().int().min(0).max(999).optional(),
+  locale: z.string().trim().min(2).max(10).optional(),
+});
+export type ClientErrorReport = z.infer<typeof ClientErrorReportSchema>;
+
+/** GET /admin/journal/errors: errors grouped by message and page, the latest first. */
+export const ClientErrorGroupSchema = z.object({
+  message: z.string(),
+  path: z.string(),
+  count: z.number().int(),
+  lastSeen: z.string(),
+  recent: z.array(
+    z.object({
+      id: z.string(),
+      kind: ClientErrorKindSchema,
+      code: z.string().nullable(),
+      status: z.number().int().nullable(),
+      locale: z.string().nullable(),
+      userAgent: z.string().nullable(),
+      createdAt: z.string(),
+    }),
+  ),
+});
+export type ClientErrorGroup = z.infer<typeof ClientErrorGroupSchema>;
+
 // ---- Sign-in (Keycloak) -------------------------------------------------------------
 
 /** The signed-in parent, from the session cookie (email and name live in Keycloak, not our DB). */
