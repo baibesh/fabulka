@@ -46,15 +46,17 @@ function currentCountry(): Country {
 }
 
 /**
- * ?lang= on this page, else the saved choice, else the browser's language, else Russian; then
- * narrowed to the languages offered in the visitor's country.
+ * ?lang= on this page, else the saved choice, else the first of the browser's preferred languages
+ * that the visitor's country offers, else Russian; then narrowed to the country's languages.
  */
 function currentLocale(): UiLocale {
   const asked = new URLSearchParams(window.location.search).get("lang");
   const saved = read(LOCALE_KEY);
-  const browser = navigator.language.slice(0, 2);
+  const country = currentCountry();
+  const preferred = (navigator.languages?.length ? navigator.languages : [navigator.language]).map((l) => l.slice(0, 2));
+  const browser = preferred.find((l) => isLocale(l) && languageFor(country, l) === l) ?? null;
   const wanted = [asked, saved, browser].find(isLocale) ?? "ru";
-  return languageFor(currentCountry(), wanted);
+  return languageFor(country, wanted);
 }
 
 export function setLocale(locale: UiLocale) {

@@ -4,7 +4,6 @@
  * Palette matches apps/web/src/app/globals.css.
  * Nunito is bundled (SIL Open Font License 1.1, see ../fonts/OFL.txt).
  */
-
 @font-face {
     font-family: "Nunito";
     font-style: normal;
@@ -32,43 +31,71 @@
     unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
+
+/*
+ * Design tokens. Every page (sign-in, sign-up, password reset, 2FA setup…) takes sizes from here,
+ * so fields, buttons and the language picker share one height and text comes in three sizes.
+ */
 :root {
     --fabulka-bg: #fffaf3;
     --fabulka-fg: #2b2118;
     --fabulka-muted: #7a6a5c;
     --fabulka-card: #ffffff;
+    --fabulka-field: #fffdf9;
     --fabulka-border: #eadfce;
     --fabulka-input-border: #d6c3a8;
     --fabulka-accent: #e8833a;
     --fabulka-accent-hover: #d57028;
     --fabulka-accent-soft: #fde3c8;
+    --fabulka-link: #c4621d;
+    --fabulka-link-hover: #9e4c12;
+    --fabulka-danger: #c9190b;
+
+    --fabulka-control-height: 48px;
+    --fabulka-control-padding: 14px;
+    --fabulka-check-size: 18px;
     --fabulka-radius: 20px;
-    --fabulka-radius-sm: 12px;
+    --fabulka-radius-control: 12px;
+    --fabulka-radius-pill: 999px;
+    --fabulka-ring: 0 0 0 3px var(--fabulka-accent-soft);
+
+    --fabulka-text: 16px;
+    --fabulka-text-sm: 15px;
+    --fabulka-text-xs: 14px;
+    --fabulka-title: 26px;
+    --fabulka-gap: 20px;
+    --fabulka-card-padding: 48px;
 
     /* PatternFly v5 tokens used by keycloak.v2 */
     --pf-v5-global--FontFamily--text: "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
     --pf-v5-global--FontFamily--heading: var(--pf-v5-global--FontFamily--text);
     --pf-v5-global--FontFamily--redhatfont--text: var(--pf-v5-global--FontFamily--text);
     --pf-v5-global--FontFamily--redhatfont--heading: var(--pf-v5-global--FontFamily--text);
+    --pf-v5-global--FontSize--md: var(--fabulka-text);
+    --pf-v5-global--FontSize--sm: var(--fabulka-text-xs);
     --pf-v5-global--Color--100: var(--fabulka-fg);
     --pf-v5-global--Color--200: var(--fabulka-muted);
     --pf-v5-global--BorderColor--100: var(--fabulka-border);
-    --pf-v5-global--BorderColor--200: #d9c9b3;
+    --pf-v5-global--BorderColor--200: var(--fabulka-input-border);
     --pf-v5-global--primary-color--100: var(--fabulka-accent);
     --pf-v5-global--primary-color--200: var(--fabulka-accent-hover);
-    --pf-v5-global--link--Color: #c4621d;
-    --pf-v5-global--link--Color--hover: #9e4c12;
+    --pf-v5-global--link--Color: var(--fabulka-link);
+    --pf-v5-global--link--Color--hover: var(--fabulka-link-hover);
     --pf-v5-global--active-color--100: var(--fabulka-accent);
     --pf-v5-global--BackgroundColor--100: var(--fabulka-card);
+    --pf-v5-c-form--GridGap: var(--fabulka-gap);
 
     --keycloak-card-top-color: transparent;
 }
+
+/* ---- Page and card ------------------------------------------------------------------------- */
 
 html.login-pf,
 .login-pf body {
     background: var(--fabulka-bg) !important;
     color: var(--fabulka-fg);
     font-family: var(--pf-v5-global--FontFamily--text);
+    font-size: var(--fabulka-text);
 }
 
 .pf-v5-c-login {
@@ -82,7 +109,6 @@ html.login-pf,
     padding-inline: 16px;
 }
 
-/* Brand: logo + "Fabulka" */
 .pf-v5-c-login__header {
     display: flex;
     justify-content: center;
@@ -109,7 +135,6 @@ html.login-pf,
     background: url("../img/logo.svg") no-repeat center / contain;
 }
 
-/* Card */
 .pf-v5-c-login__main {
     background: var(--fabulka-card);
     border: 1px solid var(--fabulka-border);
@@ -118,9 +143,45 @@ html.login-pf,
     overflow: hidden;
 }
 
+/*
+ * The language picker moves to the bottom of the card: the header box is dissolved so the title
+ * and the picker become items of the card's column, and the picker is ordered last.
+ */
+.pf-v5-c-login__main {
+    display: flex;
+    flex-direction: column;
+}
+
 .pf-v5-c-login__main-header {
-    border-top: 0;
-    padding-top: 28px;
+    display: contents;
+}
+
+#kc-page-title {
+    padding: 28px var(--fabulka-card-padding) 16px;
+}
+
+.pf-v5-c-login__main-body {
+    padding-inline: var(--fabulka-card-padding);
+}
+
+.pf-v5-c-login__main-header-utilities {
+    order: 99;
+    display: flex;
+    justify-content: center;
+    padding: 0 var(--fabulka-card-padding) 24px;
+}
+
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control {
+    width: 12rem;
+}
+
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control > select {
+    width: 100%;
+}
+
+/* Our caret replaces PatternFly's toggle icon. */
+.pf-v5-c-form-control__utilities {
+    display: none;
 }
 
 #kc-page-title,
@@ -131,59 +192,256 @@ html.login-pf,
 }
 
 #kc-page-title {
-    font-size: 26px;
+    font-size: var(--fabulka-title);
     line-height: 1.25;
 }
 
-/* Inputs */
-.pf-v5-c-form-control {
-    --pf-v5-c-form-control--BorderRadius: var(--fabulka-radius-sm);
-    --pf-v5-c-form-control--before--BorderColor: var(--fabulka-input-border);
-    --pf-v5-c-form-control--after--BorderColor: var(--fabulka-input-border);
-    --pf-v5-c-form-control--before--BorderWidth: 1px;
-    --pf-v5-c-form-control--after--BorderWidth: 0;
-    --pf-v5-c-form-control--hover--after--BorderBottomColor: var(--fabulka-accent);
-    --pf-v5-c-form-control--focus--after--BorderBottomColor: var(--fabulka-accent);
-    border-radius: var(--fabulka-radius-sm);
-    background: #fffdf9;
+.pf-v5-c-login__main-body,
+.pf-v5-c-login__main-body p,
+#kc-content-wrapper {
+    font-size: var(--fabulka-text);
+    line-height: 1.5;
 }
 
-.pf-v5-c-form-control::before,
-.pf-v5-c-form-control::after {
-    border-radius: var(--fabulka-radius-sm);
-}
+/* ---- Labels and helper text ---------------------------------------------------------------- */
 
-/* PatternFly draws the field outline with ::before and the underline with ::after. */
-.pf-v5-c-form-control::before {
-    border: 1px solid var(--fabulka-input-border) !important;
-}
-
-.pf-v5-c-form-control::after {
-    border-bottom-width: 0 !important;
-}
-
-.pf-v5-c-form-control:hover::before,
-.pf-v5-c-form-control:focus-within::before {
-    border-color: var(--fabulka-accent) !important;
-}
-
-.pf-v5-c-form-control.pf-m-error::before {
-    border-color: #c9190b !important;
-}
-
-.pf-v5-c-form-control:focus-within {
-    box-shadow: 0 0 0 3px var(--fabulka-accent-soft);
-}
-
+.pf-v5-c-form__label,
 .pf-v5-c-form__label-text {
+    font-size: var(--fabulka-text-sm);
     font-weight: 700;
     color: var(--fabulka-fg);
 }
 
-/* Buttons */
+.pf-v5-c-form__label-required {
+    color: var(--fabulka-danger);
+}
+
+.pf-v5-c-form__helper-text,
+.pf-v5-c-helper-text,
+.pf-v5-c-helper-text__item-text,
+#kc-content-wrapper .required,
+.kc-login-divider,
+.pf-v5-c-login__main-footer-band {
+    font-size: var(--fabulka-text-xs);
+    color: var(--fabulka-muted);
+}
+
+.pf-v5-c-helper-text__item.pf-m-error .pf-v5-c-helper-text__item-text,
+.pf-v5-c-form__helper-text.pf-m-error {
+    color: var(--fabulka-danger);
+}
+
+/* ---- Fields ---------------------------------------------------------------------------------
+ * keycloak.v2 renders a field two ways: a span.pf-v5-c-form-control wrapping the input (sign-in),
+ * or the class right on the input (sign-up). Both get the same real border; PatternFly's
+ * ::before/::after outline and underline are switched off.
+ */
+
+.pf-v5-c-form-control {
+    --pf-v5-c-form-control--BorderRadius: var(--fabulka-radius-control);
+    --pf-v5-c-form-control--FontSize: var(--fabulka-text);
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: var(--fabulka-control-height);
+    border: 1px solid var(--fabulka-input-border);
+    border-radius: var(--fabulka-radius-control);
+    background: var(--fabulka-field);
+    color: var(--fabulka-fg);
+    font-size: var(--fabulka-text);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+input.pf-v5-c-form-control,
+textarea.pf-v5-c-form-control,
+select.pf-v5-c-form-control {
+    width: 100%;
+    padding-inline: var(--fabulka-control-padding);
+}
+
+.pf-v5-c-form-control::before,
+.pf-v5-c-form-control::after {
+    border: 0 !important;
+}
+
+.pf-v5-c-form-control > input,
+.pf-v5-c-form-control > select,
+.pf-v5-c-form-control > textarea {
+    min-height: calc(var(--fabulka-control-height) - 2px);
+    padding-inline: var(--fabulka-control-padding);
+    border: 0;
+    background-color: transparent;
+    font: inherit;
+    color: inherit;
+}
+
+/* Sign-up puts the class on both the wrapper and the input: only the wrapper draws the field. */
+.pf-v5-c-form-control > .pf-v5-c-form-control {
+    flex: 1;
+    min-height: calc(var(--fabulka-control-height) - 2px);
+    border: 0;
+    border-radius: inherit;
+    box-shadow: none !important;
+}
+
+/* Selects draw their own caret (PatternFly's sits in the pseudo-elements switched off above). */
+.pf-v5-c-form-control > select,
+select.pf-v5-c-form-control {
+    appearance: none;
+    padding-inline-end: 40px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%237a6a5c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--fabulka-control-padding) center;
+    cursor: pointer;
+}
+
+/* The field's border and glow show focus; the browser's outline on the bare input would double it. */
+.pf-v5-c-form-control input,
+.pf-v5-c-form-control select,
+.pf-v5-c-form-control textarea,
+input.pf-v5-c-form-control,
+select.pf-v5-c-form-control,
+textarea.pf-v5-c-form-control {
+    outline: none !important;
+}
+
+.pf-v5-c-form-control:hover {
+    border-color: var(--fabulka-accent);
+}
+
+.pf-v5-c-form-control:focus,
+.pf-v5-c-form-control:focus-within {
+    border-color: var(--fabulka-accent);
+    box-shadow: var(--fabulka-ring);
+}
+
+.pf-v5-c-form-control.pf-m-error,
+.pf-v5-c-form-control[aria-invalid="true"],
+.pf-v5-c-form-control:has([aria-invalid="true"]) {
+    border-color: var(--fabulka-danger);
+}
+
+/*
+ * The password field and its show/hide button read as one field: the group draws the border,
+ * so hover and focus light up the whole field, not just the part left of the button.
+ */
+.pf-v5-c-input-group {
+    min-height: var(--fabulka-control-height);
+    border: 1px solid var(--fabulka-input-border);
+    border-radius: var(--fabulka-radius-control);
+    background: var(--fabulka-field);
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.pf-v5-c-input-group:hover,
+.pf-v5-c-input-group:focus-within {
+    border-color: var(--fabulka-accent);
+}
+
+.pf-v5-c-input-group:focus-within {
+    box-shadow: var(--fabulka-ring);
+}
+
+.pf-v5-c-input-group:has(.pf-m-error, [aria-invalid="true"]) {
+    border-color: var(--fabulka-danger);
+}
+
+.pf-v5-c-input-group .pf-v5-c-form-control {
+    min-height: calc(var(--fabulka-control-height) - 2px);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control {
+    --pf-v5-c-button--m-control--BackgroundColor: transparent;
+    --pf-v5-c-button--m-control--hover--BackgroundColor: transparent;
+    --pf-v5-c-button--m-control--focus--BackgroundColor: transparent;
+    --pf-v5-c-button--m-control--active--BackgroundColor: transparent;
+    --pf-v5-c-button--m-control--Color: var(--fabulka-muted);
+    --pf-v5-c-button--m-control--hover--Color: var(--fabulka-accent);
+    min-height: calc(var(--fabulka-control-height) - 2px);
+    padding-inline: var(--fabulka-control-padding);
+    border-radius: 0;
+}
+
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control::after {
+    border: 0 !important;
+}
+
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control:focus-visible {
+    outline: 2px solid var(--fabulka-accent);
+    outline-offset: -6px;
+    border-radius: var(--fabulka-radius-control);
+}
+
+/* ---- Checkboxes and radios ----------------------------------------------------------------- */
+
+.pf-v5-c-check,
+.pf-v5-c-radio {
+    align-items: center;
+    gap: 10px;
+    font-size: var(--fabulka-text-sm);
+}
+
+.pf-v5-c-check__input,
+.pf-v5-c-radio__input {
+    width: var(--fabulka-check-size);
+    height: var(--fabulka-check-size);
+    margin: 0;
+    accent-color: var(--fabulka-accent);
+}
+
+.pf-v5-c-check__label,
+.pf-v5-c-radio__label {
+    font-size: var(--fabulka-text-sm);
+    color: var(--fabulka-fg);
+}
+
+/* «Запомнить меня» and «Забыли пароль?» on one line, in one size */
+#kc-form-options,
+.pf-v5-c-login__main-body .pf-v5-c-form__group.pf-m-action ~ * a,
+#kc-form-options a {
+    font-size: var(--fabulka-text-sm);
+}
+
+/* ---- Buttons --------------------------------------------------------------------------------
+ * Every action button (sign in, sign up, Google, «Назад ко входу») is the same pill height.
+ */
+
 .pf-v5-c-button {
-    border-radius: 999px;
+    --pf-v5-c-button--BorderRadius: var(--fabulka-radius-pill);
+    --pf-v5-c-button--after--BorderRadius: var(--fabulka-radius-pill);
+    --pf-v5-c-button--FontSize: var(--fabulka-text);
+    border-radius: var(--fabulka-radius-pill);
+    font-size: var(--fabulka-text);
     font-weight: 700;
+}
+
+.pf-v5-c-button.pf-m-primary,
+.pf-v5-c-button.pf-m-secondary,
+.pf-v5-c-button.pf-m-tertiary,
+.pf-v5-c-button.pf-m-block {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: var(--fabulka-control-height);
+    padding: 0 20px;
+    line-height: 1.2;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.pf-v5-c-button.pf-m-block {
+    display: flex;
+    width: 100%;
+}
+
+.pf-v5-c-button:focus-visible {
+    outline: none;
+    box-shadow: var(--fabulka-ring);
 }
 
 .pf-v5-c-button.pf-m-primary {
@@ -192,84 +450,102 @@ html.login-pf,
     --pf-v5-c-button--m-primary--focus--BackgroundColor: var(--fabulka-accent-hover);
     --pf-v5-c-button--m-primary--active--BackgroundColor: var(--fabulka-accent-hover);
     --pf-v5-c-button--m-primary--Color: #ffffff;
-    padding-block: 12px;
-    font-size: 17px;
+    --pf-v5-c-button--m-primary--hover--Color: #ffffff;
 }
 
-.pf-v5-c-button.pf-m-secondary {
-    --pf-v5-c-button--m-secondary--Color: #c4621d;
-    --pf-v5-c-button--m-secondary--after--BorderColor: var(--fabulka-accent);
-    --pf-v5-c-button--m-secondary--hover--Color: #9e4c12;
-    --pf-v5-c-button--m-secondary--hover--after--BorderColor: var(--fabulka-accent-hover);
-}
-
-.pf-v5-c-button.pf-m-control {
-    border-radius: var(--fabulka-radius-sm);
-}
-
-/* The input+button group (password visibility) keeps square inner corners */
-.pf-v5-c-input-group .pf-v5-c-form-control,
-.pf-v5-c-input-group .pf-v5-c-form-control::before,
-.pf-v5-c-input-group .pf-v5-c-form-control::after {
-    border-start-end-radius: 0;
-    border-end-end-radius: 0;
-}
-
-.pf-v5-c-input-group .pf-v5-c-button.pf-m-control,
-.pf-v5-c-input-group .pf-v5-c-button.pf-m-control::after {
-    border-start-start-radius: 0;
-    border-end-start-radius: 0;
-}
-
-/* Google and other providers */
-#kc-social-providers .pf-v5-c-button.pf-m-tertiary {
+/* Secondary and provider buttons: an outlined pill with a real border (PatternFly's ::after off). */
+.pf-v5-c-button.pf-m-secondary,
+.pf-v5-c-button.pf-m-tertiary {
+    --pf-v5-c-button--m-secondary--BackgroundColor: var(--fabulka-card);
+    --pf-v5-c-button--m-secondary--hover--BackgroundColor: var(--fabulka-bg);
+    --pf-v5-c-button--m-secondary--focus--BackgroundColor: var(--fabulka-bg);
+    --pf-v5-c-button--m-secondary--Color: var(--fabulka-fg);
+    --pf-v5-c-button--m-secondary--hover--Color: var(--fabulka-fg);
+    --pf-v5-c-button--m-secondary--focus--Color: var(--fabulka-fg);
+    --pf-v5-c-button--m-tertiary--BackgroundColor: var(--fabulka-card);
+    --pf-v5-c-button--m-tertiary--hover--BackgroundColor: var(--fabulka-bg);
+    --pf-v5-c-button--m-tertiary--focus--BackgroundColor: var(--fabulka-bg);
     --pf-v5-c-button--m-tertiary--Color: var(--fabulka-fg);
     --pf-v5-c-button--m-tertiary--hover--Color: var(--fabulka-fg);
-    --pf-v5-c-button--m-tertiary--after--BorderColor: var(--fabulka-border);
-    --pf-v5-c-button--m-tertiary--hover--after--BorderColor: var(--fabulka-accent);
-    background: #ffffff;
-    padding-block: 11px;
+    --pf-v5-c-button--m-tertiary--focus--Color: var(--fabulka-fg);
+    border: 1px solid var(--fabulka-input-border);
+    background: var(--fabulka-card);
+    color: var(--fabulka-fg);
 }
 
-.kc-login-divider {
-    color: var(--fabulka-muted);
-    font-size: 14px;
+.pf-v5-c-button.pf-m-secondary::after,
+.pf-v5-c-button.pf-m-tertiary::after {
+    border: 0 !important;
 }
 
-/* Alerts */
+.pf-v5-c-button.pf-m-secondary:hover,
+.pf-v5-c-button.pf-m-tertiary:hover,
+.pf-v5-c-button.pf-m-secondary:focus-visible,
+.pf-v5-c-button.pf-m-tertiary:focus-visible {
+    border-color: var(--fabulka-accent);
+    background: var(--fabulka-bg);
+}
+
+.pf-v5-c-button.pf-m-link {
+    font-size: var(--fabulka-text-sm);
+    color: var(--fabulka-link);
+}
+
+#kc-social-providers img {
+    width: 20px;
+    height: 20px;
+}
+
+/* ---- Alerts, lists, links, footer ---------------------------------------------------------- */
+
 .pf-v5-c-alert {
-    border-radius: var(--fabulka-radius-sm);
+    border-radius: var(--fabulka-radius-control);
+    font-size: var(--fabulka-text-sm);
 }
 
-/* Links and footer band */
+.pf-v5-c-list,
+.pf-v5-c-data-list {
+    font-size: var(--fabulka-text);
+}
+
 a {
-    color: var(--pf-v5-global--link--Color);
+    color: var(--fabulka-link);
 }
 
 a:hover {
-    color: var(--pf-v5-global--link--Color--hover);
+    color: var(--fabulka-link-hover);
 }
 
 .pf-v5-c-login__main-footer-band {
     border-color: var(--fabulka-border);
-    color: var(--fabulka-muted);
 }
 
-/* Language select */
-#login-select-toggle {
-    font-family: inherit;
+.pf-v5-c-login__main-footer-band,
+.pf-v5-c-login__main-footer-band a {
+    font-size: var(--fabulka-text-sm);
 }
 
-.pf-v5-c-check__input {
-    accent-color: var(--fabulka-accent);
+.pf-v5-c-login__main-footer-band a {
+    font-weight: 700;
+}
+
+/* 2FA setup: the QR code on a soft card */
+#kc-totp-secret-qr-code,
+img[alt*="QR"] {
+    border: 1px solid var(--fabulka-border);
+    border-radius: var(--fabulka-radius-control);
+    padding: 8px;
+    background: #ffffff;
 }
 
 @media (max-width: 480px) {
-    .pf-v5-c-login__container {
-        padding-inline: 12px;
+    :root {
+        --fabulka-title: 22px;
+        --fabulka-card-padding: 24px;
     }
 
-    #kc-page-title {
-        font-size: 22px;
+
+    .pf-v5-c-login__container {
+        padding-inline: 12px;
     }
 }
