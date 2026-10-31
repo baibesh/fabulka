@@ -1,10 +1,5 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
-import {
-  BOOK_PRICES,
-  PurchaseSchema,
-  type Purchase,
-  type Quota,
-} from '@fabulka/shared';
+import { PurchaseSchema, type Purchase, type Quota } from '@fabulka/shared';
 import { CurrentUser, type SessionUser } from '../auth/current-user';
 import { CurrentClient, type Client } from '../common/client';
 import { ZodPipe } from '../common/zod.pipe';
@@ -34,13 +29,13 @@ export class QuotaController {
     @CurrentUser() user: SessionUser | null,
     @Body(new ZodPipe(PurchaseSchema)) body: Purchase,
   ): Promise<Quota> {
-    const quota = await this.quota.buyBook(client.key, body.kind);
+    const { quota, priceKzt } = await this.quota.buyBook(client.key, body.kind);
     const email = body.email ?? user?.email;
     if (email) {
       void this.mail.send(
         email,
         purchaseReceipt(
-          { kind: body.kind, priceKzt: BOOK_PRICES[body.kind].KZT },
+          { kind: body.kind, priceKzt },
           body.locale ?? 'ru',
           this.mail.publicUrl,
         ),

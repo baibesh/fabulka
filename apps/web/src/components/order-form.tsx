@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { COVER_PRICE_KZT, CreateOrderSchema, orderPrice, type CreateOrderInput } from "@fabulka/shared";
+import { CreateOrderSchema, type CreateOrderInput } from "@fabulka/shared";
 import { Loader2, Printer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
@@ -10,9 +10,11 @@ import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { createOrder, getBook } from "@/lib/api";
 import { useI18n } from "@/i18n/i18n";
-import { CITIES } from "@/lib/cities";
 import { formatKzt } from "@/lib/format";
 import { useMe } from "@/lib/auth";
+import { useCities } from "@/lib/cities";
+import { useOrderPrice, useReference } from "@/lib/use-price";
+import { PriceSkeleton } from "./price-skeleton";
 
 type FormValues = z.input<typeof CreateOrderSchema>;
 
@@ -37,7 +39,14 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
     if (user?.name && !form.getValues("recipientName")) form.setValue("recipientName", user.name);
   }, [user, form]);
   const [cover, quantity, city] = useWatch({ control: form.control, name: ["cover", "quantity", "city"] });
-  const price = orderPrice(cover, Number(quantity) || 1, city);
+  // Shown for the parent to check; the API prices the order again from the same reference data.
+  const reference = useReference();
+  const cities = useCities();
+  const price = useOrderPrice(cover, Number(quantity) || 1, city);
+  // The owner may have taken the default city off the list: start from the first one listed then.
+  useEffect(() => {
+    if (cities.length && !cities.some((c) => c.ru === form.getValues("city"))) form.setValue("city", cities[0].ru);
+  }, [cities, form]);
 
   const order = useMutation({
     mutationFn: createOrder,
@@ -57,7 +66,7 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
             <input type="radio" value={value} data-testid={`cover-${value}`} {...form.register("cover")} />
             <span className="flex flex-col">
               <span className="font-bold">{t(value === "soft" ? "order.cover.soft" : "order.cover.hard")}</span>
-              <span className="text-muted">{formatKzt(COVER_PRICE_KZT[value])}</span>
+              <span className="text-muted">{reference.data ? formatKzt(reference.data.prices.covers[value]) : <PriceSkeleton />}</span>
             </span>
           </label>
         ))}
@@ -88,8 +97,8 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
         </label>
         <label className={label}>
           {t("order.city")}
-          <select data-testid="city" className={field} {...form.register("city")}>
-            {CITIES.map((city) => (
+          <select data-testid="city" className={field} {...form.register("city")} value={city}>
+            {cities.map((city) => (
               <option key={city.ru} value={city.ru}>
                 {city[locale]}
               </option>
@@ -116,22 +125,22 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
       <section data-testid="order-summary" className="flex flex-col gap-1 rounded-2xl bg-card p-5">
         <div className="flex justify-between">
           <span>{t("order.books")}</span>
-          <span>{formatKzt(price.books)}</span>
+          <span>{price ? formatKzt(price.books) : <PriceSkeleton />}</span>
         </div>
         <div className="flex justify-between">
           <span>{t("order.delivery")}</span>
-          <span>{price.delivery ? formatKzt(price.delivery) : t("order.free")}</span>
+          <span>{price ? (price.delivery ? formatKzt(price.delivery) : t("order.free")) : <PriceSkeleton />}</span>
         </div>
         <div className="flex justify-between text-lg font-extrabold">
           <span>{t("order.total")}</span>
-          <span data-testid="order-total">{formatKzt(price.total)}</span>
+          <span data-testid="order-total">{price ? formatKzt(price.total) : <PriceSkeleton className="w-20" />}</span>
         </div>
       </section>
 
       <button
         type="submit"
         data-testid="place-order"
-        disabled={order.isPending}
+        disabled={order.isPending || !price}
         className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-4 text-lg font-bold text-accent-foreground disabled:opacity-60"
       >
         {order.isPending ? <Loader2 className="size-5 animate-spin" /> : <Printer className="size-5" />}

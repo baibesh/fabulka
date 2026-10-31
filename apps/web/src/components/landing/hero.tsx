@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useI18n } from "@/i18n/i18n";
 import { getStatus, listExamples, listTemplates } from "@/lib/api";
 import { useBookPrice } from "@/lib/use-price";
+import { PriceSkeleton } from "../price-skeleton";
 import { LogoMark } from "@/components/logo";
 import { primaryButton, secondaryButton } from "./section";
 
@@ -72,7 +73,7 @@ export function Hero() {
               </a>
             )}
           </div>
-          <p className="text-sm text-muted">{t("landing.hero.price", { price })}</p>
+          <p className="text-sm text-muted">{price ? t("landing.hero.price", { price }) : <PriceSkeleton className="w-72 max-w-full" />}</p>
         </div>
         <Covers />
       </div>

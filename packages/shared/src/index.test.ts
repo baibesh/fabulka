@@ -14,7 +14,13 @@ import {
   defaultMethodology,
   fitsAge,
   CreateOrderSchema,
+  CitiesSchema,
+  DEFAULT_CITIES,
+  DEFAULT_PRICES,
+  ISO_COUNTRY_CODES,
+  PricesSchema,
   PurchaseSchema,
+  UpdateBlockedSchema,
   StorySchema,
   bookPrice,
   countryFromIp,
@@ -60,8 +66,17 @@ describe("progressFor", () => {
 
 describe("orders", () => {
   it("prices delivery by city", () => {
-    expect(orderPrice("hard", 2, "Алматы")).toEqual({ books: 29800, delivery: 0, total: 29800 });
-    expect(orderPrice("soft", 1, "Шымкент")).toEqual({ books: 9900, delivery: 1500, total: 11400 });
+    expect(orderPrice("hard", 2, "Алматы", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 29800, delivery: 0, total: 29800 });
+    expect(orderPrice("soft", 1, "Шымкент", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 9900, delivery: 1500, total: 11400 });
+  });
+
+  it("prices by the owner's prices and free-delivery cities", () => {
+    const prices = { ...DEFAULT_PRICES, covers: { soft: 5000, hard: 8000 }, deliveryKzt: 700 };
+    const cities = DEFAULT_CITIES.map((c) => ({ ...c, freeDelivery: c.ru === "Шымкент" }));
+    expect(orderPrice("soft", 2, "Шымкент", prices, cities)).toEqual({ books: 10000, delivery: 0, total: 10000 });
+    expect(orderPrice("hard", 1, "Алматы", prices, cities)).toEqual({ books: 8000, delivery: 700, total: 8700 });
+    // A city that is no longer listed pays the fee.
+    expect(orderPrice("soft", 1, "Тирана", prices, cities).delivery).toBe(700);
   });
 
   it("normalizes Kazakh phone numbers", () => {
@@ -216,10 +231,16 @@ describe("countries", () => {
 
 describe("book prices", () => {
   it("charges less for a catalog book than for a story of your own", () => {
-    expect(bookPrice("template", "KZ")).toEqual({ amount: 1900, currency: "KZT" });
-    expect(bookPrice("custom", "KZ")).toEqual({ amount: 2900, currency: "KZT" });
-    expect(bookPrice("template", "UZ")).toEqual({ amount: 3.9, currency: "USD" });
-    expect(bookPrice("custom", "other")).toEqual({ amount: 5.9, currency: "USD" });
+    expect(bookPrice("template", "KZ", DEFAULT_PRICES)).toEqual({ amount: 1900, currency: "KZT" });
+    expect(bookPrice("custom", "KZ", DEFAULT_PRICES)).toEqual({ amount: 2900, currency: "KZT" });
+    expect(bookPrice("template", "UZ", DEFAULT_PRICES)).toEqual({ amount: 3.9, currency: "USD" });
+    expect(bookPrice("custom", "other", DEFAULT_PRICES)).toEqual({ amount: 5.9, currency: "USD" });
+  });
+
+  it("uses the prices it is given", () => {
+    const prices = { ...DEFAULT_PRICES, books: { ...DEFAULT_PRICES.books, template: { KZT: 2500, USD: 4.5 } } };
+    expect(bookPrice("template", "KZ", prices)).toEqual({ amount: 2500, currency: "KZT" });
+    expect(bookPrice("template", "KG", prices)).toEqual({ amount: 4.5, currency: "USD" });
   });
 
   it("takes only a known kind of book to buy", () => {
@@ -250,5 +271,37 @@ describe("JournalCallsQuerySchema", () => {
     expect(JournalCallsQuerySchema.parse({})).toEqual({ period: "24h" });
     expect(JournalCallsQuerySchema.parse({ kind: "story", status: "error", period: "7d" })).toMatchObject({ kind: "story" });
     expect(JournalCallsQuerySchema.safeParse({ kind: "poem" }).success).toBe(false);
+  });
+});
+
+describe("reference data", () => {
+  it("accepts the defaults it seeds", () => {
+    expect(PricesSchema.parse(DEFAULT_PRICES)).toEqual(DEFAULT_PRICES);
+    expect(CitiesSchema.parse(DEFAULT_CITIES)).toEqual(DEFAULT_CITIES);
+  });
+
+  it("refuses prices that are not whole tenge, cents, or positive", () => {
+    const books = DEFAULT_PRICES.books;
+    expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, books: { ...books, template: { KZT: 1900.5, USD: 3.9 } } }).success).toBe(false);
+    expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, books: { ...books, custom: { KZT: 2900, USD: 5.999 } } }).success).toBe(false);
+    expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, covers: { soft: 0, hard: 14900 } }).success).toBe(false);
+    expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, deliveryKzt: -1 }).success).toBe(false);
+    expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, deliveryKzt: 0 }).success).toBe(true);
+  });
+
+  it("refuses an empty city list, short names and the same city twice", () => {
+    expect(CitiesSchema.safeParse([]).success).toBe(false);
+    expect(CitiesSchema.safeParse([{ ru: "А", kk: "А", en: "A", freeDelivery: false }]).success).toBe(false);
+    const twice = CitiesSchema.safeParse([...DEFAULT_CITIES, { ...DEFAULT_CITIES[0], ru: " алматы " }]);
+    expect(twice.success).toBe(false);
+    expect(twice.error?.issues[0].path).toEqual([DEFAULT_CITIES.length, "ru"]);
+  });
+
+  it("takes real ISO country codes only, upper-cased, once each", () => {
+    expect(ISO_COUNTRY_CODES).toHaveLength(250);
+    expect(UpdateBlockedSchema.parse({ extra: [" nl", "DE"] })).toEqual({ extra: ["NL", "DE"] });
+    expect(UpdateBlockedSchema.safeParse({ extra: ["XX"] }).success).toBe(false);
+    expect(UpdateBlockedSchema.safeParse({ extra: ["NLD"] }).success).toBe(false);
+    expect(UpdateBlockedSchema.safeParse({ extra: ["NL", "nl"] }).success).toBe(false);
   });
 });

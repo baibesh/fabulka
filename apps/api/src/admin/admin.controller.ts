@@ -14,20 +14,26 @@ import {
 } from '@nestjs/common';
 import {
   AdminLoginSchema,
+  CitiesSchema,
   CreateMethodologySchema,
   JournalCallsQuerySchema,
   JournalPeriodQuerySchema,
   MethodologyPreviewSchema,
   PauseSchema,
+  PricesSchema,
+  UpdateBlockedSchema,
   UpdateBookSchema,
   UpdateMethodologySchema,
   UpdateOrderStatusSchema,
   UpdateTemplateSchema,
   type AdminLogin,
   type AdminLoginOptions,
+  type City,
   type CreateMethodology,
   type JournalCallsQuery,
   type MethodologyPreview,
+  type Prices,
+  type UpdateBlocked,
   type UpdateBook,
   type UpdateMethodology,
   type UpdateTemplate,
@@ -40,6 +46,7 @@ import { ZodPipe } from '../common/zod.pipe';
 import { JournalAdminService } from '../journal/journal-admin.service';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import { OrdersService } from '../orders/orders.service';
+import { ReferenceService } from '../reference/reference.service';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminGuard } from './admin.guard';
 import { AdminService } from './admin.service';
@@ -87,6 +94,7 @@ export class AdminController {
     private readonly orders: OrdersService,
     private readonly journal: JournalAdminService,
     private readonly methodologies: MethodologiesService,
+    private readonly reference: ReferenceService,
   ) {}
 
   @Get('me')
@@ -234,5 +242,27 @@ export class AdminController {
   @HttpCode(204)
   deleteMethodology(@Param('slug') slug: string) {
     return this.methodologies.remove(slug);
+  }
+
+  /** Prices, delivery cities and blocked countries (Meta's, read-only, and the owner's). */
+  @Get('reference')
+  referenceData() {
+    return this.reference.admin();
+  }
+
+  @Put('reference/prices')
+  setPrices(@Body(new ZodPipe(PricesSchema)) body: Prices) {
+    return this.reference.setPrices(body);
+  }
+
+  @Put('reference/cities')
+  setCities(@Body(new ZodPipe(CitiesSchema)) body: City[]) {
+    return this.reference.setCities(body);
+  }
+
+  /** 400 country_policy_blocked for a code on Meta's list: that list cannot be edited here. */
+  @Put('reference/blocked')
+  setBlocked(@Body(new ZodPipe(UpdateBlockedSchema)) body: UpdateBlocked) {
+    return this.reference.setExtraBlocked(body.extra);
   }
 }

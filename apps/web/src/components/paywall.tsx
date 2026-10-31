@@ -8,6 +8,7 @@ import { buyBook, setDemoCode } from "@/lib/api";
 import { useMe } from "@/lib/auth";
 import { useI18n } from "@/i18n/i18n";
 import { useBookPrice } from "@/lib/use-price";
+import { PriceSkeleton } from "./price-skeleton";
 
 /**
  * Shown when the free books are used up: the demo checkout for one more book of `kind` (a catalog
@@ -36,7 +37,7 @@ export function Paywall({ kind, onUnlocked }: { kind: BookKind; onUnlocked: () =
     <section data-testid="paywall" className="flex flex-col gap-4 rounded-2xl border-2 border-accent bg-card p-5 sm:col-span-2">
       <div>
         <h2 className="text-lg font-extrabold">{t("paywall.title")}</h2>
-        <p className="text-muted">{t(`paywall.text.${kind}`, { price })}</p>
+        <p className="text-muted">{price ? t(`paywall.text.${kind}`, { price }) : <PriceSkeleton className="w-64 max-w-full" />}</p>
       </div>
       <label className="flex flex-col gap-1.5 text-sm font-semibold">
         <span>
@@ -57,12 +58,12 @@ export function Paywall({ kind, onUnlocked }: { kind: BookKind; onUnlocked: () =
       <button
         type="button"
         data-testid="buy-book"
-        disabled={buy.isPending || !emailValid}
+        disabled={buy.isPending || !emailValid || !price}
         onClick={() => buy.mutate()}
         className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 font-bold text-accent-foreground disabled:opacity-60"
       >
         {buy.isPending ? <Loader2 className="size-5 animate-spin" /> : <ShoppingBag className="size-5" />}
-        {t("paywall.buy", { price })}
+        {price ? t("paywall.buy", { price }) : <PriceSkeleton className="w-40" />}
       </button>
       {buy.isError && (
         <p role="alert" className="text-sm text-red-600">

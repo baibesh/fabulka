@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { MethodologySlugSchema } from "./methodologies";
+import type { City, Prices } from "./reference";
 
 export * from "./methodologies";
+export * from "./reference";
 
 export const LANGUAGES = ["ru", "kk", "en"] as const;
 export const LanguageSchema = z.enum(LANGUAGES);
@@ -331,18 +333,13 @@ export const BookKindSchema = z.enum(BOOK_KINDS);
 export type BookKind = z.infer<typeof BookKindSchema>;
 
 /**
- * Price of one more generated (digital) book once the free ones are used. Dollars are charged
- * outside Kazakhstan, where only the PDF is sold.
+ * What one more generated (digital) book of this kind costs a visitor from `country`, at the
+ * owner's prices (reference.prices). Dollars are charged outside Kazakhstan, where only the PDF is
+ * sold.
  */
-export const BOOK_PRICES: Record<BookKind, Record<Currency, number>> = {
-  template: { KZT: 1900, USD: 3.9 },
-  custom: { KZT: 2900, USD: 5.9 },
-};
-
-/** What one more book of this kind costs a visitor from `country`. */
-export function bookPrice(kind: BookKind, country: Country): { amount: number; currency: Currency } {
+export function bookPrice(kind: BookKind, country: Country, prices: Prices): { amount: number; currency: Currency } {
   const currency = COUNTRY_INFO[country].currency;
-  return { amount: BOOK_PRICES[kind][currency], currency };
+  return { amount: prices.books[kind][currency], currency };
 }
 
 /** An email a parent typed: for order and receipt emails. */
@@ -382,11 +379,6 @@ export const COVERS = ["soft", "hard"] as const;
 export const CoverSchema = z.enum(COVERS);
 export type Cover = z.infer<typeof CoverSchema>;
 
-export const COVER_PRICE_KZT: Record<Cover, number> = { soft: 9900, hard: 14900 };
-/** Cities our print partners deliver to for free; elsewhere delivery is a flat fee. */
-export const FREE_DELIVERY_CITIES = ["Алматы", "Астана"];
-export const DELIVERY_FEE_KZT = 1500;
-
 export const CreateOrderSchema = z.object({
   bookId: z.string().min(1),
   recipientName: z.string().trim().min(2).max(80),
@@ -406,9 +398,14 @@ export const CreateOrderSchema = z.object({
 });
 export type CreateOrderInput = z.infer<typeof CreateOrderSchema>;
 
-export function orderPrice(cover: Cover, quantity: number, city: string) {
-  const books = COVER_PRICE_KZT[cover] * quantity;
-  const delivery = FREE_DELIVERY_CITIES.includes(city.trim()) ? 0 : DELIVERY_FEE_KZT;
+/**
+ * What a printed order costs at the owner's prices: the copies, plus the flat delivery fee unless
+ * the city is one with free delivery.
+ */
+export function orderPrice(cover: Cover, quantity: number, city: string, prices: Prices, cities: readonly City[]) {
+  const books = prices.covers[cover] * quantity;
+  const free = cities.some((c) => c.freeDelivery && c.ru === city.trim());
+  const delivery = free ? 0 : prices.deliveryKzt;
   return { books, delivery, total: books + delivery };
 }
 

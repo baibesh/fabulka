@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { type CountryResponse, Reader } from 'maxmind';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { RESTRICTED_COUNTRIES } from './restricted';
+import { ReferenceService } from '../reference/reference.service';
 
 /** Which country a visitor is in, from the DB-IP country database (`pnpm geoip`). */
 @Injectable()
@@ -13,7 +13,10 @@ export class GeoService implements OnModuleInit {
   private readonly dbPath: string;
   private reader: Reader<CountryResponse> | null = null;
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly reference: ReferenceService,
+  ) {
     this.enabled = config.get('GEO_BLOCK', 'false') === 'true';
     this.dbPath = resolve(config.get('GEOIP_DB', './geoip/country.mmdb'));
   }
@@ -32,10 +35,14 @@ export class GeoService implements OnModuleInit {
     );
   }
 
-  /** The restricted country the IP is in, or null when the visitor may use the service. */
-  restricted(ip: string): string | null {
+  /**
+   * The blocked country the IP is in (Meta's list or one the owner added in the admin), or null
+   * when the visitor may use the service.
+   */
+  async restricted(ip: string): Promise<string | null> {
     if (!this.enabled) return null;
     const country = this.country(ip);
-    return country && country in RESTRICTED_COUNTRIES ? country : null;
+    if (!country) return null;
+    return (await this.reference.blocked(country)) ? country : null;
   }
 }

@@ -1,0 +1,197 @@
+# Reference data in the admin («Справочники»): the owner changes the catalog book price without
+# touching code, and the book page and the checkout use it; adds a delivery city; blocks one more
+# country on top of Meta's list, which stays read-only and can never be unblocked. Everything is
+# put back afterwards, so the flows that check «1 900 ₸» keep passing.
+appId: ${WEB}
+tags: [admin, reference]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  clientKey: "e2e-reference-${Date.now()}"
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+  # RIPE NCC, in the Netherlands by the DB-IP database: not blocked until the owner adds NL.
+  dutchIp: 193.0.6.139
+commands:
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/?lang=ru"
+  # The hero's covers render only after hydration, by when the page has saved the language.
+  - waitForVisible: { testId: hero-covers }
+  - openLink: "${WEB}/admin/login?lang=ru"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - tapOn: { testId: admin-nav-reference }
+  - waitForVisible: { testId: reference-tabs }
+  - waitForVisible: { testId: reference-prices }
+  - assertVisible: "Справочники"
+
+  # A price in fractions of a cent is pointed out next to its field, and nothing is saved.
+  - tapOn: { testId: price-template-kzt }
+  - eraseText
+  - inputText: "2450"
+  - tapOn: { testId: price-template-usd }
+  - eraseText
+  - inputText: "4.999"
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-error, contains: "не больше двух знаков" }
+  - request:
+      url: ${API}/reference
+      assert: { status: 200, json: { "$.prices.books.template.KZT": 1900 } }
+
+  # Fixed and saved: the public reference data has the new price at once.
+  - tapOn: { testId: price-template-usd }
+  - eraseText
+  - inputText: "4.90"
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-saved }
+  - assertNotVisible: { testId: reference-error }
+  - request:
+      url: ${API}/reference
+      assert:
+        status: 200
+        json: { "$.prices.books.template.KZT": 2450, "$.prices.books.template.USD": 4.9, "$.prices.books.custom.KZT": 2900 }
+
+  # A new delivery city with free delivery, in three languages.
+  - tapOn: { testId: reference-tab-cities }
+  - waitForVisible: { testId: reference-cities }
+  - assertVisible: { css: "[data-testid=city-row][data-value=Алматы]" }
+  - tapOn: { testId: city-add }
+  - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-ru]" }
+  - inputText: "Туркестан"
+  - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-kk]" }
+  - inputText: "Түркістан"
+  - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-en]" }
+  - inputText: "Turkistan"
+  - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-free]" }
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-saved }
+  - request:
+      url: ${API}/reference
+      assert:
+        status: 200
+        json: { "$.cities[10].ru": Туркестан, "$.cities[10].kk": Түркістан, "$.cities[10].freeDelivery": true }
+
+  # The book page shows the new price.
+  - openLink: "${WEB}/catalog/first-day-kindergarten?lang=ru"
+  - waitForVisible: { testId: template-title }
+  - waitForVisible: { text: "2 450 ₸", childOf: { testId: book-price } }
+
+  # The checkout records the owner's price, whatever the client sends.
+  - request:
+      method: POST
+      url: ${API}/quota/purchase
+      headers: { X-Client-Key: "${clientKey}" }
+      json: { kind: template, priceKzt: 1 }
+      assert: { status: "2xx" }
+  - sql:
+      query: select "priceKzt" as price from "Credit" where "clientKey" = $1
+      params: ["${clientKey}"]
+      readOnly: true
+      assert: { rows: 1, first: { price: 2450 } }
+
+  # Blocked countries: Meta's list is read-only, with nothing to remove.
+  - openLink: "${WEB}/admin/reference?lang=ru"
+  - waitForVisible: { testId: reference-tabs }
+  - tapOn: { testId: reference-tab-blocked }
+  - waitForVisible: { testId: blocked-meta }
+  - assertVisible: { css: "[data-testid=blocked-meta-row][data-code=RU]" }
+  - assertVisible: { css: "[data-testid=blocked-meta-row][data-code=IN]" }
+  - assertNotVisible: { css: "[data-testid=blocked-meta] button" }
+  - assertVisible: { contains: "Дополнительных стран нет", childOf: { testId: blocked-extra } }
+  # A Meta country cannot be added as one of the owner's, an unknown code is refused.
+  - tapOn: { testId: blocked-input }
+  - inputText: "RU"
+  - tapOn: { testId: blocked-add }
+  - waitForVisible: { testId: reference-error, contains: "уже заблокирована по правилам Meta" }
+  - tapOn: { testId: blocked-input }
+  - eraseText
+  - inputText: "QQ"
+  - tapOn: { testId: blocked-add }
+  - waitForVisible: { testId: reference-error, contains: "ISO 3166" }
+  # The Netherlands, added and saved: listed, and turned away by the API.
+  - tapOn: { testId: blocked-input }
+  - eraseText
+  - inputText: "nl"
+  - tapOn: { testId: blocked-add }
+  - waitForVisible: { css: "[data-testid=blocked-row][data-code=NL]" }
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-saved }
+  - request:
+      url: ${API}/templates
+      headers: { X-Real-IP: "${dutchIp}" }
+      assert: { status: 451, json: { "$.code": region_unavailable, "$.country": NL } }
+
+  # Through the API too, Meta's list cannot be touched: a Meta code is refused, and emptying the
+  # owner's list unblocks only the owner's countries.
+  - request:
+      method: POST
+      url: ${API}/admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: PUT
+      url: ${API}/admin/reference/blocked
+      json: { extra: [NL, RU] }
+      assert: { status: 400, json: { "$.code": country_policy_blocked } }
+  - request:
+      method: PUT
+      url: ${API}/admin/reference/blocked
+      json: { extra: [] }
+      assert: { status: 200 }
+  - request:
+      url: ${API}/templates
+      headers: { X-Real-IP: 77.88.8.8 }
+      assert: { status: 451, json: { "$.country": RU } }
+  - request:
+      url: ${API}/templates
+      headers: { X-Real-IP: "${dutchIp}" }
+      assert: { status: 200 }
+  - openLink: "${WEB}/admin/reference?lang=ru"
+  - waitForVisible: { testId: reference-tabs }
+  - tapOn: { testId: reference-tab-blocked }
+  - waitForVisible: { contains: "Дополнительных стран нет", childOf: { testId: blocked-extra } }
+  - assertVisible: { css: "[data-testid=blocked-meta-row][data-code=RU]" }
+after:
+  # Today's prices, cities and no extra countries again, through the API so its cache is dropped.
+  - request:
+      method: POST
+      url: ${API}/admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+  - request:
+      method: PUT
+      url: ${API}/admin/reference/prices
+      json:
+        books: { template: { KZT: 1900, USD: 3.9 }, custom: { KZT: 2900, USD: 5.9 } }
+        covers: { soft: 9900, hard: 14900 }
+        deliveryKzt: 1500
+      assert: { status: 200 }
+  - request:
+      method: PUT
+      url: ${API}/admin/reference/cities
+      json:
+        - { ru: Алматы, kk: Алматы, en: Almaty, freeDelivery: true }
+        - { ru: Астана, kk: Астана, en: Astana, freeDelivery: true }
+        - { ru: Шымкент, kk: Шымкент, en: Shymkent, freeDelivery: false }
+        - { ru: Караганда, kk: Қарағанды, en: Karaganda, freeDelivery: false }
+        - { ru: Актобе, kk: Ақтөбе, en: Aktobe, freeDelivery: false }
+        - { ru: Тараз, kk: Тараз, en: Taraz, freeDelivery: false }
+        - { ru: Павлодар, kk: Павлодар, en: Pavlodar, freeDelivery: false }
+        - { ru: Усть-Каменогорск, kk: Өскемен, en: Oskemen, freeDelivery: false }
+        - { ru: Атырау, kk: Атырау, en: Atyrau, freeDelivery: false }
+        - { ru: Костанай, kk: Қостанай, en: Kostanay, freeDelivery: false }
+      assert: { status: 200 }
+  - request:
+      method: PUT
+      url: ${API}/admin/reference/blocked
+      json: { extra: [] }
+      assert: { status: 200 }
+  - sql: { exec: "delete from \"Credit\" where \"clientKey\" = $1", params: ["${clientKey}"] }

@@ -1,17 +1,18 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { COUNTRY_INFO, COVER_PRICE_KZT, type Book, type BookStatus } from "@fabulka/shared";
+import { COUNTRY_INFO, type Book, type BookStatus } from "@fabulka/shared";
 import { AlertTriangle, Check, Download, MessageCircleQuestion, Printer, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { use } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { getBook, wantPrint } from "@/lib/api";
-import { formatKzt } from "@/lib/format";
 import { useMethodologies } from "@/lib/use-methodologies";
+import { useCoverPrice } from "@/lib/use-price";
 import { BookReader } from "./book-reader";
 import { ErrorNotice } from "./error-notice";
+import { PriceSkeleton } from "./price-skeleton";
 import { SavePrompt } from "./save-prompt";
 
 const finished = (status: BookStatus | undefined) => status === "done" || status === "failed";
@@ -19,6 +20,7 @@ const finished = (status: BookStatus | undefined) => status === "done" || status
 export function BookView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { t, country } = useI18n();
+  const printPrice = useCoverPrice("soft");
   const { data: book, error } = useQuery({
     queryKey: ["book", id],
     queryFn: () => getBook(id),
@@ -83,7 +85,7 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
               className="flex items-center gap-2 rounded-xl border-2 border-accent px-6 py-3 font-bold text-accent"
             >
               <Printer className="size-5" />
-              {t("book.order", { price: formatKzt(COVER_PRICE_KZT.soft) })}
+              {printPrice ? t("book.order", { price: printPrice }) : <PriceSkeleton className="w-48" />}
             </Link>
           ) : (
             <WantPrint bookId={book.id} />

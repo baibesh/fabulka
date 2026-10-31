@@ -22,6 +22,7 @@ import { ApiError, createBook, getQuota, getStatus, uploadToy } from "@/lib/api"
 import { toJpegDataUrl } from "@/lib/toy-photo";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { useBookPrice } from "@/lib/use-price";
+import { PriceSkeleton } from "./price-skeleton";
 import { useI18n } from "@/i18n/i18n";
 import { LOCALE_NAMES, type MessageKey } from "@/i18n/messages";
 import { Paywall } from "./paywall";
@@ -460,7 +461,7 @@ export function BookForm({ template }: { template?: Template }) {
           </ReviewGroup>
           <p data-testid="review-price" className="flex flex-wrap items-center gap-2 text-sm">
             <span className="font-semibold">{t("wizard.review.price")}:</span>
-            <span className="rounded-full bg-accent px-3 py-1 font-extrabold text-accent-foreground">{price}</span>
+            <span className="rounded-full bg-accent px-3 py-1 font-extrabold text-accent-foreground">{price ?? <PriceSkeleton />}</span>
             <span className="text-muted">{t("price.afterFree")}</span>
           </p>
           <button

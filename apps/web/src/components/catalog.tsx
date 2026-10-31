@@ -7,6 +7,7 @@ import { useI18n } from "@/i18n/i18n";
 import { listTemplates } from "@/lib/api";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { useBookPrice } from "@/lib/use-price";
+import { PriceSkeleton } from "./price-skeleton";
 import { ErrorNotice } from "./error-notice";
 
 const card =
@@ -66,7 +67,7 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
               <p className="text-sm text-muted">{book.summary}</p>
               <p className="mt-auto pt-1">
                 <span data-testid="template-price" className={price}>
-                  {templatePrice}
+                  {templatePrice ?? <PriceSkeleton />}
                 </span>
               </p>
             </div>
@@ -86,7 +87,7 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
             <p className="text-sm text-muted">{t("catalog.own.text")}</p>
           </div>
           <span data-testid="custom-price" className={`${price} sm:ml-auto`}>
-            {customPrice}
+            {customPrice ?? <PriceSkeleton />}
           </span>
         </Link>
       </li>

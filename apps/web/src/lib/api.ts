@@ -5,6 +5,7 @@ import {
   MyBookSchema,
   OrderSchema,
   QuotaSchema,
+  ReferenceSchema,
   ServiceStatusSchema,
   TemplateSchema,
   TemplateSummarySchema,
@@ -19,6 +20,7 @@ import {
   type Order,
   type Purchase,
   type Quota,
+  type Reference,
   type ServiceStatus,
   type Template,
   type TemplateSummary,
@@ -170,6 +172,11 @@ export async function getStatus(): Promise<ServiceStatus> {
 
 export async function getBook(id: string): Promise<Book> {
   return BookSchema.parse(await request(`/api/books/${id}`));
+}
+
+/** The owner's prices and delivery cities: every price on the site comes from these. */
+export async function getReference(): Promise<Reference> {
+  return ReferenceSchema.parse(await request("/api/reference"));
 }
 
 /** The visitor's country by IP, or null when unknown (e.g. locally). */

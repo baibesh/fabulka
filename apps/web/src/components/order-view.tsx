@@ -6,7 +6,7 @@ import { CheckCircle2, Circle, CreditCard, Home, Printer, Truck } from "lucide-r
 import { use } from "react";
 import { getOrder } from "@/lib/api";
 import { useI18n } from "@/i18n/i18n";
-import { cityName } from "@/lib/cities";
+import { cityName, useCities } from "@/lib/cities";
 import { formatKzt } from "@/lib/format";
 import { ErrorNotice } from "./error-notice";
 
@@ -15,6 +15,7 @@ const ICONS: Record<OrderStatus, typeof Circle> = { paid: CreditCard, printing: 
 export function OrderView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { t, locale } = useI18n();
+  const cities = useCities();
   const { data: order, error } = useQuery({
     queryKey: ["order", id],
     queryFn: () => getOrder(id),
@@ -54,7 +55,7 @@ export function OrderView({ params }: { params: Promise<{ id: string }> }) {
 
       <section className="flex flex-col gap-1 rounded-2xl bg-card p-5">
         <span>
-          {order.recipientName}, {cityName(order.city, locale)}, {order.address}
+          {order.recipientName}, {cityName(order.city, locale, cities)}, {order.address}
         </span>
         <span className="text-lg font-extrabold">{t("order.done.total", { total: formatKzt(order.totalKzt) })}</span>
       </section>

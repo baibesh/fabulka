@@ -7,7 +7,6 @@ import { ConfigService } from '@nestjs/config';
 import type { Book as BookRow, Order as OrderRow } from '@prisma/client';
 import {
   LanguageSchema,
-  orderPrice,
   orderStatusAt,
   type AdminOrder,
   type CreateOrderInput,
@@ -19,6 +18,7 @@ import { ownsBook } from '../books/books.service';
 import { MailService } from '../mail/mail.service';
 import { orderConfirmation, orderStatusChanged } from '../mail/templates';
 import { PrismaService } from '../prisma/prisma.service';
+import { ReferenceService } from '../reference/reference.service';
 
 /**
  * Printed-book orders. Payment is a demo (nothing is charged) and the print and
@@ -32,6 +32,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     config: ConfigService,
+    private readonly reference: ReferenceService,
   ) {
     this.stageMs = Number(config.get('ORDER_STAGE_MS', 20_000));
   }
@@ -51,10 +52,23 @@ export class OrdersService {
     if (book.status !== 'done') {
       throw new ConflictException('The book is still being made');
     }
-    const price = orderPrice(input.cover, input.quantity, input.city);
+    // Priced here from the owner's prices; the body carries no amounts (the schema drops them).
+    const price = await this.reference.orderPrice(
+      input.cover,
+      input.quantity,
+      input.city,
+    );
     const row = await this.prisma.order.create({
       data: {
-        ...input,
+        bookId: input.bookId,
+        recipientName: input.recipientName,
+        phone: input.phone,
+        email: input.email,
+        city: input.city,
+        address: input.address,
+        cover: input.cover,
+        quantity: input.quantity,
+        locale: input.locale,
         booksKzt: price.books,
         deliveryKzt: price.delivery,
         totalKzt: price.total,

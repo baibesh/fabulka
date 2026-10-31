@@ -1,19 +1,15 @@
+import type { City } from "@fabulka/shared";
 import type { UiLocale } from "@/i18n/messages";
+import { useReference } from "./use-price";
 
-/** Cities we deliver to. The Russian name is the value the API prices by; the rest are labels. */
-export const CITIES: { ru: string; kk: string; en: string }[] = [
-  { ru: "Алматы", kk: "Алматы", en: "Almaty" },
-  { ru: "Астана", kk: "Астана", en: "Astana" },
-  { ru: "Шымкент", kk: "Шымкент", en: "Shymkent" },
-  { ru: "Караганда", kk: "Қарағанды", en: "Karaganda" },
-  { ru: "Актобе", kk: "Ақтөбе", en: "Aktobe" },
-  { ru: "Тараз", kk: "Тараз", en: "Taraz" },
-  { ru: "Павлодар", kk: "Павлодар", en: "Pavlodar" },
-  { ru: "Усть-Каменогорск", kk: "Өскемен", en: "Oskemen" },
-  { ru: "Атырау", kk: "Атырау", en: "Atyrau" },
-  { ru: "Костанай", kk: "Қостанай", en: "Kostanay" },
-];
+const NONE: City[] = [];
 
-export function cityName(value: string, locale: UiLocale): string {
-  return CITIES.find((c) => c.ru === value)?.[locale] ?? value;
+/** Cities we deliver to, in the owner's order (edited in the admin); empty while loading. */
+export function useCities(): City[] {
+  return useReference().data?.cities ?? NONE;
+}
+
+/** The city's name in `locale`. The Russian name is the value an order stores; the rest are labels. */
+export function cityName(value: string, locale: UiLocale, cities: readonly City[]): string {
+  return cities.find((c) => c.ru === value)?.[locale] ?? value;
 }

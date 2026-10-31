@@ -12,17 +12,17 @@ import { GeoService } from './geo.service';
 const UNAVAILABLE_FOR_LEGAL_REASONS = 451;
 
 /**
- * Turns away visitors from countries where Meta's models may not be offered, before any route
- * runs, so no model is ever called for them. The health check stays open for monitoring.
+ * Turns away visitors from countries where Meta's models may not be offered, and from those the
+ * owner blocked in the admin, before any route runs, so no model is ever called for them. The health check stays open for monitoring.
  */
 @Injectable()
 export class GeoGuard implements CanActivate {
   constructor(private readonly geo: GeoService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     if (request.path === '/api/health') return true;
-    const country = this.geo.restricted(clientIp(request));
+    const country = await this.geo.restricted(clientIp(request));
     if (!country) return true;
     throw new HttpException(
       {

@@ -1,7 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  BOOK_PRICES,
   BUDGET_REACHED,
   DAILY_CAP_REACHED,
   LIMIT_REACHED,
@@ -9,6 +8,7 @@ import {
   type Quota,
 } from '@fabulka/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { ReferenceService } from '../reference/reference.service';
 
 /**
  * Who may start a book: each visitor gets FREE_BOOKS, then buys more; a demo code
@@ -26,6 +26,7 @@ export class QuotaService {
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService,
+    private readonly reference: ReferenceService,
   ) {
     this.freeBooks = Number(config.get('FREE_BOOKS', 3));
     this.dailyCap = Number(config.get('DAILY_BOOK_CAP', 100));
@@ -125,13 +126,18 @@ export class QuotaService {
 
   /**
    * Demo payment: records one more book for the visitor without charging anything, at the price
-   * of its kind. A credit is good for either kind, like the free books.
+   * of its kind the owner set in the admin (never one the client sends). A credit is good for
+   * either kind, like the free books.
    */
-  async buyBook(clientKey: string, kind: BookKind): Promise<Quota> {
+  async buyBook(
+    clientKey: string,
+    kind: BookKind,
+  ): Promise<{ quota: Quota; priceKzt: number }> {
+    const priceKzt = (await this.reference.prices()).books[kind].KZT;
     await this.prisma.credit.create({
-      data: { clientKey, books: 1, priceKzt: BOOK_PRICES[kind].KZT },
+      data: { clientKey, books: 1, priceKzt },
     });
-    return this.quota(clientKey);
+    return { quota: await this.quota(clientKey), priceKzt };
   }
 }
 

@@ -4,11 +4,15 @@ import {
   AdminBookSchema,
   AdminMethodologySchema,
   AdminOrderSchema,
+  AdminReferenceSchema,
+  BlockedCountriesSchema,
+  CitySchema,
   AdminStatsSchema,
   AdminTemplateSchema,
   ClientErrorGroupSchema,
   JournalStatsSchema,
   MethodologyPreviewResultSchema,
+  PricesSchema,
   ModelCallDetailSchema,
   ModelCallPageSchema,
   ModelCallSchema,
@@ -18,6 +22,9 @@ import {
   type AdminLoginOptions,
   type AdminMethodology,
   type AdminOrder,
+  type AdminReference,
+  type BlockedCountries,
+  type City,
   type AdminStats,
   type AdminTemplate,
   type ClientErrorGroup,
@@ -31,6 +38,7 @@ import {
   type ModelCallDetail,
   type ModelCallPage,
   type OrderStatus,
+  type Prices,
   type UpdateMethodology,
   type UpdateTemplate,
 } from "@fabulka/shared";
@@ -133,4 +141,22 @@ export async function journalErrors(period: JournalPeriod): Promise<ClientErrorG
 /** A book's model calls in the order they were made. */
 export async function bookCalls(id: string): Promise<ModelCall[]> {
   return ModelCallSchema.array().parse(await request(`/api/admin/books/${id}/calls`));
+}
+
+/** Prices, delivery cities and blocked countries (Meta's read-only list and the owner's extras). */
+export async function adminReference(): Promise<AdminReference> {
+  return AdminReferenceSchema.parse(await request("/api/admin/reference"));
+}
+
+export async function savePrices(prices: Prices): Promise<Prices> {
+  return PricesSchema.parse(await request("/api/admin/reference/prices", json("PUT", prices)));
+}
+
+export async function saveCities(cities: City[]): Promise<City[]> {
+  return CitySchema.array().parse(await request("/api/admin/reference/cities", json("PUT", cities)));
+}
+
+/** Refused with 400 country_policy_blocked for a code on Meta's list. */
+export async function saveBlocked(extra: string[]): Promise<BlockedCountries> {
+  return BlockedCountriesSchema.parse(await request("/api/admin/reference/blocked", json("PUT", { extra })));
 }

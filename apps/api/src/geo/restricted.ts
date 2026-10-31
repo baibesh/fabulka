@@ -6,6 +6,9 @@
  *
  * The policy also lists the Crimea, Donetsk and Luhansk regions of Ukraine; a country database
  * cannot tell them apart from the rest of Ukraine, so they are not blocked by IP.
+ *
+ * This list stays in code: the admin shows it read-only and can only block more countries on top
+ * of it (geo.extra_blocked, see ReferenceService), never take one off.
  */
 export const RESTRICTED_COUNTRIES: Record<string, string> = {
   AF: 'Afghanistan',
@@ -32,3 +35,6 @@ export const RESTRICTED_COUNTRIES: Record<string, string> = {
   EH: 'Western Sahara',
   IN: 'India',
 };
+
+/** Meta's Model Designation and Geographic Use Policy, which the list above follows. */
+export const GEO_POLICY_URL = 'https://dev.meta.ai/legal/geographic-use-policy';
