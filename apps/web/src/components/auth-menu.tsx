@@ -43,7 +43,7 @@ export function AuthMenu({ pathname }: { pathname: string }) {
         href={loginUrl(pathname, locale)}
         data-testid="auth-login"
         aria-label={t("auth.login")}
-        className="flex items-center gap-1.5 rounded-xl px-2 py-2 text-sm font-semibold text-muted hover:text-foreground sm:px-3"
+        className="flex items-center gap-1.5 rounded-xl px-1.5 py-2 text-sm font-semibold text-muted hover:text-foreground sm:px-3"
       >
         <LogIn className="size-4" />
         <span className="hidden sm:inline">{t("auth.login")}</span>
@@ -60,7 +60,7 @@ export function AuthMenu({ pathname }: { pathname: string }) {
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => setOpen((value) => !value)}
-        className={`flex items-center gap-1.5 rounded-xl px-2 py-2 text-sm font-semibold sm:px-3 ${
+        className={`flex items-center gap-1.5 rounded-xl px-1.5 py-2 text-sm font-semibold sm:px-3 ${
           open ? "bg-accent/15 text-accent" : "text-muted hover:text-foreground"
         }`}
       >

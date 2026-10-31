@@ -35,3 +35,120 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/*
+ * Motion. Only transform and opacity move, so nothing reflows, and nothing moves at all for visitors
+ * who prefer reduced motion: every animation below lives inside this media query.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  /* The logo's book opens from its spine, the face appears, then it blinks now and then and its star twinkles. */
+  .logo-animated .logo-book {
+    transform-box: view-box;
+    transform-origin: 24px 40px;
+    animation: logo-open 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .logo-animated .logo-face {
+    animation: fade-in 0.3s 0.3s ease-out both;
+  }
+  .logo-animated .logo-eyes {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: logo-blink 5s 1.5s infinite;
+  }
+  .logo-animated .logo-star {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: logo-twinkle 3.2s ease-in-out infinite;
+  }
+  a:hover .logo-animated .logo-star {
+    animation: logo-spin 0.8s ease-in-out;
+  }
+
+  .animate-float {
+    animation: float 5s ease-in-out infinite;
+  }
+  .animate-twinkle {
+    animation: logo-twinkle 2.8s ease-in-out infinite;
+  }
+
+  /* A page corner that lifts now and then, saying the book turns. */
+  .page-peel {
+    animation: page-peel 3.6s 0.8s ease-in-out infinite;
+  }
+}
+
+.page-peel {
+  transform: scale(0);
+  transform-origin: 100% 100%;
+  background: linear-gradient(315deg, #fffaf3 0 48%, #e6d3bb 50%, #f6e8d6 72%, #fdf1e2);
+  filter: drop-shadow(-1px -1px 2px rgb(0 0 0 / 0.18));
+}
+
+@keyframes logo-open {
+  from {
+    transform: scaleX(0.25);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes logo-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes logo-twinkle {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.72) rotate(25deg);
+    opacity: 0.7;
+  }
+}
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.35);
+  }
+  to {
+    transform: rotate(360deg) scale(1);
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+@keyframes page-peel {
+  0%,
+  55%,
+  100% {
+    transform: scale(0);
+  }
+  70%,
+  80% {
+    transform: scale(1);
+  }
+}

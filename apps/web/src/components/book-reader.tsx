@@ -176,6 +176,8 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
   const [view, setView] = useState(0);
   const [turn, setTurn] = useState<Turn | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  // Until the reader turns a page, the cover's corner lifts now and then to show that it turns.
+  const [turned, setTurned] = useState(false);
   const frameRef = useRef<HTMLDivElement>(null);
   const touchX = useRef<number | null>(null);
 
@@ -191,6 +193,7 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
     if (turn) return;
     const to = view + direction;
     if (to < 0 || to >= views) return;
+    setTurned(true);
     setTurn({ direction, to });
   };
 
@@ -292,6 +295,13 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
             </>
           ) : (
             <div className="absolute inset-0 overflow-hidden rounded-md shadow-xl">{underRight}</div>
+          )}
+
+          {!turned && view === 0 && (
+            <div
+              aria-hidden
+              className={`page-peel pointer-events-none absolute right-0 bottom-0 aspect-square rounded-br-md ${wide ? "w-[6%]" : "w-[12%]"}`}
+            />
           )}
 
           {leaf && turn && (

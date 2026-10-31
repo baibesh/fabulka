@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useI18n } from "@/i18n/i18n";
 import { getStatus, listExamples, listTemplates } from "@/lib/api";
 import { useBookPrice } from "@/lib/use-price";
+import { LogoMark } from "@/components/logo";
 import { primaryButton, secondaryButton } from "./section";
 
 /** Where each cover of the collage lies: a loose, slightly fanned pile. */
@@ -14,6 +15,24 @@ const PILE = [
   "left-0 top-[6%] w-[54%] -rotate-6",
   "right-0 top-0 w-[54%] rotate-6",
   "left-[22%] bottom-0 z-10 w-[58%] -rotate-1",
+];
+
+/**
+ * Where each cover starts: stacked upright in the middle, from where it fans out to its place in the
+ * pile (the Tailwind rotation above stays; these offsets undo it at the start). Covers are fully
+ * shown within half a second, as tests and impatient visitors look for them right away.
+ */
+const DEAL = [
+  { x: "38%", y: 10, rotate: 6 },
+  { x: "-38%", y: 18, rotate: -6 },
+  { x: 0, y: 28, rotate: 1 },
+];
+
+/** Little stars twinkling around the pile, each on its own beat. */
+const SPARKLES = [
+  "left-[4%] top-[-4%] size-6 [animation-delay:0s]",
+  "right-[-2%] top-[46%] size-5 [animation-delay:0.9s]",
+  "left-[46%] top-[-8%] size-4 [animation-delay:1.7s]",
 ];
 
 /** The headline, what Fabulka does, the way in, and a pile of catalog covers. */
@@ -74,15 +93,18 @@ function Covers() {
           {covers.map((book, i) => (
             <motion.li
               key={book.slug}
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 + i * 0.12, ease: "easeOut" }}
+              initial={{ opacity: 0, scale: 0.92, ...DEAL[i] }}
+              animate={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: 0 }}
+              transition={{
+                default: { type: "spring", stiffness: 160, damping: 18, delay: i * 0.06 },
+                opacity: { duration: 0.2, delay: i * 0.06 },
+              }}
               className={`absolute ${PILE[i]}`}
             >
               <Link
                 href={`/catalog/${book.slug}`}
                 aria-label={book.title}
-                className="block overflow-hidden rounded-2xl border-4 border-card shadow-xl transition hover:scale-[1.02]"
+                className="block overflow-hidden rounded-2xl border-4 border-card shadow-xl transition duration-300 hover:-translate-y-1.5 hover:scale-[1.03] hover:shadow-2xl"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- covers are static files of any size */}
                 <img src={book.coverUrl!} alt="" className="aspect-square w-full object-cover" />
@@ -91,6 +113,17 @@ function Covers() {
           ))}
         </ul>
       )}
+      {SPARKLES.map((place) => (
+        <svg key={place} viewBox="0 0 24 24" aria-hidden className={`animate-twinkle pointer-events-none absolute z-20 text-accent ${place}`}>
+          <path d="M12 0l3.2 8.8L24 12l-8.8 3.2L12 24l-3.2-8.8L0 12l8.8-3.2z" fill="currentColor" />
+        </svg>
+      ))}
+      {/* The bookling waves from the corner of the pile. */}
+      <div aria-hidden className="pointer-events-none absolute bottom-[4%] left-[-2%] z-20 -rotate-8">
+        <div className="animate-float rounded-[27%] shadow-xl ring-4 ring-card">
+          <LogoMark className="block size-16 sm:size-20" />
+        </div>
+      </div>
     </div>
   );
 }

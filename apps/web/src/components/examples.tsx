@@ -31,11 +31,15 @@ export function Examples() {
             <Link
               href={`/books/${book.id}`}
               data-testid={`example-${book.id}`}
-              className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition duration-300 hover:-translate-y-1.5 hover:shadow-lg"
             >
               {book.heroImageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
-                <img src={book.heroImageUrl} alt="" className="aspect-square w-full bg-white object-contain" />
+                <img
+                  src={book.heroImageUrl}
+                  alt=""
+                  className="aspect-square w-full bg-white object-contain transition duration-500 group-hover:scale-105"
+                />
               ) : (
                 <div className="aspect-square w-full bg-border" />
               )}

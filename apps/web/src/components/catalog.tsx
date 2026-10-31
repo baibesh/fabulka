@@ -9,7 +9,8 @@ import { listTemplates } from "@/lib/api";
 import { useBookPrice } from "@/lib/use-price";
 import { ErrorNotice } from "./error-notice";
 
-const card = "flex flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md";
+const card =
+  "group flex flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-sm transition duration-300 hover:-translate-y-1.5 hover:shadow-lg";
 
 const price = "rounded-full bg-accent px-2.5 py-1 text-xs font-extrabold text-accent-foreground";
 
@@ -42,7 +43,11 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
           <Link href={`/catalog/${book.slug}`} data-testid={`template-${book.slug}`} className={`${card} h-full`}>
             {book.coverUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- covers are static files of any size
-              <img src={book.coverUrl} alt="" className="aspect-square w-full object-cover" />
+              <img
+                src={book.coverUrl}
+                alt=""
+                className="aspect-square w-full object-cover transition duration-500 group-hover:scale-105"
+              />
             ) : (
               <div className="aspect-square w-full bg-border" />
             )}
@@ -71,7 +76,7 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
           data-testid="create-own"
           className={`${card} h-full items-center justify-center gap-3 border-dashed p-8 text-center sm:flex-row sm:gap-5 sm:text-left`}
         >
-          <Wand2 className="size-10 shrink-0 text-accent" />
+          <Wand2 className="size-10 shrink-0 text-accent transition duration-300 group-hover:-rotate-12 group-hover:scale-110" />
           <div className="flex flex-col gap-1">
             <h2 className="text-xl font-extrabold">{t("catalog.own.title")}</h2>
             <p className="text-sm text-muted">{t("catalog.own.text")}</p>
