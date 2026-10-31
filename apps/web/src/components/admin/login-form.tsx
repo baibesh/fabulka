@@ -5,13 +5,15 @@ import { KeyRound, Loader2, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { adminLogin, adminLoginOptions } from "@/lib/admin-api";
-import { button, input } from "./ui";
+import { LanguageSwitch } from "./language-switch";
+import { button, input, useAdminI18n } from "./ui";
 
 /**
  * The way in: Keycloak (realm role `admin`, 2FA there) and, only when ADMIN_PASSWORD_LOGIN is on, the
  * emergency email and password. An older API without the options gets the password form.
  */
 export function LoginForm() {
+  const { t } = useAdminI18n();
   const options = useQuery({ queryKey: ["admin-login-options"], queryFn: adminLoginOptions, retry: false });
   const keycloak = options.data?.keycloak ?? false;
   const password = options.data?.password ?? options.isError;
@@ -20,7 +22,7 @@ export function LoginForm() {
     <div data-testid="admin-login" className="flex w-full max-w-sm flex-col gap-4 rounded-3xl border border-border bg-card p-8">
       <div className="flex items-center gap-2 text-xl font-extrabold">
         <Lock className="size-5 text-accent" />
-        Вход в админку
+        {t("admin.login.title")}
       </div>
       {options.isPending && <Loader2 className="size-5 animate-spin text-muted" />}
       {keycloak && (
@@ -30,16 +32,18 @@ export function LoginForm() {
           className={`${button} flex items-center justify-center gap-2 py-3`}
         >
           <KeyRound className="size-4" />
-          Войти через Fabulka ID
+          {t("admin.login.keycloak")}
         </a>
       )}
-      {keycloak && password && <p className="text-center text-xs text-muted">или аварийный вход</p>}
+      {keycloak && password && <p className="text-center text-xs text-muted">{t("admin.login.or")}</p>}
       {password && <PasswordForm />}
+      <LanguageSwitch className="self-center" />
     </div>
   );
 }
 
 function PasswordForm() {
+  const { t } = useAdminI18n();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,11 +58,11 @@ function PasswordForm() {
       className="flex flex-col gap-4"
     >
       <label className="flex flex-col gap-1.5 text-sm font-semibold">
-        Почта
+        {t("admin.login.email")}
         <input data-testid="admin-email" type="email" autoComplete="username" className={input} value={email} onChange={(e) => setEmail(e.target.value)} />
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-semibold">
-        Пароль
+        {t("admin.login.password")}
         <input
           data-testid="admin-password"
           type="password"
@@ -75,7 +79,7 @@ function PasswordForm() {
       )}
       <button type="submit" data-testid="admin-submit" disabled={login.isPending} className={`${button} flex items-center justify-center gap-2 py-3`}>
         {login.isPending && <Loader2 className="size-4 animate-spin" />}
-        Войти
+        {t("admin.login.submit")}
       </button>
     </form>
   );

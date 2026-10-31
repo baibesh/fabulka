@@ -16,42 +16,8 @@ import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 import { adminMethodology, createMethodology, deleteMethodology, previewMethodology, updateMethodology } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
-import { button, Card, ghostButton, input, PageTitle } from "./ui";
+import { button, Card, ghostButton, input, PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
-
-/** The page's words, kept together for the admin's translation. */
-const TEXT = {
-  back: "← Методики",
-  newTitle: "Новая методика",
-  loading: "Загружаем…",
-  save: "Сохранить",
-  saved: "Сохранено",
-  texts: "Название и описание для родителей",
-  textsHint: "Для публикации нужны все три языка; черновик можно сохранить с одним русским.",
-  name: "Название",
-  summary: "Описание",
-  missing: "не заполнено",
-  basics: "Основное",
-  slug: "Адрес (латиница, цифры и дефисы; потом не меняется)",
-  source: "Источник: на чём основана методика",
-  ageMin: "Возраст от",
-  ageMax: "до",
-  published: "Опубликована: предлагается родителям",
-  sortOrder: "Порядок в списках (меньше — выше)",
-  prompt: "Для Muse Spark (по-английски, по одному пункту в строке)",
-  structure: "Шаги сюжета по порядку",
-  rules: "Правила",
-  avoid: "Чего избегать",
-  preview: "Предпросмотр промпта",
-  previewLead: (age: number) => `Так методика попадёт в промпт Muse Spark — пример для ребёнка ${age} лет:`,
-  usage: (templates: number, books: number) => `Используют: книг каталога — ${templates}, книг — ${books}.`,
-  remove: "Удалить",
-  removeConfirm: "Удалить методику навсегда?",
-  removeYes: "Да, удалить",
-  removeNo: "Отмена",
-  unpublish: "Снять с публикации",
-  check: "Проверьте поля:",
-};
 
 const LANGS = [
   { code: "ru", label: "Русский" },
@@ -108,9 +74,10 @@ const fields = (d: Draft, sortOrder: number) => ({
 /** /admin/methodologies/[slug]: loads the method, then edits it. */
 export function MethodologyPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const { t } = useAdminI18n();
   const method = useQuery({ queryKey: ["admin", "methodology", slug], queryFn: () => adminMethodology(slug) });
   if (method.isError) return <p role="alert" className="text-red-600">{method.error.message}</p>;
-  if (!method.data) return <p className="text-muted">{TEXT.loading}</p>;
+  if (!method.data) return <p className="text-muted">{t("admin.loading")}</p>;
   // Keyed so the form starts over from the saved method after each save.
   return <MethodologyEditor key={method.data.updatedAt} initial={method.data} />;
 }
@@ -118,6 +85,7 @@ export function MethodologyPage({ params }: { params: Promise<{ slug: string }> 
 /** Edits a method, or with no `initial` creates one. */
 export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
   const router = useRouter();
+  const { t, locale } = useAdminI18n();
   const queryClient = useQueryClient();
   const all = useAdminMethodologies();
   const [draft, setDraft] = useState<Draft>(() =>
@@ -208,12 +176,12 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       className="flex flex-col gap-6"
     >
       <Link href="/admin/methodologies" className="text-sm font-semibold text-accent">
-        {TEXT.back}
+        {t("admin.method.back")}
       </Link>
       <PageTitle
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            {savedNow && <span data-testid="methodology-saved" className="text-sm text-emerald-600">{TEXT.saved}</span>}
+            {savedNow && <span data-testid="methodology-saved" className="text-sm text-emerald-600">{t("admin.saved")}</span>}
             {initial && !confirming && (
               <button
                 type="button"
@@ -225,22 +193,22 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
                 className={`${ghostButton} flex items-center gap-2 text-red-600`}
               >
                 <Trash2 className="size-4" />
-                {TEXT.remove}
+                {t("admin.delete")}
               </button>
             )}
             <button type="submit" data-testid="methodology-save" disabled={save.isPending} className={`${button} flex items-center gap-2`}>
               <Save className="size-4" />
-              {TEXT.save}
+              {t("admin.save")}
             </button>
           </div>
         }
       >
-        {initial ? initial.texts.ru.name || initial.slug : TEXT.newTitle}
+        {initial ? initial.texts[locale].name || initial.texts.ru.name || initial.slug : t("admin.method.newTitle")}
       </PageTitle>
 
       {confirming && (
         <div role="alertdialog" className="flex flex-wrap items-center gap-3 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm">
-          <span className="font-semibold">{TEXT.removeConfirm}</span>
+          <span className="font-semibold">{t("admin.method.remove.confirm")}</span>
           <button
             type="button"
             data-testid="methodology-delete-confirm"
@@ -248,10 +216,10 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
             onClick={() => remove.mutate()}
             className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-50"
           >
-            {TEXT.removeYes}
+            {t("admin.method.remove.yes")}
           </button>
           <button type="button" onClick={() => setConfirming(false)} className={ghostButton}>
-            {TEXT.removeNo}
+            {t("admin.method.remove.no")}
           </button>
         </div>
       )}
@@ -270,7 +238,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
               }}
               className={`${ghostButton} self-start`}
             >
-              {TEXT.unpublish}
+              {t("admin.method.unpublish")}
             </button>
           )}
         </div>
@@ -278,7 +246,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       {save.isError && <p role="alert" className="text-red-600">{save.error.message}</p>}
       {Object.keys(problems).length > 0 && (
         <div role="alert" data-testid="methodology-problems" className="rounded-xl bg-red-500/10 p-4 text-sm text-red-600">
-          {TEXT.check}
+          {t("admin.method.check")}
           <ul className="list-disc pl-5">
             {Object.values(problems).map((message) => (
               <li key={message}>{message}</li>
@@ -288,7 +256,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title={TEXT.texts}>
+        <Card title={t("admin.method.texts")}>
           <div role="tablist" className="flex gap-1 rounded-xl bg-background p-1">
             {LANGS.map(({ code, label: name }) => (
               <button
@@ -304,13 +272,13 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
               >
                 {name}
                 {(unfilled(code) || langProblem(code)) && (
-                  <span title={TEXT.missing} className={`size-1.5 rounded-full ${langProblem(code) ? "bg-red-600" : "bg-amber-500"}`} />
+                  <span title={t("admin.method.missing")} className={`size-1.5 rounded-full ${langProblem(code) ? "bg-red-600" : "bg-amber-500"}`} />
                 )}
               </button>
             ))}
           </div>
           <label className={label}>
-            {TEXT.name}
+            {t("admin.method.name")}
             <input
               key={`name-${lang}`}
               data-testid={`methodology-name-${lang}`}
@@ -321,7 +289,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
             {problem(`texts.${lang}.name`)}
           </label>
           <label className={label}>
-            {TEXT.summary}
+            {t("admin.method.summary")}
             <textarea
               key={`summary-${lang}`}
               data-testid={`methodology-summary-${lang}`}
@@ -331,12 +299,12 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
             />
             {problem(`texts.${lang}.summary`)}
           </label>
-          <p className="text-xs text-muted">{TEXT.textsHint}</p>
+          <p className="text-xs text-muted">{t("admin.method.texts.hint")}</p>
         </Card>
 
-        <Card title={TEXT.basics}>
+        <Card title={t("admin.method.basics")}>
           <label className={label}>
-            {TEXT.slug}
+            {t("admin.method.slug")}
             <input
               data-testid="methodology-slug"
               className={`${input} font-mono text-sm disabled:opacity-60`}
@@ -347,13 +315,13 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
             {problem("slug")}
           </label>
           <label className={label}>
-            {TEXT.source}
+            {t("admin.method.source")}
             <input data-testid="methodology-source" className={input} value={draft.source} onChange={(e) => set("source", e.target.value)} />
             {problem("source")}
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className={label}>
-              {TEXT.ageMin}
+              {t("admin.method.ageMin")}
               <input
                 type="number"
                 data-testid="methodology-age-min"
@@ -366,7 +334,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
               {problem("ageMin")}
             </label>
             <label className={label}>
-              {TEXT.ageMax}
+              {t("admin.method.ageMax")}
               <input
                 type="number"
                 data-testid="methodology-age-max"
@@ -380,7 +348,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
             </label>
           </div>
           <label className={label}>
-            {TEXT.sortOrder}
+            {t("admin.method.sortOrder")}
             <input
               type="number"
               data-testid="methodology-sort"
@@ -398,19 +366,19 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
               checked={draft.published}
               onChange={(e) => set("published", e.target.checked)}
             />
-            {TEXT.published}
+            {t("admin.method.published")}
           </label>
           {problem("published")}
           {initial && (
             <p data-testid="methodology-usage" className="text-sm text-muted">
-              {TEXT.usage(initial.templates, initial.books)}
+              {t("admin.method.usage", { templates: initial.templates, books: initial.books })}
             </p>
           )}
         </Card>
       </div>
 
       <Card
-        title={TEXT.prompt}
+        title={t("admin.method.prompt")}
         action={
           <button
             type="button"
@@ -420,13 +388,13 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
             className={`${ghostButton} flex items-center gap-2 py-1 text-sm`}
           >
             <Eye className="size-4" />
-            {TEXT.preview}
+            {t("admin.method.preview")}
           </button>
         }
       >
         <div className="grid gap-4 lg:grid-cols-3">
           <label className={label}>
-            {TEXT.structure}
+            {t("admin.method.structure")}
             <textarea
               data-testid="methodology-structure"
               className={`${input} min-h-48 font-mono text-xs`}
@@ -436,7 +404,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
             {problem("structure")}
           </label>
           <label className={label}>
-            {TEXT.rules}
+            {t("admin.method.rules")}
             <textarea
               data-testid="methodology-rules"
               className={`${input} min-h-48 font-mono text-xs`}
@@ -446,7 +414,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
             {problem("rules")}
           </label>
           <label className={label}>
-            {TEXT.avoid}
+            {t("admin.method.avoid")}
             <textarea
               data-testid="methodology-avoid"
               className={`${input} min-h-48 font-mono text-xs`}
@@ -459,7 +427,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
         {preview.isError && <p role="alert" className="text-red-600">{preview.error.message}</p>}
         {preview.data && (
           <div className="flex flex-col gap-2">
-            <p className="text-sm text-muted">{TEXT.previewLead(preview.data.age)}</p>
+            <p className="text-sm text-muted">{t("admin.method.preview.lead", { age: preview.data.age })}</p>
             <pre data-testid="methodology-preview-text" className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-background p-4 font-mono text-xs leading-relaxed">
               {preview.data.prompt}
             </pre>

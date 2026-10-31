@@ -14,36 +14,21 @@ import { ChevronDown, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { journalCall, journalCalls, journalErrors, journalStats } from "@/lib/admin-api";
-import { Badge, Card, formatDate, formatUsd, ghostButton, input, PageTitle, table } from "./ui";
-
-export const CALL_KIND: Record<ModelCallKind, string> = {
-  story: "Сказка",
-  review: "Проверка сказки",
-  "toy-cutout": "Вырезка игрушки",
-  "toy-describe": "Описание игрушки",
-  "toy-sheet": "Лист игрушки",
-  hero: "Герой",
-  pet: "Питомец",
-  page: "Страница",
-  "voice-transcribe": "Распознавание голоса",
-  "voice-extract": "Анкета из голоса",
-};
-
-const PERIOD: Record<JournalPeriod, string> = { "24h": "24 часа", "7d": "7 дней", "30d": "30 дней" };
-
-const ERROR_KIND = { js: "ошибка JS", api: "ответ API", unhandled: "необработанная" } as const;
-
-export const formatMs = (ms: number | null) => (ms === null ? "—" : ms < 1000 ? `${Math.round(ms)} мс` : `${(ms / 1000).toFixed(1)} с`);
+import { Badge, Card, formatUsd, ghostButton, input, PageTitle, table, useAdminI18n } from "./ui";
 
 export function CallStatus({ status }: { status: ModelCallStatus }) {
-  return status === "ok" ? <Badge tone="bg-emerald-500/15 text-emerald-600">ок</Badge> : <Badge tone="bg-red-500/15 text-red-600">ошибка</Badge>;
+  const { t } = useAdminI18n();
+  return <Badge tone={status === "ok" ? "bg-emerald-500/15 text-emerald-600" : "bg-red-500/15 text-red-600"}>{t(`admin.journal.status.${status}`)}</Badge>;
 }
 
 /** Tokens in → out, or the number of images: what the call was billed for. */
-function usage(call: ModelCall) {
-  if (call.images) return `${call.images} изобр.`;
-  if (call.inputTokens === null && call.outputTokens === null) return "—";
-  return `${call.inputTokens ?? 0} → ${call.outputTokens ?? 0}`;
+function useUsage() {
+  const { t, number } = useAdminI18n();
+  return (call: ModelCall) => {
+    if (call.images) return t("admin.journal.images", { count: call.images });
+    if (call.inputTokens === null && call.outputTokens === null) return "—";
+    return `${number(call.inputTokens ?? 0)} → ${number(call.outputTokens ?? 0)}`;
+  };
 }
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -58,6 +43,8 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 
 /** One call in full: the error and, for a failed call, what was sent and what came back. */
 export function CallDetail({ id, onClose }: { id: string; onClose: () => void }) {
+  const { t, date, ms } = useAdminI18n();
+  const usage = useUsage();
   const call = useQuery({ queryKey: ["admin", "journal", "call", id], queryFn: () => journalCall(id) });
   const c = call.data;
   return (
@@ -68,28 +55,28 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold">{c ? CALL_KIND[c.kind] : "Запрос"}</h2>
-          <button type="button" aria-label="Закрыть" onClick={onClose} className="rounded-xl p-2 text-muted hover:text-foreground">
+          <h2 className="text-lg font-bold">{c ? t(`admin.journal.kind.${c.kind}`) : t("admin.journal.call")}</h2>
+          <button type="button" aria-label={t("admin.close")} onClick={onClose} className="rounded-xl p-2 text-muted hover:text-foreground">
             <X className="size-5" />
           </button>
         </div>
         {call.isError && <p role="alert" className="text-red-600">{call.error.message}</p>}
-        {!c && !call.isError && <p className="text-muted">Загружаем…</p>}
+        {!c && !call.isError && <p className="text-muted">{t("admin.loading")}</p>}
         {c && (
           <>
             <div className="flex flex-wrap items-center gap-2">
               <CallStatus status={c.status} />
-              {c.attempt > 1 && <span className="text-sm text-muted">попытка {c.attempt}</span>}
+              {c.attempt > 1 && <span className="text-sm text-muted">{t("admin.attempt", { n: c.attempt })}</span>}
             </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
               {(
                 [
-                  ["Время", formatDate(c.createdAt)],
-                  ["Модель", c.model],
-                  ["Длительность", formatMs(c.latencyMs)],
-                  ["Токены / изображения", usage(c)],
-                  ["Стоимость", formatUsd(c.costUsd)],
-                  ["Ответ", c.responseId ?? "—"],
+                  [t("admin.journal.time"), date(c.createdAt)],
+                  [t("admin.journal.model"), c.model],
+                  [t("admin.journal.duration"), ms(c.latencyMs)],
+                  [t("admin.journal.usage"), usage(c)],
+                  [t("admin.journal.cost"), formatUsd(c.costUsd)],
+                  [t("admin.journal.response"), c.responseId ?? "—"],
                 ] as const
               ).map(([label, value]) => (
                 <div key={label} className="contents">
@@ -97,11 +84,11 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
                   <dd className="break-all">{value}</dd>
                 </div>
               ))}
-              <dt className="text-muted">Книга</dt>
+              <dt className="text-muted">{t("admin.journal.book")}</dt>
               <dd>
                 {c.bookId ? (
                   <Link href={`/admin/books/${c.bookId}`} className="font-semibold text-accent">
-                    {c.bookTitle ?? "Без названия"}
+                    {c.bookTitle ?? t("admin.untitled")}
                   </Link>
                 ) : (
                   "—"
@@ -115,8 +102,8 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
               </p>
             )}
             {[
-              ["Запрос", c.prompt],
-              ["Ответ модели", c.output],
+              [t("admin.journal.prompt"), c.prompt],
+              [t("admin.journal.output"), c.output],
             ].map(
               ([label, text]) =>
                 text && (
@@ -127,7 +114,7 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
                 ),
             )}
             {c.status === "error" && !c.prompt && !c.output && (
-              <p className="text-xs text-muted">Текст запроса не сохранён: его нет у этого вызова или прошло 30 дней.</p>
+              <p className="text-xs text-muted">{t("admin.journal.noPrompt")}</p>
             )}
           </>
         )}
@@ -137,46 +124,55 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
 }
 
 function Summary({ period }: { period: JournalPeriod }) {
+  const { t, number, percent, ms } = useAdminI18n();
   const stats = useQuery({ queryKey: ["admin", "journal", "stats", period], queryFn: () => journalStats(period), refetchInterval: 10_000 });
   if (stats.isError) return <p role="alert" className="text-red-600">{stats.error.message}</p>;
   const s = stats.data;
   return (
     <section data-testid="journal-summary" className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <Stat label="Запросов" value={s ? String(s.calls) : "…"} hint={`за ${PERIOD[period]}`} />
-        <Stat label="Доля ошибок" value={s ? (s.calls ? `${((s.errors / s.calls) * 100).toFixed(1)}%` : "—") : "…"} hint={s ? `ошибок: ${s.errors}` : undefined} />
-        <Stat label="Расход" value={s ? formatUsd(s.costUsd) : "…"} />
-        <Stat label="Ошибок у пользователей" value={s ? String(s.clientErrors) : "…"} />
+        <Stat
+          label={t("admin.journal.calls")}
+          value={s ? number(s.calls) : "…"}
+          hint={t("admin.journal.forPeriod", { period: t(`admin.journal.period.${period}`) })}
+        />
+        <Stat
+          label={t("admin.journal.errorShare")}
+          value={s ? (s.calls ? percent(s.errors / s.calls, 1) : "—") : "…"}
+          hint={s ? t("admin.journal.errors", { count: number(s.errors) }) : undefined}
+        />
+        <Stat label={t("admin.journal.spend")} value={s ? formatUsd(s.costUsd) : "…"} />
+        <Stat label={t("admin.journal.clientErrors")} value={s ? number(s.clientErrors) : "…"} />
       </div>
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <table className={table}>
           <thead>
             <tr>
-              <th>Тип</th>
-              <th>Модель</th>
-              <th className="text-right">Запросов</th>
-              <th className="text-right">Ошибок</th>
+              <th>{t("admin.journal.kind")}</th>
+              <th>{t("admin.journal.model")}</th>
+              <th className="text-right">{t("admin.journal.calls")}</th>
+              <th className="text-right">{t("admin.journal.errorsCol")}</th>
               <th className="text-right">p50</th>
               <th className="text-right">p95</th>
-              <th className="text-right">Ср. цена</th>
+              <th className="text-right">{t("admin.journal.avgCost")}</th>
             </tr>
           </thead>
           <tbody>
             {s?.byModel.map((row) => (
               <tr key={`${row.kind}/${row.model}`}>
-                <td className="whitespace-nowrap">{CALL_KIND[row.kind]}</td>
+                <td className="whitespace-nowrap">{t(`admin.journal.kind.${row.kind}`)}</td>
                 <td className="text-muted">{row.model}</td>
-                <td className="text-right tabular-nums">{row.calls}</td>
-                <td className={`text-right tabular-nums ${row.errors ? "font-bold text-red-600" : "text-muted"}`}>{row.errors}</td>
-                <td className="text-right tabular-nums">{formatMs(row.p50Ms)}</td>
-                <td className="text-right tabular-nums">{formatMs(row.p95Ms)}</td>
+                <td className="text-right tabular-nums">{number(row.calls)}</td>
+                <td className={`text-right tabular-nums ${row.errors ? "font-bold text-red-600" : "text-muted"}`}>{number(row.errors)}</td>
+                <td className="text-right tabular-nums">{ms(row.p50Ms)}</td>
+                <td className="text-right tabular-nums">{ms(row.p95Ms)}</td>
                 <td className="text-right tabular-nums">{formatUsd(row.avgCostUsd)}</td>
               </tr>
             ))}
             {s?.byModel.length === 0 && (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-muted">
-                  Запросов за этот период не было
+                  {t("admin.journal.noCalls.period")}
                 </td>
               </tr>
             )}
@@ -188,6 +184,8 @@ function Summary({ period }: { period: JournalPeriod }) {
 }
 
 function Calls({ period }: { period: JournalPeriod }) {
+  const { t, date, ms } = useAdminI18n();
+  const usage = useUsage();
   const [kind, setKind] = useState<ModelCallKind | "">("");
   const [status, setStatus] = useState<ModelCallStatus | "">("");
   const [open, setOpen] = useState<string | null>(null);
@@ -202,20 +200,20 @@ function Calls({ period }: { period: JournalPeriod }) {
   return (
     <Card>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="font-bold">Запросы</h2>
+        <h2 className="font-bold">{t("admin.journal.requests")}</h2>
         <div className="flex flex-col gap-2 sm:flex-row">
           <select data-testid="journal-filter-kind" className={`${input} sm:w-48`} value={kind} onChange={(e) => setKind(e.target.value as ModelCallKind | "")}>
-            <option value="">Все типы</option>
+            <option value="">{t("admin.journal.allKinds")}</option>
             {MODEL_CALL_KINDS.map((k) => (
               <option key={k} value={k}>
-                {CALL_KIND[k]}
+                {t(`admin.journal.kind.${k}`)}
               </option>
             ))}
           </select>
           <select data-testid="journal-filter-status" className={`${input} sm:w-36`} value={status} onChange={(e) => setStatus(e.target.value as ModelCallStatus | "")}>
-            <option value="">Все</option>
-            <option value="ok">Успешные</option>
-            <option value="error">Ошибки</option>
+            <option value="">{t("admin.journal.all")}</option>
+            <option value="ok">{t("admin.journal.ok")}</option>
+            <option value="error">{t("admin.journal.failed")}</option>
           </select>
         </div>
       </div>
@@ -224,13 +222,13 @@ function Calls({ period }: { period: JournalPeriod }) {
         <table data-testid="journal-calls" className={table}>
           <thead>
             <tr>
-              <th>Время</th>
-              <th>Тип</th>
-              <th>Статус</th>
-              <th className="text-right">Длительность</th>
-              <th className="text-right">Токены</th>
-              <th className="text-right">Цена</th>
-              <th>Книга</th>
+              <th>{t("admin.journal.time")}</th>
+              <th>{t("admin.journal.kind")}</th>
+              <th>{t("admin.journal.status")}</th>
+              <th className="text-right">{t("admin.journal.duration")}</th>
+              <th className="text-right">{t("admin.journal.tokens")}</th>
+              <th className="text-right">{t("admin.journal.price")}</th>
+              <th>{t("admin.journal.book")}</th>
             </tr>
           </thead>
           <tbody>
@@ -245,25 +243,25 @@ function Calls({ period }: { period: JournalPeriod }) {
                 onKeyDown={(e) => e.key === "Enter" && setOpen(call.id)}
                 className="cursor-pointer hover:bg-background/60"
               >
-                <td className="whitespace-nowrap text-muted">{formatDate(call.createdAt)}</td>
+                <td className="whitespace-nowrap text-muted">{date(call.createdAt)}</td>
                 <td>
-                  <span className="font-semibold whitespace-nowrap">{CALL_KIND[call.kind]}</span>
+                  <span className="font-semibold whitespace-nowrap">{t(`admin.journal.kind.${call.kind}`)}</span>
                   <div className="text-xs text-muted">
                     {call.model}
-                    {call.attempt > 1 && ` · попытка ${call.attempt}`}
+                    {call.attempt > 1 && ` · ${t("admin.attempt", { n: call.attempt })}`}
                   </div>
                 </td>
                 <td>
                   <CallStatus status={call.status} />
                   {call.errorCode && <div className="text-xs text-red-600">{call.errorCode}</div>}
                 </td>
-                <td className="text-right tabular-nums">{formatMs(call.latencyMs)}</td>
+                <td className="text-right tabular-nums">{ms(call.latencyMs)}</td>
                 <td className="text-right whitespace-nowrap tabular-nums text-muted">{usage(call)}</td>
                 <td className="text-right tabular-nums">{formatUsd(call.costUsd)}</td>
                 <td>
                   {call.bookId ? (
                     <Link href={`/admin/books/${call.bookId}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-accent">
-                      открыть
+                      {t("admin.journal.open")}
                     </Link>
                   ) : (
                     <span className="text-muted">—</span>
@@ -274,7 +272,7 @@ function Calls({ period }: { period: JournalPeriod }) {
             {rows?.length === 0 && (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-muted">
-                  Запросов нет
+                  {t("admin.journal.noCalls")}
                 </td>
               </tr>
             )}
@@ -283,7 +281,7 @@ function Calls({ period }: { period: JournalPeriod }) {
       </div>
       {calls.hasNextPage && (
         <button type="button" data-testid="journal-more" disabled={calls.isFetchingNextPage} onClick={() => void calls.fetchNextPage()} className={`${ghostButton} self-center`}>
-          {calls.isFetchingNextPage ? "Загружаем…" : "Показать ещё"}
+          {calls.isFetchingNextPage ? t("admin.loading") : t("admin.journal.more")}
         </button>
       )}
       {open && <CallDetail id={open} onClose={() => setOpen(null)} />}
@@ -292,6 +290,7 @@ function Calls({ period }: { period: JournalPeriod }) {
 }
 
 function ErrorRow({ group }: { group: ClientErrorGroup }) {
+  const { t, date, number } = useAdminI18n();
   const [open, setOpen] = useState(false);
   return (
     <li data-testid="journal-error-row" className="border-t border-border first:border-t-0">
@@ -300,17 +299,17 @@ function ErrorRow({ group }: { group: ClientErrorGroup }) {
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="font-semibold break-words">{group.message}</span>
           <span className="text-xs text-muted">
-            {group.path} · последний раз {formatDate(group.lastSeen)}
+            {group.path} · {t("admin.journal.lastSeen", { date: date(group.lastSeen) })}
           </span>
         </span>
-        <span className="shrink-0 rounded-full bg-red-500/15 px-2.5 py-0.5 text-xs font-bold text-red-600 tabular-nums">{group.count}</span>
+        <span className="shrink-0 rounded-full bg-red-500/15 px-2.5 py-0.5 text-xs font-bold text-red-600 tabular-nums">{number(group.count)}</span>
       </button>
       {open && (
         <ul className="flex flex-col gap-2 px-5 pb-4 pl-12 text-xs text-muted">
           {group.recent.map((e) => (
             <li key={e.id} className="flex flex-col gap-0.5">
               <span className="text-foreground">
-                {formatDate(e.createdAt)} · {ERROR_KIND[e.kind]}
+                {date(e.createdAt)} · {t(`admin.journal.errorKind.${e.kind}`)}
                 {e.status !== null && ` · ${e.status}`}
                 {e.code && ` · ${e.code}`}
                 {e.locale && ` · ${e.locale}`}
@@ -325,12 +324,13 @@ function ErrorRow({ group }: { group: ClientErrorGroup }) {
 }
 
 function Errors({ period }: { period: JournalPeriod }) {
+  const { t } = useAdminI18n();
   const errors = useQuery({ queryKey: ["admin", "journal", "errors", period], queryFn: () => journalErrors(period), refetchInterval: 10_000 });
   return (
     <section data-testid="journal-errors" className="overflow-hidden rounded-2xl border border-border bg-card">
       {errors.isError && <p role="alert" className="p-5 text-red-600">{errors.error.message}</p>}
-      {!errors.data && !errors.isError && <p className="p-5 text-muted">Загружаем…</p>}
-      {errors.data?.length === 0 && <p className="p-8 text-center text-muted">Ошибок у пользователей за этот период не было</p>}
+      {!errors.data && !errors.isError && <p className="p-5 text-muted">{t("admin.loading")}</p>}
+      {errors.data?.length === 0 && <p className="p-8 text-center text-muted">{t("admin.journal.noErrors")}</p>}
       <ul>
         {errors.data?.map((group) => (
           <ErrorRow key={`${group.path}\n${group.message}`} group={group} />
@@ -342,6 +342,7 @@ function Errors({ period }: { period: JournalPeriod }) {
 
 /** Model calls and the errors visitors ran into, for finding what breaks and what it costs. */
 export function Journal() {
+  const { t } = useAdminI18n();
   const [period, setPeriod] = useState<JournalPeriod>("24h");
   const [tab, setTab] = useState<"calls" | "errors">("calls");
   const tabClass = (active: boolean) => `rounded-xl px-4 py-2 text-sm font-semibold whitespace-nowrap ${active ? "bg-accent/15 text-accent" : "text-muted hover:text-foreground"}`;
@@ -353,20 +354,20 @@ export function Journal() {
           <select data-testid="journal-period" className={`${input} sm:w-40`} value={period} onChange={(e) => setPeriod(e.target.value as JournalPeriod)}>
             {JOURNAL_PERIODS.map((p) => (
               <option key={p} value={p}>
-                {PERIOD[p]}
+                {t(`admin.journal.period.${p}`)}
               </option>
             ))}
           </select>
         }
       >
-        Журнал
+        {t("admin.journal.title")}
       </PageTitle>
       <div role="tablist" className="flex gap-1 overflow-x-auto">
         <button type="button" role="tab" aria-selected={tab === "calls"} data-testid="journal-tab-calls" onClick={() => setTab("calls")} className={tabClass(tab === "calls")}>
-          Запросы к моделям
+          {t("admin.journal.tab.calls")}
         </button>
         <button type="button" role="tab" aria-selected={tab === "errors"} data-testid="journal-tab-errors" onClick={() => setTab("errors")} className={tabClass(tab === "errors")}>
-          Ошибки пользователей
+          {t("admin.journal.tab.errors")}
         </button>
       </div>
       {tab === "calls" ? (

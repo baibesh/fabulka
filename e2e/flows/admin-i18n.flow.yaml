@@ -1,0 +1,38 @@
+# The admin's language: Russian by default, the switch in the sidebar turns it to English and back,
+# and the choice is the site's too.
+appId: ${WEB}
+tags: [admin, i18n]
+commands:
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/?lang=ru"
+  # The hero's covers render only after hydration, by when the page has saved the language.
+  - waitForVisible: { testId: hero-covers }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "admin@e2e.test"
+  - tapOn: { testId: admin-password }
+  - inputText: "e2e-admin-password"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - assertVisible: { testId: admin-nav-books, text: "Книги" }
+
+  # English: the nav and the page switch at once.
+  - tapOn: { testId: admin-lang-en }
+  - waitForVisible: { testId: admin-nav-books, text: "Books" }
+  - assertVisible: { testId: admin-nav-journal, text: "Journal" }
+  - assertVisible: "Generation is running"
+  - tapOn: { testId: admin-nav-orders }
+  - waitForVisible: { testId: orders-table }
+  - assertVisible: "Print orders"
+
+  # The choice is kept: another admin page opened afresh stays in English.
+  - openLink: "${WEB}/admin/books"
+  - waitForVisible: { testId: books-table }
+  - assertVisible: { testId: admin-nav-books, text: "Books" }
+
+  # Back to Russian.
+  - tapOn: { testId: admin-lang-ru }
+  - waitForVisible: { testId: admin-nav-books, text: "Книги" }
+  - assertVisible: { testId: admin-nav-dashboard, text: "Дашборд" }
+  - assertNotVisible: { text: "Books" }

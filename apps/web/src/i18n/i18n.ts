@@ -2,6 +2,7 @@
 
 import { COUNTRIES, languageFor, type Country } from "@fabulka/shared";
 import { useSyncExternalStore } from "react";
+import { format, type Vars } from "./format";
 import { MESSAGES, UI_LOCALES, type MessageKey, type UiLocale } from "./messages";
 
 const LOCALE_KEY = "fabulka.locale";
@@ -59,6 +60,15 @@ function currentLocale(): UiLocale {
   return languageFor(country, wanted);
 }
 
+/**
+ * The admin's language: ?lang= on this page, else the saved choice, else Russian. Not narrowed to the
+ * country's languages and not taken from the browser, so the panel opens in Russian until switched.
+ */
+function adminLocale(): UiLocale {
+  const asked = new URLSearchParams(window.location.search).get("lang");
+  return [asked, read(LOCALE_KEY)].find(isLocale) ?? "ru";
+}
+
 export function setLocale(locale: UiLocale) {
   // A ?lang= in the address outranks the saved choice, so a choice made here drops it.
   const url = new URL(window.location.href);
@@ -83,14 +93,13 @@ export function setCountry(country: Country) {
 /** Whether the visitor has picked a country yet (otherwise it is detected once). */
 export const countryChosen = () => read(COUNTRY_KEY) !== null;
 
-function format(text: string, vars?: Record<string, string | number>) {
-  return vars ? text.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? `{${name}}`)) : text;
-}
-
-/** Interface language and country. Pages render in Russian on the server, then switch. */
-export function useI18n() {
-  const locale = useSyncExternalStore(subscribe, currentLocale, () => "ru" as UiLocale);
+/**
+ * Interface language and country. Pages render in Russian on the server, then switch. The admin
+ * (`"admin"`) shares the saved language with the site but chooses it by its own rules.
+ */
+export function useI18n(scope: "site" | "admin" = "site") {
+  const locale = useSyncExternalStore(subscribe, scope === "admin" ? adminLocale : currentLocale, () => "ru" as UiLocale);
   const country = useSyncExternalStore(subscribe, currentCountry, () => "KZ" as Country);
-  const t = (key: MessageKey, vars?: Record<string, string | number>) => format(MESSAGES[locale][key], vars);
+  const t = (key: MessageKey, vars?: Vars) => format(MESSAGES[locale][key], vars, locale);
   return { locale, country, t };
 }
