@@ -112,7 +112,7 @@ html.login-pf,
 .pf-v5-c-login__header {
     display: flex;
     justify-content: center;
-    padding-block: 32px 20px;
+    padding-block: 8px 20px;
 }
 
 #kc-header-wrapper {
@@ -125,6 +125,34 @@ html.login-pf,
     text-transform: none;
     letter-spacing: -0.01em;
     line-height: 1;
+}
+
+a#kc-header-wrapper,
+a#kc-header-wrapper:hover {
+    text-decoration: none;
+}
+
+/* «← Вернуться на сайт» above the logo: the sign-in pages live on another domain. */
+#kc-back-to-site {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 20px;
+    padding: 8px 14px;
+    border-radius: var(--fabulka-radius-pill);
+    color: var(--fabulka-muted);
+    font-size: var(--fabulka-text-sm);
+    font-weight: 700;
+    text-decoration: none;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+#kc-back-to-site:hover,
+#kc-back-to-site:focus-visible {
+    background: var(--fabulka-accent-soft);
+    color: var(--fabulka-fg);
+    outline: none;
 }
 
 #kc-header-wrapper::before {
