@@ -1,0 +1,130 @@
+# Story methods in the admin: the owner adds one without touching code, previews what Muse Spark
+# gets, sees it offered on /create for a child of a fitting age, and deletes it; one in use is kept.
+appId: ${WEB}
+tags: [admin, methodologies]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  slug: "e2e-method-${Date.now()}"
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+commands:
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/?lang=ru"
+  # The hero's covers render only after hydration, by when the page has saved the language.
+  - waitForVisible: { testId: hero-covers }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+
+  # The seed methods are listed with what follows them.
+  - tapOn: { testId: admin-nav-methodologies }
+  - waitForVisible: { testId: methodologies-table }
+  - assertVisible: { css: "[data-testid=methodology-row][data-slug=social-story]" }
+
+  # A new method: names in all three languages, ages 5–7, one beat.
+  - tapOn: { testId: methodology-new }
+  - waitForVisible: { testId: methodology-editor }
+  - tapOn: { testId: methodology-slug }
+  - inputText: "${slug}"
+  - tapOn: { testId: methodology-name-ru }
+  - inputText: "Тестовая методика"
+  - tapOn: { testId: methodology-summary-ru }
+  - inputText: "Герой пробует новое и справляется."
+  - tapOn: { testId: methodology-tab-kk }
+  - tapOn: { testId: methodology-name-kk }
+  - inputText: "Сынақ әдістемесі"
+  - tapOn: { testId: methodology-summary-kk }
+  - inputText: "Кейіпкер жаңа нәрсені байқайды."
+  - tapOn: { testId: methodology-tab-en }
+  - tapOn: { testId: methodology-name-en }
+  - inputText: "Test method"
+  - tapOn: { testId: methodology-summary-en }
+  - inputText: "The hero tries something new."
+  - tapOn: { testId: methodology-source }
+  - inputText: "E2E test source"
+  - tapOn: { testId: methodology-age-min }
+  - eraseText
+  - inputText: "5"
+  - tapOn: { testId: methodology-age-max }
+  - eraseText
+  - inputText: "7"
+  - tapOn: { testId: methodology-structure }
+  - inputText: "The hero tries something new and feels unsure."
+
+  # The preview shows the method part of the prompt for a 6-year-old.
+  - tapOn: { testId: methodology-preview }
+  - waitForVisible: { testId: methodology-preview-text }
+  - assertVisible: { contains: "Story method: ${slug} (E2E test source)" }
+  - assertVisible: { contains: "- The hero tries something new and feels unsure." }
+  - assertVisible: { contains: "ребёнка 6 лет" }
+
+  - tapOn: { testId: methodology-published }
+  - tapOn: { testId: methodology-save }
+  - waitForVisible: { testId: methodology-usage }
+  - assertUrl: { equals: "${WEB}/admin/methodologies/${slug}" }
+  - sql:
+      query: >-
+        select published, "ageMin" as min, "ageMax" as max, texts->'kk'->>'name' as kk, jsonb_array_length(structure) as beats
+        from "Methodology" where slug = $1
+      params: ["${slug}"]
+      readOnly: true
+      assert:
+        rows: 1
+        first: { published: true, min: 5, max: 7, kk: "Сынақ әдістемесі", beats: 1 }
+
+  # On /create it is offered for a 6-year-old and follows the parent's choice to the review.
+  - openLink: "${WEB}/create?lang=ru"
+  - waitForVisible: { css: "[data-step=voice]" }
+  - tapOn: { testId: voice-manual }
+  - waitForVisible: { css: "[data-step=child]" }
+  - tapOn: { testId: child-name }
+  - inputText: "Методика"
+  - selectOption: { testId: child-age, option: "6" }
+  - tapOn: { testId: child-interests }
+  - inputText: "мячи"
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { css: "[data-step=story]" }
+  - selectOption: { testId: book-methodology, optionValue: "${slug}" }
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { css: "[data-step=toy]" }
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { testId: wizard-review }
+  - assertVisible: { text: "Тестовая методика" }
+
+  # A method in use is not deleted: the admin is told to unpublish it instead.
+  - openLink: "${WEB}/admin/methodologies/social-story"
+  - waitForVisible: { testId: methodology-editor }
+  - tapOn: { testId: methodology-delete }
+  - tapOn: { testId: methodology-delete-confirm }
+  - waitForVisible: { testId: methodology-delete-error }
+  - assertVisible: { contains: "Снимите её с публикации" }
+  - assertVisible: { testId: methodology-unpublish }
+
+  # The new one is deleted; a book can no longer ask for it.
+  - openLink: "${WEB}/admin/methodologies/${slug}"
+  - waitForVisible: { testId: methodology-editor }
+  - tapOn: { testId: methodology-delete }
+  - tapOn: { testId: methodology-delete-confirm }
+  - waitForVisible: { testId: methodologies-table }
+  - assertVisible: { css: "[data-testid=methodology-row][data-slug=social-story]" }
+  - assertNotVisible: { css: "[data-slug=${slug}]" }
+  - request:
+      method: POST
+      url: ${API}/books
+      headers: { X-Client-Key: "e2e-${slug}" }
+      json:
+        child: { name: Методика, age: 6, gender: girl, interests: [мячи], city: Алматы }
+        methodology: "${slug}"
+      assert: { status: 400, json: { "$.code": methodology_unknown } }
+after:
+  - sql: { exec: "delete from \"Methodology\" where slug = $1", params: ["${slug}"] }

@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import type { BooksService } from '../books/books.service';
+import type { MethodologiesService } from '../methodologies/methodologies.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { QuotaService } from '../quota/quota.service';
 import type { SettingsService } from '../settings/settings.service';
@@ -16,6 +17,7 @@ function makeService(prisma: unknown) {
     {} as SettingsService,
     {} as StorageService,
     {} as TemplatesService,
+    {} as MethodologiesService,
     { get: () => 150 } as unknown as ConfigService,
   );
 }

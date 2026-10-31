@@ -5,8 +5,11 @@ import {
   ChildProfileSchema,
   ClientErrorReportSchema,
   CreateBookSchema,
+  CreateMethodologySchema,
+  DEFAULT_METHODOLOGIES,
   JournalCallsQuerySchema,
-  METHODOLOGIES,
+  MethodologySlugSchema,
+  UpdateMethodologySchema,
   ageBand,
   defaultMethodology,
   fitsAge,
@@ -93,32 +96,96 @@ describe("orders", () => {
 
 describe("methodologies", () => {
   const child = { name: "Арман", age: 3, gender: "boy", interests: ["машинки"], city: "Астана" };
+  const method = (slug: string, ageMin: number, ageMax: number) => ({ slug, ageMin, ageMax });
 
   it("covers every age from 2 to 10 with a default that fits", () => {
     for (let age = 2; age <= 10; age++) {
-      expect(fitsAge(defaultMethodology(age), age)).toBe(true);
+      const picked = defaultMethodology(DEFAULT_METHODOLOGIES, age);
+      expect(picked && fitsAge(picked, age)).toBe(true);
       expect(ageBand(age).ageMin).toBeLessThanOrEqual(age);
+    }
+    expect(defaultMethodology(DEFAULT_METHODOLOGIES, 3)?.slug).toBe("toddler-routine");
+    expect(defaultMethodology(DEFAULT_METHODOLOGIES, 7)?.slug).toBe("adventure-quest");
+  });
+
+  it("falls back to the first method that fits when the usual one is not offered", () => {
+    const methods = [method("growth-mindset", 5, 10), method("social-story", 2, 8), method("sel-emotions", 4, 10)];
+    expect(defaultMethodology(methods, 3)?.slug).toBe("social-story");
+    expect(defaultMethodology(methods, 9)?.slug).toBe("growth-mindset");
+    expect(defaultMethodology([method("adventure-quest", 4, 10)], 2)).toBeUndefined();
+  });
+
+  it("seeds unique slugs, at least three beats and text in every language", () => {
+    expect(new Set(DEFAULT_METHODOLOGIES.map((m) => m.slug)).size).toBe(DEFAULT_METHODOLOGIES.length);
+    for (const m of DEFAULT_METHODOLOGIES) {
+      expect(m.structure.length).toBeGreaterThanOrEqual(3);
+      expect(MethodologySlugSchema.safeParse(m.slug).success).toBe(true);
+      expect(CreateMethodologySchema.safeParse({ ...m, published: true, sortOrder: 0 }).success).toBe(true);
     }
   });
 
-  it("has unique slugs and at least three beats each", () => {
-    expect(new Set(METHODOLOGIES.map((m) => m.slug)).size).toBe(METHODOLOGIES.length);
-    for (const m of METHODOLOGIES) expect(m.structure.length).toBeGreaterThanOrEqual(3);
+  it("takes slugs of lowercase latin letters, digits and dashes", () => {
+    for (const slug of ["calm-down", "abc-2", "x9"]) expect(MethodologySlugSchema.safeParse(slug).success).toBe(true);
+    for (const slug of ["Calm", "сказка", "a_b", "-a", "a--b", "a", "a".repeat(41), "new"]) {
+      expect(MethodologySlugSchema.safeParse(slug).success).toBe(false);
+    }
   });
 
-  it("rejects a method meant for older children", () => {
-    const result = CreateBookSchema.safeParse({ child, methodology: "growth-mindset" });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0].path).toEqual(["methodology"]);
+  describe("the admin's input", () => {
+    const texts = (name: string) => ({ name, summary: `${name}: summary` });
+    const input = {
+      texts: { ru: texts("Спокойствие"), kk: texts("Тыныштық"), en: texts("Calm") },
+      source: "Mindfulness for children",
+      ageMin: 5,
+      ageMax: 7,
+      structure: ["The hero is upset."],
+      rules: [],
+      avoid: [],
+      published: true,
+      sortOrder: 10,
+    };
+    const problems = (value: unknown) =>
+      UpdateMethodologySchema.safeParse(value).error?.issues.map((i) => i.path.join(".")) ?? [];
+
+    it("accepts a full method", () => {
+      expect(problems(input)).toEqual([]);
+      expect(CreateMethodologySchema.safeParse({ ...input, slug: "calm" }).success).toBe(true);
+    });
+
+    it("keeps ages in order and within 2–12", () => {
+      expect(problems({ ...input, ageMin: 8, ageMax: 6 })).toEqual(["ageMax"]);
+      expect(problems({ ...input, ageMin: 1 })).toEqual(["ageMin"]);
+      expect(problems({ ...input, ageMax: 13 })).toEqual(["ageMax"]);
+    });
+
+    it("needs at least one beat, and no empty lines", () => {
+      expect(problems({ ...input, structure: [] })).toEqual(["structure"]);
+      expect(problems({ ...input, rules: ["  "] })).toEqual(["rules.0"]);
+    });
+
+    it("always needs the Russian name and summary", () => {
+      const draft = { ...input, published: false, texts: { ...input.texts, ru: { name: "", summary: "" } } };
+      expect(problems(draft)).toEqual(["texts.ru.name", "texts.ru.summary"]);
+    });
+
+    it("publishes only with every language filled in, while a draft may wait", () => {
+      const untranslated = { ...input, texts: { ...input.texts, kk: texts(""), en: { name: "Calm", summary: "" } } };
+      expect(problems({ ...untranslated, published: false })).toEqual([]);
+      const result = UpdateMethodologySchema.safeParse(untranslated);
+      expect(result.error?.issues.map((i) => [i.path.join("."), i.message])).toEqual([
+        ["published", expect.stringContaining("kk, en")],
+      ]);
+    });
   });
 
-  it("accepts a fitting method with a theme", () => {
+  it("leaves checking the method itself to the API", () => {
     const result = CreateBookSchema.parse({
       child,
       methodology: "social-story",
       theme: "первый день в детском саду",
     });
     expect(result.methodology).toBe("social-story");
+    expect(CreateBookSchema.safeParse({ child, methodology: "Not A Slug" }).success).toBe(false);
   });
 });
 

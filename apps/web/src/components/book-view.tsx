@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { COUNTRY_INFO, COVER_PRICE_KZT, methodologyText, type Book, type BookStatus } from "@fabulka/shared";
+import { COUNTRY_INFO, COVER_PRICE_KZT, type Book, type BookStatus } from "@fabulka/shared";
 import { AlertTriangle, Check, Download, MessageCircleQuestion, Printer, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
@@ -9,6 +9,7 @@ import { use } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { getBook, wantPrint } from "@/lib/api";
 import { formatKzt } from "@/lib/format";
+import { useMethodologies } from "@/lib/use-methodologies";
 import { BookReader } from "./book-reader";
 import { ErrorNotice } from "./error-notice";
 import { SavePrompt } from "./save-prompt";
@@ -17,16 +18,19 @@ const finished = (status: BookStatus | undefined) => status === "done" || status
 
 export function BookView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { t, locale, country } = useI18n();
+  const { t, country } = useI18n();
   const { data: book, error } = useQuery({
     queryKey: ["book", id],
     queryFn: () => getBook(id),
     refetchInterval: (query) => (finished(query.state.data?.status) ? false : 1000),
   });
+  const { data: methods } = useMethodologies();
 
   if (error) return <ErrorNotice error={error} />;
   if (!book) return <p className="text-muted">{t("common.loading")}</p>;
   const done = book.status === "done";
+  // An unpublished method is no longer listed: the line is left out rather than showing a slug.
+  const method = methods?.find((m) => m.slug === book.methodology);
 
   return (
     <div className="flex flex-col gap-8">
@@ -49,9 +53,11 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
           <h1 data-testid="book-title" className="text-3xl font-extrabold">
             {book.title}
           </h1>
-          <p data-testid="book-methodology" className="text-muted">
-            {t("book.method", { name: methodologyText(book.methodology, locale).name })}
-          </p>
+          {method && (
+            <p data-testid="book-methodology" className="text-muted">
+              {t("book.method", { name: method.name })}
+            </p>
+          )}
         </motion.div>
       )}
 

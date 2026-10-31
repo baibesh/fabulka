@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, LayoutDashboard, Library, LogOut, Package, ScrollText } from "lucide-react";
+import { BookOpen, GraduationCap, LayoutDashboard, Library, LogOut, Package, ScrollText } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
@@ -13,6 +13,7 @@ const NAV = [
   { href: "/admin/books", label: "Книги", icon: BookOpen },
   { href: "/admin/orders", label: "Заказы", icon: Package },
   { href: "/admin/catalog", label: "Каталог", icon: Library },
+  { href: "/admin/methodologies", label: "Методики", icon: GraduationCap },
   { href: "/admin/journal", label: "Журнал", icon: ScrollText },
 ];
 

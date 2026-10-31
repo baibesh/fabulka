@@ -42,6 +42,7 @@ const ru = {
   "landing.hero.price": "Первые книги — бесплатно, дальше — от {price}.",
 
   "landing.trust.methods": "{count} методик детского развития",
+  "landing.trust.methods.any": "Методики детского развития",
   "landing.trust.languages": "{count} языка: қазақша, русский, English",
   "landing.trust.print": "Печать и доставка по Казахстану",
   "landing.trust.data": "Данные детей хранятся в Казахстане",
@@ -137,6 +138,7 @@ const ru = {
   "template.changes.toy": "Любимая игрушка — по фото она будет на каждой странице",
   "template.changes.answer": "в книге будет ваш ответ",
   "template.changes.same": "Не меняется: сюжет и методика — {method}.",
+  "template.changes.same.plain": "Не меняется: сюжет и методика.",
 
   "sample.title": "Так выглядит книга — у вас будет своя",
   "sample.lead": "Эту книгу сделали для ребёнка по имени {name}. Листайте стрелками, кликом или свайпом.",
@@ -354,6 +356,7 @@ const kk: Messages = {
   "landing.hero.price": "Алғашқы кітаптар — тегін, одан кейін — {price} бастап.",
 
   "landing.trust.methods": "Бала дамуының {count} әдістемесі",
+  "landing.trust.methods.any": "Бала дамуының әдістемелері",
   "landing.trust.languages": "{count} тіл: қазақша, русский, English",
   "landing.trust.print": "Қазақстан бойынша басып шығару және жеткізу",
   "landing.trust.data": "Балалардың деректері Қазақстанда сақталады",
@@ -450,6 +453,7 @@ const kk: Messages = {
   "template.changes.toy": "Сүйікті ойыншық — фотосы бойынша әр бетте болады",
   "template.changes.answer": "кітапта сіздің жауабыңыз болады",
   "template.changes.same": "Өзгермейді: сюжет пен әдістеме — {method}.",
+  "template.changes.same.plain": "Өзгермейді: сюжет пен әдістеме.",
 
   "sample.title": "Кітап осындай болады — сіздікі өзіңізге арналады",
   "sample.lead": "Бұл кітап {name} есімді балаға жасалған. Көрсеткілермен, басу немесе сырғыту арқылы парақтаңыз.",
@@ -664,6 +668,7 @@ const en: Messages = {
   "landing.hero.price": "Your first books are free, then from {price}.",
 
   "landing.trust.methods": "{count} child-development methods",
+  "landing.trust.methods.any": "Child-development methods",
   "landing.trust.languages": "{count} languages: қазақша, русский, English",
   "landing.trust.print": "Print and delivery across Kazakhstan",
   "landing.trust.data": "Children's data stays in Kazakhstan",
@@ -761,6 +766,7 @@ const en: Messages = {
   "template.changes.toy": "Favourite toy — from your photo, it appears on every page",
   "template.changes.answer": "your answer goes into the book",
   "template.changes.same": "Stays the same: the plot and the method — {method}.",
+  "template.changes.same.plain": "Stays the same: the plot and the method.",
 
   "sample.title": "This is what the book looks like — yours will be your own",
   "sample.lead": "This one was made for a child named {name}. Turn the pages with the arrows, a click or a swipe.",

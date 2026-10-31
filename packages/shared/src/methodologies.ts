@@ -1,14 +1,56 @@
 import { z } from "zod";
 
-/**
- * Story methods a book can be written by. Names and summaries are Russian (shown to parents and in
- * the admin); structure and rules are English because they go straight into the Muse Spark prompt.
- */
-export interface Methodology {
-  slug: string;
-  name: string;
-  summary: string;
+// ---- Story methods -----------------------------------------------------------------
+// Methods live in the database and are edited in the admin; DEFAULT_METHODOLOGIES below only
+// seeds it. Names and summaries are per interface language (shown to parents and in the admin);
+// structure, rules and avoid are English because they go straight into the Muse Spark prompt.
+
+/** What catalog books and books refer to a method by, so it never changes once created. */
+export const MethodologySlugSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(40)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Только латинские буквы в нижнем регистре, цифры и дефисы")
+  // The admin's page for a new method is /admin/methodologies/new.
+  .refine((slug) => slug !== "new", "Этот адрес занят");
+export type MethodologySlug = z.infer<typeof MethodologySlugSchema>;
+
+/** Ages a method can be set for. */
+export const METHODOLOGY_AGE_MIN = 2;
+export const METHODOLOGY_AGE_MAX = 12;
+
+const METHODOLOGY_LANGUAGES = ["ru", "kk", "en"] as const;
+
+const MethodologyTextSchema = z.object({
+  name: z.string().trim().max(80),
+  summary: z.string().trim().max(300),
+});
+
+/** A method's name and summary in each interface language. */
+export const MethodologyTextsSchema = z.object({
+  ru: MethodologyTextSchema,
+  kk: MethodologyTextSchema,
+  en: MethodologyTextSchema,
+});
+export type MethodologyTexts = z.infer<typeof MethodologyTextsSchema>;
+
+/** A story method as the site shows it, in the requested language (GET /methodologies). */
+export const MethodologySchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  summary: z.string(),
   /** Where the method comes from, so an author can read further. */
+  source: z.string(),
+  ageMin: z.number().int(),
+  ageMax: z.number().int(),
+});
+export type Methodology = z.infer<typeof MethodologySchema>;
+
+/** A method as stored: what the seed holds and what the prompt is built from. */
+export interface MethodologyData {
+  slug: string;
+  texts: MethodologyTexts;
   source: string;
   ageMin: number;
   ageMax: number;
@@ -18,11 +60,142 @@ export interface Methodology {
   avoid: string[];
 }
 
-export const METHODOLOGIES = [
+/** One item per line in the editor; each goes into the prompt as a list item. */
+const promptLines = (maxLength: number) => z.array(z.string().trim().min(1).max(maxLength)).max(12);
+const methodologyAge = z.number().int().min(METHODOLOGY_AGE_MIN).max(METHODOLOGY_AGE_MAX);
+
+const MethodologyFieldsSchema = z.object({
+  texts: MethodologyTextsSchema,
+  source: z.string().trim().min(1, "Укажите источник методики").max(300),
+  ageMin: methodologyAge,
+  ageMax: methodologyAge,
+  structure: promptLines(400).min(1, "Нужен хотя бы один шаг сюжета"),
+  rules: promptLines(400),
+  avoid: promptLines(200),
+  published: z.boolean(),
+  sortOrder: z.number().int().min(0).max(1000),
+});
+type MethodologyFields = z.infer<typeof MethodologyFieldsSchema>;
+
+/**
+ * Russian is always required: it is the admin's language and the fallback. A published method is
+ * offered in every interface language, so it needs its name and summary in all of them; a draft may
+ * wait for its translations.
+ */
+function checkMethodology(m: MethodologyFields, ctx: z.RefinementCtx) {
+  if (m.ageMin > m.ageMax) {
+    ctx.addIssue({ code: "custom", path: ["ageMax"], message: "Возраст «до» меньше возраста «от»" });
+  }
+  if (!m.texts.ru.name) ctx.addIssue({ code: "custom", path: ["texts", "ru", "name"], message: "Назовите методику по-русски" });
+  if (!m.texts.ru.summary) {
+    ctx.addIssue({ code: "custom", path: ["texts", "ru", "summary"], message: "Опишите методику по-русски" });
+  }
+  const missing = METHODOLOGY_LANGUAGES.filter((lang) => !m.texts[lang].name || !m.texts[lang].summary);
+  if (m.published && missing.length) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["published"],
+      message: `Чтобы опубликовать, заполните название и описание на всех языках: не хватает ${missing.join(", ")}`,
+    });
+  }
+}
+
+/** Body of PUT /admin/methodologies/:slug: the whole method; the slug stays. */
+export const UpdateMethodologySchema = MethodologyFieldsSchema.superRefine(checkMethodology);
+export type UpdateMethodology = z.infer<typeof UpdateMethodologySchema>;
+
+/** Body of POST /admin/methodologies. */
+export const CreateMethodologySchema = MethodologyFieldsSchema.extend({ slug: MethodologySlugSchema }).superRefine(
+  checkMethodology,
+);
+export type CreateMethodology = z.infer<typeof CreateMethodologySchema>;
+
+/** Body of POST /admin/methodologies/preview: the method as it stands in the editor, saved or not. */
+export const MethodologyPreviewSchema = MethodologyFieldsSchema.pick({
+  ageMin: true,
+  ageMax: true,
+  structure: true,
+  rules: true,
+  avoid: true,
+}).extend({
+  slug: z.string().trim().max(40),
+  source: z.string().trim().max(300),
+});
+export type MethodologyPreview = z.infer<typeof MethodologyPreviewSchema>;
+
+/** The story prompt for a sample child of `age`, exactly as Muse Spark would get it. */
+export const MethodologyPreviewResultSchema = z.object({ age: z.number().int(), prompt: z.string() });
+export type MethodologyPreviewResult = z.infer<typeof MethodologyPreviewResultSchema>;
+
+/** A method in the admin: every field, and what follows it. */
+export const AdminMethodologySchema = z.object({
+  slug: z.string(),
+  texts: MethodologyTextsSchema,
+  source: z.string(),
+  ageMin: z.number().int(),
+  ageMax: z.number().int(),
+  structure: z.array(z.string()),
+  rules: z.array(z.string()),
+  avoid: z.array(z.string()),
+  published: z.boolean(),
+  sortOrder: z.number().int(),
+  /** Catalog books and books that follow the method; while there are any it cannot be deleted. */
+  templates: z.number().int(),
+  books: z.number().int(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type AdminMethodology = z.infer<typeof AdminMethodologySchema>;
+
+/** Body of a 409 from DELETE /admin/methodologies/:slug: catalog books or books follow the method. */
+export const METHODOLOGY_IN_USE = "methodology_in_use";
+/** Body of a 409 from POST /admin/methodologies: a method with that slug exists. */
+export const METHODOLOGY_EXISTS = "methodology_exists";
+/** Body of a 400 from POST /books: there is no published method with that slug. */
+export const METHODOLOGY_UNKNOWN = "methodology_unknown";
+/** Body of a 400 from POST /books: the method is not for the child's age, or none is. */
+export const METHODOLOGY_AGE = "methodology_age";
+
+export function fitsAge(method: { ageMin: number; ageMax: number }, age: number): boolean {
+  return age >= method.ageMin && age <= method.ageMax;
+}
+
+/**
+ * Used when the parent does not pick a method: from `methods` (the published ones, in their order),
+ * rhythm and repetition for toddlers and an adventure for older children when they are there and
+ * fit, else the first one that fits. Undefined when none fits the age.
+ */
+export function defaultMethodology<T extends { slug: string; ageMin: number; ageMax: number }>(
+  methods: readonly T[],
+  age: number,
+): T | undefined {
+  const preferred = age <= 3 ? "toddler-routine" : "adventure-quest";
+  const fitting = methods.filter((m) => fitsAge(m, age));
+  return fitting.find((m) => m.slug === preferred) ?? fitting[0];
+}
+
+/**
+ * The methods the service starts with. The API adds the ones missing from the database on start and
+ * never overwrites what the admin has changed; nothing reads this list at runtime.
+ */
+export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
+
   {
     slug: "toddler-routine",
-    name: "Повтор и ритм для малышей",
-    summary: "Знакомый день малыша с повторяющейся фразой, звуками и маленьким добрым сюрпризом.",
+    texts: {
+      ru: {
+        name: "Повтор и ритм для малышей",
+        summary: "Знакомый день малыша с повторяющейся фразой, звуками и маленьким добрым сюрпризом.",
+      },
+      kk: {
+        name: "Кішкентайларға арналған қайталау мен ырғақ",
+        summary: "Қайталанатын сөз тіркесі, дыбыстар және кішкентай мейірімді тосынсыйы бар таныс күн.",
+      },
+      en: {
+        name: "Rhythm and repetition for toddlers",
+        summary: "A familiar day with a repeating line, sounds to say along and a small, kind surprise.",
+      },
+    },
     source: "Predictable and repetitive texts in early literacy; reality-based stories for toddlers",
     ageMin: 2,
     ageMax: 4,
@@ -42,8 +215,20 @@ export const METHODOLOGIES = [
   },
   {
     slug: "social-story",
-    name: "Социальная история",
-    summary: "Спокойно готовит к новому: детский сад, врач, перелёт, переезд, братик или сестрёнка.",
+    texts: {
+      ru: {
+        name: "Социальная история",
+        summary: "Спокойно готовит к новому: детский сад, врач, перелёт, переезд, братик или сестрёнка.",
+      },
+      kk: {
+        name: "Әлеуметтік әңгіме",
+        summary: "Жаңа жағдайға сабырмен дайындайды: балабақша, дәрігер, ұшақ, көшу, інісі не сіңлісі.",
+      },
+      en: {
+        name: "Social story",
+        summary: "Calmly prepares for something new: kindergarten, the doctor, a flight, a move, a new sibling.",
+      },
+    },
     source: "Social Stories by Carol Gray",
     ageMin: 2,
     ageMax: 8,
@@ -64,8 +249,20 @@ export const METHODOLOGIES = [
   },
   {
     slug: "sel-emotions",
-    name: "Эмоциональный интеллект",
-    summary: "Герой учится замечать и называть чувства, успокаиваться и понимать других.",
+    texts: {
+      ru: {
+        name: "Эмоциональный интеллект",
+        summary: "Герой учится замечать и называть чувства, успокаиваться и понимать других.",
+      },
+      kk: {
+        name: "Эмоциялық интеллект",
+        summary: "Кейіпкер сезімдерін байқап, атауды, сабырға келуді және басқаларды түсінуді үйренеді.",
+      },
+      en: {
+        name: "Emotional intelligence",
+        summary: "The hero learns to notice and name feelings, calm down and understand others.",
+      },
+    },
     source: "CASEL social and emotional learning framework; emotion coaching by John Gottman",
     ageMin: 4,
     ageMax: 10,
@@ -87,8 +284,20 @@ export const METHODOLOGIES = [
   },
   {
     slug: "growth-mindset",
-    name: "Мышление роста",
-    summary: "Не получилось — пока. Герой пробует, ошибается, ищет способ и добивается своего трудом.",
+    texts: {
+      ru: {
+        name: "Мышление роста",
+        summary: "Не получилось — пока. Герой пробует, ошибается, ищет способ и добивается своего трудом.",
+      },
+      kk: {
+        name: "Даму ойлауы",
+        summary: "Шықпады — әзірге. Кейіпкер байқап, қателесіп, жол іздейді және еңбекпен мақсатына жетеді.",
+      },
+      en: {
+        name: "Growth mindset",
+        summary: "Can't do it — yet. The hero tries, makes mistakes, finds a way and gets there through effort.",
+      },
+    },
     source: "Growth mindset research by Carol Dweck",
     ageMin: 5,
     ageMax: 10,
@@ -109,8 +318,20 @@ export const METHODOLOGIES = [
   },
   {
     slug: "mirrors-windows",
-    name: "Зеркала и окна",
-    summary: "Ребёнок узнаёт в книге свой город и культуру и открывает для себя мир других людей.",
+    texts: {
+      ru: {
+        name: "Зеркала и окна",
+        summary: "Ребёнок узнаёт в книге свой город и культуру и открывает для себя мир других людей.",
+      },
+      kk: {
+        name: "Айналар мен терезелер",
+        summary: "Бала кітаптан өз қаласы мен мәдениетін таниды және басқа адамдардың әлемін ашады.",
+      },
+      en: {
+        name: "Mirrors and windows",
+        summary: "Children see their own city and culture in the book and discover the worlds of other people.",
+      },
+    },
     source: "\"Mirrors, windows and sliding glass doors\" by Rudine Sims Bishop",
     ageMin: 4,
     ageMax: 10,
@@ -130,8 +351,20 @@ export const METHODOLOGIES = [
   },
   {
     slug: "adventure-quest",
-    name: "Приключение",
-    summary: "Путешествие в волшебный мир по интересам ребёнка, где побеждают доброта и смекалка.",
+    texts: {
+      ru: {
+        name: "Приключение",
+        summary: "Путешествие в волшебный мир по интересам ребёнка, где побеждают доброта и смекалка.",
+      },
+      kk: {
+        name: "Шытырман оқиға",
+        summary: "Мейірімділік пен тапқырлық жеңетін, баланың қызығушылықтарына сай сиқырлы әлемге саяхат.",
+      },
+      en: {
+        name: "Adventure",
+        summary: "A journey to a magical place built on the child's interests, where kindness and wit win.",
+      },
+    },
     source: "The hero's journey (Campbell, Vogler), adapted for picture books",
     ageMin: 4,
     ageMax: 10,
@@ -150,26 +383,7 @@ export const METHODOLOGIES = [
     ],
     avoid: ["violence or weapons", "villains who are evil for no reason", "frightening images"],
   },
-] as const satisfies readonly Methodology[];
-
-export type MethodologySlug = (typeof METHODOLOGIES)[number]["slug"];
-export const MethodologySlugSchema = z.enum(
-  METHODOLOGIES.map((m) => m.slug) as [MethodologySlug, ...MethodologySlug[]],
-);
-
-export function methodology(slug: MethodologySlug): Methodology {
-  return METHODOLOGIES.find((m) => m.slug === slug)!;
-}
-
-export function fitsAge(slug: MethodologySlug, age: number): boolean {
-  const m = methodology(slug);
-  return age >= m.ageMin && age <= m.ageMax;
-}
-
-/** Used when the parent does not pick a method. */
-export function defaultMethodology(age: number): MethodologySlug {
-  return age <= 3 ? "toddler-routine" : "adventure-quest";
-}
+];
 
 /** Text norms per age, applied on top of any method. */
 export interface AgeBand {
@@ -223,67 +437,3 @@ export function talkQuestionKinds(age: number): string[] {
       ];
 }
 
-/** Method names and summaries for the Kazakh and English interface; Russian lives on the method. */
-const METHOD_TEXT: Record<"kk" | "en", Record<MethodologySlug, { name: string; summary: string }>> = {
-  kk: {
-    "toddler-routine": {
-      name: "Кішкентайларға арналған қайталау мен ырғақ",
-      summary: "Қайталанатын сөз тіркесі, дыбыстар және кішкентай мейірімді тосынсыйы бар таныс күн.",
-    },
-    "social-story": {
-      name: "Әлеуметтік әңгіме",
-      summary: "Жаңа жағдайға сабырмен дайындайды: балабақша, дәрігер, ұшақ, көшу, інісі не сіңлісі.",
-    },
-    "sel-emotions": {
-      name: "Эмоциялық интеллект",
-      summary: "Кейіпкер сезімдерін байқап, атауды, сабырға келуді және басқаларды түсінуді үйренеді.",
-    },
-    "growth-mindset": {
-      name: "Даму ойлауы",
-      summary: "Шықпады — әзірге. Кейіпкер байқап, қателесіп, жол іздейді және еңбекпен мақсатына жетеді.",
-    },
-    "mirrors-windows": {
-      name: "Айналар мен терезелер",
-      summary: "Бала кітаптан өз қаласы мен мәдениетін таниды және басқа адамдардың әлемін ашады.",
-    },
-    "adventure-quest": {
-      name: "Шытырман оқиға",
-      summary: "Мейірімділік пен тапқырлық жеңетін, баланың қызығушылықтарына сай сиқырлы әлемге саяхат.",
-    },
-  },
-  en: {
-    "toddler-routine": {
-      name: "Rhythm and repetition for toddlers",
-      summary: "A familiar day with a repeating line, sounds to say along and a small, kind surprise.",
-    },
-    "social-story": {
-      name: "Social story",
-      summary: "Calmly prepares for something new: kindergarten, the doctor, a flight, a move, a new sibling.",
-    },
-    "sel-emotions": {
-      name: "Emotional intelligence",
-      summary: "The hero learns to notice and name feelings, calm down and understand others.",
-    },
-    "growth-mindset": {
-      name: "Growth mindset",
-      summary: "Can't do it — yet. The hero tries, makes mistakes, finds a way and gets there through effort.",
-    },
-    "mirrors-windows": {
-      name: "Mirrors and windows",
-      summary: "Children see their own city and culture in the book and discover the worlds of other people.",
-    },
-    "adventure-quest": {
-      name: "Adventure",
-      summary: "A journey to a magical place built on the child's interests, where kindness and wit win.",
-    },
-  },
-};
-
-/** A method's name and summary in the interface language. */
-export function methodologyText(slug: MethodologySlug, locale: "ru" | "kk" | "en"): { name: string; summary: string } {
-  if (locale === "ru") {
-    const m = methodology(slug);
-    return { name: m.name, summary: m.summary };
-  }
-  return METHOD_TEXT[locale][slug];
-}

@@ -1,3 +1,4 @@
+import { DEFAULT_METHODOLOGIES } from '@fabulka/shared';
 import type { Prisma } from '@prisma/client';
 import { MetaGateway } from '../meta/meta.gateway';
 import { MockGateway } from '../meta/mock.gateway';
@@ -35,7 +36,7 @@ const brief = {
     language: 'ru' as const,
   },
   pageCount: 1,
-  methodology: 'adventure-quest' as const,
+  methodology: DEFAULT_METHODOLOGIES.find((m) => m.slug === 'adventure-quest')!,
 };
 
 describe('JournalService', () => {

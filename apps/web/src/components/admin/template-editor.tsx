@@ -1,12 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { METHODOLOGIES, type AdminTemplate, type MethodologySlug, type TemplateQuestion } from "@fabulka/shared";
+import type { AdminTemplate, TemplateQuestion } from "@fabulka/shared";
 import { Plus, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { use, useState } from "react";
 import { adminTemplate, updateTemplate } from "@/lib/admin-api";
 import { button, Card, ghostButton, input, PageTitle } from "./ui";
+import { useAdminMethodologies } from "./use-methodologies";
 
 const label = "flex flex-col gap-1.5 text-sm font-semibold";
 
@@ -22,6 +23,7 @@ export function TemplateEditor({ params }: { params: Promise<{ slug: string }> }
 function Editor({ initial }: { initial: AdminTemplate }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(initial);
+  const methods = useAdminMethodologies();
   const [plot, setPlot] = useState(initial.plot.join("\n"));
   const set = <K extends keyof AdminTemplate>(key: K, value: AdminTemplate[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const setQuestion = (index: number, patch: Partial<TemplateQuestion>) =>
@@ -106,10 +108,12 @@ function Editor({ initial }: { initial: AdminTemplate }) {
         <Card title="Сюжет для Muse Spark">
           <label className={label}>
             Методика
-            <select className={input} value={draft.methodology} onChange={(e) => set("methodology", e.target.value as MethodologySlug)}>
-              {METHODOLOGIES.map((m) => (
+            <select className={input} value={draft.methodology} onChange={(e) => set("methodology", e.target.value)}>
+              {/* The saved slug stays selectable while the list loads. */}
+              {!methods.data?.some((m) => m.slug === draft.methodology) && <option value={draft.methodology}>{draft.methodology}</option>}
+              {methods.data?.map((m) => (
                 <option key={m.slug} value={m.slug}>
-                  {m.name} ({m.ageMin}–{m.ageMax})
+                  {m.texts.ru.name} ({m.ageMin}–{m.ageMax}){m.published ? "" : " — черновик"}
                 </option>
               ))}
             </select>

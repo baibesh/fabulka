@@ -1,10 +1,9 @@
 import {
   ageBand,
-  methodology,
   talkQuestionKinds,
   type ChildProfile,
   type Language,
-  type MethodologySlug,
+  type MethodologyData,
   type TemplateQuestion,
 } from '@fabulka/shared';
 
@@ -52,11 +51,17 @@ Return only JSON of this exact shape:
   the child after reading, of the kinds the user lists. They speak to the child as "you"
   with the grammatical gender of the child (Russian "ты хотела" for a girl, "ты хотел" for a boy).`;
 
+/** What the prompt takes from a story method (a Methodology row). */
+export type MethodologyPrompt = Pick<
+  MethodologyData,
+  'slug' | 'source' | 'structure' | 'rules' | 'avoid'
+>;
+
 /** What a story is written from: the child, the method and, optionally, the parent's theme. */
 export interface StoryBrief {
   child: ChildProfile;
   pageCount: number;
-  methodology: MethodologySlug;
+  methodology: MethodologyPrompt;
   theme?: string;
   /** The child's favourite toy from the parent's photo, described by Muse Spark. */
   toy?: { name?: string; description: string };
@@ -70,10 +75,6 @@ export interface StoryBrief {
 
 export function storyPrompt(brief: StoryBrief): string {
   const { child, pageCount } = brief;
-  const method = methodology(brief.methodology);
-  const band = ageBand(child.age);
-  const list = (items: readonly string[]) =>
-    items.map((item) => `- ${item}`).join('\n');
   return [
     `Write a ${pageCount}-page book in ${LANGUAGE_NAMES[child.language]}.`,
     `Hero: ${child.name}, a ${child.age}-year-old ${child.gender}.`,
@@ -86,15 +87,27 @@ export function storyPrompt(brief: StoryBrief): string {
       : 'Choose what the book is about so it fits the method and the interests.',
     '',
     ...templateLines(brief),
+    methodPrompt(brief.methodology, child.age),
+  ].join('\n');
+}
+
+/**
+ * The part of the story prompt the method and the child's age decide: beats, rules, age norms and
+ * the kinds of talk questions. The admin's preview shows it for a sample child.
+ */
+export function methodPrompt(method: MethodologyPrompt, age: number): string {
+  const band = ageBand(age);
+  const list = (items: readonly string[]) =>
+    items.map((item) => `- ${item}`).join('\n');
+  return [
     `Story method: ${method.slug} (${method.source}). Beats, in order:`,
     list(method.structure),
-    'Rules:',
-    list(method.rules),
-    `Avoid: ${method.avoid.join('; ')}.`,
+    ...(method.rules.length ? ['Rules:', list(method.rules)] : []),
+    ...(method.avoid.length ? [`Avoid: ${method.avoid.join('; ')}.`] : []),
     '',
     `Age norms: each page is ${band.sentencesPerPage}, at most ${band.maxWordsPerPage} words.`,
     list(band.guidance),
-    `Talk questions, one of each kind: ${talkQuestionKinds(child.age).join('; ')}.`,
+    `Talk questions, one of each kind: ${talkQuestionKinds(age).join('; ')}.`,
   ].join('\n');
 }
 

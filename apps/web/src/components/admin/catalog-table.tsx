@@ -1,14 +1,15 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { methodology } from "@fabulka/shared";
 import Link from "next/link";
 import { adminTemplates, updateTemplate } from "@/lib/admin-api";
 import { Badge, PageTitle, table } from "./ui";
+import { useMethodologyName } from "./use-methodologies";
 
 export function CatalogTable() {
   const queryClient = useQueryClient();
   const templates = useQuery({ queryKey: ["admin", "templates"], queryFn: adminTemplates });
+  const methodName = useMethodologyName();
   const toggle = useMutation({
     mutationFn: ({ slug, published }: { slug: string; published: boolean }) => updateTemplate(slug, { published }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin", "templates"] }),
@@ -44,7 +45,7 @@ export function CatalogTable() {
                 <td className="whitespace-nowrap">
                   {t.ageMin}–{t.ageMax}
                 </td>
-                <td className="text-muted">{methodology(t.methodology).name}</td>
+                <td className="text-muted">{methodName(t.methodology)}</td>
                 <td className="text-right tabular-nums">{t.books}</td>
                 <td>
                   <button

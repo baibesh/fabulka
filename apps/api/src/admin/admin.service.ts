@@ -13,12 +13,12 @@ import {
   type Answers,
   type ChildProfile,
   type Language,
-  type MethodologySlug,
   type UpdateTemplate,
 } from '@fabulka/shared';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BooksService, withTemplate } from '../books/books.service';
+import { MethodologiesService } from '../methodologies/methodologies.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { QuotaService, startOfDay } from '../quota/quota.service';
 import { SettingsService } from '../settings/settings.service';
@@ -37,6 +37,7 @@ export class AdminService {
     private readonly settings: SettingsService,
     private readonly storage: StorageService,
     private readonly templates: TemplatesService,
+    private readonly methodologies: MethodologiesService,
     config: ConfigService,
   ) {
     this.budgetUsd = Number(config.get('MODEL_BUDGET_USD', 150));
@@ -151,7 +152,7 @@ export class AdminService {
       status: row.status,
       childName: (row.child as unknown as ChildProfile).name,
       language: row.language as Language,
-      methodology: row.methodology as MethodologySlug,
+      methodology: row.methodology,
       template: row.template?.slug ?? null,
       country: row.country,
       demo: row.demo,
@@ -240,6 +241,11 @@ export class AdminService {
         );
       }
     }
+    if (
+      patch.methodology &&
+      !(await this.methodologies.find(patch.methodology))
+    )
+      throw new BadRequestException(`Методики «${patch.methodology}» нет`);
     if (patch.sampleBookId) await this.assertSample(slug, patch.sampleBookId);
     await this.prisma.bookTemplate.update({
       where: { slug },
@@ -277,7 +283,7 @@ export class AdminService {
       summary: row.summary,
       ageMin: row.ageMin,
       ageMax: row.ageMax,
-      methodology: row.methodology as MethodologySlug,
+      methodology: row.methodology,
       languages: row.languages as AdminTemplate['languages'],
       coverUrl: row.coverUrl,
       questions: questions(row),

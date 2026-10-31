@@ -10,19 +10,18 @@ import { ConfigService } from '@nestjs/config';
 import type { Book as BookRow, BookStatus, Prisma } from '@prisma/client';
 import {
   answersProblem,
-  defaultMethodology,
   progressFor,
   type Book,
   type ChildProfile,
   type CreateBookInput,
   type ExampleBook,
   type Language,
-  type MethodologySlug,
   type MyBook,
 } from '@fabulka/shared';
 import { basename } from 'node:path';
 import { JournalService } from '../journal/journal.service';
 import { MODEL_GATEWAY, type ModelGateway } from '../meta/model-gateway';
+import { MethodologiesService } from '../methodologies/methodologies.service';
 import type { StoryBrief } from '../meta/prompts';
 import {
   questions,
@@ -100,6 +99,7 @@ export class BooksService implements OnModuleInit {
     private readonly storage: StorageService,
     private readonly pdf: PdfService,
     private readonly templates: TemplatesService,
+    private readonly methodologies: MethodologiesService,
     @Inject(MODEL_GATEWAY) private readonly models: ModelGateway,
     private readonly journal: JournalService,
     config: ConfigService,
@@ -141,7 +141,10 @@ export class BooksService implements OnModuleInit {
           brief: {
             child,
             pageCount: this.pageCount,
-            methodology: input.methodology ?? defaultMethodology(child.age),
+            methodology: await this.methodologies.forBook(
+              input.methodology,
+              child.age,
+            ),
             theme: input.theme,
           },
         };
@@ -157,7 +160,7 @@ export class BooksService implements OnModuleInit {
       data: {
         child,
         language: child.language,
-        methodology: job.brief.methodology,
+        methodology: job.brief.methodology.slug,
         theme: job.brief.theme,
         template: input.template
           ? { connect: { slug: input.template } }
@@ -261,7 +264,7 @@ export class BooksService implements OnModuleInit {
       brief: {
         child,
         pageCount: this.pageCount,
-        methodology: template.methodology as MethodologySlug,
+        methodology: await this.methodologies.forTemplate(template.methodology),
         theme: template.theme,
         template: {
           title: template.title,
@@ -484,7 +487,7 @@ export class BooksService implements OnModuleInit {
       title: row.title,
       language: row.language as Language,
       childName: (row.child as unknown as ChildProfile).name,
-      methodology: row.methodology as MethodologySlug,
+      methodology: row.methodology,
       template: row.template?.slug ?? null,
       talkQuestions: row.talkQuestions as string[],
       heroImageUrl: this.storage.url(row.heroImagePath),

@@ -1,6 +1,7 @@
 import {
   BookSchema,
   ExampleBookSchema,
+  MethodologySchema,
   MyBookSchema,
   OrderSchema,
   QuotaSchema,
@@ -14,6 +15,7 @@ import {
   type CreateOrderInput,
   type ExampleBook,
   type Language,
+  type Methodology,
   type Order,
   type Purchase,
   type Quota,
@@ -145,6 +147,11 @@ export async function listTemplates(lang: Language): Promise<TemplateSummary[]> 
 
 export async function getTemplate(slug: string, lang: Language): Promise<Template> {
   return TemplateSchema.parse(await request(`/api/templates/${encodeURIComponent(slug)}?lang=${lang}`));
+}
+
+/** The story methods on offer (published), with their names and summaries in `lang`. */
+export async function listMethodologies(lang: Language): Promise<Methodology[]> {
+  return MethodologySchema.array().parse(await request(`/api/methodologies?lang=${lang}`));
 }
 
 export async function listMyBooks() {

@@ -2,11 +2,13 @@ import {
   AdminBookRowSchema,
   AdminLoginOptionsSchema,
   AdminBookSchema,
+  AdminMethodologySchema,
   AdminOrderSchema,
   AdminStatsSchema,
   AdminTemplateSchema,
   ClientErrorGroupSchema,
   JournalStatsSchema,
+  MethodologyPreviewResultSchema,
   ModelCallDetailSchema,
   ModelCallPageSchema,
   ModelCallSchema,
@@ -14,17 +16,22 @@ import {
   type AdminBookRow,
   type AdminLogin,
   type AdminLoginOptions,
+  type AdminMethodology,
   type AdminOrder,
   type AdminStats,
   type AdminTemplate,
   type ClientErrorGroup,
+  type CreateMethodology,
   type JournalCallsQuery,
   type JournalPeriod,
   type JournalStats,
+  type MethodologyPreview,
+  type MethodologyPreviewResult,
   type ModelCall,
   type ModelCallDetail,
   type ModelCallPage,
   type OrderStatus,
+  type UpdateMethodology,
   type UpdateTemplate,
 } from "@fabulka/shared";
 import { request } from "./api";
@@ -79,6 +86,31 @@ export async function adminTemplate(slug: string): Promise<AdminTemplate> {
 
 export async function updateTemplate(slug: string, patch: UpdateTemplate): Promise<AdminTemplate> {
   return AdminTemplateSchema.parse(await request(`/api/admin/templates/${slug}`, json("PATCH", patch)));
+}
+
+export async function adminMethodologies(): Promise<AdminMethodology[]> {
+  return AdminMethodologySchema.array().parse(await request("/api/admin/methodologies"));
+}
+
+export async function adminMethodology(slug: string): Promise<AdminMethodology> {
+  return AdminMethodologySchema.parse(await request(`/api/admin/methodologies/${encodeURIComponent(slug)}`));
+}
+
+export async function createMethodology(method: CreateMethodology): Promise<AdminMethodology> {
+  return AdminMethodologySchema.parse(await request("/api/admin/methodologies", json("POST", method)));
+}
+
+export async function updateMethodology(slug: string, method: UpdateMethodology): Promise<AdminMethodology> {
+  return AdminMethodologySchema.parse(await request(`/api/admin/methodologies/${encodeURIComponent(slug)}`, json("PUT", method)));
+}
+
+/** Refused with 409 methodology_in_use while catalog books or books follow the method. */
+export const deleteMethodology = (slug: string) =>
+  request(`/api/admin/methodologies/${encodeURIComponent(slug)}`, { method: "DELETE" });
+
+/** The method part of the story prompt for a sample child, from the editor's unsaved fields. */
+export async function previewMethodology(draft: MethodologyPreview): Promise<MethodologyPreviewResult> {
+  return MethodologyPreviewResultSchema.parse(await request("/api/admin/methodologies/preview", json("POST", draft)));
 }
 
 export async function journalStats(period: JournalPeriod): Promise<JournalStats> {

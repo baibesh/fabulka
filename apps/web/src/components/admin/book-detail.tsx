@@ -1,7 +1,6 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { methodology } from "@fabulka/shared";
 import { Download, ExternalLink, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -9,6 +8,7 @@ import { use, useState } from "react";
 import { adminBook, bookCalls, deleteBook, setFeatured } from "@/lib/admin-api";
 import { CALL_KIND, CallDetail, CallStatus, formatMs } from "./journal";
 import { Badge, BOOK_STATUS, Card, formatDate, formatUsd, ghostButton, PageTitle } from "./ui";
+import { useMethodologyName } from "./use-methodologies";
 
 /** The book's model calls in order, timed from the first: where generation spent its time and money. */
 function BookCalls({ id, generating }: { id: string; generating: boolean }) {
@@ -45,6 +45,7 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const book = useQuery({ queryKey: ["admin", "book", id], queryFn: () => adminBook(id) });
+  const methodName = useMethodologyName();
   const remove = useMutation({ mutationFn: () => deleteBook(id), onSuccess: () => router.replace("/admin/books") });
   const queryClient = useQueryClient();
   const feature = useMutation({
@@ -59,7 +60,7 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
     ["Ребёнок", `${b.child.name}, ${b.child.age} лет, ${b.child.gender === "girl" ? "девочка" : "мальчик"}, ${b.child.city}`],
     ["Увлечения", b.child.interests.join(", ")],
     ["Питомец", b.child.pet ?? "—"],
-    ["Методика", methodology(b.methodology).name],
+    ["Методика", methodName(b.methodology)],
     ["Книга каталога", b.template ?? "своя история"],
     ["Тема", b.theme ?? "—"],
     ["Язык", b.language.toUpperCase()],

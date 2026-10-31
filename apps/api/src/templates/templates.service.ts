@@ -10,7 +10,6 @@ import {
   type Answers,
   type ChildProfile,
   type Language,
-  type MethodologySlug,
   type Template,
   type TemplateQuestion,
   type TemplateSummary,
@@ -154,7 +153,7 @@ function summary(row: BookTemplate, lang: Language): TemplateSummary {
     summary: text?.summary ?? row.summary,
     ageMin: row.ageMin,
     ageMax: row.ageMax,
-    methodology: row.methodology as MethodologySlug,
+    methodology: row.methodology,
     languages: row.languages as TemplateSummary['languages'],
     coverUrl: row.coverUrl,
   };

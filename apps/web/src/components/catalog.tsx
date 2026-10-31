@@ -1,11 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { methodologyText } from "@fabulka/shared";
 import { Wand2 } from "lucide-react";
 import Link from "next/link";
 import { useI18n } from "@/i18n/i18n";
 import { listTemplates } from "@/lib/api";
+import { useMethodologies } from "@/lib/use-methodologies";
 import { useBookPrice } from "@/lib/use-price";
 import { ErrorNotice } from "./error-notice";
 
@@ -24,6 +24,8 @@ const PREVIEW_BOOKS = 6;
 export function Catalog({ preview = false }: { preview?: boolean }) {
   const { t, locale } = useI18n();
   const { data: templates, error } = useQuery({ queryKey: ["templates", locale], queryFn: () => listTemplates(locale) });
+  const { data: methods } = useMethodologies();
+  const methodName = (slug: string) => methods?.find((m) => m.slug === slug)?.name;
   const templatePrice = useBookPrice("template");
   const customPrice = useBookPrice("custom");
 
@@ -56,7 +58,9 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
                 <span className="rounded-full bg-accent/15 px-2.5 py-1 text-accent">
                   {t("common.years", { min: book.ageMin, max: book.ageMax })}
                 </span>
-                <span className="rounded-full bg-border px-2.5 py-1 text-muted">{methodologyText(book.methodology, locale).name}</span>
+                {methodName(book.methodology) && (
+                  <span className="rounded-full bg-border px-2.5 py-1 text-muted">{methodName(book.methodology)}</span>
+                )}
               </div>
               <h2 className="text-xl font-extrabold">{book.title}</h2>
               <p className="text-sm text-muted">{book.summary}</p>

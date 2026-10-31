@@ -1,11 +1,24 @@
-import { StorySchema, type ChildProfile } from '@fabulka/shared';
+import {
+  DEFAULT_METHODOLOGIES,
+  StorySchema,
+  type ChildProfile,
+} from '@fabulka/shared';
 import { MockGateway } from './mock.gateway';
-import { heroPrompt, pagePrompt, storyPrompt, toyPrompt } from './prompts';
+import {
+  heroPrompt,
+  methodPrompt,
+  pagePrompt,
+  storyPrompt,
+  toyPrompt,
+} from './prompts';
+
+const method = (slug: string) =>
+  DEFAULT_METHODOLOGIES.find((m) => m.slug === slug)!;
 
 const brief = (overrides: Partial<ChildProfile> = {}, pageCount = 4) => ({
   child: { ...child, ...overrides },
   pageCount,
-  methodology: 'growth-mindset' as const,
+  methodology: method('growth-mindset'),
 });
 
 const child: ChildProfile = {
@@ -65,7 +78,7 @@ describe('prompts', () => {
   it('puts the method beats, the age norms and the theme into the story prompt', () => {
     const prompt = storyPrompt({
       ...brief({ age: 3 }),
-      methodology: 'social-story',
+      methodology: method('social-story'),
       theme: 'первый день в детском саду',
     });
     expect(prompt).toContain('Social Stories by Carol Gray');
@@ -93,6 +106,25 @@ describe('prompts', () => {
     expect(pagePrompt('x', { pet: true, toy: false })).toContain(
       'pet character sheet',
     );
+  });
+
+  it('writes the method part from what the admin edited, leaving out empty lists', () => {
+    const prompt = methodPrompt(
+      {
+        slug: 'calm-down',
+        source: 'Mindfulness for children',
+        structure: ['The hero is upset.', 'The hero breathes slowly.'],
+        rules: [],
+        avoid: ['shaming'],
+      },
+      6,
+    );
+    expect(prompt).toContain(
+      'Story method: calm-down (Mindfulness for children). Beats, in order:\n- The hero is upset.\n- The hero breathes slowly.',
+    );
+    expect(prompt).not.toContain('Rules:');
+    expect(prompt).toContain('Avoid: shaming.');
+    expect(prompt).toContain('at most 60 words');
   });
 
   it('brings the toy into the story and draws it from the reference', () => {

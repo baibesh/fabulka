@@ -7,11 +7,8 @@ import {
   GENERATION_PAUSED,
   LANGUAGES,
   LIMIT_REACHED,
-  METHODOLOGIES,
-  methodologyText,
   answersProblem,
   fitsAge,
-  type MethodologySlug,
   type Template,
   type VoicePrefill,
 } from "@fabulka/shared";
@@ -23,6 +20,7 @@ import { useForm, useWatch, type FieldErrors, type FieldPath } from "react-hook-
 import { z } from "zod";
 import { ApiError, createBook, getQuota, getStatus, uploadToy } from "@/lib/api";
 import { toJpegDataUrl } from "@/lib/toy-photo";
+import { useMethodologies } from "@/lib/use-methodologies";
 import { useBookPrice } from "@/lib/use-price";
 import { useI18n } from "@/i18n/i18n";
 import { LOCALE_NAMES, type MessageKey } from "@/i18n/messages";
@@ -97,7 +95,9 @@ export function BookForm({ template }: { template?: Template }) {
   useEffect(() => {
     if (!bookLanguages.includes(form.getValues("language"))) form.setValue("language", bookLanguages[0]);
   }, [form, bookLanguages]);
-  const methods = METHODOLOGIES.filter((m) => fitsAge(m.slug, age));
+  // Until the methods arrive only "pick by age" is offered, which needs none of them.
+  const { data: allMethods } = useMethodologies();
+  const methods = (allMethods ?? []).filter((m) => fitsAge(m, age));
   const errors = form.formState.errors;
   const queryClient = useQueryClient();
   const quota = useQuery({ queryKey: ["quota"], queryFn: getQuota });
@@ -169,9 +169,7 @@ export function BookForm({ template }: { template?: Template }) {
         ...(template
           ? { template: template.slug, answers: values.answers }
           : {
-              methodology: methods.some((m) => m.slug === values.methodology)
-                ? (values.methodology as MethodologySlug)
-                : undefined,
+              methodology: methods.some((m) => m.slug === values.methodology) ? values.methodology : undefined,
               theme: values.theme || undefined,
             }),
       }),
@@ -377,7 +375,7 @@ export function BookForm({ template }: { template?: Template }) {
                 <option value="">{t("form.method.auto")}</option>
                 {methods.map((m) => (
                   <option key={m.slug} value={m.slug}>
-                    {methodologyText(m.slug, locale).name} — {methodologyText(m.slug, locale).summary}
+                    {m.name} — {m.summary}
                   </option>
                 ))}
               </select>
@@ -446,7 +444,7 @@ export function BookForm({ template }: { template?: Template }) {
                 <ReviewRow name={t("wizard.review.theme")} value={values.theme || t("wizard.review.none")} />
                 <ReviewRow
                   name={t("form.method")}
-                  value={method ? methodologyText(method.slug, locale).name : t("form.method.auto")}
+                  value={method ? method.name : t("form.method.auto")}
                 />
               </>
             )}

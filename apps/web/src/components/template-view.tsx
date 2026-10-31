@@ -1,12 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { methodology, methodologyText, type Book, type Template } from "@fabulka/shared";
+import type { Book, Template } from "@fabulka/shared";
 import { ArrowDown, Baby, BookOpen, Camera, Heart, MapPin, MessageCircleQuestion, PawPrint } from "lucide-react";
 import { use } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { getBook, getTemplate } from "@/lib/api";
 import type { Highlight } from "@/lib/personalization";
+import { useMethodologies } from "@/lib/use-methodologies";
 import { BookForm } from "./book-form";
 import { BookReader } from "./book-reader";
 import { ErrorNotice } from "./error-notice";
@@ -25,10 +26,12 @@ export function TemplateView({ params }: { params: Promise<{ slug: string }> }) 
     queryFn: () => getBook(sampleId!),
     enabled: Boolean(sampleId),
   });
+  const methods = useMethodologies();
 
   if (error) return <ErrorNotice error={error} />;
-  if (!template) return <p className="text-muted">{t("common.loading")}</p>;
-  const method = { ...methodology(template.methodology), ...methodologyText(template.methodology, locale) };
+  // Waits for the methods too, so the method's name does not pop in; without them the page goes on.
+  if (!template || methods.isPending) return <p className="text-muted">{t("common.loading")}</p>;
+  const method = methods.data?.find((m) => m.slug === template.methodology);
 
   return (
     <div className="flex flex-col gap-10">
@@ -39,15 +42,18 @@ export function TemplateView({ params }: { params: Promise<{ slug: string }> }) 
         )}
         <div className="flex flex-col gap-3">
           <p className="text-sm font-bold text-accent">
-            {t("common.years", { min: template.ageMin, max: template.ageMax })} · {method.name}
+            {t("common.years", { min: template.ageMin, max: template.ageMax })}
+            {method && ` · ${method.name}`}
           </p>
           <h1 data-testid="template-title" className="text-4xl font-extrabold leading-tight">
             {template.title}
           </h1>
           <p className="text-lg text-muted">{template.summary}</p>
-          <p className="text-sm text-muted">
-            {method.summary} {t("template.basis", { source: method.source })}
-          </p>
+          {method && (
+            <p className="text-sm text-muted">
+              {method.summary} {t("template.basis", { source: method.source })}
+            </p>
+          )}
           <PriceTag kind="template" />
           <a
             href={`#${FORM_ID}`}
@@ -64,7 +70,7 @@ export function TemplateView({ params }: { params: Promise<{ slug: string }> }) 
         </div>
       </header>
       {sample?.status === "done" && <SampleBook book={sample} template={template} />}
-      <Changes template={template} method={method.name} />
+      <Changes template={template} method={method?.name} />
       <section id={FORM_ID} data-testid={FORM_ID} className="scroll-mt-20">
         <BookForm template={template} />
       </section>
@@ -106,7 +112,7 @@ function SampleBook({ book, template }: { book: Book; template: Template }) {
 }
 
 /** What the parent's answers change in the book, and what stays as the template has it. */
-function Changes({ template, method }: { template: Template; method: string }) {
+function Changes({ template, method }: { template: Template; method?: string }) {
   const { t } = useI18n();
   const items = [
     { icon: Baby, text: t("template.changes.name") },
@@ -132,7 +138,7 @@ function Changes({ template, method }: { template: Template; method: string }) {
       </ul>
       <p className="flex items-start gap-3 border-t border-border pt-4 text-sm text-muted">
         <BookOpen className="mt-0.5 size-5 shrink-0" />
-        {t("template.changes.same", { method })}
+        {method ? t("template.changes.same", { method }) : t("template.changes.same.plain")}
       </p>
     </section>
   );

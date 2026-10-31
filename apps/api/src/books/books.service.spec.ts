@@ -1,5 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
+import { DEFAULT_METHODOLOGIES } from '@fabulka/shared';
 import { MockGateway } from '../meta/mock.gateway';
+import { MethodologiesService } from '../methodologies/methodologies.service';
 import { JournalService } from '../journal/journal.service';
 import type { PdfService } from '../pdf/pdf.service';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -22,7 +24,21 @@ const kindergarten = SEED_TEMPLATES.find(
   (t) => t.slug === 'first-day-kindergarten',
 )!;
 
-function makeService(prisma: unknown, models = new MockGateway(0)) {
+/** The seed methods as rows; `unpublished` ones are kept off the site. */
+const methodRows = (unpublished: string[] = []) =>
+  DEFAULT_METHODOLOGIES.map((m, i) => ({
+    ...m,
+    published: !unpublished.includes(m.slug),
+    sortOrder: i,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }));
+
+function makeService(
+  prisma: unknown,
+  models = new MockGateway(0),
+  methods = methodRows(),
+) {
   const templates = {
     find: jest.fn().mockResolvedValue({
       ...kindergarten,
@@ -36,6 +52,9 @@ function makeService(prisma: unknown, models = new MockGateway(0)) {
     { url: () => null } as unknown as StorageService,
     {} as PdfService,
     templates,
+    new MethodologiesService({
+      methodology: { findMany: jest.fn().mockResolvedValue(methods) },
+    } as unknown as PrismaService),
     models,
     new JournalService(prisma as PrismaService),
     { get: () => 2 } as unknown as ConfigService,
@@ -95,7 +114,9 @@ describe('BooksService', () => {
     const { story } = await models.writeStory({
       child,
       pageCount: 2,
-      methodology: 'adventure-quest',
+      methodology: DEFAULT_METHODOLOGIES.find(
+        (m) => m.slug === 'adventure-quest',
+      )!,
     });
     jest
       .spyOn(models, 'writeStory')
@@ -165,6 +186,93 @@ describe('BooksService', () => {
     ]);
   });
 
+  describe('a book of your own', () => {
+    /** Creates the book and returns what the story was written by; the story itself is skipped. */
+    async function briefFor(
+      input: { methodology?: string; age?: number },
+      methods = methodRows(),
+    ) {
+      const models = new MockGateway(0);
+      const writeStory = jest
+        .spyOn(models, 'writeStory')
+        .mockRejectedValue(new Error('stop after the story'));
+      const create = jest
+        .fn()
+        .mockImplementation(({ data }: { data: { methodology: string } }) =>
+          Promise.resolve({
+            id: 'b4',
+            status: 'queued',
+            child,
+            language: 'ru',
+            methodology: data.methodology,
+            pages: [],
+            createdAt: new Date(),
+          }),
+        );
+      const service = makeService(
+        { book: { create, update: jest.fn(), updateMany: jest.fn() } },
+        models,
+        methods,
+      );
+      const book = await service.create(
+        {
+          child: { ...child, age: input.age ?? child.age },
+          methodology: input.methodology,
+        },
+        'k',
+        false,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { book, brief: writeStory.mock.calls[0][0] };
+    }
+
+    it('follows the method the parent picked, with its beats from the database', async () => {
+      const { book, brief } = await briefFor({ methodology: 'sel-emotions' });
+      expect(book.methodology).toBe('sel-emotions');
+      expect(brief.methodology.structure[0]).toContain('strong feeling');
+    });
+
+    it('picks a method by age when none is chosen', async () => {
+      expect((await briefFor({ age: 3 })).book.methodology).toBe(
+        'toddler-routine',
+      );
+      expect((await briefFor({ age: 7 })).book.methodology).toBe(
+        'adventure-quest',
+      );
+      // The usual one is unpublished: the first published one that fits the age.
+      const { book } = await briefFor(
+        { age: 3 },
+        methodRows(['toddler-routine']),
+      );
+      expect(book.methodology).toBe('social-story');
+    });
+
+    it('refuses an unknown or unpublished method, or one for other ages, with a code', async () => {
+      const refusal = (code: string) =>
+        expect.objectContaining({
+          response: expect.objectContaining({ code }) as unknown,
+        }) as unknown;
+      await expect(briefFor({ methodology: 'no-such' })).rejects.toEqual(
+        refusal('methodology_unknown'),
+      );
+      await expect(
+        briefFor(
+          { methodology: 'growth-mindset' },
+          methodRows(['growth-mindset']),
+        ),
+      ).rejects.toEqual(refusal('methodology_unknown'));
+      await expect(
+        briefFor({ methodology: 'growth-mindset', age: 3 }),
+      ).rejects.toThrow('для возраста 5–10 лет');
+      await expect(
+        briefFor({ methodology: 'growth-mindset', age: 3 }),
+      ).rejects.toEqual(refusal('methodology_age'));
+      await expect(
+        briefFor({ age: 2 }, methodRows(['toddler-routine', 'social-story'])),
+      ).rejects.toEqual(refusal('methodology_age'));
+    });
+  });
+
   describe('a catalog book', () => {
     const row = {
       id: 'b2',
@@ -213,7 +321,8 @@ describe('BooksService', () => {
         template: { connect: { slug: kindergarten.slug } },
       });
       const brief = writeStory.mock.calls[0][0];
-      expect(brief.methodology).toBe('social-story');
+      expect(brief.methodology.slug).toBe('social-story');
+      expect(brief.methodology.source).toBe('Social Stories by Carol Gray');
       expect(brief.template?.plot).toEqual(kindergarten.plot);
       expect(brief.template?.answers).toEqual([
         { question: 'Какую игрушку возьмёт с собой?', answer: 'зайка' },

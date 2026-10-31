@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MethodologySlugSchema, fitsAge, methodology } from "./methodologies";
+import { MethodologySlugSchema } from "./methodologies";
 
 export * from "./methodologies";
 
@@ -57,7 +57,8 @@ export const TemplateSummarySchema = z.object({
   summary: z.string(),
   ageMin: z.number().int(),
   ageMax: z.number().int(),
-  methodology: MethodologySlugSchema,
+  /** Method slug; its name and summary come from GET /methodologies. */
+  methodology: z.string(),
   languages: z.array(LanguageSchema),
   coverUrl: z.string().nullable(),
 });
@@ -102,33 +103,26 @@ export function answersProblem(
   return null;
 }
 
-export const CreateBookSchema = z
-  .object({
-    child: ChildProfileSchema,
-    /** Catalog book slug; the book then follows its plot, method and questions. */
-    template: z.string().min(1).optional(),
-    answers: AnswersSchema.optional(),
-    /** Story method for a book of your own; left out, one is picked by age. */
-    methodology: MethodologySlugSchema.optional(),
-    /** What a book of your own is about, in the parent's words ("first day at kindergarten"). */
-    theme: z.string().trim().min(3).max(200).optional(),
-    /** The child's favourite toy, from a photo uploaded to POST /toys; it joins the story. */
-    toy: z
-      .object({
-        upload: z.string().regex(/^[a-z0-9]{10,40}$/),
-        name: z.string().trim().max(40).optional(),
-      })
-      .optional(),
-  })
-  .superRefine((b, ctx) => {
-    if (!b.methodology || fitsAge(b.methodology, b.child.age)) return;
-    const m = methodology(b.methodology);
-    ctx.addIssue({
-      code: "custom",
-      path: ["methodology"],
-      message: `«${m.name}» подходит для возраста ${m.ageMin}–${m.ageMax} лет`,
-    });
-  });
+export const CreateBookSchema = z.object({
+  child: ChildProfileSchema,
+  /** Catalog book slug; the book then follows its plot, method and questions. */
+  template: z.string().min(1).optional(),
+  answers: AnswersSchema.optional(),
+  /**
+   * Story method for a book of your own: a published one that fits the child's age (checked by the
+   * API, which knows the methods). Left out, one is picked by age.
+   */
+  methodology: MethodologySlugSchema.optional(),
+  /** What a book of your own is about, in the parent's words ("first day at kindergarten"). */
+  theme: z.string().trim().min(3).max(200).optional(),
+  /** The child's favourite toy, from a photo uploaded to POST /toys; it joins the story. */
+  toy: z
+    .object({
+      upload: z.string().regex(/^[a-z0-9]{10,40}$/),
+      name: z.string().trim().max(40).optional(),
+    })
+    .optional(),
+});
 export type CreateBookInput = z.infer<typeof CreateBookSchema>;
 
 /** One page of the story as Muse Spark returns it. */
@@ -171,7 +165,7 @@ export const BookSchema = z.object({
   language: LanguageSchema,
   /** The child's name, for the cover. */
   childName: z.string(),
-  methodology: MethodologySlugSchema,
+  methodology: z.string(),
   /** Catalog book slug, or null for a book of your own. */
   template: z.string().nullable(),
   talkQuestions: z.array(z.string()),
@@ -502,7 +496,7 @@ export const AdminBookRowSchema = z.object({
   status: BookStatusSchema,
   childName: z.string(),
   language: LanguageSchema,
-  methodology: MethodologySlugSchema,
+  methodology: z.string(),
   template: z.string().nullable(),
   country: z.string().nullable(),
   demo: z.boolean(),

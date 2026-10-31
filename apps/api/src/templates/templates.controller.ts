@@ -25,7 +25,8 @@ export class TemplatesController {
   }
 }
 
-function language(lang: string | undefined) {
+/** The interface language a ?lang= asks for; anything else falls back to Russian. */
+export function language(lang: string | undefined) {
   const parsed = LanguageSchema.safeParse(lang);
   return parsed.success ? parsed.data : 'ru';
 }

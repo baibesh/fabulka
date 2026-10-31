@@ -1,16 +1,18 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BOOK_STATUSES, methodology, type BookStatus } from "@fabulka/shared";
+import { BOOK_STATUSES, type BookStatus } from "@fabulka/shared";
 import Link from "next/link";
 import { useState } from "react";
 import { adminBooks } from "@/lib/admin-api";
 import { Badge, BOOK_STATUS, formatDate, formatUsd, input, PageTitle, table } from "./ui";
+import { useMethodologyName } from "./use-methodologies";
 
 export function BooksTable() {
   const [status, setStatus] = useState<BookStatus | "">("");
   const [query, setQuery] = useState("");
   const books = useQuery({ queryKey: ["admin", "books", status], queryFn: () => adminBooks(status || undefined), refetchInterval: 5000 });
+  const methodName = useMethodologyName();
 
   const needle = query.trim().toLowerCase();
   const visible = needle
@@ -75,7 +77,7 @@ export function BooksTable() {
                 <td>
                   <Badge tone={BOOK_STATUS[book.status].tone}>{BOOK_STATUS[book.status].label}</Badge>
                 </td>
-                <td className="text-muted">{methodology(book.methodology).name}</td>
+                <td className="text-muted">{methodName(book.methodology)}</td>
                 <td className="uppercase text-muted">{book.language}</td>
                 <td className="text-muted">{book.country ?? "—"}</td>
                 <td className="text-right tabular-nums">{formatUsd(book.costUsd)}</td>

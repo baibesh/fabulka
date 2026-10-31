@@ -7,22 +7,29 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import {
   AdminLoginSchema,
+  CreateMethodologySchema,
   JournalCallsQuerySchema,
   JournalPeriodQuerySchema,
+  MethodologyPreviewSchema,
   PauseSchema,
   UpdateBookSchema,
+  UpdateMethodologySchema,
   UpdateOrderStatusSchema,
   UpdateTemplateSchema,
   type AdminLogin,
   type AdminLoginOptions,
+  type CreateMethodology,
   type JournalCallsQuery,
+  type MethodologyPreview,
   type UpdateBook,
+  type UpdateMethodology,
   type UpdateTemplate,
 } from '@fabulka/shared';
 import type { Response } from 'express';
@@ -31,6 +38,7 @@ import { AuthService } from '../auth/auth.service';
 import { CurrentClient, type Client } from '../common/client';
 import { ZodPipe } from '../common/zod.pipe';
 import { JournalAdminService } from '../journal/journal-admin.service';
+import { MethodologiesService } from '../methodologies/methodologies.service';
 import { OrdersService } from '../orders/orders.service';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminGuard } from './admin.guard';
@@ -78,6 +86,7 @@ export class AdminController {
     private readonly admin: AdminService,
     private readonly orders: OrdersService,
     private readonly journal: JournalAdminService,
+    private readonly methodologies: MethodologiesService,
   ) {}
 
   @Get('me')
@@ -184,5 +193,46 @@ export class AdminController {
     @Body(new ZodPipe(UpdateTemplateSchema)) body: UpdateTemplate,
   ) {
     return this.admin.updateTemplate(slug, body);
+  }
+
+  @Get('methodologies')
+  listMethodologies() {
+    return this.methodologies.adminList();
+  }
+
+  /** The method part of the story prompt for a sample child, from the editor's unsaved fields. */
+  @Post('methodologies/preview')
+  @HttpCode(200)
+  previewMethodology(
+    @Body(new ZodPipe(MethodologyPreviewSchema)) body: MethodologyPreview,
+  ) {
+    return this.methodologies.preview(body);
+  }
+
+  @Get('methodologies/:slug')
+  methodology(@Param('slug') slug: string) {
+    return this.methodologies.adminGet(slug);
+  }
+
+  @Post('methodologies')
+  createMethodology(
+    @Body(new ZodPipe(CreateMethodologySchema)) body: CreateMethodology,
+  ) {
+    return this.methodologies.create(body);
+  }
+
+  @Put('methodologies/:slug')
+  updateMethodology(
+    @Param('slug') slug: string,
+    @Body(new ZodPipe(UpdateMethodologySchema)) body: UpdateMethodology,
+  ) {
+    return this.methodologies.update(slug, body);
+  }
+
+  /** 409 methodology_in_use while catalog books or books follow it: unpublish it instead. */
+  @Delete('methodologies/:slug')
+  @HttpCode(204)
+  deleteMethodology(@Param('slug') slug: string) {
+    return this.methodologies.remove(slug);
   }
 }

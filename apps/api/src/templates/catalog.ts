@@ -1,4 +1,4 @@
-import type { MethodologySlug, TemplateQuestion } from '@fabulka/shared';
+import type { TemplateQuestion } from '@fabulka/shared';
 
 export interface SeedTemplate {
   slug: string;
@@ -6,7 +6,8 @@ export interface SeedTemplate {
   summary: string;
   ageMin: number;
   ageMax: number;
-  methodology: MethodologySlug;
+  /** A slug from DEFAULT_METHODOLOGIES (@fabulka/shared), seeded alongside. */
+  methodology: string;
   theme: string;
   plot: string[];
   questions: TemplateQuestion[];

@@ -26,6 +26,8 @@ import { TelemetryController } from './journal/telemetry.controller';
 import { MailService } from './mail/mail.service';
 import { TestMailsController } from './mail/test-mails.controller';
 import { MetaModule } from './meta/meta.module';
+import { MethodologiesController } from './methodologies/methodologies.controller';
+import { MethodologiesService } from './methodologies/methodologies.service';
 import { OrdersController } from './orders/orders.controller';
 import { OrdersService } from './orders/orders.service';
 import { PdfModule } from './pdf/pdf.service';
@@ -69,6 +71,7 @@ class HealthController {
     QuotaController,
     OrdersController,
     TemplatesController,
+    MethodologiesController,
     GeoController,
     StatusController,
     ToysController,
@@ -86,6 +89,7 @@ class HealthController {
     QuotaService,
     OrdersService,
     TemplatesService,
+    MethodologiesService,
     SettingsService,
     ToyUploadsCleaner,
     AdminAuthService,
