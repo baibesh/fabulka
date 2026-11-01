@@ -18,11 +18,11 @@ import { useOrderPrice, useReference } from "@/lib/use-price";
 import { PriceSkeleton } from "./price-skeleton";
 import { ErrorText } from "./ui/notice";
 import { Button } from "./ui/button";
+import { ChoiceCard, Radio } from "./ui/choice";
+import { Field } from "./ui/field";
+import { Input, Select } from "./ui/input";
 
 type FormValues = z.input<typeof CreateOrderSchema>;
-
-const field = "w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:border-accent";
-const label = "flex flex-col gap-1.5 text-sm font-semibold";
 
 export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -79,64 +79,46 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
 
       <fieldset className="grid gap-3 sm:grid-cols-2">
         {(["soft", "hard"] as const).map((value) => (
-          <label key={value} className="flex cursor-pointer items-center gap-3 rounded-2xl border border-border bg-card p-4 has-[:checked]:border-accent">
-            <input type="radio" value={value} data-testid={`cover-${value}`} {...form.register("cover")} />
+          <ChoiceCard key={value} control={<Radio value={value} data-testid={`cover-${value}`} {...form.register("cover")} />}>
             <span className="flex flex-col">
               <span className="font-bold">{t(value === "soft" ? "order.cover.soft" : "order.cover.hard")}</span>
               <span className="text-muted">{reference.data ? formatKzt(reference.data.prices.covers[value]) : <PriceSkeleton />}</span>
             </span>
-          </label>
+          </ChoiceCard>
         ))}
       </fieldset>
 
       <div className="grid gap-5 rounded-3xl border border-border bg-card p-6 sm:grid-cols-2">
-        <label className={label}>
-          {t("order.recipient")}
-          <input data-testid="recipient-name" className={field} placeholder={t("order.recipient.placeholder")} {...form.register("recipientName")} />
-          {errors.recipientName && <span className="text-danger">{t("order.recipient.error")}</span>}
-        </label>
-        <label className={label}>
-          {t("order.phone")}
-          <input data-testid="phone" className={field} inputMode="tel" {...form.register("phone")} />
-          {errors.phone && <span className="text-danger">{t("order.phone.error")}</span>}
-        </label>
-        <label className={`${label} sm:col-span-2`}>
-          {t("order.email")}
-          <input
-            data-testid="order-email"
-            type="email"
-            autoComplete="email"
-            className={field}
-            placeholder={t("order.email.placeholder")}
-            {...form.register("email")}
-          />
-          {errors.email && <span className="text-danger">{t("order.email.error")}</span>}
-        </label>
-        <label className={label}>
-          {t("order.city")}
-          <select data-testid="city" className={field} {...form.register("cityId")} value={cityId}>
+        <Field label={t("order.recipient")} error={errors.recipientName && t("order.recipient.error")}>
+          <Input data-testid="recipient-name" placeholder={t("order.recipient.placeholder")} {...form.register("recipientName")} />
+        </Field>
+        <Field label={t("order.phone")} error={errors.phone && t("order.phone.error")}>
+          <Input data-testid="phone" inputMode="tel" {...form.register("phone")} />
+        </Field>
+        <Field label={t("order.email")} error={errors.email && t("order.email.error")} className="sm:col-span-2">
+          <Input data-testid="order-email" type="email" autoComplete="email" placeholder={t("order.email.placeholder")} {...form.register("email")} />
+        </Field>
+        <Field label={t("order.city")}>
+          <Select data-testid="city" {...form.register("cityId")} value={cityId}>
             {cities.map((city) => (
               <option key={city.id} value={city.id}>
                 {cityName(city, locale)}
               </option>
             ))}
-          </select>
-        </label>
-        <label className={label}>
-          {t("order.quantity")}
-          <select data-testid="quantity" className={field} {...form.register("quantity")}>
+          </Select>
+        </Field>
+        <Field label={t("order.quantity")}>
+          <Select data-testid="quantity" {...form.register("quantity")}>
             {[1, 2, 3, 4, 5].map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
             ))}
-          </select>
-        </label>
-        <label className={`${label} sm:col-span-2`}>
-          {t("order.address")}
-          <input data-testid="address" className={field} placeholder={t("order.address.placeholder")} {...form.register("address")} />
-          {errors.address && <span className="text-danger">{t("order.address.error")}</span>}
-        </label>
+          </Select>
+        </Field>
+        <Field label={t("order.address")} error={errors.address && t("order.address.error")} className="sm:col-span-2">
+          <Input data-testid="address" placeholder={t("order.address.placeholder")} {...form.register("address")} />
+        </Field>
       </div>
 
       <section data-testid="order-summary" className="flex flex-col gap-1 rounded-2xl bg-card p-5">

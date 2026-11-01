@@ -11,6 +11,8 @@ import { useBookPrice } from "@/lib/use-price";
 import { PriceSkeleton } from "./price-skeleton";
 import { ErrorText } from "./ui/notice";
 import { Button } from "./ui/button";
+import { Field } from "./ui/field";
+import { Input } from "./ui/input";
 
 /**
  * Shown when the free books are used up: the demo checkout for one more book of `kind` (a catalog
@@ -41,22 +43,16 @@ export function Paywall({ kind, onUnlocked }: { kind: BookKind; onUnlocked: () =
         <h2 className="text-lg font-extrabold">{t("paywall.title")}</h2>
         <p className="text-muted">{price ? t(info.print ? `paywall.text.${kind}` : `paywall.text.${kind}.pdf`, { price }) : <PriceSkeleton className="w-64 max-w-full" />}</p>
       </div>
-      <label className="flex flex-col gap-1.5 text-sm font-semibold">
-        <span>
-          {t("paywall.email")} <span className="font-normal text-muted">{t("common.optional")}</span>
-        </span>
-        <input
+      <Field label={t("paywall.email")} optional={t("common.optional")} error={!emailValid && t("order.email.error")}>
+        <Input
           data-testid="paywall-email"
           type="email"
           autoComplete="email"
           value={email}
           onChange={(event) => setTyped(event.target.value)}
           placeholder="name@mail.kz"
-          aria-invalid={!emailValid}
-          className="w-full rounded-xl border border-border bg-background px-4 py-2 font-normal aria-[invalid=true]:border-danger"
         />
-        {!emailValid && <span className="font-normal text-danger">{t("order.email.error")}</span>}
-      </label>
+      </Field>
       <Button
         data-testid="buy-book"
         loading={buy.isPending}
@@ -77,13 +73,7 @@ export function Paywall({ kind, onUnlocked }: { kind: BookKind; onUnlocked: () =
           unlocked();
         }}
       >
-        <input
-          data-testid="demo-code"
-          value={code}
-          onChange={(event) => setCode(event.target.value)}
-          placeholder={t("paywall.code")}
-          className="w-full rounded-xl border border-border bg-background px-4 py-2"
-        />
+        <Input data-testid="demo-code" aria-label={t("paywall.code")} value={code} onChange={(event) => setCode(event.target.value)} placeholder={t("paywall.code")} />
         <Button type="submit" variant="secondary" data-testid="apply-demo-code" icon={<KeyRound className="size-4" />}>
           {t("paywall.apply")}
         </Button>

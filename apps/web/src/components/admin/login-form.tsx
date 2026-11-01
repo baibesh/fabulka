@@ -6,9 +6,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { adminLogin, adminLoginOptions } from "@/lib/admin-api";
 import { LanguageSwitch } from "./language-switch";
-import { input, useAdminI18n } from "./ui";
+import { useAdminI18n } from "./ui";
 import { Spinner } from "@/components/ui/spinner";
 import { Button, buttonClass } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { ErrorText } from "@/components/ui/notice";
 
 /**
  * The way in: Keycloak (realm role `admin`, 2FA there) and, only when ADMIN_PASSWORD_LOGIN is on, the
@@ -59,26 +62,13 @@ function PasswordForm() {
       }}
       className="flex flex-col gap-4"
     >
-      <label className="flex flex-col gap-1.5 text-sm font-semibold">
-        {t("admin.login.email")}
-        <input data-testid="admin-email" type="email" autoComplete="username" className={input} value={email} onChange={(e) => setEmail(e.target.value)} />
-      </label>
-      <label className="flex flex-col gap-1.5 text-sm font-semibold">
-        {t("admin.login.password")}
-        <input
-          data-testid="admin-password"
-          type="password"
-          autoComplete="current-password"
-          className={input}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      </label>
-      {login.isError && (
-        <p role="alert" className="text-sm text-danger">
-          {login.error.message}
-        </p>
-      )}
+      <Field label={t("admin.login.email")}>
+        <Input data-testid="admin-email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
+      </Field>
+      <Field label={t("admin.login.password")}>
+        <Input data-testid="admin-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      </Field>
+      {login.isError && <ErrorText className="text-sm">{login.error.message}</ErrorText>}
       <Button type="submit" size="lg" data-testid="admin-submit" loading={login.isPending}>
         {t("admin.login.submit")}
       </Button>

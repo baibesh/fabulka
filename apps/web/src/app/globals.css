@@ -48,6 +48,7 @@
   --spacing-control-lg: var(--control-h-lg);
   --spacing-control-x: var(--control-px);
   --spacing-check: var(--check-size);
+  --text-control: var(--control-font);
   --radius-control: 0.75rem;
   --radius-card: 1rem;
   --radius-panel: 1.5rem;

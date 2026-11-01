@@ -6,13 +6,14 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { use, useState } from "react";
 import { adminTemplate, updateTemplate } from "@/lib/admin-api";
-import { Card, input, PageTitle, useAdminI18n } from "./ui";
+import { Card, PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
 import { ErrorText } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
 import { Button, IconButton } from "@/components/ui/button";
-
-const label = "flex flex-col gap-1.5 text-sm font-semibold";
+import { Checkbox, ChoiceLabel } from "@/components/ui/choice";
+import { Field } from "@/components/ui/field";
+import { Input, Select, Textarea } from "@/components/ui/input";
 
 export function TemplateEditor({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -83,34 +84,29 @@ function Editor({ initial }: { initial: AdminTemplate }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title={t("admin.template.card")}>
-          <label className={label}>
-            {t("admin.template.title")}
-            <input data-testid="template-title-input" className={input} value={draft.title} onChange={(e) => set("title", e.target.value)} />
-          </label>
-          <label className={label}>
-            {t("admin.template.summary")}
-            <textarea className={`${input} min-h-20`} value={draft.summary} onChange={(e) => set("summary", e.target.value)} />
-          </label>
+          <Field label={t("admin.template.title")}>
+            <Input data-testid="template-title-input" value={draft.title} onChange={(e) => set("title", e.target.value)} />
+          </Field>
+          <Field label={t("admin.template.summary")}>
+            <Textarea className="min-h-20" value={draft.summary} onChange={(e) => set("summary", e.target.value)} />
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <label className={label}>
-              {t("admin.template.ageMin")}
-              <input type="number" min={2} max={10} className={input} value={draft.ageMin} onChange={(e) => set("ageMin", Number(e.target.value))} />
-            </label>
-            <label className={label}>
-              {t("admin.template.ageMax")}
-              <input type="number" min={2} max={10} className={input} value={draft.ageMax} onChange={(e) => set("ageMax", Number(e.target.value))} />
-            </label>
+            <Field label={t("admin.template.ageMin")}>
+              <Input type="number" min={2} max={10} value={draft.ageMin} onChange={(e) => set("ageMin", Number(e.target.value))} />
+            </Field>
+            <Field label={t("admin.template.ageMax")}>
+              <Input type="number" min={2} max={10} value={draft.ageMax} onChange={(e) => set("ageMax", Number(e.target.value))} />
+            </Field>
           </div>
-          <label className="flex items-center gap-2 text-sm font-semibold">
-            <input type="checkbox" checked={draft.published} onChange={(e) => set("published", e.target.checked)} />
+          <ChoiceLabel strong>
+            <Checkbox checked={draft.published} onChange={(e) => set("published", e.target.checked)} />
             {t("admin.template.published")}
-          </label>
+          </ChoiceLabel>
         </Card>
 
         <Card title={t("admin.template.story")}>
-          <label className={label}>
-            {t("admin.template.method")}
-            <select className={input} value={draft.methodology} onChange={(e) => set("methodology", e.target.value)}>
+          <Field label={t("admin.template.method")}>
+            <Select value={draft.methodology} onChange={(e) => set("methodology", e.target.value)}>
               {/* The saved slug stays selectable while the list loads. */}
               {!methods.data?.some((m) => m.slug === draft.methodology) && <option value={draft.methodology}>{draft.methodology}</option>}
               {methods.data?.map((m) => (
@@ -122,20 +118,17 @@ function Editor({ initial }: { initial: AdminTemplate }) {
                   })}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className={label}>
-            {t("admin.template.theme")}
-            <input className={input} value={draft.theme} onChange={(e) => set("theme", e.target.value)} />
-          </label>
-          <label className={label}>
-            {t("admin.template.plot")}
-            <textarea className={`${input} min-h-40 font-mono text-xs`} value={plot} onChange={(e) => setPlot(e.target.value)} />
-          </label>
-          <label className={label}>
-            {t("admin.template.style")}
-            <textarea className={`${input} min-h-16 text-xs`} value={draft.stylePrompt ?? ""} onChange={(e) => set("stylePrompt", e.target.value)} />
-          </label>
+            </Select>
+          </Field>
+          <Field label={t("admin.template.theme")}>
+            <Input value={draft.theme} onChange={(e) => set("theme", e.target.value)} />
+          </Field>
+          <Field label={t("admin.template.plot")}>
+            <Textarea code className="min-h-40" value={plot} onChange={(e) => setPlot(e.target.value)} />
+          </Field>
+          <Field label={t("admin.template.style")}>
+            <Textarea code className="min-h-16" value={draft.stylePrompt ?? ""} onChange={(e) => set("stylePrompt", e.target.value)} />
+          </Field>
         </Card>
       </div>
 
@@ -156,34 +149,42 @@ function Editor({ initial }: { initial: AdminTemplate }) {
       >
         {draft.questions.map((q, i) => (
           <div key={i} className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[8rem_1fr_8rem_auto]">
-            <input className={`${input} font-mono text-xs`} value={q.key} placeholder={t("admin.template.question.key")} onChange={(e) => setQuestion(i, { key: e.target.value })} />
-            <input className={input} value={q.label} placeholder={t("admin.template.question.label")} onChange={(e) => setQuestion(i, { label: e.target.value })} />
-            <select className={input} value={q.kind} onChange={(e) => setQuestion(i, { kind: e.target.value as TemplateQuestion["kind"] })}>
+            <Input
+              code
+              aria-label={t("admin.template.question.key")}
+              value={q.key}
+              placeholder={t("admin.template.question.key")}
+              onChange={(e) => setQuestion(i, { key: e.target.value })}
+            />
+            <Input aria-label={t("admin.template.question.label")} value={q.label} placeholder={t("admin.template.question.label")} onChange={(e) => setQuestion(i, { label: e.target.value })} />
+            <Select value={q.kind} onChange={(e) => setQuestion(i, { kind: e.target.value as TemplateQuestion["kind"] })}>
               <option value="text">{t("admin.template.question.text")}</option>
               <option value="choice">{t("admin.template.question.choice")}</option>
-            </select>
+            </Select>
             <IconButton variant="ghost" label={t("admin.template.question.remove")} onClick={() => set("questions", draft.questions.filter((_, j) => j !== i))}>
               <Trash2 className="size-4" />
             </IconButton>
             {q.kind === "choice" ? (
-              <input
-                className={`${input} md:col-span-3`}
+              <Input
+                className="md:col-span-3"
+                aria-label={t("admin.template.question.options")}
                 defaultValue={q.options?.join(", ") ?? ""}
                 placeholder={t("admin.template.question.options")}
                 onBlur={(e) => setQuestion(i, { options: e.target.value.split(",").map((o) => o.trim()).filter(Boolean) })}
               />
             ) : (
-              <input
-                className={`${input} md:col-span-3`}
+              <Input
+                className="md:col-span-3"
+                aria-label={t("admin.template.question.placeholder")}
                 value={q.placeholder ?? ""}
                 placeholder={t("admin.template.question.placeholder")}
                 onChange={(e) => setQuestion(i, { placeholder: e.target.value || undefined })}
               />
             )}
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={q.required} onChange={(e) => setQuestion(i, { required: e.target.checked })} />
+            <ChoiceLabel>
+              <Checkbox checked={q.required} onChange={(e) => setQuestion(i, { required: e.target.checked })} />
               {t("admin.template.question.required")}
-            </label>
+            </ChoiceLabel>
           </div>
         ))}
       </Card>
