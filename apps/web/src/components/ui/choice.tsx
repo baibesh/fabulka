@@ -15,7 +15,7 @@ export function Radio({ className, ...rest }: Omit<ComponentProps<"input">, "typ
 
 /** A checkbox or radio with its text after it; clicking the text toggles it. */
 export function ChoiceLabel({ strong = false, className, ...rest }: ComponentProps<"label"> & { strong?: boolean }) {
-  return <label className={cx("flex cursor-pointer items-center gap-2 text-sm", strong && "font-semibold", className)} {...rest} />;
+  return <label className={cx("flex cursor-pointer items-center gap-2 text-sm", strong ? "font-semibold" : "font-normal", className)} {...rest} />;
 }
 
 /** A radio (or checkbox) as a whole card, outlined in the accent colour when chosen. */

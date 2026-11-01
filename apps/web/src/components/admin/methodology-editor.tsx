@@ -16,23 +16,25 @@ import {
   type MethodologyTexts,
 } from "@fabulka/shared";
 import { Eye, Save, Trash2 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 import { adminMethodology, createMethodology, deleteMethodology, previewMethodology, updateMethodology } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
-import { Card, input, PageTitle, useAdminI18n } from "./ui";
+import { Card, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
 import { ErrorText, Notice } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { Checkbox, ChoiceLabel } from "@/components/ui/choice";
+import { Field } from "@/components/ui/field";
+import { Input, Textarea } from "@/components/ui/input";
+import { BackLink, PageHeader } from "@/components/ui/page";
+import { tabPanelProps, Tabs, useTabsId } from "@/components/ui/tabs";
 
 /** Languages a method must have to be published; the others are optional. */
 const isBase = (language: Language) => (BASE_LANGUAGES as readonly Language[]).includes(language);
 
-const label = "flex flex-col gap-1.5 text-sm font-semibold";
-const error = "text-sm font-normal text-danger";
 
 /** What the form holds: lists as one item per line, the way the owner types them. */
 interface Draft {
@@ -107,6 +109,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
           sortOrder: null,
         },
   );
+  const tabs = useTabsId();
   const [lang, setLang] = useState<Language>("ru");
   const [problems, setProblems] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState(false);
@@ -164,7 +167,6 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
   });
   const inUse = remove.error instanceof ApiError && remove.error.code === METHODOLOGY_IN_USE;
 
-  const problem = (path: string) => problems[path] && <span className={error}>{problems[path]}</span>;
   const langProblem = (code: Language) => Object.keys(problems).some((path) => path.startsWith(`texts.${code}.`));
   // Marked only where publishing needs it: an optional language falls back to the base ones.
   const unfilled = (code: Language) => isBase(code) && (!draft.texts[code]?.name || !draft.texts[code]?.summary);
@@ -179,10 +181,10 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       }}
       className="flex flex-col gap-6"
     >
-      <Link href="/admin/methodologies" className="text-sm font-semibold text-accent">
-        {t("admin.method.back")}
-      </Link>
-      <PageTitle
+      <BackLink href="/admin/methodologies">{t("admin.method.back")}</BackLink>
+      <PageHeader
+        size="sm"
+        title={initial ? methodologyText(initial.texts, locale).name || initial.slug : t("admin.method.newTitle")}
         aside={
           <div className="flex flex-wrap items-center gap-3">
             {savedNow && <span data-testid="methodology-saved" className="text-sm text-success">{t("admin.saved")}</span>}
@@ -204,9 +206,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
             </Button>
           </div>
         }
-      >
-        {initial ? methodologyText(initial.texts, locale).name || initial.slug : t("admin.method.newTitle")}
-      </PageTitle>
+      />
 
       <ConfirmDialog
         open={confirming}
@@ -254,118 +254,95 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title={t("admin.method.texts")}>
-          <div role="tablist" className="flex gap-1 rounded-xl bg-background p-1">
-            {LANGUAGES.map((code) => (
-              <button
-                key={code}
-                type="button"
-                role="tab"
-                aria-selected={lang === code}
-                data-testid={`methodology-tab-${code}`}
-                onClick={() => setLang(code)}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ${
-                  lang === code ? "bg-card shadow-sm" : "text-muted hover:text-foreground"
-                }`}
-              >
-                {LANGUAGE_NAMES[code]}
-                {(unfilled(code) || langProblem(code)) && (
-                  <span title={t("admin.method.missing")} className={`size-1.5 rounded-full ${langProblem(code) ? "bg-danger" : "bg-amber-500"}`} />
-                )}
-              </button>
-            ))}
+          <Tabs
+            base={tabs}
+            variant="segmented"
+            value={lang}
+            onChange={setLang}
+            items={LANGUAGES.map((code) => ({
+              id: code,
+              testId: `methodology-tab-${code}`,
+              label: (
+                <>
+                  {LANGUAGE_NAMES[code]}
+                  {(unfilled(code) || langProblem(code)) && (
+                    <span title={t("admin.method.missing")} className={`size-1.5 rounded-full ${langProblem(code) ? "bg-danger" : "bg-warning"}`} />
+                  )}
+                </>
+              ),
+            }))}
+          />
+          <div {...tabPanelProps(tabs, lang)} className="flex flex-col gap-4 outline-none">
+            <Field label={t("admin.method.name")} error={problems[`texts.${lang}.name`]}>
+              <Input
+                key={`name-${lang}`}
+                data-testid={`methodology-name-${lang}`}
+                value={draft.texts[lang]?.name ?? ""}
+                onChange={(e) => setText("name", e.target.value)}
+              />
+            </Field>
+            <Field label={t("admin.method.summary")} error={problems[`texts.${lang}.summary`]}>
+              <Textarea
+                key={`summary-${lang}`}
+                data-testid={`methodology-summary-${lang}`}
+                className="min-h-24"
+                value={draft.texts[lang]?.summary ?? ""}
+                onChange={(e) => setText("summary", e.target.value)}
+              />
+            </Field>
           </div>
-          <label className={label}>
-            {t("admin.method.name")}
-            <input
-              key={`name-${lang}`}
-              data-testid={`methodology-name-${lang}`}
-              className={input}
-              value={draft.texts[lang]?.name ?? ""}
-              onChange={(e) => setText("name", e.target.value)}
-            />
-            {problem(`texts.${lang}.name`)}
-          </label>
-          <label className={label}>
-            {t("admin.method.summary")}
-            <textarea
-              key={`summary-${lang}`}
-              data-testid={`methodology-summary-${lang}`}
-              className={`${input} min-h-24`}
-              value={draft.texts[lang]?.summary ?? ""}
-              onChange={(e) => setText("summary", e.target.value)}
-            />
-            {problem(`texts.${lang}.summary`)}
-          </label>
           <p className="text-xs text-muted">{t("admin.method.texts.hint")}</p>
         </Card>
 
         <Card title={t("admin.method.basics")}>
-          <label className={label}>
-            {t("admin.method.slug")}
-            <input
+          <Field label={t("admin.method.slug")} error={problems["slug"]}>
+            <Input
               data-testid="methodology-slug"
-              className={`${input} font-mono text-sm disabled:opacity-60`}
+              code
               value={draft.slug}
               disabled={Boolean(initial)}
               onChange={(e) => set("slug", e.target.value.toLowerCase())}
             />
-            {problem("slug")}
-          </label>
-          <label className={label}>
-            {t("admin.method.source")}
-            <input data-testid="methodology-source" className={input} value={draft.source} onChange={(e) => set("source", e.target.value)} />
-            {problem("source")}
-          </label>
+          </Field>
+          <Field label={t("admin.method.source")} error={problems["source"]}>
+            <Input data-testid="methodology-source" value={draft.source} onChange={(e) => set("source", e.target.value)} />
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <label className={label}>
-              {t("admin.method.ageMin")}
-              <input
+            <Field label={t("admin.method.ageMin")} error={problems["ageMin"]}>
+              <Input
                 type="number"
                 data-testid="methodology-age-min"
                 min={METHODOLOGY_AGE_MIN}
                 max={METHODOLOGY_AGE_MAX}
-                className={input}
                 value={draft.ageMin}
                 onChange={(e) => set("ageMin", Number(e.target.value))}
               />
-              {problem("ageMin")}
-            </label>
-            <label className={label}>
-              {t("admin.method.ageMax")}
-              <input
+            </Field>
+            <Field label={t("admin.method.ageMax")} error={problems["ageMax"]}>
+              <Input
                 type="number"
                 data-testid="methodology-age-max"
                 min={METHODOLOGY_AGE_MIN}
                 max={METHODOLOGY_AGE_MAX}
-                className={input}
                 value={draft.ageMax}
                 onChange={(e) => set("ageMax", Number(e.target.value))}
               />
-              {problem("ageMax")}
-            </label>
+            </Field>
           </div>
-          <label className={label}>
-            {t("admin.method.sortOrder")}
-            <input
+          <Field label={t("admin.method.sortOrder")} error={problems["sortOrder"]}>
+            <Input
               type="number"
               data-testid="methodology-sort"
               min={0}
-              className={input}
               value={sortOrder}
               onChange={(e) => set("sortOrder", Number(e.target.value))}
             />
-            {problem("sortOrder")}
-          </label>
-          <label className="flex items-center gap-2 text-sm font-semibold">
-            <input
-              type="checkbox"
-              data-testid="methodology-published"
-              checked={draft.published}
-              onChange={(e) => set("published", e.target.checked)}
-            />
+          </Field>
+          <ChoiceLabel strong>
+            <Checkbox data-testid="methodology-published" checked={draft.published} onChange={(e) => set("published", e.target.checked)} />
             {t("admin.method.published")}
-          </label>
-          {problem("published")}
+          </ChoiceLabel>
+          {problems.published && <p className="text-sm text-danger">{problems.published}</p>}
           {initial && (
             <p data-testid="methodology-usage" className="text-sm text-muted">
               {t("admin.method.usage", { templates: initial.templates, books: initial.books })}
@@ -383,36 +360,30 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
         }
       >
         <div className="grid gap-4 lg:grid-cols-3">
-          <label className={label}>
-            {t("admin.method.structure")}
-            <textarea
+          <Field label={t("admin.method.structure")} error={problems["structure"]}>
+            <Textarea
               data-testid="methodology-structure"
-              className={`${input} min-h-48 font-mono text-xs`}
+              code className="min-h-48"
               value={draft.structure}
               onChange={(e) => set("structure", e.target.value)}
             />
-            {problem("structure")}
-          </label>
-          <label className={label}>
-            {t("admin.method.rules")}
-            <textarea
+          </Field>
+          <Field label={t("admin.method.rules")} error={problems["rules"]}>
+            <Textarea
               data-testid="methodology-rules"
-              className={`${input} min-h-48 font-mono text-xs`}
+              code className="min-h-48"
               value={draft.rules}
               onChange={(e) => set("rules", e.target.value)}
             />
-            {problem("rules")}
-          </label>
-          <label className={label}>
-            {t("admin.method.avoid")}
-            <textarea
+          </Field>
+          <Field label={t("admin.method.avoid")} error={problems["avoid"]}>
+            <Textarea
               data-testid="methodology-avoid"
-              className={`${input} min-h-48 font-mono text-xs`}
+              code className="min-h-48"
               value={draft.avoid}
               onChange={(e) => set("avoid", e.target.value)}
             />
-            {problem("avoid")}
-          </label>
+          </Field>
         </div>
         {preview.isError && <ErrorText>{preview.error.message}</ErrorText>}
         {preview.data && (

@@ -5,63 +5,30 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@/lib/query";
 import {
   GENERATION_PAUSED,
-  LANGUAGES,
   LIMIT_REACHED,
   answersProblem,
   fitsAge,
   type Template,
   type VoicePrefill,
 } from "@fabulka/shared";
-import { ArrowLeft, ArrowRight, BookOpen, CirclePause, Mic, Pencil, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CirclePause } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch, type FieldErrors, type FieldPath } from "react-hook-form";
-import { z } from "zod";
 import { ApiError, createBook, getQuota, getStatus, uploadToy } from "@/lib/api";
 import { toJpegDataUrl } from "@/lib/toy-photo";
 import { useMethodologies } from "@/lib/use-methodologies";
+import { ages, FormSchema, STEP_FIELDS, STEPS, splitInterests, type FormValues, type Step } from "./book-form-model";
+import { ReviewSummary } from "./book-form-review";
+import { ChildStep, StoryStep, ToyStep } from "./book-form-steps";
 import { PriceTag } from "./price-tag";
 import { useI18n } from "@/i18n/i18n";
-import { LOCALE_NAMES, type MessageKey } from "@/i18n/messages";
+import type { MessageKey } from "@/i18n/messages";
 import { Paywall } from "./paywall";
 import { VoiceStep } from "./voice-step";
 import { ErrorText, Notice } from "./ui/notice";
 import { Button } from "./ui/button";
-
-const FormSchema = z.object({
-  name: z.string().trim().min(1).max(40),
-  age: z.string(),
-  gender: z.enum(["boy", "girl"]),
-  interests: z.string().trim().min(1),
-  pet: z.string().trim().max(60),
-  city: z.string().trim().min(1).max(60),
-  language: z.enum(LANGUAGES),
-  /** "" lets the API pick a method by age. */
-  methodology: z.string(),
-  theme: z.string().trim().max(200),
-  toyName: z.string().trim().max(40),
-  answers: z.record(z.string(), z.string()),
-});
-type FormValues = z.infer<typeof FormSchema>;
-
-/** The wizard's steps in order; "voice" is offered only while voice input is on. */
-const STEPS = ["voice", "child", "story", "toy", "review"] as const;
-type Step = (typeof STEPS)[number];
-
-/** Fields each step checks before moving on; answers to a template's questions are checked apart. */
-const STEP_FIELDS: Record<Step, FieldPath<FormValues>[]> = {
-  voice: [],
-  child: ["name", "age", "gender", "language", "interests", "city"],
-  story: ["theme", "methodology"],
-  toy: ["pet", "toyName"],
-  review: [],
-};
-
-const ages = (min: number, max: number) => Array.from({ length: max - min + 1 }, (_, i) => String(i + min));
-
-const field = "w-full rounded-xl border border-border bg-card px-4 py-3 outline-none focus:border-accent";
-const label = "flex flex-col gap-1.5 text-sm font-semibold";
 
 /**
  * A book of your own, or, with `template`, a catalog book with its questions — filled in step by
@@ -100,7 +67,6 @@ export function BookForm({ template }: { template?: Template }) {
   // Until the methods arrive only "pick by age" is offered, which needs none of them.
   const { data: allMethods } = useMethodologies();
   const methods = (allMethods ?? []).filter((m) => fitsAge(m, age));
-  const errors = form.formState.errors;
   const queryClient = useQueryClient();
   const quota = useQuery({ queryKey: ["quota"], queryFn: getQuota });
   // Said up front, so a parent does not fill in the whole form only to be turned away.
@@ -217,7 +183,6 @@ export function BookForm({ template }: { template?: Template }) {
   const limitReached = create.error instanceof ApiError && create.error.code === LIMIT_REACHED;
 
   const values = form.getValues();
-  const interests = splitInterests(values.interests).join(", ");
   const method = methods.find((m) => m.slug === values.methodology);
 
   return (
@@ -265,196 +230,23 @@ export function BookForm({ template }: { template?: Template }) {
 
       {step === "voice" && <VoiceStep template={template} onPrefill={applyPrefill} onSkip={() => goTo("child")} />}
 
-      {step === "child" && (
-        <div className="grid gap-5 sm:grid-cols-2">
-          {heard && (
-            <Notice data-testid="voice-transcript" role="status" tone="subtle" icon={<Mic className="size-5 shrink-0 text-accent" />} className="sm:col-span-2">
-              <p>{t("voice.heard", { transcript: heard })}</p>
-              <p className="font-semibold">{t("voice.check")}</p>
-            </Notice>
-          )}
-          <label className={label}>
-            {t("form.name")}
-            <input data-testid="child-name" className={field} placeholder={t("form.name.placeholder")} {...form.register("name")} />
-            {errors.name && <span className="text-danger">{t("form.name.error")}</span>}
-          </label>
+      {step === "child" && <ChildStep form={form} ageOptions={ageOptions} languages={bookLanguages} heard={heard} />}
 
-          <label className={label}>
-            {t("form.age")}
-            <select data-testid="child-age" className={field} {...form.register("age")}>
-              {ageOptions.map((age) => (
-                <option key={age} value={age}>
-                  {age}
-                </option>
-              ))}
-            </select>
-          </label>
+      {step === "story" && <StoryStep form={form} template={template} methods={methods} />}
 
-          <fieldset className={label}>
-            <legend className="mb-1.5">{t("form.hero")}</legend>
-            <div className="flex gap-3">
-              <label className="flex items-center gap-2 font-normal">
-                <input type="radio" value="girl" {...form.register("gender")} /> {t("form.girl")}
-              </label>
-              <label className="flex items-center gap-2 font-normal">
-                <input type="radio" value="boy" {...form.register("gender")} /> {t("form.boy")}
-              </label>
-            </div>
-          </fieldset>
-
-          <label className={label}>
-            {t("form.bookLanguage")}
-            <select data-testid="book-language" className={field} {...form.register("language")}>
-              {bookLanguages.map((l) => (
-                <option key={l} value={l}>
-                  {LOCALE_NAMES[l]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className={`${label} sm:col-span-2`}>
-            {t("form.interests")}
-            <input data-testid="child-interests" className={field} placeholder={t("form.interests.placeholder")} {...form.register("interests")} />
-            {errors.interests && <span className="text-danger">{t("form.interests.error")}</span>}
-          </label>
-
-          <label className={label}>
-            {t("form.city")}
-            <input data-testid="child-city" className={field} {...form.register("city")} />
-            {errors.city && <span className="text-danger">{t("form.city.error")}</span>}
-          </label>
-        </div>
-      )}
-
-      {step === "story" &&
-        (template ? (
-          <fieldset data-testid="template-questions" className="grid gap-5 sm:grid-cols-2">
-            <legend className="sr-only">{t("form.questions")}</legend>
-            {template.questions.map((q) => (
-              <label key={q.key} className={label}>
-                {q.label}
-                {!q.required && <span className="font-normal text-muted">{t("common.optional")}</span>}
-                {q.kind === "choice" ? (
-                  <select data-testid={`answer-${q.key}`} className={field} {...form.register(`answers.${q.key}`)}>
-                    <option value="">—</option>
-                    {q.options?.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    data-testid={`answer-${q.key}`}
-                    className={field}
-                    placeholder={q.placeholder}
-                    {...form.register(`answers.${q.key}`)}
-                  />
-                )}
-              </label>
-            ))}
-            {errors.root?.answers && <ErrorText className="sm:col-span-2">{errors.root.answers.message}</ErrorText>}
-          </fieldset>
-        ) : (
-          <div className="grid gap-5">
-            <label className={label}>
-              {t("form.theme")}
-              <input
-                data-testid="book-theme"
-                className={field}
-                placeholder={t("form.theme.placeholder")}
-                {...form.register("theme")}
-              />
-            </label>
-            <label className={label}>
-              {t("form.method")}
-              <select data-testid="book-methodology" className={field} {...form.register("methodology")}>
-                <option value="">{t("form.method.auto")}</option>
-                {methods.map((m) => (
-                  <option key={m.slug} value={m.slug}>
-                    {m.name} — {m.summary}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        ))}
-
-      {step === "toy" && (
-        <div className="grid gap-5">
-          <fieldset className="grid gap-4 rounded-2xl border border-dashed border-border p-4 sm:grid-cols-[8rem_1fr]">
-            <legend className="px-1 text-sm font-semibold">{t("form.toy.legend")}</legend>
-            <label className="relative flex aspect-square w-32 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-border bg-background text-center text-xs text-muted hover:border-accent sm:w-auto">
-              {toyPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element -- a local preview of the chosen file
-                <img src={toyPreview} alt={t("form.toy.alt")} className="h-full w-full object-cover" />
-              ) : (
-                <span className="p-2">{t("form.toy.pick")}</span>
-              )}
-              <input
-                data-testid="toy-photo"
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={(e) => setToyPhoto(e.target.files?.[0] ?? null)}
-              />
-            </label>
-            <div className="flex flex-col gap-3">
-              <p className="text-sm text-muted">
-                {t("form.toy.text")}
-              </p>
-              <input data-testid="toy-name" className={field} placeholder={t("form.toy.name")} {...form.register("toyName")} />
-              {toyPhoto && (
-                <Button variant="ghost" size="inline" icon={<X className="size-4" />} onClick={() => setToyPhoto(null)} className="self-start text-sm">
-                  {t("form.toy.remove")}
-                </Button>
-              )}
-            </div>
-          </fieldset>
-
-          <label className={label}>
-            {t("form.pet")}
-            <input data-testid="child-pet" className={field} placeholder={t("form.pet.placeholder")} {...form.register("pet")} />
-          </label>
-        </div>
-      )}
+      {step === "toy" && <ToyStep form={form} photo={toyPhoto} preview={toyPreview} onPhoto={setToyPhoto} />}
 
       {step === "review" && (
         <div data-testid="wizard-review" className="flex flex-col gap-4">
           <p className="text-muted">{t("wizard.review.lead")}</p>
-          <ReviewGroup title={t(stepName("child"))} edit={t("wizard.edit")} step="child" onEdit={goTo}>
-            <ReviewRow name={t("form.name")} value={values.name} />
-            <ReviewRow name={t("form.age")} value={values.age} />
-            <ReviewRow name={t("form.hero")} value={t(values.gender === "boy" ? "form.boy" : "form.girl")} />
-            <ReviewRow name={t("form.bookLanguage")} value={LOCALE_NAMES[values.language]} />
-            <ReviewRow name={t("wizard.review.interests")} value={interests} />
-            <ReviewRow name={t("form.city")} value={values.city} />
-          </ReviewGroup>
-          <ReviewGroup title={t(stepName("story"))} edit={t("wizard.edit")} step="story" onEdit={goTo}>
-            {template ? (
-              template.questions.map((q) => (
-                <ReviewRow key={q.key} name={q.label} value={values.answers[q.key] || t("wizard.review.none")} />
-              ))
-            ) : (
-              <>
-                <ReviewRow name={t("wizard.review.theme")} value={values.theme || t("wizard.review.none")} />
-                <ReviewRow
-                  name={t("form.method")}
-                  value={method ? method.name : t("form.method.auto")}
-                />
-              </>
-            )}
-          </ReviewGroup>
-          <ReviewGroup title={t(stepName("toy"))} edit={t("wizard.edit")} step="toy" onEdit={goTo}>
-            <ReviewRow
-              name={t("wizard.review.toy")}
-              value={
-                [values.toyName, toyPhoto && t("wizard.review.photo")].filter(Boolean).join(", ") || t("wizard.review.none")
-              }
-            />
-            <ReviewRow name={t("wizard.review.pet")} value={values.pet || t("wizard.review.none")} />
-          </ReviewGroup>
+          <ReviewSummary
+            values={values}
+            template={template}
+            methodName={method?.name}
+            hasPhoto={Boolean(toyPhoto)}
+            stepName={stepName}
+            onEdit={goTo}
+          />
           <PriceTag kind={template ? "template" : "custom"} label={t("wizard.review.price")} testId="review-price" />
           <Button type="submit" size="lg" data-testid="create-book" loading={create.isPending} disabled={paused} icon={<BookOpen className="size-5" />}>
             {t("form.submit")}
@@ -492,42 +284,3 @@ export function BookForm({ template }: { template?: Template }) {
   );
 }
 
-function splitInterests(interests: string) {
-  return interests.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 5);
-}
-
-/** One step's answers on the review, with a way back to change them. */
-function ReviewGroup({
-  title,
-  edit,
-  step,
-  onEdit,
-  children,
-}: {
-  title: string;
-  edit: string;
-  step: Step;
-  onEdit: (step: Step) => void;
-  children: ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-2 rounded-2xl border border-border p-4">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="font-bold">{title}</h3>
-        <Button variant="link" size="inline" data-testid={`wizard-edit-${step}`} icon={<Pencil className="size-3.5" />} onClick={() => onEdit(step)} className="text-sm">
-          {edit}
-        </Button>
-      </div>
-      <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[minmax(8rem,auto)_1fr]">{children}</dl>
-    </section>
-  );
-}
-
-function ReviewRow({ name, value }: { name: string; value: string }) {
-  return (
-    <>
-      <dt className="text-muted">{name}</dt>
-      <dd className="mb-1 break-words font-semibold sm:mb-0">{value}</dd>
-    </>
-  );
-}
