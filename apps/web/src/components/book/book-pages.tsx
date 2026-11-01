@@ -14,7 +14,10 @@ export const PX_PER_MM = 96 / 25.4;
  * @fabulka/shared). Null until the language's hyphenation patterns have loaded, so the line breaks
  * are the printed ones from the first frame.
  */
-export function useRenderedBook(book: Book, highlights?: Highlight[]): RenderedBook | null {
+/** What the renderer needs of a book: a real one, or a preview put together in the admin. */
+export type PreviewableBook = Pick<Book, "title" | "childName" | "language" | "heroImageUrl" | "pages" | "talkQuestions" | "layout">;
+
+export function useRenderedBook(book: PreviewableBook, highlights?: Highlight[]): RenderedBook | null {
   const [hyphenate, setHyphenate] = useState<{ language: string; fn: Hyphenate } | null>(null);
   useEffect(() => {
     let live = true;

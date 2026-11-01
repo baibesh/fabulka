@@ -6,17 +6,28 @@ import {
   DEFAULT_ADDABLE,
   DEFAULT_BLOCKS,
   OPTIONAL_KINDS,
+  BOOK_THEMES,
+  LANGUAGES,
+  LANGUAGE_NAMES,
+  SAMPLE_BOOKS,
   TemplateBlocksSchema,
+  defaultThemeId,
   methodologyText,
+  newLayout,
   themesFor,
+  withTheme,
+  type AdminBook,
   type AdminTemplate,
-  type SelectableTheme,
+  type BookTheme,
+  type Language,
   type TemplateBlocks,
   type TemplateQuestion,
 } from "@fabulka/shared";
+import { BookPage, BookStyles, PX_PER_MM, useRenderedBook, type PreviewableBook } from "@/components/book/book-pages";
+import { themeName } from "@/lib/themes";
 import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from "lucide-react";
 import { use, useState } from "react";
-import { adminTemplate, updateTemplate } from "@/lib/admin-api";
+import { adminBook, adminTemplate, adminThemes, updateTemplate } from "@/lib/admin-api";
 import { Card, PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
 import { ErrorText } from "@/components/ui/notice";
@@ -50,6 +61,11 @@ function Editor({ initial }: { initial: AdminTemplate }) {
 
   const [blocks, setBlocks] = useState<TemplateBlocks>(() => initial.blocks ?? { order: DEFAULT_BLOCKS, addable: [...DEFAULT_ADDABLE] as TemplateBlocks["addable"] });
   const blocksOk = TemplateBlocksSchema.safeParse(blocks).success;
+  // Published themes whose fonts cover every language of the book (the curated ones while loading).
+  const allThemes = useQuery({ queryKey: ["admin", "themes"], queryFn: adminThemes });
+  const themes: BookTheme[] = allThemes.data
+    ? allThemes.data.filter((x) => x.status === "published" && draft.languages.every((l) => x.theme.languages.includes(l))).map((x) => x.theme)
+    : themesFor(draft.languages);
   const save = useMutation({
     mutationFn: () =>
       updateTemplate(initial.slug, {
@@ -63,7 +79,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
         plot: plot.split("\n").map((line) => line.trim()).filter(Boolean),
         questions: draft.questions,
         stylePrompt: draft.stylePrompt?.trim() || null,
-        layoutTheme: (draft.layoutTheme as SelectableTheme | null) ?? null,
+        layoutTheme: draft.layoutTheme ?? null,
         published: draft.published,
       }),
     onSuccess: (saved) => {
@@ -147,9 +163,9 @@ function Editor({ initial }: { initial: AdminTemplate }) {
               onChange={(e) => set("layoutTheme", e.target.value || null)}
             >
               <option value="">{t("admin.template.layoutTheme.auto")}</option>
-              {themesFor(draft.languages).map((theme) => (
+              {themes.map((theme) => (
                 <option key={theme.id} value={theme.id}>
-                  {t(`design.theme.${theme.id as SelectableTheme}`)}
+                  {themeName(theme, t, locale)}
                 </option>
               ))}
             </Select>
@@ -161,6 +177,8 @@ function Editor({ initial }: { initial: AdminTemplate }) {
       </div>
 
       <BlocksCard blocks={blocks} onChange={setBlocks} valid={blocksOk} />
+
+      <TemplatePreview template={draft} blocks={blocksOk ? blocks : null} theme={themes.find((x) => x.id === draft.layoutTheme) ?? null} />
 
       <Card
         title={t("admin.template.questions")}
@@ -315,5 +333,86 @@ function BlocksCard({ blocks, onChange, valid }: { blocks: TemplateBlocks; onCha
       </fieldset>
       {!valid && <ErrorText>{t("admin.template.blocks.invalid")}</ErrorText>}
     </Card>
+  );
+}
+
+/**
+ * The template's sample book as it will print, through the same renderer as the reader and the PDF,
+ * in a chosen language: the sample book's own text in its language, the shared sample text in the
+ * others, always with its pictures; in the theme and blocks picked above (saved or not).
+ */
+function TemplatePreview({ template, blocks, theme }: { template: AdminTemplate; blocks: TemplateBlocks | null; theme: BookTheme | null }) {
+  const { t } = useAdminI18n();
+  const [language, setLanguage] = useState<Language>(template.languages[0] ?? "ru");
+  const sample = useQuery({
+    queryKey: ["admin", "book", template.sampleBookId],
+    queryFn: () => adminBook(template.sampleBookId!),
+    enabled: !!template.sampleBookId,
+  });
+  const book = previewBook(sample.data ?? null, language, theme ?? BOOK_THEMES[defaultThemeId(template.ageMin)], blocks, template.ageMin);
+  return (
+    <Card
+      title={t("admin.template.preview")}
+      data-testid="template-preview"
+      data-language={language}
+      data-theme={book.layout.theme.id}
+      action={
+        <Select data-testid="template-preview-language" aria-label={t("admin.template.preview.language")} value={language} onChange={(e) => setLanguage(e.target.value as Language)}>
+          {LANGUAGES.map((l) => (
+            <option key={l} value={l}>
+              {LANGUAGE_NAMES[l]}
+            </option>
+          ))}
+        </Select>
+      }
+    >
+      <p className="-mt-2 text-sm text-muted">{template.sampleBookId ? t("admin.template.preview.hint") : t("admin.template.preview.noSample")}</p>
+      <PreviewPages book={book} />
+    </Card>
+  );
+}
+
+/** The book a template preview shows (see TemplatePreview). */
+function previewBook(sample: AdminBook | null, language: Language, theme: BookTheme, blocks: TemplateBlocks | null, age: number): PreviewableBook {
+  const text = SAMPLE_BOOKS[language];
+  const own = sample?.language === language;
+  const count = sample?.pages.length ?? text.pages.length;
+  const pages = Array.from({ length: count }, (_, i) => ({
+    page: sample?.pages[i]?.page ?? i + 1,
+    text: own ? sample.pages[i].text : text.pages[i % text.pages.length],
+    imageUrl: sample?.pages[i]?.imageUrl ?? null,
+  }));
+  const base = sample ? withTheme(sample.layout, theme) : newLayout(theme, age);
+  const layout = { ...base, blocks: blocks?.order ?? base.blocks, addable: blocks?.addable ?? base.addable, dedication: null };
+  return {
+    title: own ? sample.title : text.title,
+    childName: own ? sample.childName : text.childName,
+    language,
+    heroImageUrl: sample?.heroImageUrl ?? null,
+    pages,
+    talkQuestions: own ? sample.talkQuestions : text.talkQuestions,
+    layout,
+  };
+}
+
+/** Every page small, in print order. */
+function PreviewPages({ book }: { book: PreviewableBook }) {
+  const rendered = useRenderedBook(book);
+  const { widthMm, heightMm } = book.layout.format;
+  const width = 150;
+  const scale = width / (widthMm * PX_PER_MM);
+  if (!rendered) return null;
+  return (
+    <ol className="flex flex-wrap gap-3" style={{ ["--fb-scale" as string]: String(scale) }}>
+      <BookStyles />
+      {rendered.pages.map((page) => (
+        <li key={page.key} data-testid="template-preview-page" data-key={page.key} className="flex flex-col items-center gap-1">
+          <div className="overflow-hidden rounded border border-border shadow-sm" style={{ width, height: (width * heightMm) / widthMm }}>
+            <BookPage html={page.html} widthMm={widthMm} heightMm={heightMm} />
+          </div>
+          <span className="text-xs text-muted">{page.index + 1}</span>
+        </li>
+      ))}
+    </ol>
   );
 }

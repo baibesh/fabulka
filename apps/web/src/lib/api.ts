@@ -1,4 +1,6 @@
 import {
+  BookThemeSchema,
+  type BookTheme,
   BookSchema,
   ExampleBookSchema,
   MethodologySchema,
@@ -77,6 +79,8 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string | undefined,
     message: string,
+    /** The error's whole JSON body, for refusals that say more than a message (theme checks). */
+    readonly body?: unknown,
   ) {
     super(message);
   }
@@ -96,7 +100,7 @@ async function send(path: string, init: RequestInit): Promise<unknown> {
   if (!response.ok) {
     const error = (body ?? {}) as { code?: string; message?: unknown };
     const message = typeof error.message === "string" ? error.message : response.statusText;
-    const failure = new ApiError(response.status, error.code, message);
+    const failure = new ApiError(response.status, error.code, message, body);
     reportApiError(method, path, failure);
     throw failure;
   }
@@ -182,6 +186,11 @@ export async function getBook(id: string): Promise<Book> {
 /** Another theme or page layout before ordering; the API re-renders the book and returns it. */
 export async function updateLayout(id: string, patch: UpdateLayout): Promise<Book> {
   return BookSchema.parse(await request(`/api/books/${id}/layout`, { method: "PATCH", body: JSON.stringify(patch) }));
+}
+
+/** Themes a book may switch to: the curated ones and the AI ones staff published. */
+export async function getThemes(): Promise<BookTheme[]> {
+  return BookThemeSchema.array().parse(await request("/api/themes"));
 }
 
 /** The owner's prices and delivery cities: every price on the site comes from these. */

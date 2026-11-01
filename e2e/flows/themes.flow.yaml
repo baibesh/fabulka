@@ -1,0 +1,156 @@
+# AI-proposed themes (mock models): the owner types a brief in «Темы», Muse Spark proposes a theme,
+# the code checks fonts, contrast, sizes and letters and renders a sample book in all five languages;
+# the owner looks at the previews per language and publishes it; staff pick it in the template editor
+# (which previews the sample book per language) and a parent switches a book to it. A pale theme is
+# refused with the reason.
+appId: ${WEB}
+tags: [admin, layout, themes]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  brief: "Лесная поляна, 4–6 лет, зелёный и тёплый жёлтый ${Date.now()}"
+  paleBrief: "бледная пастель, почти невидимый текст ${Date.now()}"
+  childName: "Тема ИИ ${Date.now()}"
+  slug: big-feelings
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+commands:
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login?lang=ru"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - tapOn: { testId: admin-nav-themes }
+  - waitForVisible: { testId: themes-list }
+  # The curated themes are listed, read-only.
+  - assertVisible: { css: "[data-testid=theme-card][data-id=fairy][data-source=curated]" }
+  - assertNotVisible: { css: "[data-testid=theme-card][data-id=fairy] [data-testid=theme-delete]" }
+
+  # A pale theme is refused, saying which colors and why; nothing is stored.
+  - tapOn: { testId: theme-brief }
+  - inputText: "${paleBrief}"
+  - tapOn: { testId: theme-propose }
+  - waitForVisible: { testId: theme-refused, timeout: 30000 }
+  - assertVisible: { css: "[data-testid=theme-refused] [data-testid=theme-check][data-check=contrast][data-ok=false]" }
+  - assertVisible: { testId: theme-refused, containsDescendants: { contains: "needs 4.5" } }
+  - sql:
+      query: 'select count(*)::int as n from "Theme" where brief = $1'
+      params: ["${paleBrief}"]
+      readOnly: true
+      assert: { rows: 1, first: { n: 0 } }
+
+  # A good one: every check passes and the sample book is rendered in all five languages.
+  - tapOn: { testId: theme-brief }
+  - eraseText: 200
+  - inputText: "${brief}"
+  - tapOn: { testId: theme-propose }
+  - waitForVisible: { testId: theme-proposed, timeout: 60000 }
+  - sql:
+      query: >-
+        select id, published, theme->>'source' as source, jsonb_array_length(theme->'languages') as languages,
+        theme->>'ornamentImage' is not null as ornament,
+        (select count(*)::int from jsonb_array_elements(checks) c where (c->>'ok')::boolean) as passed,
+        (select count(*)::int from jsonb_array_elements(checks) c where not (c->>'ok')::boolean) as failed,
+        (select count(*)::int from jsonb_array_elements(checks) c where c->>'check' = 'render') as renders
+        from "Theme" where brief = $1
+      params: ["${brief}"]
+      readOnly: true
+      extract: { themeId: "$[0].id" }
+      assert: { rows: 1, first: { published: false, source: ai, languages: 5, ornament: true, failed: 0, renders: 5 } }
+  - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'][data-status=draft]" }
+  - assertNotVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-check][data-ok=false]" }
+  - assertVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-ornament]" }
+  # Previews in each of the five languages.
+  - tapOn: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-preview-lang-ru]" }
+  - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-previews][data-language=ru] img[src*='/ru-0.png']" }
+  - tapOn: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-preview-lang-kk]" }
+  - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-previews][data-language=kk] img[src*='/kk-0.png']" }
+  - tapOn: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-preview-lang-en]" }
+  - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-previews][data-language=en] img[src*='/en-0.png']" }
+  - tapOn: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-preview-lang-es]" }
+  - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-previews][data-language=es] img[src*='/es-0.png']" }
+  - tapOn: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-preview-lang-de]" }
+  - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-previews][data-language=de] img[src*='/de-0.png']" }
+  - request:
+      url: ${WEB}/files/themes/${themeId}/de-0.png
+      assert: { status: 200, headers: { content-type: image/png } }
+
+  # Not offered to parents until it is published.
+  - request:
+      url: /themes
+      extract: { last: "$[-1:].id" }
+      assert: { status: 200 }
+  - assertTrue: "${'${last}' !== '${themeId}'}"
+  - tapOn: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-publish]" }
+  - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'][data-status=published]" }
+  # Published AI themes come after the curated ones, oldest first: this one is last.
+  - request:
+      url: /themes
+      extract: { last: "$[-1:].id" }
+      assert: { status: 200 }
+  - assertTrue: { equals: ["${last}", "${themeId}"] }
+
+  # Staff pick it for a catalog book; the editor previews the sample book in the chosen language.
+  - openLink: "${WEB}/admin/catalog/${slug}"
+  - waitForVisible: { testId: template-editor }
+  - selectOption: { testId: template-layout-theme, optionValue: "${themeId}" }
+  - waitForVisible: { css: "[data-testid=template-preview][data-theme='${themeId}'] [data-testid=template-preview-page][data-key=cover]" }
+  - selectOption: { testId: template-preview-language, optionValue: kk }
+  - waitForVisible: { css: "[data-testid=template-preview][data-language=kk] [data-testid=template-preview-page][data-key=end]" }
+  - tapOn: { testId: template-save }
+  - waitForVisible: { testId: template-saved }
+  - sql:
+      query: 'select "layoutTheme" as theme from "BookTemplate" where slug = $1'
+      params: ["${slug}"]
+      readOnly: true
+      extract: { saved: "$[0].theme" }
+  - assertTrue: { equals: ["${saved}", "${themeId}"] }
+
+  # A parent switches their book to it in the reader.
+  - openLink: "${WEB}/create?lang=ru"
+  - tapOn: { testId: voice-manual }
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "лес"
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "Книга готова", timeout: 30000 }
+  - waitForVisible: { css: "[data-testid=theme-${themeId}][data-source=ai]" }
+  - tapOn: { testId: "theme-${themeId}" }
+  - waitForVisible: { css: "[data-testid=book-reader][data-theme='${themeId}']", timeout: 20000 }
+  - assertVisible: { css: "[data-testid=theme-${themeId}][aria-pressed=true]" }
+  - sql:
+      query: >-
+        select layout->'theme'->>'id' as theme, layout->'theme'->>'source' as source,
+        layout->'theme'->'fonts'->'body'->>'family' as body, layout->'qa'->>'status' as qa
+        from "Book" where child->>'name' = $1
+      params: ["${childName}"]
+      readOnly: true
+      extract: { bookTheme: "$[0].theme" }
+      assert: { rows: 1, first: { source: ai, body: Literata, qa: ok } }
+  - assertTrue: { equals: ["${bookTheme}", "${themeId}"] }
+  # The model calls are in the journal.
+  - sql:
+      query: >-
+        select count(*)::int as n from "ModelCall" where kind in ('theme', 'ornament') and status = 'ok'
+        and "createdAt" > now() - interval '10 minutes'
+      readOnly: true
+      extract: { calls: "$[0].n" }
+  - assertTrue: ${calls >= 2}
+after:
+  - sql: { exec: "update \"BookTemplate\" set \"layoutTheme\" = null where slug = $1", params: ["${slug}"] }
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }
+  - sql: { exec: "delete from \"Theme\" where brief in ($1, $2)", params: ["${brief}", "${paleBrief}"] }

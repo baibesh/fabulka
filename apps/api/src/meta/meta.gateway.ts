@@ -2,8 +2,10 @@ import OpenAI from 'openai';
 import type { Response, Tool } from 'openai/resources/responses/responses';
 import { z } from 'zod';
 import {
+  BOOK_FONTS,
   GRID,
   LANGUAGE_MODEL_NAMES,
+  ProposedThemeSchema,
   StorySchema,
   encodeGrid,
   type PageSubject,
@@ -37,6 +39,9 @@ import {
   type StoryBrief,
   type TextSpace,
   heroPrompt,
+  ornamentPrompt,
+  themeInstructions,
+  themePrompt,
   toyPrompt,
   pagePrompt,
   petPrompt,
@@ -296,6 +301,74 @@ export class MetaGateway implements ModelGateway {
     return { description, costUsd: tokenCost(response) };
   }
 
+  /** Muse Spark proposes a theme as JSON; a reply that is not a valid proposal is asked for again. */
+  async proposeTheme(
+    brief: string,
+  ): Promise<{ proposal: unknown; costUsd: number }> {
+    const fonts = Object.entries(BOOK_FONTS);
+    const instructions = themeInstructions({
+      body: fonts.filter(([, f]) => f.body).map(([family]) => family),
+      display: fonts.filter(([, f]) => !f.body).map(([family]) => family),
+      weights: Object.fromEntries(
+        fonts.map(([family, f]) => [family, f.weights]),
+      ),
+    });
+    let costUsd = 0;
+    let error = '';
+    for (let attempt = 0; attempt < STORY_ATTEMPTS; attempt++) {
+      const input =
+        themePrompt(brief) +
+        (error ? `\nYour previous output was invalid: ${error}` : '');
+      const call = this.journal.start({
+        kind: 'theme',
+        model: this.options.storyModel,
+        prompt: input,
+        attempt: attempt + 1,
+      });
+      const response = await call.request(
+        this.client.responses.create({
+          model: this.options.storyModel,
+          instructions,
+          input,
+          text: { format: { type: 'json_object' } },
+        }),
+      );
+      costUsd += tokenCost(response);
+      try {
+        const proposal = ProposedThemeSchema.parse(
+          JSON.parse(response.output_text),
+        );
+        call.ok(spend(response));
+        return { proposal, costUsd };
+      } catch (problem) {
+        call.fail(problem, {
+          ...spend(response),
+          code: 'invalid_output',
+          output: response.output_text,
+        });
+        error =
+          problem instanceof Error
+            ? problem.message.slice(0, 500)
+            : String(problem);
+      }
+    }
+    throw new Error(
+      `Muse Spark returned an invalid theme ${STORY_ATTEMPTS} times: ${error}`,
+    );
+  }
+
+  /** A PNG with a transparent background, if Muse Image honours it (else white, multiplied away in print). */
+  drawOrnament(prompt: string): Promise<GeneratedImage> {
+    return this.draw(
+      'ornament',
+      ornamentPrompt(prompt),
+      '1024x1024',
+      undefined,
+      undefined,
+      { output_format: 'png', background: 'transparent' },
+    );
+  }
+
   drawToy(
     toyDescription: string,
     reference: Buffer,
@@ -442,6 +515,7 @@ export class MetaGateway implements ModelGateway {
     size: '1024x1024' | '1536x1024',
     previousResponseId?: string,
     reference?: Buffer,
+    extra: { output_format?: 'png'; background?: 'transparent' } = {},
   ): Promise<GeneratedImage> {
     // Web and image search add latency and nothing for invented characters.
     const tool = {
@@ -451,6 +525,7 @@ export class MetaGateway implements ModelGateway {
       output_format: 'jpeg',
       enable_web_search: false,
       enable_image_search: false,
+      ...extra,
     } as unknown as Tool;
     const call = this.journal.start({
       kind,
@@ -499,7 +574,7 @@ export class MetaGateway implements ModelGateway {
     call.ok({ ...usage(response), costUsd: IMAGE_PRICE, images: 1 });
     return {
       data: Buffer.from(image.result, 'base64'),
-      ext: 'jpeg',
+      ext: extra.output_format ?? 'jpeg',
       ref: response.id,
       costUsd: IMAGE_PRICE,
     };

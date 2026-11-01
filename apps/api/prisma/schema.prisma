@@ -291,3 +291,23 @@ model ClientError {
 
   @@index([createdAt])
 }
+
+/// A book theme Muse Spark proposed from the owner's brief (admin «Темы»). Curated themes live in
+/// code; these are checked in code (contrast, sizes, glyphs, a sample book in every language through
+/// render QA) before they are stored, and become selectable once staff publish them.
+model Theme {
+  id        String   @id
+  /// BookTheme (@fabulka/shared), source "ai".
+  theme     Json
+  /// What the owner asked for.
+  brief     String
+  published Boolean  @default(false)
+  /// ThemeCheck[] (@fabulka/shared): what was checked and how it went.
+  checks    Json     @default("[]")
+  /// Sample page PNGs by language: { ru: ["themes/…/ru-0.png", …], … }.
+  previews  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([published, createdAt])
+}

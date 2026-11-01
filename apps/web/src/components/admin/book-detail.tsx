@@ -17,7 +17,8 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { BackLink } from "@/components/ui/page";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { BookReader } from "@/components/book/book-reader";
-import { PAGE_VARIANTS, type AdminBook, type LayoutQa, type PageVariant, type SelectableTheme } from "@fabulka/shared";
+import { PAGE_VARIANTS, type AdminBook, type LayoutQa, type PageVariant } from "@fabulka/shared";
+import { themeName } from "@/lib/themes";
 import { Select } from "@/components/ui/input";
 
 const QA_TONE: Record<LayoutQa["status"], "success" | "warning" | "danger" | "neutral"> = {
@@ -29,7 +30,7 @@ const QA_TONE: Record<LayoutQa["status"], "success" | "warning" | "danger" | "ne
 
 /** The book's theme and what render QA found: shrunk pages, and what blocks printing. */
 function BookLayoutCard({ book }: { book: AdminBook }) {
-  const { t } = useAdminI18n();
+  const { t, locale } = useAdminI18n();
   const queryClient = useQueryClient();
   const pin = useMutation({
     mutationFn: (pins: Record<string, PageVariant | null>) => pinLayout(book.id, { pins }),
@@ -42,7 +43,7 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
         <dt className="text-muted">{t("admin.book.layout.theme")}</dt>
         <dd data-testid="layout-theme" data-theme={layout.theme.id}>
-          {t(`design.theme.${layout.theme.id as SelectableTheme}`)} · {layout.theme.fonts.body.family} / {layout.theme.fonts.heading.family}
+          {themeName(layout.theme, t, locale)} · {layout.theme.fonts.body.family} / {layout.theme.fonts.heading.family}
           {layout.headingFallback && ` → ${layout.theme.fonts.body.family}`}
         </dd>
         <dt className="text-muted">{t("admin.book.layout.format")}</dt>

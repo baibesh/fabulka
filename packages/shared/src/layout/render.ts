@@ -37,6 +37,8 @@ export interface RenderOptions {
    * the trim run on into it, and the trimmed page sits in the middle exactly as on screen.
    */
   bleed?: boolean;
+  /** Where a stored file (an AI theme's ornament) is loaded from; the site's /files/ when left out. */
+  asset?: (path: string) => string;
 }
 
 export interface RenderedPage extends PlannedPage {
@@ -110,6 +112,8 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
   const body = (text: string) => inline(text, options, true);
   const title = (text: string) => inline(text, options, false);
   const bleed = options.bleed ? layout.format.bleedMm : 0;
+  const asset = options.asset ?? ((path: string) => `/files/${path}`);
+  const ornament = () => ornamentHtml(layout.theme, asset);
   const bleedArt = (r: Rect) => (bleed ? place(grow(r, layout.format, bleed)) + ";" : "");
 
   const pages = plan.map((planned): RenderedPage => {
@@ -125,13 +129,13 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
         break;
       case "dedication":
         inner = `<div class="fb-box fb-center" data-fit-box style="${place(paperRect(layout))}"><div class="fb-flow">
-  <div class="fb-ornament">${ornament(layout.theme.ornament)}</div>
+  <div class="fb-ornament">${ornament()}</div>
   <p class="fb-dedication-text" data-qa-text>${title(layout.dedication ?? labels.madeFor(book.childName))}</p></div></div>`;
         break;
       case "story": {
         const page = byPage.get(planned.story!)!;
         const state = layout.pages[String(planned.story)];
-        inner = story(planned, page, state, layout, body, bleedArt);
+        inner = story(planned, page, state, layout, body, bleedArt, ornament);
         classes.push(`fb-v-${planned.variant}`);
         break;
       }
@@ -145,7 +149,7 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
         break;
       case "end":
         inner = `<div class="fb-box fb-center" data-fit-box style="${place(paperRect(layout))}"><div class="fb-flow">
-  <div class="fb-ornament">${ornament(layout.theme.ornament)}</div>
+  <div class="fb-ornament">${ornament()}</div>
   <h2 class="fb-end-title" data-qa-text>${escapeHtml(labels.end)}</h2>
   <p class="fb-made" data-qa-text>Fabulka · Powered by Meta Muse models</p></div></div>`;
         break;
@@ -207,6 +211,7 @@ function story(
   layout: BookLayout,
   body: (t: string) => string,
   bleedArt: (r: Rect) => string,
+  ornament: () => string,
 ): string {
   const variant = planned.variant as PageVariant;
   const ink = state?.ink?.[variant] ?? "dark";
@@ -224,7 +229,7 @@ function story(
       return art("fb-art", full || `${place(box)};`) + text(rect, "fb-on-paper");
     case "facing":
       if (planned.part === 0) return art("fb-art", full);
-      return `<div class="fb-ornament fb-facing-ornament">${ornament(layout.theme.ornament)}</div>${text(rect, "fb-on-paper fb-center")}`;
+      return `<div class="fb-ornament fb-facing-ornament">${ornament()}</div>${text(rect, "fb-on-paper fb-center")}`;
     case "spread": {
       const left = planned.part === 0;
       const side = state?.spreadSide ?? "right";
@@ -244,8 +249,13 @@ const ORNAMENT_SVG: Record<BookTheme["ornament"], string> = {
   sparkle: '<path d="M12 2c1 6 4 9 10 10-6 1-9 4-10 10-1-6-4-9-10-10 6-1 9-4 10-10z"/>',
 };
 
-function ornament(shape: BookTheme["ornament"]): string {
-  return `<svg viewBox="0 0 24 24" width="12mm" height="12mm" fill="currentColor" aria-hidden="true">${ORNAMENT_SVG[shape]}</svg>`;
+/**
+ * The theme's ornament: an AI theme's drawn one (multiplied onto the paper, so a white background
+ * the image model could not make transparent disappears), else the SVG shape in the accent color.
+ */
+function ornamentHtml(theme: BookTheme, asset: (path: string) => string): string {
+  if (theme.ornamentImage) return `<img class="fb-ornament-img" src="${escapeHtml(asset(theme.ornamentImage))}" alt="">`;
+  return `<svg viewBox="0 0 24 24" width="12mm" height="12mm" fill="currentColor" aria-hidden="true">${ORNAMENT_SVG[theme.ornament]}</svg>`;
 }
 
 /** The object-position that keeps the hero in view when the picture is cropped to a box of this shape. */
@@ -304,6 +314,7 @@ export const BOOK_CSS = `
   box-shadow: 0 .6mm 2.4mm rgba(0,0,0,.12); }
 .fb-ornament { color: var(--accent); line-height: 0; margin-bottom: 4mm; text-align: center; }
 .fb-ornament svg { display: inline-block; }
+.fb-ornament .fb-ornament-img { display: inline-block; width: 22mm; height: 22mm; object-fit: contain; mix-blend-mode: multiply; }
 .fb-facing-ornament { position: absolute; left: 0; right: 0; top: calc(var(--safe) + 4mm); }
 .fb-folio { position: absolute; bottom: 5mm; font-size: 9pt; line-height: 1; color: var(--muted); }
 .fb-left .fb-folio { left: 9mm; }

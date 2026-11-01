@@ -91,57 +91,22 @@ export class PdfService {
     pictures: PagePicture[] = [],
   ): Promise<RenderResult> {
     const call = this.journal.start({ kind: 'render', model: 'chromium' });
-    const hyphenate = hyphenatorFor(book.language);
     const browser = await chromium.launch();
     try {
       const page = await browser.newPage();
-      const folder = join(this.storage.root, 'books', bookId);
-      const tones = await measureTones(page, folder, book, pictures);
-      let current: BookLayout = { ...layout, fits: {} };
-      const notes: LayoutQa['notes'] = [];
-      if (pictures.length) {
-        const analyses = pictures.map((p) => ({
-          page: p.page,
-          subject: p.subject,
-          tone: tones[p.page],
-          words: countWords(
-            book.pages.find((b) => b.page === p.page)?.text ?? '',
-          ),
-        }));
-        current = chooseLayout(current, analyses);
-        // Layouts the format crops the picture too much for are left out; staff see which.
-        for (const analysis of analyses) {
-          const detail = cropNote(current, analysis);
-          if (detail)
-            notes.push({
-              page: `story-${analysis.page}`,
-              kind: 'crop',
-              detail,
-            });
-        }
-      }
-      let check: PageCheck = { fits: {}, overflow: [], fallback: [] };
-      for (let round = 0; round < ROUNDS; round++) {
-        const rendered = renderBook(book, current, { hyphenate });
-        const html = bookDocument(rendered, {
-          title: book.title ?? '',
-          language: book.language,
-          fontCss: this.fontCss,
-        });
-        const htmlPath = await this.storage.save(
-          `books/${bookId}/book.html`,
-          Buffer.from(html),
-        );
-        // A file:// page, so the relative image paths resolve against the book folder.
-        await page.goto(pathToFileURL(join(this.storage.root, htmlPath)).href, {
-          waitUntil: 'load',
-        });
-        await page.evaluate(() => document.fonts.ready);
-        check = await checkPages(page, current.theme.minFit);
-        const next = demote(current, rendered.pages, check.overflow);
-        if (!next) break;
-        current = next;
-      }
+      const {
+        layout: current,
+        check,
+        notes,
+        tones,
+      } = await this.layOut(
+        page,
+        `books/${bookId}`,
+        'book.html',
+        book,
+        layout,
+        pictures,
+      );
       // The PDF is printed from the page as checked: the shrink is already applied there.
       const pdf = await page.pdf({
         width: `${current.format.widthMm}mm`,
@@ -171,6 +136,122 @@ export class PdfService {
     }
   }
 
+  /** Where a stored file is, for a file:// page (an AI theme's ornament). */
+  private asset = (path: string) =>
+    pathToFileURL(join(this.storage.root, path)).href;
+
+  /**
+   * Lays a book out in `folder` (a storage path holding its pictures) and runs render QA there: the
+   * chooser picks each page's layout from its picture, text that overflows is shrunk within the
+   * theme's limit, a story page that still overflows tries its next layout. The page is left open
+   * on the checked document.
+   */
+  private async layOut(
+    page: Page,
+    folder: string,
+    htmlName: string,
+    book: RenderableBook,
+    layout: BookLayout,
+    pictures: PagePicture[],
+  ) {
+    const hyphenate = hyphenatorFor(book.language);
+    const tones = await measureTones(
+      page,
+      join(this.storage.root, folder),
+      book,
+      pictures,
+    );
+    let current: BookLayout = { ...layout, fits: {} };
+    const notes: LayoutQa['notes'] = [];
+    if (pictures.length) {
+      const analyses = pictures.map((p) => ({
+        page: p.page,
+        subject: p.subject,
+        tone: tones[p.page],
+        words: countWords(
+          book.pages.find((b) => b.page === p.page)?.text ?? '',
+        ),
+      }));
+      current = chooseLayout(current, analyses);
+      // Layouts the format crops the picture too much for are left out; staff see which.
+      for (const analysis of analyses) {
+        const detail = cropNote(current, analysis);
+        if (detail)
+          notes.push({ page: `story-${analysis.page}`, kind: 'crop', detail });
+      }
+    }
+    let check: PageCheck = { fits: {}, overflow: [], fallback: [] };
+    for (let round = 0; round < ROUNDS; round++) {
+      const rendered = renderBook(book, current, {
+        hyphenate,
+        asset: this.asset,
+      });
+      const html = bookDocument(rendered, {
+        title: book.title ?? '',
+        language: book.language,
+        fontCss: this.fontCss,
+      });
+      const htmlPath = await this.storage.save(
+        `${folder}/${htmlName}`,
+        Buffer.from(html),
+      );
+      // A file:// page, so the relative image paths resolve against the book folder.
+      await page.goto(pathToFileURL(join(this.storage.root, htmlPath)).href, {
+        waitUntil: 'load',
+      });
+      await page.evaluate(() => document.fonts.ready);
+      check = await checkPages(page, current.theme.minFit);
+      const next = demote(current, rendered.pages, check.overflow);
+      if (!next) break;
+      current = next;
+    }
+    return { layout: current, check, notes, tones };
+  }
+
+  /**
+   * A theme tried on sample books (one per language) in `folder`: each goes through render QA, and
+   * every page is saved as a PNG preview for staff. Returns, by sample, its QA verdict and previews.
+   */
+  async renderSamples(
+    folder: string,
+    samples: { name: string; book: RenderableBook }[],
+    layout: BookLayout,
+    pictures: PagePicture[],
+  ): Promise<{ name: string; qa: LayoutQa; previews: string[] }[]> {
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage({ deviceScaleFactor: 1 });
+      const results: { name: string; qa: LayoutQa; previews: string[] }[] = [];
+      for (const sample of samples) {
+        const { check, notes } = await this.layOut(
+          page,
+          folder,
+          `sample-${sample.name}.html`,
+          sample.book,
+          layout,
+          pictures,
+        );
+        const previews: string[] = [];
+        const sections = page.locator('.fb-page');
+        const count = await sections.count();
+        for (let i = 0; i < count; i++) {
+          const png = await sections.nth(i).screenshot({ type: 'png' });
+          previews.push(
+            await this.storage.save(`${folder}/${sample.name}-${i}.png`, png),
+          );
+        }
+        results.push({
+          name: sample.name,
+          qa: verdict(check, new Date(), notes),
+          previews,
+        });
+      }
+      return results;
+    } finally {
+      await browser.close();
+    }
+  }
+
   /**
    * The print file of a frozen layout: every page with the format's bleed (pictures run on past the
    * trim), on a sheet with crop marks and a label outside the bleed. Nothing is chosen or checked
@@ -185,7 +266,11 @@ export class PdfService {
     label: string,
   ): Promise<string> {
     const hyphenate = hyphenatorFor(book.language);
-    const rendered = renderBook(book, layout, { hyphenate, bleed: true });
+    const rendered = renderBook(book, layout, {
+      hyphenate,
+      bleed: true,
+      asset: this.asset,
+    });
     const html = printDocument(rendered, {
       title: book.title ?? '',
       language: book.language,

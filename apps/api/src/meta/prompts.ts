@@ -277,3 +277,45 @@ export function prefillPrompt(brief: PrefillBrief): string {
     JSON.stringify(brief.transcript),
   ].join('\n');
 }
+
+/**
+ * Muse Spark as a book designer: a theme for the owner's brief, as strict JSON, with fonts only from
+ * the vetted list. The API checks contrast, sizes and glyphs itself; the limits are stated so the
+ * first answer usually passes.
+ */
+export function themeInstructions(fonts: {
+  body: string[];
+  display: string[];
+  weights: Record<string, number[]>;
+}): string {
+  const weights = Object.entries(fonts.weights)
+    .map(([family, w]) => `${family} (${w.join(', ')})`)
+    .join('; ');
+  return `You design the look of printed personalized picture books for children aged 2–10, in Russian, Kazakh, English, Spanish and German.
+Answer with one JSON object only, no prose, with exactly these keys:
+{
+  "name": { "ru": "…", "kk": "…", "en": "…", "es": "…", "de": "…" },   // 1–3 words each, the same idea in each language
+  "fonts": { "heading": { "family": "…", "weight": 400 }, "body": { "family": "…", "weight": 400 } },
+  "palette": { "paper": "#rrggbb", "ink": "#rrggbb", "accent": "#rrggbb", "muted": "#rrggbb", "cover": "#rrggbb", "plate": "#rrggbb" },
+  "sizes": { "young": S, "middle": S, "older": S },   // S = { "bodyPt": n, "lineHeight": n, "titlePt": n, "headingPt": n, "maxWords": n }
+  "variants": [ … ],   // 2–4 of "overlay-bottom", "overlay-top", "split", "facing", "spread", in order of preference
+  "textSpace": "top" | "bottom" | null,   // where pictures leave calm space for text over them
+  "cover": "framed" | "scene",
+  "ornament": "leaf" | "star" | "flower" | "sparkle",
+  "ornamentPrompt": "…"   // English: one small decorative motif for the theme, to be drawn as an isolated ornament
+}
+Rules:
+- Body font: one of ${fonts.body.join(', ')}. Heading font: any of ${[...fonts.body, ...fonts.display].join(', ')}. Weights available: ${weights}. Never any other font.
+- Text must read clearly: ink on paper and on plate at least 4.5:1 contrast (WCAG); ink on cover and muted on paper at least 3:1, accent on paper at least 2:1. Paper and plate are light.
+- Sizes: young bodyPt 16–26 (maxWords ≤ 40), middle 13–22 (≤ 70), older 11–18 (≤ 110); young type at least as big as older; titlePt at least 1.3 × bodyPt and at most 48; headingPt between bodyPt and titlePt; lineHeight 1.2–1.8.
+- Follow the owner's brief for mood, colors and age.`;
+}
+
+export function themePrompt(brief: string): string {
+  return `The owner's brief for a new theme: «${brief}»`;
+}
+
+/** The ornament as an isolated motif the book prints small next to the dedication and the end. */
+export function ornamentPrompt(motif: string): string {
+  return `${motif}. A single small decorative ornament for a children's picture book, centered, isolated on a fully transparent background (if transparency is impossible: pure white #ffffff background), no text, no letters, no frame, no shadow, flat soft colors.`;
+}

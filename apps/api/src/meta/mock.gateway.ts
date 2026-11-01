@@ -117,6 +117,66 @@ export const MOCK_TRANSCRIPT =
   'Нашу дочку зовут Алия, ей пять лет, мы живём в Алматы, она любит динозавров и рисование, ' +
   'у нас есть кот Барсик';
 
+/**
+ * The theme the mock "proposes": a calm forest look within every limit. A brief asking for pale or
+ * low-contrast colors gets pale ink, which the contrast check refuses (for the E2E flow).
+ */
+export function mockTheme(brief: string) {
+  const pale = /pale|low.contrast|бледн|блёкл|нечитаем/i.test(brief);
+  const scale = (bodyPt: number, maxWords: number, titlePt: number) => ({
+    bodyPt,
+    lineHeight: 1.42,
+    titlePt,
+    headingPt: Math.round(titlePt * 0.7),
+    maxWords,
+  });
+  return {
+    name: {
+      ru: 'Лесная поляна',
+      kk: 'Орман алаңы',
+      en: 'Forest Glade',
+      es: 'Claro del bosque',
+      de: 'Waldlichtung',
+    },
+    fonts: {
+      heading: { family: 'Comfortaa', weight: 700 },
+      body: { family: 'Literata', weight: 400 },
+    },
+    palette: {
+      paper: '#f6f8ef',
+      ink: pale ? '#c9cfc0' : '#22331f',
+      accent: '#3f7d4e',
+      muted: '#5d6b58',
+      cover: '#dfeacf',
+      plate: '#f6f8ef',
+    },
+    sizes: {
+      young: scale(20, 25, 34),
+      middle: scale(16, 50, 32),
+      older: scale(13.5, 75, 30),
+    },
+    variants: ['overlay-bottom', 'split', 'facing'],
+    textSpace: 'bottom',
+    cover: 'framed',
+    ornament: 'leaf',
+    ornamentPrompt:
+      'a small round wreath of green leaves and tiny white flowers, flat children-book illustration',
+  };
+}
+
+/** The mock's ornament: a leaf wreath on a transparent background. */
+const MOCK_ORNAMENT = Buffer.from(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">` +
+    `<circle cx="128" cy="128" r="84" fill="none" stroke="#3f7d4e" stroke-width="10"/>` +
+    Array.from({ length: 10 }, (_, i) => {
+      const a = (i / 10) * Math.PI * 2;
+      const x = 128 + Math.cos(a) * 84;
+      const y = 128 + Math.sin(a) * 84;
+      return `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="22" ry="11" transform="rotate(${((a * 180) / Math.PI + 90).toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="#6aa86f"/>`;
+    }).join('') +
+    `<circle cx="128" cy="44" r="10" fill="#f4d35e"/></svg>`,
+);
+
 /** Canned model output: no network, no cost, same result every run. */
 export class MockGateway implements ModelGateway {
   constructor(
@@ -232,6 +292,21 @@ export class MockGateway implements ModelGateway {
         ...(theme && { theme: 'динозавры и рисование' }),
         ...(Object.keys(answers).length && { answers }),
       },
+      costUsd: 0,
+    };
+  }
+
+  async proposeTheme(brief: string) {
+    await this.pretend('theme');
+    return { proposal: mockTheme(brief), costUsd: 0 };
+  }
+
+  async drawOrnament(): Promise<GeneratedImage> {
+    await this.pretend('ornament', 1);
+    return {
+      data: MOCK_ORNAMENT,
+      ext: 'svg',
+      ref: 'mock-ornament',
       costUsd: 0,
     };
   }

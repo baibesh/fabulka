@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { MethodologySlugSchema } from "./methodologies";
 import { LanguageSchema, type Language } from "./language";
-import { BlockKindSchema, BookLayoutSchema, DedicationSchema, PageVariantSchema, TemplateBlocksSchema } from "./layout";
+import { BlockKindSchema, BookLayoutSchema, BookThemeSchema, DedicationSchema, PageVariantSchema, TemplateBlocksSchema, ThemeCheckSchema } from "./layout";
 import { countryInfo, type City, type Country, type CountryEntry, type Currency, type PrintFormat, type Prices } from "./reference";
 
 export * from "./language";
@@ -635,6 +635,10 @@ export const MODEL_CALL_KINDS = [
   "page-mask",
   /** Render QA in Chromium while making the PDF; an error when the book cannot be printed. */
   "render",
+  /** Muse Spark proposes a book theme from the owner's brief (admin «Темы»). */
+  "theme",
+  /** Muse Image draws an AI theme's ornament. */
+  "ornament",
 ] as const;
 export const ModelCallKindSchema = z.enum(MODEL_CALL_KINDS);
 export type ModelCallKind = z.infer<typeof ModelCallKindSchema>;
@@ -776,3 +780,24 @@ export type AuthLogout = z.infer<typeof AuthLogoutSchema>;
 
 /** The `auth` query parameter the callback adds to the return path when sign-in failed. */
 export const AUTH_ERROR = "error";
+
+// ---- Book themes (admin «Темы») ----------------------------------------------------------------
+
+/**
+ * A theme as the admin lists it: a curated one from code (always published, no checks), or one
+ * Muse Spark proposed, with the checks it passed and its sample pages by language (image URLs).
+ */
+export const AdminThemeSchema = z.object({
+  theme: BookThemeSchema,
+  status: z.enum(["draft", "published"]),
+  brief: z.string().nullable(),
+  checks: z.array(ThemeCheckSchema),
+  previews: z.partialRecord(LanguageSchema, z.array(z.string())),
+  createdAt: z.string().nullable(),
+});
+export type AdminTheme = z.infer<typeof AdminThemeSchema>;
+
+/** Body of a 422 from POST /admin/themes: the proposal failed a check; `checks` says which and why. */
+export const THEME_REFUSED = "theme_refused";
+export const ThemeRefusalSchema = z.object({ code: z.literal(THEME_REFUSED), message: z.string(), checks: z.array(ThemeCheckSchema) });
+export type ThemeRefusal = z.infer<typeof ThemeRefusalSchema>;

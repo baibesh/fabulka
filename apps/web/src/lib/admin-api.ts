@@ -17,6 +17,8 @@ import {
   PricesSchema,
   PrintFormatSchema,
   type PrintFormat,
+  AdminThemeSchema,
+  type AdminTheme,
   ModelCallDetailSchema,
   ModelCallPageSchema,
   ModelCallSchema,
@@ -164,6 +166,21 @@ export async function adminReference(): Promise<AdminReference> {
 export async function savePrices(prices: Prices): Promise<Prices> {
   return PricesSchema.parse(await request("/api/admin/reference/prices", json("PUT", prices)));
 }
+
+export async function adminThemes(): Promise<AdminTheme[]> {
+  return AdminThemeSchema.array().parse(await request("/api/admin/themes"));
+}
+
+/** Refused with 422 theme_refused (the checks in the error's body) when a check fails. */
+export async function proposeTheme(brief: string): Promise<AdminTheme> {
+  return AdminThemeSchema.parse(await request("/api/admin/themes", json("POST", { brief })));
+}
+
+export async function publishTheme(id: string): Promise<AdminTheme> {
+  return AdminThemeSchema.parse(await request(`/api/admin/themes/${id}/publish`, { method: "POST" }));
+}
+
+export const deleteTheme = (id: string) => request(`/api/admin/themes/${id}`, { method: "DELETE" });
 
 export async function saveFormats(formats: PrintFormat[]): Promise<PrintFormat[]> {
   return PrintFormatSchema.array().parse(await request("/api/admin/reference/formats", json("PUT", formats)));

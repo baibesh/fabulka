@@ -82,6 +82,14 @@ export interface ModelGateway {
     image: Buffer,
     ext: GeneratedImage['ext'],
   ): Promise<{ subject: PageSubject; costUsd: number }>;
+  /**
+   * Muse Spark proposes a book theme for the owner's brief, as JSON (ProposedTheme in
+   * @fabulka/shared); the caller validates it and checks it in code. Throws when the model returns
+   * no valid JSON after its retries.
+   */
+  proposeTheme(brief: string): Promise<{ proposal: unknown; costUsd: number }>;
+  /** Muse Image draws a theme's ornament: a small motif on a transparent (or white) background. */
+  drawOrnament(prompt: string): Promise<GeneratedImage>;
   /** Muse Voice Transcribe: the parent's recording (a 16 kHz mono WAV) as text. Nothing is kept. */
   transcribe(
     wav: Buffer,

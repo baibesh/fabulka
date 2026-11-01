@@ -3,28 +3,10 @@ import {
   BOOK_LABELS,
   BOOK_THEMES,
   LANGUAGES,
-  type Language,
 } from '@fabulka/shared';
+import { ALPHABETS } from './alphabets';
 import { bookFontCss, fontCodePoints, missingGlyphs } from './fonts';
 import { hyphenatorFor } from './hyphenate';
-
-const upper = (from: string, to: string) =>
-  Array.from({ length: to.charCodeAt(0) - from.charCodeAt(0) + 1 }, (_, i) =>
-    String.fromCharCode(from.charCodeAt(0) + i),
-  ).join('');
-const LATIN = upper('A', 'Z') + upper('a', 'z');
-const CYRILLIC = upper('А', 'я') + 'Ёё';
-const DIGITS = '0123456789';
-const COMMON = '.,:;!?-–—…()\'"%·';
-
-/** Every letter and the punctuation a book in each language may print. */
-const ALPHABETS: Record<Language, string> = {
-  ru: CYRILLIC + '«»„“' + COMMON + DIGITS,
-  kk: CYRILLIC + 'ӘәҒғҚқҢңӨөҰұҮүҺһІі' + '«»' + COMMON + DIGITS,
-  en: LATIN + '“”‘’' + COMMON + DIGITS,
-  es: LATIN + 'ÁÉÍÓÚÜÑáéíóúüñ¿¡«»' + COMMON + DIGITS,
-  de: LATIN + 'ÄÖÜäöüß„“‚‘»«' + COMMON + DIGITS,
-};
 
 describe('book fonts', () => {
   it('embeds every font file the themes use', () => {

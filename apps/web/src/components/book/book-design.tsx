@@ -6,6 +6,7 @@ import {
   BOOK_LABELS,
   DEDICATION_MAX,
   SELECTABLE_THEMES,
+  BOOK_THEMES,
   availableVariants,
   planBook,
   type BlockKind,
@@ -17,7 +18,9 @@ import { useState } from "react";
 import { Button, IconButton } from "../ui/button";
 import { Textarea } from "../ui/input";
 import { useI18n } from "@/i18n/i18n";
-import { updateLayout } from "@/lib/api";
+import { getThemes, updateLayout } from "@/lib/api";
+import { useQuery } from "@/lib/query";
+import { themeName, themeNote } from "@/lib/themes";
 import { Card } from "../ui/card";
 import { ErrorText } from "../ui/notice";
 import { SectionHeader } from "../ui/section-header";
@@ -29,8 +32,12 @@ import { Spinner } from "../ui/spinner";
  * the reader shows the new pages.
  */
 export function BookDesign({ book }: { book: Book }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const queryClient = useQueryClient();
+  // The curated themes until the list (with the AI themes staff published) arrives.
+  const themes = (useQuery({ queryKey: ["themes"], queryFn: getThemes, staleTime: 60_000 }).data ?? SELECTABLE_THEMES.map((id) => BOOK_THEMES[id])).filter(
+    (theme) => theme.languages.includes(book.language),
+  );
   const save = useMutation({
     mutationFn: (patch: UpdateLayout) => updateLayout(book.id, patch),
     onSuccess: (updated) => queryClient.setQueryData(["book", book.id], updated),
@@ -46,18 +53,22 @@ export function BookDesign({ book }: { book: Book }) {
     <Card data-testid="book-design" data-theme={current} aria-busy={save.isPending} className="flex flex-col gap-4">
       <SectionHeader size="md" icon={<Palette className="size-5 text-accent" />} title={t("design.title")} lead={t("design.hint")} />
       <div role="group" aria-label={t("design.theme")} className="grid gap-2 sm:grid-cols-3">
-        {SELECTABLE_THEMES.map((id) => (
+        {themes.map((theme) => (
           <button
-            key={id}
+            key={theme.id}
             type="button"
-            data-testid={`theme-${id}`}
-            aria-pressed={current === id}
+            data-testid={`theme-${theme.id}`}
+            data-source={theme.source}
+            aria-pressed={current === theme.id}
             disabled={save.isPending}
-            onClick={() => current !== id && save.mutate({ theme: id })}
+            onClick={() => current !== theme.id && save.mutate({ theme: theme.id })}
             className="flex flex-col gap-0.5 rounded-xl border border-border bg-card px-3 py-2 text-left transition hover:border-accent disabled:opacity-60 aria-pressed:border-accent aria-pressed:ring-2 aria-pressed:ring-accent/30"
           >
-            <span className="font-bold">{t(`design.theme.${id}`)}</span>
-            <span className="text-xs text-muted">{t(`design.theme.${id}.note`)}</span>
+            <span className="flex items-center gap-1.5 font-bold">
+              <span aria-hidden className="size-3 shrink-0 rounded-full border border-border" style={{ background: theme.palette.accent }} />
+              {themeName(theme, t, locale)}
+            </span>
+            <span className="text-xs text-muted">{themeNote(theme, t)}</span>
           </button>
         ))}
       </div>

@@ -79,6 +79,10 @@ export const ThemePaletteSchema = z.object({
 export const BookThemeSchema = z.object({
   id: z.string(),
   version: z.number().int(),
+  /** "curated": in code, named in the UI's messages; "ai": proposed by Muse Spark, approved by staff. */
+  source: z.enum(["curated", "ai"]).default("curated"),
+  /** An AI theme's name by language (a curated theme's name is in the UI's messages). */
+  name: z.partialRecord(LanguageSchema, z.string().max(60)).optional(),
   /** Hidden from pickers: the look books had before themes, kept so they still render the same. */
   legacy: z.boolean().default(false),
   /** Book languages both fonts fully cover (checked by a unit test against the font files). */
@@ -96,6 +100,8 @@ export const BookThemeSchema = z.object({
   cover: z.enum(["framed", "scene"]),
   /** Drawn as SVG, so it never depends on a font having the glyph. */
   ornament: z.enum(ORNAMENTS),
+  /** An AI theme's drawn ornament (a storage path), used instead of the SVG one; null: the SVG. */
+  ornamentImage: z.string().nullable().default(null),
 });
 export type BookTheme = z.infer<typeof BookThemeSchema>;
 

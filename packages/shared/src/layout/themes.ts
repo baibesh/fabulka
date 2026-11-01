@@ -56,6 +56,7 @@ const scale = (bodyPt: number, maxWords: number, titlePt: number, lineHeight = 1
 const FAIRY: BookTheme = {
   id: "fairy",
   version: 1,
+  source: "curated",
   legacy: false,
   languages: [...LANGUAGES],
   fonts: { heading: { family: "Lobster", weight: 400 }, body: { family: "Literata", weight: 400 } },
@@ -67,6 +68,7 @@ const FAIRY: BookTheme = {
   textSpace: "bottom",
   cover: "scene",
   ornament: "leaf",
+  ornamentImage: null,
 };
 
 /**
@@ -77,6 +79,7 @@ const FAIRY: BookTheme = {
 const ADVENTURE: BookTheme = {
   id: "adventure",
   version: 1,
+  source: "curated",
   legacy: false,
   languages: [...LANGUAGES],
   fonts: { heading: { family: "Rubik", weight: 700 }, body: { family: "PT Serif", weight: 400 } },
@@ -88,6 +91,7 @@ const ADVENTURE: BookTheme = {
   textSpace: "top",
   cover: "scene",
   ornament: "star",
+  ornamentImage: null,
 };
 
 /**
@@ -98,6 +102,7 @@ const ADVENTURE: BookTheme = {
 const LITTLE: BookTheme = {
   id: "little",
   version: 1,
+  source: "curated",
   legacy: false,
   languages: [...LANGUAGES],
   fonts: { heading: { family: "Comfortaa", weight: 700 }, body: { family: "Andika", weight: 400 } },
@@ -109,12 +114,14 @@ const LITTLE: BookTheme = {
   textSpace: "bottom",
   cover: "framed",
   ornament: "flower",
+  ornamentImage: null,
 };
 
 /** How books looked before themes: Nunito, the picture on top, the text below. */
 const CLASSIC: BookTheme = {
   id: "classic",
   version: 1,
+  source: "curated",
   legacy: true,
   languages: [...LANGUAGES],
   fonts: { heading: { family: "Nunito", weight: 800 }, body: { family: "Nunito", weight: 400 } },
@@ -126,6 +133,7 @@ const CLASSIC: BookTheme = {
   textSpace: null,
   cover: "framed",
   ornament: "sparkle",
+  ornamentImage: null,
 };
 
 export const BOOK_THEMES: Record<string, BookTheme> = { fairy: FAIRY, adventure: ADVENTURE, little: LITTLE, classic: CLASSIC };

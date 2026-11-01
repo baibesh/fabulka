@@ -20,6 +20,8 @@ import {
   FaqSchema,
   FormatsSchema,
   JournalCallsQuerySchema,
+  ThemeBriefSchema,
+  type ThemeBrief,
   JournalPeriodQuerySchema,
   MethodologyPreviewSchema,
   PauseSchema,
@@ -57,6 +59,7 @@ import { MethodologiesService } from '../methodologies/methodologies.service';
 import { OrdersService } from '../orders/orders.service';
 import { ReferenceService } from '../reference/reference.service';
 import { StorageService } from '../storage/storage.service';
+import { ThemesService } from '../themes/themes.service';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminGuard } from './admin.guard';
 import { AdminService } from './admin.service';
@@ -107,6 +110,7 @@ export class AdminController {
     private readonly methodologies: MethodologiesService,
     private readonly reference: ReferenceService,
     private readonly storage: StorageService,
+    private readonly themes: ThemesService,
   ) {}
 
   @Get('me')
@@ -220,6 +224,34 @@ export class AdminController {
     query: z.infer<typeof JournalPeriodQuerySchema>,
   ) {
     return this.journal.errors(query.period);
+  }
+
+  /** Curated themes (read-only) and the ones Muse Spark proposed, with their checks and previews. */
+  @Get('themes')
+  listThemes() {
+    return this.themes.adminList();
+  }
+
+  /**
+   * Muse Spark proposes a theme for the owner's brief; it is checked (fonts, contrast, sizes,
+   * glyphs, a sample book in every language) and stored as a draft. 422 theme_refused with the checks
+   * when one fails.
+   */
+  @Post('themes')
+  proposeTheme(@Body(new ZodPipe(ThemeBriefSchema)) body: ThemeBrief) {
+    return this.themes.propose(body.brief);
+  }
+
+  @Post('themes/:id/publish')
+  @HttpCode(200)
+  publishTheme(@Param('id') id: string) {
+    return this.themes.publish(id, true);
+  }
+
+  @Delete('themes/:id')
+  @HttpCode(204)
+  deleteTheme(@Param('id') id: string) {
+    return this.themes.remove(id);
   }
 
   @Get('templates')
