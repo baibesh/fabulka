@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 import type { MessageKey } from "@/i18n/messages";
 import { adminLogout, adminMe } from "@/lib/admin-api";
+import { logout as signOut } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import { LanguageSwitch } from "./language-switch";
 import { useAdminI18n } from "./ui";
@@ -35,9 +36,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   if (!me.isSuccess) return <p className="p-8 text-muted">{me.isError && !signedOut ? me.error.message : t("admin.loading")}</p>;
 
+  // Leaving the admin signs out of the site too (and of Keycloak), then lands on the home page.
   const logout = async () => {
-    await adminLogout();
-    router.replace("/admin/login");
+    await adminLogout().catch(() => undefined);
+    await signOut();
   };
 
   return (
@@ -65,6 +67,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <LanguageSwitch className="self-center md:mx-3 md:mb-2 md:self-stretch" />
         <button
           type="button"
+          data-testid="admin-logout"
           aria-label={t("admin.logout")}
           onClick={() => void logout()}
           className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted hover:text-foreground"

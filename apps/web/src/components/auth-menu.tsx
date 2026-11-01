@@ -35,7 +35,8 @@ export function AuthMenu({ pathname }: { pathname: string }) {
 
   if (!me.data?.enabled) return null;
   const user = me.data.user;
-  const label = user?.email ?? user?.name;
+  // The name from the account (Keycloak's first and last name); the email only when there is none.
+  const label = user?.name || user?.email;
 
   if (!user) {
     return (
@@ -73,10 +74,19 @@ export function AuthMenu({ pathname }: { pathname: string }) {
           data-testid="auth-menu"
           className="absolute right-0 mt-2 flex w-64 max-w-[calc(100vw-2rem)] flex-col gap-1 rounded-2xl border border-border bg-card p-2 shadow-lg"
         >
-          {label && (
-            <p data-testid="auth-email" className="truncate px-3 py-2 text-sm text-muted" title={label}>
-              {label}
-            </p>
+          {(user.name || user.email) && (
+            <div className="flex flex-col px-3 py-2">
+              {user.name && (
+                <p data-testid="auth-name" className="truncate text-sm font-semibold" title={user.name}>
+                  {user.name}
+                </p>
+              )}
+              {user.email && (
+                <p data-testid="auth-email" className="truncate text-sm text-muted" title={user.email}>
+                  {user.email}
+                </p>
+              )}
+            </div>
           )}
           <Link
             href="/my"

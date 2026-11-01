@@ -33,5 +33,12 @@ commands:
   - tapOn: { testId: auth-account }
   - tapOn: { testId: auth-admin }
   - waitForVisible: { testId: pause-card, timeout: 15000 }
+  # Leaving the admin signs out of the site as well and lands on the home page.
+  - tapOn: { testId: admin-logout }
+  - waitForVisible: { testId: hero-covers, timeout: 15000 }
+  - waitForVisible: { testId: auth-login, timeout: 15000 }
+  - assertNotVisible: { testId: auth-account }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login-keycloak, timeout: 15000 }
 after:
   - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${email}"] }
