@@ -32,6 +32,8 @@ Return only JSON of this exact shape:
 }
 
 - "title" and every "text" are in the language the user asks for.
+- Spoken words in "text" stand in the language's own quotation marks, never left bare:
+  “…” in English, „…“ in German, «…» in Russian, Kazakh and Spanish.
 - "hero_description" is in English: the child's look and outfit in one sentence
   (age, hair, eyes, clothes with colors). It must stay the same for the whole book.
 - "pet_description" is in English: the pet's species, size, fur colors and markings in one
