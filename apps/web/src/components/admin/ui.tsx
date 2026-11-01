@@ -53,8 +53,5 @@ export function PageTitle({ children, aside }: { children: ReactNode; aside?: Re
   return <PageHeader size="sm" title={children} aside={aside} />;
 }
 
-export const table = "w-full text-left text-sm [&_td]:px-3 [&_td]:py-2.5 [&_th]:px-3 [&_th]:py-2 [&_th]:font-semibold [&_th]:text-muted [&_tbody_tr]:border-t [&_tbody_tr]:border-border";
-export const input = "w-full rounded-xl border border-border bg-background px-3 py-2 outline-none focus:border-accent";
-
 /** Dollars of model spend: three decimals under a dollar, where single calls cost cents. */
 export const formatSpendUsd = (usd: number) => `$${usd.toFixed(usd < 1 ? 3 : 2)}`;

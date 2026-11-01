@@ -150,7 +150,7 @@ export function CountryPicker() {
             aria-label={t("nav.country.search")}
             placeholder={t("nav.country.search")}
             autoComplete="off"
-            className="w-full rounded-xl border border-border bg-background py-2.5 pr-3 pl-9 outline-none focus:border-accent"
+            className="h-control w-full rounded-xl border border-border bg-background pr-3 pl-9 text-control focus:border-accent"
           />
         </label>
         <ul data-testid="ui-country-list" className="-mx-1 flex min-h-0 flex-col gap-1 overflow-y-auto px-1">
