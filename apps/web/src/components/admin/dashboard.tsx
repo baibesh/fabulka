@@ -8,18 +8,7 @@ import { intlLocale } from "@/i18n/format";
 import { Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
 import { QueryState } from "@/components/ui/query-state";
 import { Button } from "@/components/ui/button";
-
-function Stat({ label, value, hint, testId }: { label: string; value: string; hint?: string; testId?: string }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-2xl border border-border bg-card p-5">
-      <span className="text-sm text-muted">{label}</span>
-      <span data-testid={testId} className="text-3xl font-extrabold tabular-nums">
-        {value}
-      </span>
-      {hint && <span className="text-xs text-muted">{hint}</span>}
-    </div>
-  );
-}
+import { Stat } from "@/components/ui/stat";
 
 function Meter({ label, used, limit, format }: { label: string; used: number; limit: number; format?: (n: number) => string }) {
   const { t, number } = useAdminI18n();

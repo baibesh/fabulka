@@ -5,10 +5,12 @@ import { BOOK_STATUSES, type BookStatus } from "@fabulka/shared";
 import Link from "next/link";
 import { useState } from "react";
 import { adminBooks } from "@/lib/admin-api";
-import { BOOK_STATUS_TONE, formatSpendUsd, input, PageTitle, table, useAdminI18n } from "./ui";
+import { BOOK_STATUS_TONE, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
 import { useMethodologyName } from "./use-methodologies";
 import { Badge } from "@/components/ui/badge";
 import { ErrorText } from "@/components/ui/notice";
+import { Table, TableEmpty, TableFrame } from "@/components/ui/table";
+import { Input, Select } from "@/components/ui/input";
 
 export function BooksTable() {
   const { t, date, bookStatus } = useAdminI18n();
@@ -27,30 +29,31 @@ export function BooksTable() {
       <PageTitle
         aside={
           <div className="flex flex-wrap gap-2">
-          <input
-            data-testid="books-search"
-            type="search"
-            className={`${input} w-56`}
-            placeholder={t("admin.books.search")}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <select data-testid="books-filter" className={`${input} w-48`} value={status} onChange={(e) => setStatus(e.target.value as BookStatus | "")}>
+            <Input
+              data-testid="books-search"
+              type="search"
+              aria-label={t("admin.books.search")}
+              className="w-56"
+              placeholder={t("admin.books.search")}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <Select data-testid="books-filter" aria-label={t("admin.books.status")} className="w-48" value={status} onChange={(e) => setStatus(e.target.value as BookStatus | "")}>
             <option value="">{t("admin.allStatuses")}</option>
             {BOOK_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {bookStatus(s)}
               </option>
             ))}
-          </select>
+            </Select>
           </div>
         }
       >
         {t("admin.books.title")}
       </PageTitle>
       {books.isError && <ErrorText>{books.error.message}</ErrorText>}
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-        <table data-testid="books-table" className={table}>
+      <TableFrame>
+        <Table data-testid="books-table">
           <thead>
             <tr>
               <th>{t("admin.books.book")}</th>
@@ -91,16 +94,10 @@ export function BooksTable() {
                 <td className="whitespace-nowrap text-muted">{date(book.createdAt)}</td>
               </tr>
             ))}
-            {visible?.length === 0 && (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-muted">
-                  {t("admin.books.empty")}
-                </td>
-              </tr>
-            )}
+            {visible?.length === 0 && <TableEmpty colSpan={7}>{t("admin.books.empty")}</TableEmpty>}
           </tbody>
-        </table>
-      </div>
+        </Table>
+      </TableFrame>
     </>
   );
 }

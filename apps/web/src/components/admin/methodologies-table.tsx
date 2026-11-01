@@ -3,11 +3,12 @@
 import { methodologyText } from "@fabulka/shared";
 import { Plus } from "lucide-react";
 import Link from "next/link";
-import { PageTitle, table, useAdminI18n } from "./ui";
+import { PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
 import { Badge } from "@/components/ui/badge";
 import { ErrorText } from "@/components/ui/notice";
 import { buttonClass } from "@/components/ui/button";
+import { Table, TableEmpty, TableFrame } from "@/components/ui/table";
 
 export function MethodologiesTable() {
   const { t, locale } = useAdminI18n();
@@ -27,8 +28,8 @@ export function MethodologiesTable() {
       </PageTitle>
       <p className="-mt-3 max-w-3xl text-sm text-muted">{t("admin.methods.lead")}</p>
       {methods.isError && <ErrorText>{methods.error.message}</ErrorText>}
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-        <table data-testid="methodologies-table" className={table}>
+      <TableFrame>
+        <Table data-testid="methodologies-table">
           <thead>
             <tr>
               <th>{t("admin.methods.name")}</th>
@@ -59,16 +60,10 @@ export function MethodologiesTable() {
                 </td>
               </tr>
             ))}
-            {methods.data?.length === 0 && (
-              <tr>
-                <td colSpan={4} className="py-6 text-center text-muted">
-                  {t("admin.methods.empty")}
-                </td>
-              </tr>
-            )}
+            {methods.data?.length === 0 && <TableEmpty colSpan={4}>{t("admin.methods.empty")}</TableEmpty>}
           </tbody>
-        </table>
-      </div>
+        </Table>
+      </TableFrame>
     </>
   );
 }

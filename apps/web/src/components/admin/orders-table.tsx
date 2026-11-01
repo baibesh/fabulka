@@ -5,8 +5,10 @@ import { ORDER_STATUSES, type OrderStatus } from "@fabulka/shared";
 import Link from "next/link";
 import { Fragment, useState } from "react";
 import { adminOrders, setOrderStatus } from "@/lib/admin-api";
-import { input, PageTitle, table, useAdminI18n } from "./ui";
+import { PageTitle, useAdminI18n } from "./ui";
 import { ErrorText } from "@/components/ui/notice";
+import { Table, TableEmpty, TableFrame } from "@/components/ui/table";
+import { Select } from "@/components/ui/input";
 
 export function OrdersTable() {
   const { t, date, kzt, orderStatus } = useAdminI18n();
@@ -23,21 +25,21 @@ export function OrdersTable() {
     <>
       <PageTitle
         aside={
-          <select data-testid="orders-filter" className={`${input} w-48`} value={filter} onChange={(e) => setFilter(e.target.value as OrderStatus | "")}>
+          <Select data-testid="orders-filter" aria-label={t("admin.orders.status")} className="w-48" value={filter} onChange={(e) => setFilter(e.target.value as OrderStatus | "")}>
             <option value="">{t("admin.allStatuses")}</option>
             {ORDER_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {orderStatus(s)}
               </option>
             ))}
-          </select>
+          </Select>
         }
       >
         {t("admin.orders.title")}
       </PageTitle>
       {orders.isError && <ErrorText>{orders.error.message}</ErrorText>}
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-        <table data-testid="orders-table" className={table}>
+      <TableFrame>
+        <Table data-testid="orders-table">
           <thead>
             <tr>
               <th>{t("admin.orders.book")}</th>
@@ -71,9 +73,11 @@ export function OrdersTable() {
                   </td>
                   <td className="text-right tabular-nums">{kzt(order.totalKzt)}</td>
                   <td>
-                    <select
+                    <Select
+                      small
                       data-testid="order-status-select"
-                      className={`${input} w-36 py-1`}
+                      aria-label={t("admin.orders.status")}
+                      className="w-36"
                       value={order.status}
                       disabled={update.isPending}
                       onChange={(e) => update.mutate({ id: order.id, status: e.target.value as OrderStatus })}
@@ -83,7 +87,7 @@ export function OrdersTable() {
                           {orderStatus(s)}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                     <div className="text-xs text-muted">{order.manual ? t("admin.orders.manual") : t("admin.orders.timer")}</div>
                   </td>
                   <td className="whitespace-nowrap text-muted">
@@ -116,16 +120,10 @@ export function OrdersTable() {
                 )}
               </Fragment>
             ))}
-            {orders.data?.length === 0 && (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-muted">
-                  {t("admin.orders.empty")}
-                </td>
-              </tr>
-            )}
+            {orders.data?.length === 0 && <TableEmpty colSpan={7}>{t("admin.orders.empty")}</TableEmpty>}
           </tbody>
-        </table>
-      </div>
+        </Table>
+      </TableFrame>
     </>
   );
 }

@@ -3,10 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { adminTemplates, updateTemplate } from "@/lib/admin-api";
-import { PageTitle, table, useAdminI18n } from "./ui";
+import { PageTitle, useAdminI18n } from "./ui";
 import { useMethodologyName } from "./use-methodologies";
 import { Badge } from "@/components/ui/badge";
 import { ErrorText } from "@/components/ui/notice";
+import { Table, TableFrame } from "@/components/ui/table";
 
 export function CatalogTable() {
   const { t, number } = useAdminI18n();
@@ -22,8 +23,8 @@ export function CatalogTable() {
     <>
       <PageTitle>{t("admin.catalog.title")}</PageTitle>
       {templates.isError && <ErrorText>{templates.error.message}</ErrorText>}
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-        <table data-testid="catalog-table" className={table}>
+      <TableFrame>
+        <Table data-testid="catalog-table">
           <thead>
             <tr>
               <th>{t("admin.catalog.book")}</th>
@@ -65,8 +66,8 @@ export function CatalogTable() {
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </Table>
+      </TableFrame>
     </>
   );
 }
