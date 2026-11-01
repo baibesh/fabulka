@@ -12,9 +12,11 @@ import { getBook, wantPrint } from "@/lib/api";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { useCoverPrice } from "@/lib/use-price";
 import { BookReader } from "./book-reader";
-import { ErrorNotice } from "./error-notice";
 import { PriceSkeleton } from "./price-skeleton";
 import { SavePrompt } from "./save-prompt";
+import { ErrorText } from "./ui/notice";
+import { QueryState } from "./ui/query-state";
+import { Skeleton } from "./ui/skeleton";
 
 const finished = (status: BookStatus | undefined) => status === "done" || status === "failed";
 
@@ -29,8 +31,7 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
   });
   const { data: methods } = useMethodologies();
 
-  if (error) return <ErrorNotice error={error} />;
-  if (!book) return <p className="text-muted">{t("common.loading")}</p>;
+  if (!book) return <QueryState error={error} />;
   const done = book.status === "done";
   // An unpublished method is no longer listed: the line is left out rather than showing a slug.
   const method = methods?.find((m) => m.slug === book.methodology);
@@ -48,7 +49,7 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
             <motion.div className="h-full bg-accent" animate={{ width: `${book.progress}%` }} transition={{ duration: 0.8 }} />
           </div>
         )}
-        {book.error && <p role="alert" className="text-danger">{book.error}</p>}
+        {book.error && <ErrorText>{book.error}</ErrorText>}
       </section>
 
       {book.title && (
@@ -152,7 +153,7 @@ function Progress({ book }: { book: Book }) {
                 className="aspect-[3/2] w-full object-cover"
               />
             ) : (
-              <div className="aspect-[3/2] w-full animate-pulse bg-border" />
+              <Skeleton as="div" radius="none" className="aspect-[3/2] w-full" />
             )}
             <p className="p-4 leading-relaxed">{page.text}</p>
           </motion.li>
@@ -187,7 +188,7 @@ function ToyPipeline({ toy }: { toy: NonNullable<Book["toy"]> }) {
                 className={`aspect-square w-full rounded-xl border border-border bg-white ${step.cover ? "object-cover" : "object-contain"}`}
               />
             ) : (
-              <div className="aspect-square w-full animate-pulse rounded-xl bg-border" />
+              <Skeleton as="div" radius="md" className="aspect-square w-full" />
             )}
             <span className="text-xs text-muted">{step.label}</span>
           </li>

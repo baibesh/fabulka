@@ -4,6 +4,7 @@ import { REGION_UNAVAILABLE } from "@fabulka/shared";
 import { Globe } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import { ApiError } from "@/lib/api";
+import { ErrorText } from "./ui/notice";
 
 /** An API error; visitors from a restricted country get an explanation instead of a raw message. */
 export function ErrorNotice({ error }: { error: Error }) {
@@ -17,9 +18,5 @@ export function ErrorNotice({ error }: { error: Error }) {
       </section>
     );
   }
-  return (
-    <p role="alert" className="text-danger">
-      {error.message}
-    </p>
-  );
+  return <ErrorText>{error.message}</ErrorText>;
 }

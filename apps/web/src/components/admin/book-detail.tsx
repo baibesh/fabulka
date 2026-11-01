@@ -7,8 +7,11 @@ import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 import { adminBook, bookCalls, deleteBook, setFeatured } from "@/lib/admin-api";
 import { CallDetail, CallStatus } from "./journal";
-import { Badge, BOOK_STATUS_TONE, Card, formatSpendUsd, ghostButton, PageTitle, useAdminI18n } from "./ui";
+import { BOOK_STATUS_TONE, Card, formatSpendUsd, ghostButton, PageTitle, useAdminI18n } from "./ui";
 import { useMethodologyName } from "./use-methodologies";
+import { Badge } from "@/components/ui/badge";
+import { ErrorText, Notice } from "@/components/ui/notice";
+import { QueryState } from "@/components/ui/query-state";
 
 /** The book's model calls in order, timed from the first: where generation spent its time and money. */
 function BookCalls({ id, generating }: { id: string; generating: boolean }) {
@@ -18,7 +21,7 @@ function BookCalls({ id, generating }: { id: string; generating: boolean }) {
   const start = calls.data?.[0] ? new Date(calls.data[0].createdAt).getTime() : 0;
   return (
     <Card title={t("admin.book.calls")}>
-      {calls.isError && <p role="alert" className="text-danger">{calls.error.message}</p>}
+      {calls.isError && <ErrorText>{calls.error.message}</ErrorText>}
       <ol data-testid="book-calls" className="flex flex-col text-sm">
         {calls.data?.map((call) => (
           <li key={call.id} className="border-t border-border first:border-t-0">
@@ -55,8 +58,7 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
     onSuccess: (updated) => queryClient.setQueryData(["admin", "book", id], updated),
   });
 
-  if (book.isError) return <p role="alert" className="text-danger">{book.error.message}</p>;
-  if (!book.data) return <p className="text-muted">{t("admin.loading")}</p>;
+  if (!book.data) return <QueryState error={book.error} scope="admin" />;
   const b = book.data;
   const facts: [string, string][] = [
     [
@@ -133,8 +135,12 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
         {b.demo && <span className="ml-2 text-sm text-muted">{t("admin.book.demo")}</span>}
         {b.featured && <span className="ml-2 text-sm text-muted">{t("admin.book.featured")}</span>}
       </div>
-      {feature.isError && <p role="alert" className="text-danger">{feature.error.message}</p>}
-      {b.error && <p role="alert" className="rounded-xl bg-danger/10 p-4 text-sm text-danger">{b.error}</p>}
+      {feature.isError && <ErrorText>{feature.error.message}</ErrorText>}
+      {b.error && (
+        <Notice as="p" role="alert" tone="danger">
+          {b.error}
+        </Notice>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
         <Card title={t("admin.book.facts")}>

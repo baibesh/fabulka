@@ -7,24 +7,29 @@ import { intlLocale } from "@/i18n/format";
 import { useI18n } from "@/i18n/i18n";
 import { listMyBooks } from "@/lib/api";
 import { loginUrl, useMe } from "@/lib/auth";
-import { ErrorNotice } from "./error-notice";
+import { EmptyState } from "./ui/empty-state";
+import { QueryState } from "./ui/query-state";
+import { Skeleton } from "./ui/skeleton";
 
 export function MyBooks() {
   const { t, locale } = useI18n();
   const books = useQuery({ queryKey: ["my-books"], queryFn: listMyBooks, refetchInterval: 5000 });
 
-  if (books.error) return <ErrorNotice error={books.error} />;
-  if (!books.data) return <p className="text-muted">{t("common.loading")}</p>;
+  if (!books.data) return <QueryState error={books.error} />;
   if (!books.data.length) {
     return (
-      <div data-testid="my-books-empty" className="flex flex-col items-center gap-4 rounded-3xl border border-dashed border-border p-10 text-center">
-        <BookOpen className="size-10 text-accent" />
-        <p className="text-lg font-bold">{t("my.empty.title")}</p>
-        <p className="text-muted">{t("my.empty.text")}</p>
-        <Link href="/catalog" className="rounded-xl bg-accent px-5 py-3 font-bold text-accent-foreground">
-          {t("my.empty.cta")}
-        </Link>
-      </div>
+      <EmptyState
+        data-testid="my-books-empty"
+        icon={<BookOpen className="size-10 text-accent" />}
+        title={t("my.empty.title")}
+        action={
+          <Link href="/catalog" className="rounded-xl bg-accent px-5 py-3 font-bold text-accent-foreground">
+            {t("my.empty.cta")}
+          </Link>
+        }
+      >
+        {t("my.empty.text")}
+      </EmptyState>
     );
   }
   return (
@@ -36,7 +41,7 @@ export function MyBooks() {
               // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
               <img src={book.heroImageUrl} alt="" className="size-20 shrink-0 rounded-xl bg-white object-contain" />
             ) : (
-              <div className="size-20 shrink-0 animate-pulse rounded-xl bg-border" />
+              <Skeleton as="div" radius="md" className="size-20 shrink-0" />
             )}
             <div className="flex min-w-0 flex-col gap-1">
               <span className="truncate font-bold">{book.title ?? book.childName}</span>

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { adminLogin, adminLoginOptions } from "@/lib/admin-api";
 import { LanguageSwitch } from "./language-switch";
 import { button, input, useAdminI18n } from "./ui";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * The way in: Keycloak (realm role `admin`, 2FA there) and, only when ADMIN_PASSWORD_LOGIN is on, the
@@ -24,7 +25,7 @@ export function LoginForm() {
         <Lock className="size-5 text-accent" />
         {t("admin.login.title")}
       </div>
-      {options.isPending && <Loader2 className="size-5 animate-spin text-muted" />}
+      {options.isPending && <Spinner className="text-muted" />}
       {keycloak && (
         <a
           href="/api/auth/login?return=/admin"

@@ -1,19 +1,20 @@
 import type { BookStatus, OrderStatus } from "@fabulka/shared";
 import type { ReactNode } from "react";
+import type { BadgeTone } from "@/components/ui/badge";
 import { intlLocale } from "@/i18n/format";
 import { useI18n } from "@/i18n/i18n";
 import { formatDateTime, formatKzt, formatNumber } from "@/lib/format";
 
 /** The badge colour of each book status; the label comes from the messages (admin.bookStatus.*). */
-export const BOOK_STATUS_TONE: Record<BookStatus, string> = {
-  queued: "bg-border text-muted",
-  toy: "bg-warning/15 text-warning",
-  story: "bg-warning/15 text-warning",
-  hero: "bg-warning/15 text-warning",
-  pages: "bg-warning/15 text-warning",
-  pdf: "bg-warning/15 text-warning",
-  done: "bg-success/15 text-success",
-  failed: "bg-danger/15 text-danger",
+export const BOOK_STATUS_TONE: Record<BookStatus, BadgeTone> = {
+  queued: "neutral",
+  toy: "warning",
+  story: "warning",
+  hero: "warning",
+  pages: "warning",
+  pdf: "warning",
+  done: "success",
+  failed: "danger",
 };
 
 /**
@@ -37,10 +38,6 @@ export function useAdminI18n() {
     bookStatus: (status: BookStatus) => t(`admin.bookStatus.${status}`),
     orderStatus: (status: OrderStatus) => t(`admin.orderStatus.${status}`),
   };
-}
-
-export function Badge({ tone, children }: { tone: string; children: ReactNode }) {
-  return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${tone}`}>{children}</span>;
 }
 
 export function Card({ title, action, children, className = "" }: { title?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {

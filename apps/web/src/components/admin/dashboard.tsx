@@ -6,6 +6,7 @@ import { Pause, Play } from "lucide-react";
 import { adminStats, setPaused } from "@/lib/admin-api";
 import { intlLocale } from "@/i18n/format";
 import { Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
+import { QueryState } from "@/components/ui/query-state";
 
 function Stat({ label, value, hint, testId }: { label: string; value: string; hint?: string; testId?: string }) {
   return (
@@ -65,8 +66,7 @@ export function Dashboard() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin", "stats"] }),
   });
 
-  if (stats.isError) return <p role="alert" className="text-danger">{stats.error.message}</p>;
-  if (!stats.data) return <p className="text-muted">{t("admin.loading")}</p>;
+  if (!stats.data) return <QueryState error={stats.error} scope="admin" />;
   const s: AdminStats = stats.data;
   const success = s.books.successRate === null ? "—" : percent(s.books.successRate);
   const avg = s.books.avgSeconds === null ? "—" : t("admin.seconds", { n: Math.round(s.books.avgSeconds) });

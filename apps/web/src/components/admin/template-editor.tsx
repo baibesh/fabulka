@@ -8,15 +8,15 @@ import { use, useState } from "react";
 import { adminTemplate, updateTemplate } from "@/lib/admin-api";
 import { button, Card, ghostButton, input, PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
+import { ErrorText } from "@/components/ui/notice";
+import { QueryState } from "@/components/ui/query-state";
 
 const label = "flex flex-col gap-1.5 text-sm font-semibold";
 
 export function TemplateEditor({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const { t } = useAdminI18n();
   const template = useQuery({ queryKey: ["admin", "template", slug], queryFn: () => adminTemplate(slug) });
-  if (template.isError) return <p role="alert" className="text-danger">{template.error.message}</p>;
-  if (!template.data) return <p className="text-muted">{t("admin.loading")}</p>;
+  if (!template.data) return <QueryState error={template.error} scope="admin" />;
   // Keyed so the form starts over from the saved book after each save.
   return <Editor key={template.data.title + template.data.plot.join()} initial={template.data} />;
 }
@@ -79,7 +79,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
       >
         {initial.title}
       </PageTitle>
-      {save.isError && <p role="alert" className="text-danger">{save.error.message}</p>}
+      {save.isError && <ErrorText>{save.error.message}</ErrorText>}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title={t("admin.template.card")}>

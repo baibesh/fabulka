@@ -37,6 +37,8 @@ import { useCountryName } from "@/hooks/use-country-name";
 import { languageCode } from "@/lib/regions";
 import { Flag } from "../flag";
 import { button, Card, ghostButton, input, PageTitle, useAdminI18n } from "./ui";
+import { ErrorText } from "@/components/ui/notice";
+import { Badge } from "@/components/ui/badge";
 
 const TABS = ["prices", "countries", "faq", "cities", "blocked"] as const;
 type Tab = (typeof TABS)[number];
@@ -63,7 +65,7 @@ export function ReferencePage() {
           </button>
         ))}
       </div>
-      {reference.isError && <p role="alert" className="text-danger">{reference.error.message}</p>}
+      {reference.isError && <ErrorText>{reference.error.message}</ErrorText>}
       {!reference.data ? (
         !reference.isError && <p className="text-muted">{t("admin.loading")}</p>
       ) : tab === "prices" ? (
@@ -585,7 +587,7 @@ function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: Country
                     <span className="w-6 text-right text-sm font-bold text-muted">{i + 1}</span>
                     <span className="flex-1 font-semibold">{localized(row.q, locale) || t("admin.reference.faq.untitled")}</span>
                     <span className="text-xs text-muted">{summary(row)}</span>
-                    {!row.published && <span className="rounded-full bg-border px-2 py-0.5 text-xs font-bold text-muted">{t("admin.reference.faq.draft")}</span>}
+                    {!row.published && <Badge>{t("admin.reference.faq.draft")}</Badge>}
                   </summary>
                   <div className="flex flex-col gap-4 border-t border-border p-3">
                     {LANGUAGES.map((language) => {

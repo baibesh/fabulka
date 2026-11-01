@@ -21,12 +21,12 @@ import { z } from "zod";
 import { ApiError, createBook, getQuota, getStatus, uploadToy } from "@/lib/api";
 import { toJpegDataUrl } from "@/lib/toy-photo";
 import { useMethodologies } from "@/lib/use-methodologies";
-import { useBookPrice } from "@/lib/use-price";
-import { PriceSkeleton } from "./price-skeleton";
+import { PriceTag } from "./price-tag";
 import { useI18n } from "@/i18n/i18n";
 import { LOCALE_NAMES, type MessageKey } from "@/i18n/messages";
 import { Paywall } from "./paywall";
 import { VoiceStep } from "./voice-step";
+import { ErrorText, Notice } from "./ui/notice";
 
 const FormSchema = z.object({
   name: z.string().trim().min(1).max(40),
@@ -105,7 +105,6 @@ export function BookForm({ template }: { template?: Template }) {
   // Said up front, so a parent does not fill in the whole form only to be turned away.
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const paused = status.data?.paused === true;
-  const price = useBookPrice(template ? "template" : "custom");
 
   const steps = STEPS.filter((s) => s !== "voice" || status.data?.voice === true);
   const [chosen, setChosen] = useState<Step | null>(null);
@@ -223,16 +222,20 @@ export function BookForm({ template }: { template?: Template }) {
   return (
     <div className="flex flex-col gap-4">
     {paused && (
-      <section data-testid="paused-notice" role="status" className="flex gap-4 rounded-2xl border-2 border-accent bg-card p-5">
-        <CirclePause className="size-8 shrink-0 text-accent" />
-        <div className="flex flex-col gap-2">
-          <h2 className="text-lg font-extrabold">{t("form.paused.title")}</h2>
-          <p className="text-muted">{t("form.paused.text")}</p>
-          <Link href="/#examples" data-testid="paused-examples" className="self-start font-semibold text-accent">
-            {t("form.paused.examples")} →
-          </Link>
-        </div>
-      </section>
+      <Notice
+        as="section"
+        data-testid="paused-notice"
+        role="status"
+        tone="accent"
+        size="lg"
+        icon={<CirclePause className="size-8 shrink-0 text-accent" />}
+        title={t("form.paused.title")}
+      >
+        <p className="text-muted">{t("form.paused.text")}</p>
+        <Link href="/#examples" data-testid="paused-examples" className="self-start font-semibold text-accent">
+          {t("form.paused.examples")} →
+        </Link>
+      </Notice>
     )}
     <form
       data-testid="book-form"
@@ -264,13 +267,10 @@ export function BookForm({ template }: { template?: Template }) {
       {step === "child" && (
         <div className="grid gap-5 sm:grid-cols-2">
           {heard && (
-            <div data-testid="voice-transcript" role="status" className="flex gap-3 rounded-2xl bg-background p-4 text-sm sm:col-span-2">
-              <Mic className="size-5 shrink-0 text-accent" />
-              <div className="flex flex-col gap-1">
-                <p>{t("voice.heard", { transcript: heard })}</p>
-                <p className="font-semibold">{t("voice.check")}</p>
-              </div>
-            </div>
+            <Notice data-testid="voice-transcript" role="status" tone="subtle" icon={<Mic className="size-5 shrink-0 text-accent" />} className="sm:col-span-2">
+              <p>{t("voice.heard", { transcript: heard })}</p>
+              <p className="font-semibold">{t("voice.check")}</p>
+            </Notice>
           )}
           <label className={label}>
             {t("form.name")}
@@ -353,11 +353,7 @@ export function BookForm({ template }: { template?: Template }) {
                 )}
               </label>
             ))}
-            {errors.root?.answers && (
-              <p role="alert" className="text-danger sm:col-span-2">
-                {errors.root.answers.message}
-              </p>
-            )}
+            {errors.root?.answers && <ErrorText className="sm:col-span-2">{errors.root.answers.message}</ErrorText>}
           </fieldset>
         ) : (
           <div className="grid gap-5">
@@ -459,11 +455,7 @@ export function BookForm({ template }: { template?: Template }) {
             />
             <ReviewRow name={t("wizard.review.pet")} value={values.pet || t("wizard.review.none")} />
           </ReviewGroup>
-          <p data-testid="review-price" className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-semibold">{t("wizard.review.price")}:</span>
-            <span className="rounded-full bg-accent px-3 py-1 font-extrabold text-accent-foreground">{price ?? <PriceSkeleton />}</span>
-            <span className="text-muted">{t("price.afterFree")}</span>
-          </p>
+          <PriceTag kind={template ? "template" : "custom"} label={t("wizard.review.price")} testId="review-price" />
           <button
             type="submit"
             data-testid="create-book"
@@ -480,11 +472,7 @@ export function BookForm({ template }: { template?: Template }) {
                 : t("form.quota.left", { remaining: quota.data.remaining, limit: quota.data.limit })}
             </p>
           )}
-          {create.isError && !limitReached && !paused && (
-            <p role="alert" className="text-danger">
-              {t("form.error", { message: create.error.message })}
-            </p>
-          )}
+          {create.isError && !limitReached && !paused && <ErrorText>{t("form.error", { message: create.error.message })}</ErrorText>}
         </div>
       )}
 

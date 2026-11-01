@@ -3,8 +3,10 @@
 import { methodologyText } from "@fabulka/shared";
 import { Plus } from "lucide-react";
 import Link from "next/link";
-import { Badge, button, PageTitle, table, useAdminI18n } from "./ui";
+import { button, PageTitle, table, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
+import { Badge } from "@/components/ui/badge";
+import { ErrorText } from "@/components/ui/notice";
 
 export function MethodologiesTable() {
   const { t, locale } = useAdminI18n();
@@ -23,7 +25,7 @@ export function MethodologiesTable() {
         {t("admin.methods.title")}
       </PageTitle>
       <p className="-mt-3 max-w-3xl text-sm text-muted">{t("admin.methods.lead")}</p>
-      {methods.isError && <p role="alert" className="text-danger">{methods.error.message}</p>}
+      {methods.isError && <ErrorText>{methods.error.message}</ErrorText>}
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <table data-testid="methodologies-table" className={table}>
           <thead>
@@ -47,7 +49,7 @@ export function MethodologiesTable() {
                   {m.ageMin}–{m.ageMax}
                 </td>
                 <td>
-                  <Badge tone={m.published ? "bg-success/15 text-success" : "bg-border text-muted"}>
+                  <Badge tone={m.published ? "success" : "neutral"}>
                     {m.published ? t("admin.published") : t("admin.draft")}
                   </Badge>
                 </td>

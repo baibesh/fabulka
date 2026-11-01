@@ -7,8 +7,8 @@ import { use } from "react";
 import { getOrder } from "@/lib/api";
 import { useI18n } from "@/i18n/i18n";
 import { formatKzt } from "@/lib/format";
-import { ErrorNotice } from "./error-notice";
 import { OrderAddress, OrderTimeline } from "./order-timeline";
+import { QueryState } from "./ui/query-state";
 
 export function OrderView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -19,8 +19,7 @@ export function OrderView({ params }: { params: Promise<{ id: string }> }) {
     refetchInterval: (query) => (query.state.data?.status === "delivered" ? false : 2000),
   });
 
-  if (error) return <ErrorNotice error={error} />;
-  if (!order) return <p className="text-muted">{t("common.loading")}</p>;
+  if (!order) return <QueryState error={error} />;
 
   return (
     <div className="flex flex-col gap-6">

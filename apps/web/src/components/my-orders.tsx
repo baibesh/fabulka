@@ -9,6 +9,7 @@ import { listMyOrders } from "@/lib/api";
 import { formatDay, formatKzt } from "@/lib/format";
 import { ErrorNotice } from "./error-notice";
 import { OrderAddress, OrderTimeline } from "./order-timeline";
+import { EmptyState } from "./ui/empty-state";
 
 /**
  * «Мои заказы»: printed orders with where each one is. Shown when there are orders, or when the
@@ -39,9 +40,9 @@ export function MyOrders() {
         {t("my.orders.title")}
       </h2>
       {!orders.data.length ? (
-        <p data-testid="my-orders-empty" className="rounded-3xl border border-dashed border-border p-6 text-muted">
+        <EmptyState variant="box" data-testid="my-orders-empty">
           {t("my.orders.empty")}
-        </p>
+        </EmptyState>
       ) : (
         <ul className="grid gap-4 lg:grid-cols-2">
           {orders.data.map((order) => (

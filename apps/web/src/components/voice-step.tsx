@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { VOICE_DISABLED, VOICE_RATE_LIMITED, type Template, type VoicePrefill } from "@fabulka/shared";
-import { Loader2, Mic, ShieldCheck, Square } from "lucide-react";
+import { Mic, ShieldCheck, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useClientValue } from "@/hooks/use-hydrated";
 import { ApiError, transcribeVoice } from "@/lib/api";
@@ -10,6 +10,7 @@ import { canRecord, startRecording, type Recorder } from "@/lib/recorder";
 import { encodeWav, recordingToWav, VOICE_SAMPLE_RATE } from "@/lib/wav";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
+import { Spinner } from "./ui/spinner";
 
 /** The API takes at most a minute. */
 const MAX_SECONDS = 60;
@@ -123,7 +124,7 @@ export function VoiceStep({
           aria-label={t("voice.start")}
           className="flex size-28 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg disabled:opacity-60"
         >
-          {state.kind === "sending" ? <Loader2 className="size-10 animate-spin" /> : <Mic className="size-12" />}
+          {state.kind === "sending" ? <Spinner size="lg" /> : <Mic className="size-12" />}
         </button>
       )}
 

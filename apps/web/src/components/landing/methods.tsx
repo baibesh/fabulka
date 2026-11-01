@@ -4,6 +4,8 @@ import { BookOpen, Compass, Globe, Heart, Repeat, School, Sprout } from "lucide-
 import { useI18n } from "@/i18n/i18n";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { Section } from "./section";
+import { Badge } from "../ui/badge";
+import { Skeleton } from "../ui/skeleton";
 
 /** Icons of the methods the service started with; one added in the admin gets the book. */
 const ICONS: Record<string, typeof Heart> = {
@@ -30,11 +32,11 @@ export function Methods() {
         {!methods &&
           Array.from({ length: PLACEHOLDERS }, (_, i) => (
             <li key={i} className="flex h-36 gap-4 rounded-3xl border border-border bg-card p-5">
-              <span className="size-11 shrink-0 animate-pulse rounded-2xl bg-border" />
+              <Skeleton radius="lg" className="size-11 shrink-0" />
               <div className="flex flex-1 flex-col gap-2">
-                <span className="h-4 w-3/4 animate-pulse rounded bg-border" />
-                <span className="h-4 w-16 animate-pulse rounded-full bg-border" />
-                <span className="h-3 w-full animate-pulse rounded bg-border" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton radius="full" className="h-4 w-16" />
+                <Skeleton className="h-3 w-full" />
               </div>
             </li>
           ))}
@@ -47,9 +49,7 @@ export function Methods() {
               </span>
               <div className="flex flex-col gap-1.5">
                 <h3 className="font-extrabold leading-snug">{m.name}</h3>
-                <span className="self-start rounded-full bg-border px-2.5 py-0.5 text-xs font-bold text-muted">
-                  {t("common.years", { min: m.ageMin, max: m.ageMax })}
-                </span>
+                <Badge className="self-start">{t("common.years", { min: m.ageMin, max: m.ageMax })}</Badge>
                 <p className="text-sm text-muted">{m.summary}</p>
               </div>
             </li>

@@ -10,9 +10,9 @@ import type { Highlight } from "@/lib/personalization";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { BookForm } from "./book-form";
 import { BookReader } from "./book-reader";
-import { ErrorNotice } from "./error-notice";
 import { primaryButton } from "./landing/section";
 import { PriceTag } from "./price-tag";
+import { QueryState } from "./ui/query-state";
 
 const FORM_ID = "book-form-section";
 
@@ -28,9 +28,8 @@ export function TemplateView({ params }: { params: Promise<{ slug: string }> }) 
   });
   const methods = useMethodologies();
 
-  if (error) return <ErrorNotice error={error} />;
   // Waits for the methods too, so the method's name does not pop in; without them the page goes on.
-  if (!template || methods.isPending) return <p className="text-muted">{t("common.loading")}</p>;
+  if (!template || methods.isPending) return <QueryState error={error} />;
   const method = methods.data?.find((m) => m.slug === template.methodology);
 
   return (

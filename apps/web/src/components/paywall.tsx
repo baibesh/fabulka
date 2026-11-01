@@ -9,6 +9,7 @@ import { useMe } from "@/lib/auth";
 import { useI18n } from "@/i18n/i18n";
 import { useBookPrice } from "@/lib/use-price";
 import { PriceSkeleton } from "./price-skeleton";
+import { ErrorText } from "./ui/notice";
 
 /**
  * Shown when the free books are used up: the demo checkout for one more book of `kind` (a catalog
@@ -65,11 +66,7 @@ export function Paywall({ kind, onUnlocked }: { kind: BookKind; onUnlocked: () =
         {buy.isPending ? <Loader2 className="size-5 animate-spin" /> : <ShoppingBag className="size-5" />}
         {price ? t("paywall.buy", { price }) : <PriceSkeleton className="w-40" />}
       </button>
-      {buy.isError && (
-        <p role="alert" className="text-sm text-danger">
-          {buy.error.message}
-        </p>
-      )}
+      {buy.isError && <ErrorText className="text-sm">{buy.error.message}</ErrorText>}
       <p className="text-xs text-muted">{t("paywall.demo")}</p>
       <form
         className="flex gap-2"

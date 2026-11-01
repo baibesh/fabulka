@@ -23,6 +23,8 @@ import { adminMethodology, createMethodology, deleteMethodology, previewMethodol
 import { ApiError } from "@/lib/api";
 import { button, Card, ghostButton, input, PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
+import { ErrorText, Notice } from "@/components/ui/notice";
+import { QueryState } from "@/components/ui/query-state";
 
 /** Languages a method must have to be published; the others are optional. */
 const isBase = (language: Language) => (BASE_LANGUAGES as readonly Language[]).includes(language);
@@ -75,10 +77,8 @@ const fields = (d: Draft, sortOrder: number) => ({
 /** /admin/methodologies/[slug]: loads the method, then edits it. */
 export function MethodologyPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const { t } = useAdminI18n();
   const method = useQuery({ queryKey: ["admin", "methodology", slug], queryFn: () => adminMethodology(slug) });
-  if (method.isError) return <p role="alert" className="text-danger">{method.error.message}</p>;
-  if (!method.data) return <p className="text-muted">{t("admin.loading")}</p>;
+  if (!method.data) return <QueryState error={method.error} scope="admin" />;
   // Keyed so the form starts over from the saved method after each save.
   return <MethodologyEditor key={method.data.updatedAt} initial={method.data} />;
 }
@@ -226,7 +226,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
         </div>
       )}
       {remove.isError && (
-        <div data-testid="methodology-delete-error" role="alert" className="flex flex-col gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
+        <Notice data-testid="methodology-delete-error" role="alert" tone="warning" className="items-start">
           <p>{remove.error.message}</p>
           {inUse && draft.published && (
             <button
@@ -243,18 +243,18 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
               {t("admin.method.unpublish")}
             </button>
           )}
-        </div>
+        </Notice>
       )}
-      {save.isError && <p role="alert" className="text-danger">{save.error.message}</p>}
+      {save.isError && <ErrorText>{save.error.message}</ErrorText>}
       {Object.keys(problems).length > 0 && (
-        <div role="alert" data-testid="methodology-problems" className="rounded-xl bg-danger/10 p-4 text-sm text-danger">
-          {t("admin.method.check")}
+        <Notice role="alert" data-testid="methodology-problems" tone="danger">
+          <p>{t("admin.method.check")}</p>
           <ul className="list-disc pl-5">
             {Object.values(problems).map((message) => (
               <li key={message}>{message}</li>
             ))}
           </ul>
-        </div>
+        </Notice>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -426,7 +426,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
             {problem("avoid")}
           </label>
         </div>
-        {preview.isError && <p role="alert" className="text-danger">{preview.error.message}</p>}
+        {preview.isError && <ErrorText>{preview.error.message}</ErrorText>}
         {preview.data && (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-muted">{t("admin.method.preview.lead", { age: preview.data.age })}</p>

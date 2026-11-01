@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Fragment, useState } from "react";
 import { adminOrders, setOrderStatus } from "@/lib/admin-api";
 import { input, PageTitle, table, useAdminI18n } from "./ui";
+import { ErrorText } from "@/components/ui/notice";
 
 export function OrdersTable() {
   const { t, date, kzt, orderStatus } = useAdminI18n();
@@ -34,7 +35,7 @@ export function OrdersTable() {
       >
         {t("admin.orders.title")}
       </PageTitle>
-      {orders.isError && <p role="alert" className="text-danger">{orders.error.message}</p>}
+      {orders.isError && <ErrorText>{orders.error.message}</ErrorText>}
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <table data-testid="orders-table" className={table}>
           <thead>

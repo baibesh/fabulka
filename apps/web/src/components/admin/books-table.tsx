@@ -5,8 +5,10 @@ import { BOOK_STATUSES, type BookStatus } from "@fabulka/shared";
 import Link from "next/link";
 import { useState } from "react";
 import { adminBooks } from "@/lib/admin-api";
-import { Badge, BOOK_STATUS_TONE, formatSpendUsd, input, PageTitle, table, useAdminI18n } from "./ui";
+import { BOOK_STATUS_TONE, formatSpendUsd, input, PageTitle, table, useAdminI18n } from "./ui";
 import { useMethodologyName } from "./use-methodologies";
+import { Badge } from "@/components/ui/badge";
+import { ErrorText } from "@/components/ui/notice";
 
 export function BooksTable() {
   const { t, date, bookStatus } = useAdminI18n();
@@ -46,7 +48,7 @@ export function BooksTable() {
       >
         {t("admin.books.title")}
       </PageTitle>
-      {books.isError && <p role="alert" className="text-danger">{books.error.message}</p>}
+      {books.isError && <ErrorText>{books.error.message}</ErrorText>}
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <table data-testid="books-table" className={table}>
           <thead>

@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useClientValue } from "@/hooks/use-hydrated";
 import { useI18n } from "@/i18n/i18n";
 import { loginUrl, logout, useMe } from "@/lib/auth";
+import { Notice } from "./ui/notice";
 
 /**
  * The header's sign-in: «Войти» for a visitor, the account menu once signed in, nothing while
@@ -147,16 +148,20 @@ export function AuthNotice() {
   if (!failed || closed) return null;
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pt-3">
-      <p
+      <Notice
+        as="p"
         role="status"
         data-testid="auth-error"
-        className="flex items-start gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm text-muted"
+        size="sm"
+        className="items-start"
+        action={
+          <button type="button" aria-label={t("auth.error.close")} onClick={() => setClosed(true)} className="hover:text-foreground">
+            <X className="size-4" />
+          </button>
+        }
       >
-        <span className="mr-auto">{t("auth.error")}</span>
-        <button type="button" aria-label={t("auth.error.close")} onClick={() => setClosed(true)} className="hover:text-foreground">
-          <X className="size-4" />
-        </button>
-      </p>
+        {t("auth.error")}
+      </Notice>
     </div>
   );
 }

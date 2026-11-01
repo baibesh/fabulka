@@ -3,8 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { adminTemplates, updateTemplate } from "@/lib/admin-api";
-import { Badge, PageTitle, table, useAdminI18n } from "./ui";
+import { PageTitle, table, useAdminI18n } from "./ui";
 import { useMethodologyName } from "./use-methodologies";
+import { Badge } from "@/components/ui/badge";
+import { ErrorText } from "@/components/ui/notice";
 
 export function CatalogTable() {
   const { t, number } = useAdminI18n();
@@ -19,7 +21,7 @@ export function CatalogTable() {
   return (
     <>
       <PageTitle>{t("admin.catalog.title")}</PageTitle>
-      {templates.isError && <p role="alert" className="text-danger">{templates.error.message}</p>}
+      {templates.isError && <ErrorText>{templates.error.message}</ErrorText>}
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <table data-testid="catalog-table" className={table}>
           <thead>
@@ -55,7 +57,7 @@ export function CatalogTable() {
                     disabled={toggle.isPending}
                     onClick={() => toggle.mutate({ slug: item.slug, published: !item.published })}
                   >
-                    <Badge tone={item.published ? "bg-success/15 text-success" : "bg-border text-muted"}>
+                    <Badge tone={item.published ? "success" : "neutral"}>
                       {item.published ? t("admin.published") : t("admin.draft")}
                     </Badge>
                   </button>

@@ -16,6 +16,7 @@ import { useMe } from "@/lib/auth";
 import { useCities } from "@/lib/cities";
 import { useOrderPrice, useReference } from "@/lib/use-price";
 import { PriceSkeleton } from "./price-skeleton";
+import { ErrorText } from "./ui/notice";
 
 type FormValues = z.input<typeof CreateOrderSchema>;
 
@@ -162,11 +163,7 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
         {t("order.submit")}
       </button>
       <p className="text-center text-xs text-muted">{t("order.demo")}</p>
-      {order.isError && (
-        <p role="alert" className="text-danger">
-          {t("order.error", { message: order.error.message })}
-        </p>
-      )}
+      {order.isError && <ErrorText>{t("order.error", { message: order.error.message })}</ErrorText>}
     </form>
   );
 }

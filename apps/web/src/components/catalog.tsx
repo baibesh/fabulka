@@ -9,11 +9,10 @@ import { useMethodologies } from "@/lib/use-methodologies";
 import { useBookPrice } from "@/lib/use-price";
 import { PriceSkeleton } from "./price-skeleton";
 import { ErrorNotice } from "./error-notice";
+import { Badge } from "./ui/badge";
 
 const card =
   "group flex flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-sm transition duration-300 hover:-translate-y-1.5 hover:shadow-lg";
-
-const price = "rounded-full bg-accent px-2.5 py-1 text-xs font-extrabold text-accent-foreground";
 
 /** How many books the home page shows before sending visitors to the whole catalog. */
 const PREVIEW_BOOKS = 6;
@@ -55,20 +54,18 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
               <div className="aspect-square w-full bg-border" />
             )}
             <div className="flex flex-1 flex-col gap-2 p-5">
-              <div className="flex flex-wrap gap-2 text-xs font-bold">
-                <span className="rounded-full bg-accent/15 px-2.5 py-1 text-accent">
+              <div className="flex flex-wrap gap-2">
+                <Badge tone="accent" size="md">
                   {t("common.years", { min: book.ageMin, max: book.ageMax })}
-                </span>
-                {methodName(book.methodology) && (
-                  <span className="rounded-full bg-border px-2.5 py-1 text-muted">{methodName(book.methodology)}</span>
-                )}
+                </Badge>
+                {methodName(book.methodology) && <Badge size="md">{methodName(book.methodology)}</Badge>}
               </div>
               <h2 className="text-xl font-extrabold">{book.title}</h2>
               <p className="text-sm text-muted">{book.summary}</p>
               <p className="mt-auto pt-1">
-                <span data-testid="template-price" className={price}>
+                <Badge data-testid="template-price" tone="solid" size="md">
                   {templatePrice ?? <PriceSkeleton />}
-                </span>
+                </Badge>
               </p>
             </div>
           </Link>
@@ -86,9 +83,9 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
             <h2 className="text-xl font-extrabold">{t("catalog.own.title")}</h2>
             <p className="text-sm text-muted">{t("catalog.own.text")}</p>
           </div>
-          <span data-testid="custom-price" className={`${price} sm:ml-auto`}>
+          <Badge data-testid="custom-price" tone="solid" size="md" className="sm:ml-auto">
             {customPrice ?? <PriceSkeleton />}
-          </span>
+          </Badge>
         </Link>
       </li>
     </ul>
