@@ -58,6 +58,8 @@ export interface StoryBrief {
   pageCount: number;
   methodology: MethodologyPrompt;
   theme?: string;
+  /** Words a page may have so its text fits the book's layout (the theme's type at this age). */
+  wordsPerPage?: number;
   /** The child's favourite toy from the parent's photo, described by Muse Spark. */
   toy?: { name?: string; description: string };
   /** Set for a catalog book: the author's plot and the parent's answers. */
@@ -82,7 +84,7 @@ export function storyPrompt(brief: StoryBrief): string {
       : 'Choose what the book is about so it fits the method and the interests.',
     '',
     ...templateLines(brief),
-    methodPrompt(brief.methodology, child.age),
+    methodPrompt(brief.methodology, child.age, brief.wordsPerPage),
   ].join('\n');
 }
 
@@ -90,8 +92,14 @@ export function storyPrompt(brief: StoryBrief): string {
  * The part of the story prompt the method and the child's age decide: beats, rules, age norms and
  * the kinds of talk questions. The admin's preview shows it for a sample child.
  */
-export function methodPrompt(method: MethodologyPrompt, age: number): string {
+export function methodPrompt(
+  method: MethodologyPrompt,
+  age: number,
+  wordsPerPage?: number,
+): string {
   const band = ageBand(age);
+  // The layout may leave less room than the age norm allows; never more.
+  const words = Math.min(band.maxWordsPerPage, wordsPerPage ?? Infinity);
   const list = (items: readonly string[]) =>
     items.map((item) => `- ${item}`).join('\n');
   return [
@@ -100,7 +108,12 @@ export function methodPrompt(method: MethodologyPrompt, age: number): string {
     ...(method.rules.length ? ['Rules:', list(method.rules)] : []),
     ...(method.avoid.length ? [`Avoid: ${method.avoid.join('; ')}.`] : []),
     '',
-    `Age norms: each page is ${band.sentencesPerPage}, at most ${band.maxWordsPerPage} words.`,
+    `Age norms: each page is ${band.sentencesPerPage}, at most ${words} words.`,
+    ...(words < band.maxWordsPerPage
+      ? [
+          `The page text is printed over or beside the picture: keep every page within ${words} words, or it will not fit.`,
+        ]
+      : []),
     list(band.guidance),
     `Talk questions, one of each kind: ${talkQuestionKinds(age).join('; ')}.`,
   ].join('\n');

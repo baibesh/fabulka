@@ -44,9 +44,10 @@ commands:
   - tapOn: { testId: hero-example }
   - waitForVisible: { testId: book-reader }
   - assertUrl: { contains: "#example" }
-  - assertVisible: { testId: reader-position, text: "1 / 8" }
+  # How many spreads depends on the example's theme and page layouts.
+  - assertVisible: { testId: reader-position, contains: "1 / " }
   - tapOn: { testId: reader-next }
-  - waitForVisible: { testId: reader-position, text: "2 / 8" }
+  - waitForVisible: { testId: reader-position, contains: "2 / " }
 
   # A tap brings the prices into view: scrolling by drag would pick up the catalog's cover links.
   - tapOn: { testId: free-books }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { methodologyText, type AdminTemplate, type TemplateQuestion } from "@fabulka/shared";
+import { methodologyText, themesFor, type AdminTemplate, type SelectableTheme, type TemplateQuestion } from "@fabulka/shared";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { use, useState } from "react";
 import { adminTemplate, updateTemplate } from "@/lib/admin-api";
@@ -48,6 +48,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
         plot: plot.split("\n").map((line) => line.trim()).filter(Boolean),
         questions: draft.questions,
         stylePrompt: draft.stylePrompt?.trim() || null,
+        layoutTheme: (draft.layoutTheme as SelectableTheme | null) ?? null,
         published: draft.published,
       }),
     onSuccess: (saved) => {
@@ -123,6 +124,20 @@ function Editor({ initial }: { initial: AdminTemplate }) {
           </Field>
           <Field label={t("admin.template.plot")}>
             <Textarea code className="min-h-40" value={plot} onChange={(e) => setPlot(e.target.value)} />
+          </Field>
+          <Field label={t("admin.template.layoutTheme")} hint={t("admin.template.layoutTheme.hint")}>
+            <Select
+              data-testid="template-layout-theme"
+              value={draft.layoutTheme ?? ""}
+              onChange={(e) => set("layoutTheme", e.target.value || null)}
+            >
+              <option value="">{t("admin.template.layoutTheme.auto")}</option>
+              {themesFor(draft.languages).map((theme) => (
+                <option key={theme.id} value={theme.id}>
+                  {t(`design.theme.${theme.id as SelectableTheme}`)}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field label={t("admin.template.style")}>
             <Textarea code className="min-h-16" value={draft.stylePrompt ?? ""} onChange={(e) => set("stylePrompt", e.target.value)} />

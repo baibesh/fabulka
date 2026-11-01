@@ -22,6 +22,7 @@ import {
   JournalPeriodQuerySchema,
   MethodologyPreviewSchema,
   PauseSchema,
+  PinLayoutSchema,
   PricesSchema,
   UpdateBlockedSchema,
   UpdateBookSchema,
@@ -36,6 +37,7 @@ import {
   type FaqItem,
   type JournalCallsQuery,
   type MethodologyPreview,
+  type PinLayout,
   type Prices,
   type UpdateBlocked,
   type UpdateBook,
@@ -45,6 +47,7 @@ import {
 import type { Response } from 'express';
 import type { z } from 'zod';
 import { AuthService } from '../auth/auth.service';
+import { BooksService } from '../books/books.service';
 import { CurrentClient, type Client } from '../common/client';
 import { ZodPipe } from '../common/zod.pipe';
 import { JournalAdminService } from '../journal/journal-admin.service';
@@ -95,6 +98,7 @@ export class AdminAuthController {
 export class AdminController {
   constructor(
     private readonly admin: AdminService,
+    private readonly bookService: BooksService,
     private readonly orders: OrdersService,
     private readonly journal: JournalAdminService,
     private readonly methodologies: MethodologiesService,
@@ -139,6 +143,16 @@ export class AdminController {
     @Body(new ZodPipe(UpdateBookSchema)) body: UpdateBook,
   ) {
     return this.admin.setFeatured(id, body.featured);
+  }
+
+  /** Staff pin a page's layout or change the theme; the book is re-rendered and re-checked. */
+  @Patch('books/:id/layout')
+  async pinLayout(
+    @Param('id') id: string,
+    @Body(new ZodPipe(PinLayoutSchema)) body: PinLayout,
+  ) {
+    await this.bookService.pinLayout(id, body);
+    return this.admin.book(id);
   }
 
   @Delete('books/:id')

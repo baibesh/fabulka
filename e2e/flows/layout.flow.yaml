@@ -1,0 +1,148 @@
+# Book layout: the reader shows the pages the PDF is printed from (one renderer). The parent switches
+# the theme before ordering and the reader shows the re-rendered pages; nobody else can; a catalog book
+# takes the theme staff picked in the admin; text too long for its page is shrunk or blocks printing,
+# which the admin and the parent see (mock models).
+appId: ${WEB}
+tags: [book, layout]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Вёрстка ${Date.now()}"
+  catalogChild: "Тема каталога ${Date.now()}"
+  slug: big-feelings
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+  # A page far longer than any layout holds (the mock writes one short sentence).
+  longText: "${'Айгерим смотрела на звёзды и думала о дальней дороге, о горах и о новом друге. '.repeat(40)}"
+http:
+  baseUrl: ${API}
+  headers:
+    X-Client-Key: "e2e-layout-${childName}"
+    X-Demo-Code: E2E-DEMO
+commands:
+  # A book of your own from the wizard (a 5-year-old: the «Сказка» theme by age).
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/create?lang=ru"
+  - tapOn: { testId: voice-manual }
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "звёзды"
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "Книга готова", timeout: 30000 }
+  - waitForVisible: { css: "[data-testid=book-reader][data-theme=fairy]" }
+  # «Сказка» puts the first picture on the cover with the title on a plate.
+  - assertVisible: { css: "[data-page-key=cover] .fb-cover-scene" }
+  - sql:
+      query: >-
+        select id, layout->'theme'->>'id' as theme, layout->'qa'->>'status' as qa
+        from "Book" where child->>'name' = $1
+      params: ["${childName}"]
+      readOnly: true
+      extract: { bookId: "$[0].id" }
+      assert: { rows: 1, first: { theme: fairy, qa: ok } }
+
+  # The parent picks «Малышам»: the book is re-rendered and the reader shows the new pages.
+  - assertVisible: { testId: book-design }
+  - tapOn: { testId: theme-little }
+  - waitForVisible: { css: "[data-testid=book-reader][data-theme=little]", timeout: 20000 }
+  - assertVisible: { css: "[data-page-key=cover] .fb-cover-framed" }
+  - assertVisible: { css: "[data-testid=theme-little][aria-pressed=true]" }
+  - sql:
+      query: >-
+        select layout->'theme'->>'id' as theme, layout->'theme'->'fonts'->'body'->>'family' as body,
+        layout->'qa'->>'status' as qa from "Book" where id = $1
+      params: ["${bookId}"]
+      readOnly: true
+      assert: { rows: 1, first: { theme: little, body: Andika, qa: ok } }
+
+  # Another visitor can neither change it nor see the controls.
+  - request:
+      method: PATCH
+      url: /books/${bookId}/layout
+      headers: { X-Client-Key: "e2e-layout-stranger-${childName}" }
+      json: { theme: adventure }
+      assert: { status: 404 }
+  - request:
+      url: /books/${bookId}
+      headers: { X-Client-Key: "e2e-layout-stranger-${childName}" }
+      assert: { status: 200, json: { "$.editable": false, "$.layout.theme.id": little } }
+
+  # Staff pick «Приключение» for a catalog book in the admin; a new book from it gets that theme.
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - openLink: "${WEB}/admin/catalog/${slug}"
+  - waitForVisible: { testId: template-editor }
+  - selectOption: { testId: template-layout-theme, option: "Приключение" }
+  - tapOn: { testId: template-save }
+  - waitForVisible: { testId: template-saved }
+  - sql:
+      query: 'select "layoutTheme" as theme from "BookTemplate" where slug = $1'
+      params: ["${slug}"]
+      readOnly: true
+      assert: { rows: 1, first: { theme: adventure } }
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${catalogChild}", age: 5, gender: boy, interests: [футбол], city: Астана, language: ru }
+        template: ${slug}
+        answers: { feeling: злость }
+      extract: { catalogBook: "$.id" }
+      assert: { status: 201, json: { "$.layout.theme.id": adventure } }
+  - request:
+      url: /books/${catalogBook}
+      retryUntil:
+        status: 200
+        json: { "$.status": done, "$.layout.theme.id": adventure, "$.layout.qa.status": ok }
+      timeout: 30000
+
+  # A page far too long: render QA shrinks it, tries other layouts, then blocks printing.
+  - sql:
+      exec: >-
+        update "Book" set pages = jsonb_set(pages, '{0,text}', to_jsonb($2::text)) where id = $1
+      params: ["${bookId}", "${longText}"]
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: PATCH
+      url: /admin/books/${bookId}/layout
+      json: {}
+      assert: { status: 200, json: { "$.layout.qa.status": blocked, "$.layout.qa.issues[0].kind": overflow } }
+  - openLink: "${WEB}/admin/books/${bookId}"
+  - waitForVisible: { css: "[data-testid=render-qa][data-status=blocked]" }
+  - assertVisible:
+      testId: render-issues
+      containsDescendants:
+        - { contains: "story-1" }
+        - { contains: "Текст не помещается" }
+  # The journal has the render call that blocked it.
+  - sql:
+      query: >-
+        select count(*)::int as n from "ModelCall"
+        where "bookId" = $1 and kind = 'render' and status = 'error' and "errorCode" = 'render_overflow'
+      params: ["${bookId}"]
+      readOnly: true
+      assert: { rows: 1, first: { n: 1 } }
+  # The parent sees that it cannot be printed; an order is refused.
+  - openLink: "${WEB}/books/${bookId}?lang=ru"
+  - waitForVisible: { testId: print-blocked }
+after:
+  - sql: { exec: "update \"BookTemplate\" set \"layoutTheme\" = null where slug = $1", params: ["${slug}"] }
+  - sql: { exec: "delete from \"Book\" where child->>'name' in ($1, $2)", params: ["${childName}", "${catalogChild}"] }

@@ -1,5 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
-import { DEFAULT_METHODOLOGIES } from '@fabulka/shared';
+import { DEFAULT_METHODOLOGIES, type BookLayout } from '@fabulka/shared';
 import { MockGateway } from '../meta/mock.gateway';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import { JournalService } from '../journal/journal.service';
@@ -38,10 +38,13 @@ function makeService(
   prisma: unknown,
   models = new MockGateway(0),
   methods = methodRows(),
+  template: Record<string, unknown> = {},
 ) {
   const templates = {
     find: jest.fn().mockResolvedValue({
       ...kindergarten,
+      layoutTheme: null,
+      ...template,
       stylePrompt: null,
       published: true,
       translations: SEED_TRANSLATIONS[kindergarten.slug],
@@ -197,8 +200,11 @@ describe('BooksService', () => {
         .spyOn(models, 'writeStory')
         .mockRejectedValue(new Error('stop after the story'));
       const create = jest
-        .fn()
-        .mockImplementation(({ data }: { data: { methodology: string } }) =>
+        .fn<
+          Promise<unknown>,
+          [{ data: { methodology: string; layout: BookLayout } }]
+        >()
+        .mockImplementation(({ data }) =>
           Promise.resolve({
             id: 'b4',
             status: 'queued',
@@ -223,8 +229,22 @@ describe('BooksService', () => {
         false,
       );
       await new Promise((resolve) => setTimeout(resolve, 20));
-      return { book, brief: writeStory.mock.calls[0][0] };
+      return {
+        book,
+        brief: writeStory.mock.calls[0][0],
+        data: create.mock.calls[0][0].data,
+      };
     }
+
+    it('gives the book a theme by age and writes pages to fit its type', async () => {
+      const young = await briefFor({ age: 3 });
+      expect(young.data.layout.theme.id).toBe('little');
+      expect(young.brief.wordsPerPage).toBe(25);
+      const middle = await briefFor({ age: 6 });
+      expect(middle.data.layout.theme.id).toBe('fairy');
+      expect(middle.brief.wordsPerPage).toBe(50);
+      expect(middle.data.layout.qa.status).toBe('pending');
+    });
 
     it('follows the method the parent picked, with its beats from the database', async () => {
       const { book, brief } = await briefFor({ methodology: 'sel-emotions' });
@@ -328,6 +348,32 @@ describe('BooksService', () => {
         { question: 'Какую игрушку возьмёт с собой?', answer: 'зайка' },
         { question: 'Как вы прощаетесь утром?', answer: 'машем в окно' },
       ]);
+    });
+
+    it('takes the theme the template names, else one by age', async () => {
+      const themeOf = async (layoutTheme: string | null) => {
+        const models = new MockGateway(0);
+        jest.spyOn(models, 'writeStory').mockRejectedValue(new Error('stop'));
+        const create = jest
+          .fn<Promise<typeof row>, [{ data: { layout: BookLayout } }]>()
+          .mockResolvedValue(row);
+        const service = makeService(
+          { book: { create, update: jest.fn(), updateMany: jest.fn() } },
+          models,
+          methodRows(),
+          { layoutTheme },
+        );
+        await service.create(
+          { child, template: kindergarten.slug, answers },
+          'k',
+          false,
+        );
+        return create.mock.calls[0][0].data.layout.theme.id;
+      };
+      expect(await themeOf('adventure')).toBe('adventure');
+      expect(await themeOf(null)).toBe('fairy');
+      // The legacy look is never given to a new book.
+      expect(await themeOf('classic')).toBe('fairy');
     });
 
     it('accepts a choice made in the Kazakh interface', async () => {

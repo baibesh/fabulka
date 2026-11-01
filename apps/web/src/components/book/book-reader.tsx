@@ -1,152 +1,44 @@
 "use client";
 
-import { BOOK_LABELS, type Book } from "@fabulka/shared";
+import { type Book } from "@fabulka/shared";
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
 import { motion } from "motion/react";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useI18n } from "@/i18n/i18n";
-import { type Highlight, markPersonal } from "@/lib/personalization";
-import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { type Highlight } from "@/lib/personalization";
+import { type ReactNode, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { IconButton } from "../ui/button";
+import { Skeleton } from "../ui/skeleton";
+import { BookPage, BookStyles, PX_PER_MM, useRenderedBook } from "./book-pages";
 
-/** One page. Pages keep paper colors in dark mode: it is a printed book, not app chrome. */
-function Page({ hard, className = "", children }: { hard?: boolean; className?: string; children?: ReactNode }) {
-  return (
-    <div className={`@container h-full w-full text-[#2b2118] ${hard ? "bg-[#fdf1e2]" : "bg-[#fffaf3]"} ${className}`}>
-      {children}
-    </div>
-  );
+/** A blank leaf back (the inside of a cover while it turns on a phone). */
+function Blank() {
+  return <div className="h-full w-full bg-[#fffaf3]" />;
 }
 
-/**
- * A word that will be the parent's own in their book; its hint shows on hover, focus or a tap. The
- * hint is portalled out of the page, whose overflow would clip it near the edges.
- */
-function Mark({ text, hint }: { text: string; hint: string }) {
-  const id = useId();
-  const ref = useRef<HTMLElement>(null);
-  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
-  const show = () => {
-    const box = ref.current?.getBoundingClientRect();
-    if (box) setAt({ x: box.left + box.width / 2, y: box.top });
-  };
+/** The hint of a marked word (the sample book), shown over the word; portalled out of the page. */
+interface Hint {
+  text: string;
+  x: number;
+  y: number;
+}
 
-  // The hint is fixed on screen, so it follows the word while the page scrolls.
-  const open = at !== null;
-  const follow = useEffectEvent(show);
-  useEffect(() => {
-    if (!open) return;
-    const onScroll = () => follow();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [open]);
-
-  return (
-    <mark
-      ref={ref}
-      data-testid="sample-highlight"
-      tabIndex={0}
-      aria-describedby={at ? id : undefined}
-      onMouseEnter={show}
-      onMouseLeave={() => setAt(null)}
-      onFocus={show}
-      onBlur={() => setAt(null)}
-      // A tap shows the hint instead of turning the page.
-      onClick={(event) => {
-        event.stopPropagation();
-        show();
-      }}
-      className="cursor-help rounded-[0.2em] bg-[#e8833a]/20 px-[0.1em] text-inherit underline decoration-[#e8833a]/70 decoration-dotted underline-offset-[0.2em] outline-none focus-visible:ring-2 focus-visible:ring-[#e8833a]"
+function HintBubble({ hint, id }: { hint: Hint; id: string }) {
+  return createPortal(
+    <span
+      id={id}
+      role="tooltip"
+      style={{ left: Math.min(Math.max(hint.x, 124), window.innerWidth - 124), top: hint.y - 6 }}
+      className="pointer-events-none fixed z-50 w-max max-w-56 -translate-x-1/2 -translate-y-full rounded-lg bg-[#2b2118] px-2.5 py-1.5 text-center text-xs leading-snug font-semibold text-white shadow-lg"
     >
-      {text}
-      {at &&
-        createPortal(
-          <span
-            id={id}
-            role="tooltip"
-            style={{ left: Math.min(Math.max(at.x, 124), window.innerWidth - 124), top: at.y - 6 }}
-            className="pointer-events-none fixed z-50 w-max max-w-56 -translate-x-1/2 -translate-y-full rounded-lg bg-[#2b2118] px-2.5 py-1.5 text-center text-xs leading-snug font-semibold text-white shadow-lg"
-          >
-            {hint}
-          </span>,
-          document.fullscreenElement ?? document.body,
-        )}
-    </mark>
+      {hint.text}
+    </span>,
+    document.fullscreenElement ?? document.body,
   );
 }
 
-/** Text with the highlighted words marked, or as is without highlights. */
-function personal(text: string, highlights: Highlight[] | undefined): ReactNode {
-  if (!highlights?.length) return text;
-  return markPersonal(text, highlights).map((piece, i) =>
-    typeof piece === "string" ? piece : <Mark key={i} text={piece.text} hint={piece.hint} />,
-  );
-}
-
-/** The pages of a book in reading order: cover, opening spread, illustration and text per page, the end. */
-function bookPages(book: Book, highlights?: Highlight[]): ReactNode[] {
-  const labels = BOOK_LABELS[book.language];
-  const mark = (text: string) => personal(text, highlights);
-  const pages: ReactNode[] = [
-    <Page key="cover" hard className="flex flex-col items-center justify-center gap-[5%] p-[8%] text-center">
-      {book.heroImageUrl && (
-        // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
-        <img src={book.heroImageUrl} alt="" className="h-[58%] w-[58%] rounded-[6%] bg-white object-contain shadow-md" />
-      )}
-      <h2 className="text-[6.5cqw] font-extrabold leading-tight">{book.title && mark(book.title)}</h2>
-    </Page>,
-    <Page key="dedication" className="flex flex-col items-center justify-center gap-4 p-[10%] text-center">
-      <span className="text-[9cqw] text-[#e8833a]">✦</span>
-      <p className="text-[5.5cqw] font-bold leading-snug">{mark(labels.madeFor(book.childName))}</p>
-    </Page>,
-    <Page key="hero" className="flex flex-col items-center justify-center gap-[4%] p-[10%] text-center">
-      {book.heroImageUrl && (
-        // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
-        <img src={book.heroImageUrl} alt="" className="h-[70%] w-[70%] object-contain" />
-      )}
-      <p className="text-[6cqw] font-extrabold">{mark(book.childName)}</p>
-    </Page>,
-  ];
-  for (const page of book.pages) {
-    pages.push(
-      <Page key={`art-${page.page}`} className="flex items-center justify-center p-[6%]">
-        {page.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
-          <img src={page.imageUrl} alt="" className="w-full rounded-[4%] object-contain shadow-sm" />
-        ) : (
-          <div className="aspect-[3/2] w-full rounded-[4%] bg-[#eadfce]" />
-        )}
-      </Page>,
-      <Page key={`text-${page.page}`} className="relative flex items-center p-[11%]">
-        <p className="text-[4.6cqw] leading-relaxed">{mark(page.text)}</p>
-        <span className="absolute right-[8%] bottom-[6%] text-[2.6cqw] text-[#b3a493]">{page.page}</span>
-      </Page>,
-    );
-  }
-  if (book.talkQuestions.length) {
-    pages.push(
-      <Page key="talk" className="flex flex-col justify-center gap-4 p-[10%]">
-        <h3 className="text-[5.5cqw] font-extrabold">{labels.talk}</h3>
-        <ol className="list-decimal space-y-2 pl-5 text-[3.6cqw] leading-snug">
-          {book.talkQuestions.map((question) => (
-            <li key={question}>{question}</li>
-          ))}
-        </ol>
-      </Page>,
-    );
-  }
-  // The back cover must land on a left page: an odd number of pages before it.
-  if (pages.length % 2 === 0) pages.push(<Page key="blank" />);
-  pages.push(
-    <Page key="end" hard className="flex flex-col items-center justify-center gap-3 text-center">
-      <p className="text-[9cqw] font-extrabold">{labels.end}</p>
-      <p className="text-[2.6cqw] text-[#7a6a5c]">Powered by Meta Muse models</p>
-    </Page>,
-  );
-  return pages;
-}
-
+const markOf = (target: EventTarget | null) => (target instanceof Element ? target.closest<HTMLElement>("mark[data-hint]") : null);
 
 interface Turn {
   direction: 1 | -1;
@@ -157,14 +49,32 @@ const FLIP_SECONDS = 0.7;
 const FLIP_EASE = [0.45, 0, 0.25, 1] as const;
 
 /**
- * The finished book as a picture book: a two-page spread on wide screens (illustration left, text
- * right), one page at a time on phones. Pages turn with a 3D flip that only animates while turning,
- * so the page is idle between turns. Arrow keys, clicks on either half and swipes turn pages.
- * With `highlights`, the words that came from the parent are marked and explained (a sample book).
+ * The finished book as a picture book, exactly as it will be printed: the pages come from the same
+ * renderer as the PDF (useRenderedBook), shown as two-page spreads on wide screens and one page at a
+ * time on phones. Pages turn with a 3D flip that only animates while turning, so the page is idle
+ * between turns. Arrow keys, clicks on either half and swipes turn pages. With `highlights`, the
+ * words that came from the parent are marked and explained (a sample book).
  */
 export function BookReader({ book, highlights }: { book: Book; highlights?: Highlight[] }) {
+  const rendered = useRenderedBook(book, highlights);
+  const { widthMm, heightMm } = book.layout.format;
+  if (!rendered) {
+    return (
+      <section data-testid="book-reader-loading" className="flex flex-col items-center gap-4">
+        <Skeleton as="div" radius="md" className="w-full max-w-[1000px]" style={{ aspectRatio: `${(2 * widthMm) / heightMm}` }} />
+      </section>
+    );
+  }
+  const pages = rendered.pages.map((p) => (
+    <div key={p.key} data-page-key={p.key} className="h-full w-full">
+      <BookPage html={p.html} widthMm={widthMm} heightMm={heightMm} />
+    </div>
+  ));
+  return <Reader pages={pages} widthMm={widthMm} heightMm={heightMm} theme={book.layout.theme.id} />;
+}
+
+function Reader({ pages, widthMm, heightMm, theme }: { pages: ReactNode[]; widthMm: number; heightMm: number; theme: string }) {
   const { t } = useI18n();
-  const pages = bookPages(book, highlights);
   const wide = useMediaQuery("(min-width: 768px)", true);
   // Wide: view k shows pages 2k-1 (left) and 2k (right); view 0 is the cover alone.
   // Narrow: view k shows page k.
@@ -175,7 +85,31 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
   // Until the reader turns a page, the cover's corner lifts now and then to show that it turns.
   const [turned, setTurned] = useState(false);
   const frameRef = useRef<HTMLDivElement>(null);
+  const bookRef = useRef<HTMLDivElement>(null);
   const touchX = useRef<number | null>(null);
+  const [hint, setHint] = useState<Hint | null>(null);
+  const hintId = useId();
+
+  // Pages are laid out at their printed size and scaled to the page box: one page is half the book
+  // on wide screens, all of it on phones.
+  useLayoutEffect(() => {
+    const element = bookRef.current;
+    if (!element) return;
+    const fit = () => {
+      const pagePx = element.clientWidth / (wide ? 2 : 1);
+      element.style.setProperty("--fb-scale", String(pagePx / (widthMm * PX_PER_MM)));
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [wide, widthMm]);
+
+  const showHint = (mark: HTMLElement | null) => {
+    if (!mark) return setHint(null);
+    const box = mark.getBoundingClientRect();
+    setHint({ text: mark.dataset.hint ?? "", x: box.left + box.width / 2, y: box.top });
+  };
 
   // Switching between spread and single-page layout keeps roughly the same place in the book.
   const [layout, setLayout] = useState(wide);
@@ -228,9 +162,9 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
   } else if (turn) {
     if (turn.direction === 1) {
       underRight = right(turn.to);
-      leaf = { front: right(view), back: <Page />, side: "right" };
+      leaf = { front: right(view), back: <Blank />, side: "right" };
     } else {
-      leaf = { front: right(turn.to), back: <Page />, side: "right" };
+      leaf = { front: right(turn.to), back: <Blank />, side: "right" };
     }
   }
   // On a phone, turning back brings the previous page in from the left, so the leaf runs in reverse.
@@ -250,6 +184,7 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
   return (
     <motion.section
       data-testid="book-reader"
+      data-theme={theme}
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
@@ -259,14 +194,29 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
         ref={frameRef}
         className={`flex w-full items-center justify-center ${fullscreen ? "h-full bg-[#1c1712] p-6" : ""}`}
       >
+        <BookStyles />
         <motion.div
-          className={`relative cursor-pointer select-none [perspective:2400px] ${wide ? "aspect-[2/1]" : "aspect-square"}`}
-          style={{ width: wide ? "min(100%, 1000px, calc(85vh * 2))" : "min(100%, 85vh)" }}
+          ref={bookRef}
+          className="relative cursor-pointer select-none [perspective:2400px]"
+          style={{
+            aspectRatio: `${((wide ? 2 : 1) * widthMm) / heightMm}`,
+            width: wide ? `min(100%, 1000px, calc(85vh * ${(2 * widthMm) / heightMm}))` : `min(100%, calc(85vh * ${widthMm / heightMm}))`,
+          }}
+          onMouseOver={(event) => {
+            const mark = markOf(event.target);
+            if (mark || hint) showHint(mark);
+          }}
+          onFocus={(event) => showHint(markOf(event.target))}
+          onBlur={() => setHint(null)}
+          onMouseLeave={() => setHint(null)}
           // A closed book (front or back cover alone) sits in the middle and slides aside as it opens.
           initial={false}
           animate={{ x: shift }}
           transition={{ duration: FLIP_SECONDS, ease: FLIP_EASE }}
           onClick={(event) => {
+            // A tap on a marked word shows its hint instead of turning the page.
+            const mark = markOf(event.target);
+            if (mark) return showHint(mark);
             const box = event.currentTarget.getBoundingClientRect();
             go(event.clientX - box.left > box.width / 2 ? 1 : -1);
           }}
@@ -319,6 +269,7 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
             </motion.div>
           )}
         </motion.div>
+        {hint && <HintBubble hint={hint} id={hintId} />}
       </div>
 
       <div className="flex items-center gap-3">

@@ -14,6 +14,7 @@ import type {
 import {
   LanguageSchema,
   CITY_UNKNOWN,
+  PRINT_BLOCKED,
   PRINT_UNAVAILABLE,
   ORDER_STATUSES,
   cityName,
@@ -28,6 +29,7 @@ import {
   type OrderStatusEvent,
 } from '@fabulka/shared';
 import { ownsBook } from '../books/books.service';
+import { layoutOf } from '../layout/layout';
 import { MailService } from '../mail/mail.service';
 import { orderConfirmation, orderStatusChanged } from '../mail/templates';
 import { PrismaService } from '../prisma/prisma.service';
@@ -113,6 +115,13 @@ export class OrdersService {
     }
     if (book.status !== 'done') {
       throw new ConflictException('The book is still being made');
+    }
+    // Render QA found text that does not fit or a letter without its font: not sent to print.
+    if (layoutOf(book.layout).qa.status === 'blocked') {
+      throw new ConflictException({
+        code: PRINT_BLOCKED,
+        message: 'This book cannot be printed yet: its layout needs a fix',
+      });
     }
     // Only to a city on the owner's list; the order keeps its Russian name as it is today.
     const city = (await this.reference.cities()).find(

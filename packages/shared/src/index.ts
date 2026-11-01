@@ -1,20 +1,14 @@
 import { z } from "zod";
 import { MethodologySlugSchema } from "./methodologies";
 import { LanguageSchema, type Language } from "./language";
+import { BookLayoutSchema, PageVariantSchema, SELECTABLE_THEMES } from "./layout";
 import { countryInfo, type City, type Country, type CountryEntry, type Currency, type Prices } from "./reference";
 
 export * from "./language";
 export * from "./methodologies";
 export * from "./reference";
-
-/** Fixed words of a book, by its language. Phrased so the name never has to be declined. */
-export const BOOK_LABELS: Record<Language, { madeFor: (name: string) => string; end: string; talk: string }> = {
-  ru: { madeFor: (name) => `Специально для тебя, ${name}!`, end: "Конец", talk: "Поговорим?" },
-  kk: { madeFor: (name) => `Арнайы саған, ${name}!`, end: "Соңы", talk: "Әңгімелесейік" },
-  en: { madeFor: (name) => `Made just for you, ${name}!`, end: "The End", talk: "Let's talk" },
-  es: { madeFor: (name) => `¡Hecho especialmente para ti, ${name}!`, end: "Fin", talk: "¿Hablamos?" },
-  de: { madeFor: (name) => `Nur für dich gemacht, ${name}!`, end: "Ende", talk: "Lass uns reden" },
-};
+export * from "./labels";
+export * from "./layout";
 
 /** What the parent tells us about the child. */
 export const ChildProfileSchema = z.object({
@@ -184,9 +178,35 @@ export const BookSchema = z.object({
   pages: z.array(BookPageSchema),
   pdfUrl: z.string().nullable(),
   error: z.string().nullable(),
+  /** How the book is laid out and printed (the theme, each page's layout, render QA). */
+  layout: BookLayoutSchema,
+  /** The visitor may still change the layout: their book, finished, not yet ordered. */
+  editable: z.boolean(),
   createdAt: z.string(),
 });
 export type Book = z.infer<typeof BookSchema>;
+
+/**
+ * Body of PATCH /books/:id/layout (the parent, before ordering): another theme, and the parent's
+ * pick among each story page's layouts (by page number; null goes back to the automatic one).
+ */
+export const UpdateLayoutSchema = z.object({
+  theme: z.enum(SELECTABLE_THEMES).optional(),
+  choices: z.record(z.string().regex(/^\d{1,3}$/), PageVariantSchema.nullable()).optional(),
+});
+export type UpdateLayout = z.infer<typeof UpdateLayoutSchema>;
+
+/** Body of PATCH /admin/books/:id/layout: staff pin a page's layout (null unpins), or change the theme. */
+export const PinLayoutSchema = z.object({
+  theme: z.enum(SELECTABLE_THEMES).optional(),
+  pins: z.record(z.string().regex(/^\d{1,3}$/), PageVariantSchema.nullable()).optional(),
+});
+export type PinLayout = z.infer<typeof PinLayoutSchema>;
+
+/** Body of a 409 from PATCH /books/:id/layout: the book is ordered, its layout is frozen. */
+export const LAYOUT_LOCKED = "layout_locked";
+/** Body of a 409 from POST /orders: render QA found text that does not fit, so it is not printed. */
+export const PRINT_BLOCKED = "print_blocked";
 
 /** A row of "My books": what this browser has made. */
 export const MyBookSchema = z.object({
@@ -555,6 +575,8 @@ export const AdminTemplateSchema = TemplateSchema.omit({ sampleDetails: true }).
   theme: z.string(),
   plot: z.array(z.string()),
   stylePrompt: z.string().nullable(),
+  /** The theme books from this template get; null: by the child's age. */
+  layoutTheme: z.string().nullable(),
   books: z.number().int(),
 });
 export type AdminTemplate = z.infer<typeof AdminTemplateSchema>;
@@ -570,6 +592,8 @@ export const UpdateTemplateSchema = z
     plot: z.array(z.string().trim().min(3).max(300)).min(3).max(12),
     questions: z.array(TemplateQuestionSchema).max(8),
     stylePrompt: z.string().trim().max(400).nullable(),
+    /** One of the themes that cover all the template's languages, or null to pick by age. */
+    layoutTheme: z.enum(SELECTABLE_THEMES).nullable(),
     /** A finished book made from this template to show on its page, or null for none. */
     sampleBookId: z.string().min(1).nullable(),
     published: z.boolean(),
@@ -592,6 +616,8 @@ export const MODEL_CALL_KINDS = [
   "page",
   "voice-transcribe",
   "voice-extract",
+  /** Render QA in Chromium while making the PDF; an error when the book cannot be printed. */
+  "render",
 ] as const;
 export const ModelCallKindSchema = z.enum(MODEL_CALL_KINDS);
 export type ModelCallKind = z.infer<typeof ModelCallKindSchema>;

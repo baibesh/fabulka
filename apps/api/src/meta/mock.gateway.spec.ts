@@ -106,6 +106,18 @@ describe('prompts', () => {
     expect(prompt).toContain('finish a sentence');
   });
 
+  it('keeps pages within the words the layout has room for, never above the age norm', () => {
+    const roomy = storyPrompt({ ...brief({ age: 9 }), wordsPerPage: 120 });
+    expect(roomy).toContain('at most 100 words');
+    expect(roomy).not.toContain('or it will not fit');
+    const tight = storyPrompt({ ...brief({ age: 9 }), wordsPerPage: 60 });
+    expect(tight).toContain('at most 60 words');
+    expect(tight).toContain('keep every page within 60 words');
+    expect(storyPrompt({ ...brief({ age: 3 }), wordsPerPage: 90 })).toContain(
+      'at most 25 words',
+    );
+  });
+
   it('repeats the art style in hero and page prompts', () => {
     const none = { pet: false, toy: false };
     expect(heroPrompt('a girl')).toContain('watercolor');

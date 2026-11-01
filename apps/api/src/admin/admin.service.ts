@@ -14,6 +14,7 @@ import {
   type ChildProfile,
   type Language,
   type UpdateTemplate,
+  themesFor,
 } from '@fabulka/shared';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -250,6 +251,15 @@ export class AdminService {
     )
       throw new BadRequestException(`Методики «${patch.methodology}» нет`);
     if (patch.sampleBookId) await this.assertSample(slug, patch.sampleBookId);
+    // Only a theme whose fonts cover every language the template is written in.
+    if (
+      patch.layoutTheme &&
+      !themesFor(current.languages).some((t) => t.id === patch.layoutTheme)
+    ) {
+      throw new BadRequestException(
+        `Тема «${patch.layoutTheme}» не подходит для языков ${current.languages.join(', ')}`,
+      );
+    }
     await this.prisma.bookTemplate.update({
       where: { slug },
       data: {
@@ -295,6 +305,7 @@ export class AdminService {
       theme: row.theme,
       plot: row.plot as string[],
       stylePrompt: row.stylePrompt,
+      layoutTheme: row.layoutTheme,
       sampleBookId: row.sampleBookId,
       books,
     };

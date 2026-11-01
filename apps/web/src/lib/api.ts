@@ -24,6 +24,7 @@ import {
   type ServiceStatus,
   type Template,
   type TemplateSummary,
+  type UpdateLayout,
   type VoicePrefill,
 } from "@fabulka/shared";
 import { savedCountry } from "@/i18n/i18n";
@@ -176,6 +177,11 @@ export async function getStatus(): Promise<ServiceStatus> {
 
 export async function getBook(id: string): Promise<Book> {
   return BookSchema.parse(await request(`/api/books/${id}`));
+}
+
+/** Another theme or page layout before ordering; the API re-renders the book and returns it. */
+export async function updateLayout(id: string, patch: UpdateLayout): Promise<Book> {
+  return BookSchema.parse(await request(`/api/books/${id}/layout`, { method: "PATCH", body: JSON.stringify(patch) }));
 }
 
 /** The owner's prices and delivery cities: every price on the site comes from these. */

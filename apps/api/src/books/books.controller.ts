@@ -6,6 +6,7 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  Patch,
   Post,
 } from '@nestjs/common';
 import {
@@ -16,6 +17,8 @@ import {
   type CreateBookInput,
   type ExampleBook,
   type MyBook,
+  type UpdateLayout,
+  UpdateLayoutSchema,
 } from '@fabulka/shared';
 import { CurrentUser, type SessionUser } from '../auth/current-user';
 import { CurrentClient, type Client } from '../common/client';
@@ -96,7 +99,22 @@ export class BooksController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string): Promise<Book> {
-    return this.books.get(id);
+  get(
+    @Param('id') id: string,
+    @CurrentClient() client: Client,
+    @CurrentUser() user: SessionUser | null,
+  ): Promise<Book> {
+    return this.books.get(id, client.key, user?.id);
+  }
+
+  /** The parent picks another theme or page layout before ordering; the book is re-rendered. */
+  @Patch(':id/layout')
+  updateLayout(
+    @Param('id') id: string,
+    @Body(new ZodPipe(UpdateLayoutSchema)) body: UpdateLayout,
+    @CurrentClient() client: Client,
+    @CurrentUser() user: SessionUser | null,
+  ): Promise<Book> {
+    return this.books.updateLayout(id, body, client.key, user?.id);
   }
 }

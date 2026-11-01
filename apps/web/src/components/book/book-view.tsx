@@ -11,10 +11,11 @@ import { useI18n } from "@/i18n/i18n";
 import { getBook, wantPrint } from "@/lib/api";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { useCoverPrice } from "@/lib/use-price";
+import { BookDesign } from "./book-design";
 import { BookReader } from "./book-reader";
 import { PriceSkeleton } from "./price-skeleton";
 import { SavePrompt } from "../account/save-prompt";
-import { ErrorText } from "../ui/notice";
+import { ErrorText, Notice } from "../ui/notice";
 import { QueryState } from "../ui/query-state";
 import { Skeleton } from "../ui/skeleton";
 import { Button, buttonClass } from "../ui/button";
@@ -83,7 +84,11 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
             <Download className="size-5" />
             {t("book.download")}
           </a>
-          {info.print ? (
+          {book.layout.qa.status === "blocked" ? (
+            <Notice data-testid="print-blocked" tone="warning" size="sm" className="max-w-md">
+              {t("design.blocked")}
+            </Notice>
+          ) : info.print ? (
             <Link
               data-testid="order-print"
               href={`/books/${book.id}/order`}
@@ -97,6 +102,8 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
           )}
         </div>
       )}
+
+      {done && book.editable && <BookDesign book={book} />}
 
       {done && <SavePrompt bookId={book.id} />}
 

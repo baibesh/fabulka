@@ -16,6 +16,50 @@ import { QueryState } from "@/components/ui/query-state";
 import { Button, buttonClass } from "@/components/ui/button";
 import { BackLink } from "@/components/ui/page";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { BookReader } from "@/components/book/book-reader";
+import type { AdminBook, LayoutQa, SelectableTheme } from "@fabulka/shared";
+
+const QA_TONE: Record<LayoutQa["status"], "success" | "warning" | "danger" | "neutral"> = {
+  ok: "success",
+  shrunk: "warning",
+  blocked: "danger",
+  pending: "neutral",
+};
+
+/** The book's theme and what render QA found: shrunk pages, and what blocks printing. */
+function BookLayoutCard({ book }: { book: AdminBook }) {
+  const { t } = useAdminI18n();
+  const { layout } = book;
+  const shrunk = Object.entries(layout.fits).map(([page, fit]) => `${page} ${Math.round(fit * 100)}%`);
+  return (
+    <Card title={t("admin.book.layout")}>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <dt className="text-muted">{t("admin.book.layout.theme")}</dt>
+        <dd data-testid="layout-theme" data-theme={layout.theme.id}>
+          {t(`design.theme.${layout.theme.id as SelectableTheme}`)} · {layout.theme.fonts.body.family} / {layout.theme.fonts.heading.family}
+          {layout.headingFallback && ` → ${layout.theme.fonts.body.family}`}
+        </dd>
+        <dt className="text-muted">{t("admin.book.layout.qa")}</dt>
+        <dd>
+          <Badge data-testid="render-qa" data-status={layout.qa.status} tone={QA_TONE[layout.qa.status]}>
+            {t(`admin.book.layout.qa.${layout.qa.status}`)}
+          </Badge>
+        </dd>
+      </dl>
+      {shrunk.length > 0 && <p className="text-sm text-muted">{t("admin.book.layout.shrunk", { pages: shrunk.join(", ") })}</p>}
+      {layout.qa.issues.length > 0 && (
+        <ul data-testid="render-issues" className="flex flex-col gap-1 text-sm">
+          {layout.qa.issues.map((issue, i) => (
+            <li key={i} className="text-danger">
+              <span className="font-semibold">{issue.page}</span> — {t(`admin.book.layout.issue.${issue.kind}`)}
+              <span className="block text-xs text-muted">{issue.detail}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
 
 /** The book's model calls in order, timed from the first: where generation spent its time and money. */
 function BookCalls({ id, generating }: { id: string; generating: boolean }) {
@@ -173,6 +217,14 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
           </ol>
         </Card>
       </div>
+      {b.status === "done" && (
+        <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
+          <BookLayoutCard book={b} />
+          <Card title={t("admin.book.preview")}>
+            <BookReader book={b} />
+          </Card>
+        </div>
+      )}
       <BookCalls id={b.id} generating={b.status !== "done" && b.status !== "failed"} />
       <ConfirmDialog
         open={confirming}

@@ -73,6 +73,8 @@ commands:
   - assertVisible: { testId: book-form-section }
   - assertUrl: { contains: "/catalog/${slug}" }
   - assertVisible: { testId: sample-highlight }
+  # The name sits in the cover title near the top of the page: centred, so the sticky header is clear of it.
+  - scrollUntilVisible: { testId: sample-highlight, direction: up, centerElement: true }
   - hover: { testId: sample-highlight }
   - assertVisible: "Здесь будет имя вашего ребёнка"
   # The child's fields, one line per question of the template, and what stays the same.

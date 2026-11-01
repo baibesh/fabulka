@@ -49,6 +49,9 @@ model Book {
   pages           Json            @default("[]")
   /// Questions for the parent to ask after reading (dialogic reading).
   talkQuestions   Json            @default("[]")
+  /// BookLayout (@fabulka/shared): format, theme snapshot, blocks, page layouts, render QA.
+  /// Null for books made before themes: they render in the classic look.
+  layout          Json?
   pdfPath         String?
   error           String?
   /// Model spend for this book, in US dollars.
@@ -184,6 +187,8 @@ model BookTemplate {
   questions    Json     @default("[]")
   /// Replaces the default art style in image prompts.
   stylePrompt  String?
+  /// Book theme (BOOK_THEMES in @fabulka/shared) its books get; null: by the child's age.
+  layoutTheme  String?
   coverUrl     String?
   /// Kazakh and English text by language: TemplateTranslation in @fabulka/shared.
   translations Json     @default("{}")

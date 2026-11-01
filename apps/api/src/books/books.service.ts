@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -9,9 +10,23 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Book as BookRow, BookStatus, Prisma } from '@prisma/client';
 import {
+  BOOK_LABELS,
+  BOOK_THEMES,
+  LAYOUT_LOCKED,
   answersProblem,
+  availableVariants,
+  blankPage,
+  defaultThemeId,
+  newLayout,
+  planBook,
   progressFor,
+  withTheme,
+  wordsPerPage,
   type Book,
+  type BookLayout,
+  type PageLayout,
+  type PinLayout,
+  type UpdateLayout,
   type ChildProfile,
   type CreateBookInput,
   type ExampleBook,
@@ -29,12 +44,13 @@ import {
   TemplatesService,
 } from '../templates/templates.service';
 import { toyUploadPath } from '../toy/toys.controller';
+import { layoutOf, withHeadingCheck } from '../layout/layout';
 import { PdfService } from '../pdf/pdf.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 
 /** A page as stored in Book.pages. */
-interface StoredPage {
+export interface StoredPage {
   page: number;
   text: string;
   scenePrompt: string;
@@ -75,6 +91,8 @@ export function ownsBook(
 /** What generation needs besides the story brief. */
 interface Job {
   brief: StoryBrief;
+  /** The book's theme: the template's, else by age. */
+  themeId: string;
   /** Art style of a catalog book; the default one otherwise. */
   style?: string;
   /** The uploaded toy photo, when the parent sent one. */
@@ -135,9 +153,11 @@ export class BooksService implements OnModuleInit {
     userId: string | null = null,
   ): Promise<Book> {
     const { child } = input;
+    const themeId = defaultThemeId(child.age);
     const job: Job = input.template
       ? await this.catalogJob(input.template, input)
       : {
+          themeId,
           brief: {
             child,
             pageCount: this.pageCount,
@@ -148,6 +168,9 @@ export class BooksService implements OnModuleInit {
             theme: input.theme,
           },
         };
+    // The theme's type size decides how many words fit on a page; the story is written to fit.
+    const layout = newLayout(job.themeId, child.age);
+    job.brief.wordsPerPage = wordsPerPage(layout.theme, child.age);
     if (input.toy) {
       await this.storage.read(toyUploadPath(input.toy.upload)).catch(() => {
         throw new BadRequestException(
@@ -166,6 +189,7 @@ export class BooksService implements OnModuleInit {
           ? { connect: { slug: input.template } }
           : undefined,
         answers: input.answers,
+        layout: json(layout),
         clientKey,
         user: userId ? { connect: { id: userId } } : undefined,
         demo,
@@ -231,13 +255,114 @@ export class BooksService implements OnModuleInit {
     }));
   }
 
-  async get(id: string): Promise<Book> {
+  /** A book; `editable` tells this visitor whether they may still change its layout. */
+  async get(
+    id: string,
+    clientKey?: string,
+    userId?: string | null,
+  ): Promise<Book> {
     const row = await this.prisma.book.findUnique({
       where: { id },
-      include: withTemplate,
+      include: { ...withTemplate, _count: { select: { orders: true } } },
     });
     if (!row) throw new NotFoundException(`book ${id} not found`);
-    return this.toDto(row);
+    const editable =
+      clientKey !== undefined &&
+      row.status === 'done' &&
+      row._count.orders === 0 &&
+      ownsBook(row, clientKey, userId);
+    return this.toDto(row, editable);
+  }
+
+  /**
+   * The parent changes the look before ordering: another theme, or another layout for a page among
+   * the ones that suit it. Only the layout changes; the book is re-rendered and re-checked.
+   */
+  async updateLayout(
+    id: string,
+    patch: UpdateLayout,
+    clientKey: string,
+    userId?: string | null,
+  ): Promise<Book> {
+    const row = await this.prisma.book.findUnique({
+      where: { id },
+      include: { _count: { select: { orders: true } } },
+    });
+    if (!row || !ownsBook(row, clientKey, userId))
+      throw new NotFoundException(`book ${id} not found`);
+    if (row.status !== 'done')
+      throw new ConflictException('The book is still being made');
+    if (row._count.orders > 0) {
+      throw new ConflictException({
+        code: LAYOUT_LOCKED,
+        message: 'The book is ordered: its layout is frozen',
+      });
+    }
+    let layout = layoutOf(row.layout);
+    if (patch.theme && patch.theme !== layout.theme.id)
+      layout = withTheme(layout, patch.theme);
+    if (patch.choices) {
+      const plan = planBook(storedBook(row), layout);
+      for (const [page, choice] of Object.entries(patch.choices)) {
+        const start = plan.find((p) => p.key === `story-${page}`);
+        if (!start) throw new BadRequestException(`No page ${page}`);
+        const state = layout.pages[page];
+        if (
+          choice &&
+          !availableVariants(layout.theme, state, start.index).includes(choice)
+        ) {
+          throw new BadRequestException(
+            `Layout ${choice} does not suit page ${page}`,
+          );
+        }
+        layout = setPage(layout, page, { choice });
+      }
+    }
+    await this.rerender(id, layout);
+    return this.get(id, clientKey, userId);
+  }
+
+  /** Staff pin a page's layout (any variant; null unpins) or change the theme, then re-render. */
+  async pinLayout(id: string, patch: PinLayout): Promise<void> {
+    const row = await this.prisma.book.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException(`book ${id} not found`);
+    if (row.status !== 'done')
+      throw new ConflictException('The book is still being made');
+    let layout = layoutOf(row.layout);
+    if (patch.theme && patch.theme !== layout.theme.id)
+      layout = withTheme(layout, patch.theme);
+    const pages = row.pages as unknown as StoredPage[];
+    for (const [page, pin] of Object.entries(patch.pins ?? {})) {
+      if (!pages.some((p) => String(p.page) === page))
+        throw new BadRequestException(`No page ${page}`);
+      layout = setPage(layout, page, { pin });
+    }
+    await this.rerender(id, layout);
+  }
+
+  /** Renders the PDF again with a changed layout and stores both. */
+  private async rerender(id: string, layout: BookLayout): Promise<void> {
+    const row = await this.prisma.book.findUniqueOrThrow({ where: { id } });
+    const result = await this.renderPdf(row, layout);
+    await this.prisma.book.update({
+      where: { id },
+      data: { pdfPath: result.pdfPath, layout: json(result.layout) },
+    });
+  }
+
+  /** Lays the book out, prints it and runs render QA; the result's layout records what QA did. */
+  private renderPdf(row: BookRow, layout = layoutOf(row.layout)) {
+    const book = storedBook(row);
+    const labels = BOOK_LABELS[book.language];
+    const checked = withHeadingCheck(layout, [
+      book.title ?? '',
+      labels.madeFor(book.childName),
+      labels.talk,
+      labels.end,
+    ]);
+    return this.journal.run({ bookId: row.id }, () =>
+      this.pdf.render(row.id, book, checked),
+    );
   }
 
   /** A catalog book: its method, plot, art style and the parent's answers. */
@@ -260,7 +385,16 @@ export class BooksService implements OnModuleInit {
           : `«${answer}» — нет такого варианта в вопросе «${question.label}»`,
       );
     }
+    // A theme the template names, if it still covers the book's language; else by age.
+    const theme = template.layoutTheme
+      ? BOOK_THEMES[template.layoutTheme]
+      : undefined;
+    const themeId =
+      theme && !theme.legacy && theme.languages.includes(child.language)
+        ? theme.id
+        : defaultThemeId(child.age);
     return {
+      themeId,
       brief: {
         child,
         pageCount: this.pageCount,
@@ -422,26 +556,17 @@ export class BooksService implements OnModuleInit {
       });
     });
 
-    await this.update(id, 'pdf', {
+    const row = await this.update(id, 'pdf', {
       pages: json(pages),
       costUsd: spent.usd,
       progress: progressFor('pdf'),
     });
-    // Images sit next to book.html, so the template takes bare file names.
-    const local = (path: string | null) => (path ? basename(path) : null);
-    const pdfPath = await this.pdf.render(id, {
-      title: story.title,
-      childName: child.name,
-      language: child.language,
-      coverImage: local(heroImagePath),
-      pages: pages.map((p) => ({
-        page: p.page,
-        text: p.text,
-        image: local(p.imagePath),
-      })),
-      talkQuestions: story.talk_questions,
+    const { pdfPath, layout } = await this.renderPdf(row);
+    await this.update(id, 'done', {
+      pdfPath,
+      layout: json(layout),
+      progress: 100,
     });
-    await this.update(id, 'done', { pdfPath, progress: 100 });
     this.logger.log(
       `book ${id} done: ${pages.length} pages, $${spent.usd.toFixed(3)}`,
     );
@@ -482,7 +607,7 @@ export class BooksService implements OnModuleInit {
     }
   }
 
-  toDto(row: BookWithTemplate): Book {
+  toDto(row: BookWithTemplate, editable = false): Book {
     const pages = row.pages as unknown as StoredPage[];
     return {
       id: row.id,
@@ -510,9 +635,42 @@ export class BooksService implements OnModuleInit {
       })),
       pdfUrl: this.storage.url(row.pdfPath),
       error: row.error,
+      layout: layoutOf(row.layout),
+      editable,
       createdAt: row.createdAt.toISOString(),
     };
   }
+}
+
+/** What the renderer needs of a stored book; images by file name, as they sit next to book.html. */
+export function storedBook(row: BookRow) {
+  const child = row.child as unknown as ChildProfile;
+  const local = (path: string | null) => (path ? basename(path) : null);
+  return {
+    title: row.title,
+    childName: child.name,
+    language: row.language as Language,
+    heroImage: local(row.heroImagePath),
+    pages: (row.pages as unknown as StoredPage[]).map((p) => ({
+      page: p.page,
+      text: p.text,
+      image: local(p.imagePath),
+    })),
+    talkQuestions: row.talkQuestions as string[],
+  };
+}
+
+/** The layout with one story page's state changed. */
+function setPage(
+  layout: BookLayout,
+  page: string,
+  patch: Partial<PageLayout>,
+): BookLayout {
+  const current = layout.pages[page] ?? blankPage();
+  return {
+    ...layout,
+    pages: { ...layout.pages, [page]: { ...current, ...patch } },
+  };
 }
 
 /** Pointing Muse Image at the pet sheet on every page draws the pet into scenes it is not in. */
