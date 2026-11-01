@@ -67,7 +67,7 @@ describe('mail templates', () => {
       purchaseReceipt({ kind: 'custom', price }, 'es', site).text,
     ).toContain('una historia propia');
     expect(orderStatusChanged(order, 'printing', 'de', site).subject).toBe(
-      `Bestellung Nr. ${orderNumber(order.id)}: wird gedruckt — Fabulka`,
+      `Bestellung Nr. ${orderNumber(order.id)}: wird gedruckt – Fabulka`,
     );
   });
 

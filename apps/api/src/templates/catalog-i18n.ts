@@ -23,7 +23,7 @@ export const SEED_TRANSLATIONS: Record<
           options: [
             'құшақтасамыз',
             'терезеден қол бұлғаймыз',
-            'алақан соғамыз',
+            'алақан соғыстырамыз',
             'бетінен сүйеміз',
           ],
         },
@@ -119,7 +119,7 @@ export const SEED_TRANSLATIONS: Record<
         },
         looking_forward: {
           label: 'Worauf freut sich dein Kind am meisten?',
-          options: ['Spielen', 'Malen', 'neue Freunde', 'draußen spielen'],
+          options: ['Spiele', 'Malen', 'neue Freunde', 'draußen spielen'],
         },
       },
     },
@@ -207,7 +207,7 @@ export const SEED_TRANSLATIONS: Record<
     kk: {
       title: 'Мен үйренемін!',
       summary:
-        'Шықпады — әзірге. Жаттығу мен жақындардың көмегі «білмеймін» дегенді «білемінге» қалай айналдыратыны туралы кітап.',
+        'Әзірге шықпай тұр — тек әзірге. Жаттығу мен жақындардың көмегі «білмеймін» дегенді «білемін» дегенге қалай айналдыратыны туралы кітап.',
       questions: {
         skill: {
           label: 'Бала қазір не үйреніп жүр?',
@@ -333,7 +333,7 @@ export const SEED_TRANSLATIONS: Record<
       questions: {
         feeling: {
           label: 'Балаға қай сезіммен күресу қиын?',
-          options: ['ашу', 'қорқыныш', 'өкпе', 'қызғаныш', 'мұң'],
+          options: ['ашу', 'қорқыныш', 'реніш', 'қызғаныш', 'мұң'],
         },
         trigger: {
           label: 'Бұл сезімді әдетте не тудырады?',
@@ -379,7 +379,7 @@ export const SEED_TRANSLATIONS: Record<
     es: {
       title: 'Una tormenta por dentro',
       summary:
-        'Sobre las emociones grandes: cómo notarlas, ponerles nombre, calmarse y hacer las paces.',
+        'Sobre las emociones intensas: cómo notarlas, ponerles nombre, calmarse y hacer las paces.',
       questions: {
         feeling: {
           label: '¿Qué emoción le cuesta más manejar?',
@@ -451,7 +451,7 @@ export const SEED_TRANSLATIONS: Record<
         },
         dish: {
           label: 'Наурыздағы сүйікті тағам',
-          options: ['наурыз көже', 'бауырсақ', 'бешбармақ', 'шәкшәк'],
+          options: ['наурыз көже', 'бауырсақ', 'бесбармақ', 'шәкшәк'],
         },
         tradition: {
           label: 'Отбасыңыздың Наурыз дәстүрі',
@@ -519,7 +519,7 @@ export const SEED_TRANSLATIONS: Record<
   },
   'bath-time': {
     kk: {
-      title: 'Былқ-сылқ, шомыламыз!',
+      title: 'Шалп-шұлп, шомыламыз!',
       summary:
         'Кішкентайларға арналған кешкі ванна: ойыншықтар, көпіршіктер, қайталанатын әуен және тәтті ұйқы.',
       questions: {

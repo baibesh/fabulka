@@ -29,11 +29,11 @@ export const SAMPLE_BOOKS: Record<Language, SampleBook> = {
     title: "Әлия және жұлдызын жоғалтқан кірпі",
     pages: [
       "Кешке Әлия ауланы аралап жүріп, ақырын сыбдырды естіді. Алма ағашының түбінде кішкентай кірпі отыр екен. Ол аспанға мұңая қарап: «Жұлдызымды жоғалтып алдым», — деп сыбырлады.",
-      "Әлия шамын алды да, екеуі іздеуге шықты. Жұлдыз шөптің арасында да, шалшықта да, торғайлар тұратын ескі қораның шатырында да жоқ болып шықты.",
+      "Әлия қалта шамын алды да, екеуі іздеуге шықты. Жұлдыз шөптің арасында да, шалшықта да, торғайлар тұратын ескі қораның шатырында да жоқ болып шықты.",
       "Өзен жағасында оларға бақа кездесті. «Жұлдыздар суды жақсы көреді, — деді ол. — Төмен қараңдар». Қара суда бір нәрсе жарқырап, оларға көз қысып тұрды.",
-      "Бұл жұлдыздың суреті еді! Жұлдыз үнемі аспанда болып, кірпінің басын көтеруін күтіпті. «Рақмет, Әлия!» — деп күлді кірпі, сөйтіп олар үйге қайтты.",
+      "Бұл жұлдыздың судағы бейнесі еді! Жұлдыз үнемі аспанда болып, кірпінің басын көтеруін күтіпті. «Рақмет, Әлия!» — деп күлді кірпі, сөйтіп олар үйге қайтты.",
     ],
-    talkQuestions: ["Кірпі неге мұңайды?", "Достар жұлдызды қайдан іздеді?", "Сен бір нәрсе тауып көрдің бе?"],
+    talkQuestions: ["Кірпі неге мұңайды?", "Достар жұлдызды қайдан іздеді?", "Сен жоғалған бір нәрсені тауып көрдің бе?"],
   },
   en: {
     childName: "Alia",
@@ -50,9 +50,9 @@ export const SAMPLE_BOOKS: Record<Language, SampleBook> = {
     childName: "Alía",
     title: "Alía y el erizo que perdió su estrella",
     pages: [
-      "Una tarde, Alía salió al jardín y oyó un susurro. Bajo el manzano había un erizo pequeñito que miraba el cielo con tristeza. «He perdido mi estrella», susurró.",
-      "Alía cogió su linterna y se fueron a buscarla. La estrella no estaba en la hierba, ni en el charco, ni en el tejado del viejo cobertizo donde vivían los gorriones.",
-      "Junto al río se encontraron con una rana. «¿Sabéis? A las estrellas les encanta el agua —dijo—. ¡Mirad hacia abajo!». Algo brillaba en el agua oscura y les guiñaba un ojo.",
+      "Una tarde, Alía salió al jardín y oyó un ruidito. Bajo el manzano había un erizo pequeñito que miraba el cielo con tristeza. «He perdido mi estrella», susurró.",
+      "Alía tomó su linterna y se fueron a buscarla. La estrella no estaba en la hierba, ni en el charco, ni en el tejado del viejo cobertizo donde vivían los gorriones.",
+      "Junto al río se encontraron con una rana. «A las estrellas les encanta el agua —les dijo—. ¡Hay que mirar hacia abajo!». Algo brillaba en el agua oscura y les guiñaba un ojo.",
       "¡Era su reflejo! La estrella había estado siempre en el cielo, esperando a que el erizo levantara la cabeza. «¡Gracias, Alía!», rio el erizo, y volvieron a casa.",
     ],
     talkQuestions: ["¿Por qué estaba triste el erizo?", "¿Dónde buscaron la estrella?", "¿Alguna vez encontraste algo que habías perdido?"],

@@ -195,7 +195,7 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       },
       kk: {
         name: "Кішкентайларға арналған қайталау мен ырғақ",
-        summary: "Қайталанатын сөз тіркесі, дыбыстар және кішкентай мейірімді тосынсыйы бар таныс күн.",
+        summary: "Сәбидің таныс күні: қайталанып отыратын сөз, дыбыстар және кішкентай жағымды тосынсый.",
       },
       en: {
         name: "Rhythm and repetition for toddlers",
@@ -203,7 +203,7 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       },
       es: {
         name: "Ritmo y repetición para los más pequeños",
-        summary: "Un día conocido con una frase que se repite, sonidos para decir en voz alta y una pequeña sorpresa bonita.",
+        summary: "Un día cotidiano con una frase que se repite, sonidos para decir en voz alta y una pequeña sorpresa llena de cariño.",
       },
       de: {
         name: "Rhythmus und Wiederholung für die Kleinsten",
@@ -236,7 +236,7 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       },
       kk: {
         name: "Әлеуметтік әңгіме",
-        summary: "Жаңа жағдайға сабырмен дайындайды: балабақша, дәрігер, ұшақ, көшу, інісі не сіңлісі.",
+        summary: "Жаңа жағдайға сабырмен дайындайды: балабақша, дәрігер, ұшақпен ұшу, көшу, кішкентай бауырдың дүниеге келуі.",
       },
       en: {
         name: "Social story",
@@ -278,7 +278,7 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       },
       kk: {
         name: "Эмоциялық интеллект",
-        summary: "Кейіпкер сезімдерін байқап, атауды, сабырға келуді және басқаларды түсінуді үйренеді.",
+        summary: "Кейіпкер сезімдерді байқауды, оларды атауды, сабырға келуді және өзгелерді түсінуді үйренеді.",
       },
       en: {
         name: "Emotional intelligence",
@@ -290,7 +290,7 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       },
       de: {
         name: "Emotionale Intelligenz",
-        summary: "Die Hauptfigur lernt, Gefühle zu bemerken und zu benennen, sich zu beruhigen und andere zu verstehen.",
+        summary: "Der Held lernt, Gefühle zu bemerken und zu benennen, sich zu beruhigen und andere zu verstehen.",
       },
     },
     source: "CASEL social and emotional learning framework; emotion coaching by John Gottman",
@@ -321,7 +321,7 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       },
       kk: {
         name: "Даму ойлауы",
-        summary: "Шықпады — әзірге. Кейіпкер байқап, қателесіп, жол іздейді және еңбекпен мақсатына жетеді.",
+        summary: "Әзірге шықпай тұр — тек әзірге. Кейіпкер талпынады, қателеседі, жол іздейді және еңбегімен мақсатына жетеді.",
       },
       en: {
         name: "Growth mindset",
@@ -333,7 +333,7 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       },
       de: {
         name: "Wachstumsdenken",
-        summary: "„Ich kann das nicht“ – noch nicht! Die Hauptfigur probiert, macht Fehler, findet einen Weg und schafft es mit Ausdauer.",
+        summary: "„Ich kann das nicht“ – noch nicht! Der Held probiert, macht Fehler, findet einen Weg und schafft es mit Ausdauer.",
       },
     },
     source: "Growth mindset research by Carol Dweck",

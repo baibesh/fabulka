@@ -60,7 +60,7 @@ const termsEs: LegalDoc = {
     {
       title: "Qué hace el servicio",
       text: [
-        "Fabulka crea libros infantiles personalizados con los modelos de IA de Meta. Cada libro es único, pero los modelos pueden cometer errores: lee el libro antes de enseñárselo a tu hijo o hija o de encargar una copia impresa.",
+        "Fabulka crea libros infantiles personalizados con los modelos de IA de Meta. Cada libro es único, pero los modelos pueden cometer errores: lee el libro antes de mostrárselo a tu hijo o hija o de pedir un ejemplar impreso.",
       ],
     },
     {
@@ -109,7 +109,7 @@ const privacyDe: LegalDoc = {
     {
       title: "Wer die Daten verarbeitet",
       text: [
-        "Die Antworten und das Foto des Spielzeugs werden ausschließlich zur Erstellung des Buchs an die Meta Model API (Muse Spark, Muse Image und SAM 3.1) übermittelt. Wir verkaufen keine Daten und nutzen sie nicht für Werbung.",
+        "Die Antworten und das Foto des Spielzeugs werden ausschließlich zur Erstellung des Buches an die Meta Model API (Muse Spark, Muse Image und SAM 3.1) übermittelt. Wir verkaufen keine Daten und nutzen sie nicht für Werbung.",
       ],
     },
     {
@@ -227,7 +227,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
       sections: [
         {
           title: "Біз кімбіз",
-          text: ["Fabulka — Қазақстаннан шыққан жеке балалар кітаптарының сервисі. Деректер туралы сұрақтарды hello@fabulka.com поштасына жазыңыз."],
+          text: ["Fabulka — Қазақстаннан шыққан жеке балалар кітаптарының сервисі. Деректер туралы сұрақтарды hello@fabulka.com мекенжайына жазыңыз."],
         },
         {
           title: "Қандай деректер аламыз",
@@ -239,7 +239,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         },
         {
           title: "Не үшін",
-          text: ["Кітапты жазып, суреттеу, PDF жинау, басып шығарып жеткізу, сондай-ақ шектеулерді сақтау және сервисті теріс пайдаланудан қорғау үшін."],
+          text: ["Кітапты жазу мен суреттеу, PDF құрастыру, оны басып шығару және жеткізу, сондай-ақ шектеулерді сақтау және сервисті теріс пайдаланудан қорғау үшін."],
         },
         {
           title: "Деректерді кім өңдейді",
@@ -251,7 +251,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
           title: "Қайда және қанша уақыт сақталады",
           text: [
             "Деректер ҚР «Дербес деректер және оларды қорғау туралы» заңына сәйкес Қазақстан Республикасындағы серверлерде сақталады.",
-            "Кітап, оның файлдары мен тапсырыстары сіз жоюды сұрағанша сақталады. hello@fabulka.com поштасына жазыңыз — кітапқа қатысты бәрін жоямыз.",
+            "Кітап, оның файлдары мен тапсырыстары сіз жоюды сұрағанша сақталады. hello@fabulka.com мекенжайына жазыңыз — кітапқа қатысты бәрін жоямыз.",
             "Модельдерге сұраулар мен қателердің техникалық журналдары ақауларды табу және түзету үшін 90 күнге дейін сақталады (қатемен аяқталған сұраулардың мәтіндері — 30 күнге дейін).",
           ],
         },
@@ -262,7 +262,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         {
           title: "Сіздің құқықтарыңыз",
           text: [
-            "Сіз туралы қандай деректер сақталатынын біліп, оларды түзетуге немесе жоюға болады. Біз тек браузердің қажетті қоймасын (тіл, ел, анонимді кілт) пайдаланамыз және жарнамалық трекерлер қоспаймыз.",
+            "Сіз өзіңіз туралы қандай деректер сақталатынын біліп, оларды түзете немесе жоя аласыз. Біз тек браузердің қажетті қоймасын (тіл, ел, анонимді кілт) пайдаланамыз және жарнамалық трекерлер қоспаймыз.",
           ],
         },
       ],
@@ -379,7 +379,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         },
         {
           title: "Не істеуге болмайды",
-          text: ["Балаларға қорлайтын немесе қауіпті мазмұнды және ата-анасының келісімінсіз басқа балалардың деректерін енгізбеңіз."],
+          text: ["Қорлайтын немесе балаларға қауіпті мазмұнды, сондай-ақ басқа балалардың деректерін олардың ата-анасының келісімінсіз енгізбеңіз."],
         },
         {
           title: "Қолжетімділік",

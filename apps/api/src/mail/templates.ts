@@ -68,7 +68,7 @@ const STATUS: Record<Language, Record<OrderStatus, string>> = {
   },
   es: {
     paid: 'pagado',
-    printing: 'en impresión',
+    printing: 'en imprenta',
     shipped: 'en camino',
     delivered: 'entregado',
   },
@@ -144,16 +144,16 @@ const TEXT = {
     statusSubject: (n: string, status: string) =>
       `№${n} тапсырыс: ${status} — Fabulka`,
     statusIntro: (title: string, status: string) =>
-      `«${title}» кітабына тапсырыс жаңалығы: қазір ол ${status}.`,
+      `«${title}» кітабына берген тапсырысыңыз туралы жаңалық: қазір ол ${status}.`,
     receiptSubject: 'Кітап сатып алу түбіртегі — Fabulka',
     receiptIntro: (kind: string) =>
       `Рахмет! Сіз тағы бір кітап сатып алдыңыз (${kind}). Оны қазір жасауға болады.`,
-    receiptDemo: 'Бұл демо-төлем: ақша алынған жоқ, карта байланбады.',
+    receiptDemo: 'Бұл демо-төлем: ақша алынған жоқ, карта байланған жоқ.',
     amount: 'Сомасы',
     create: 'Кітап жасау',
     demoOrder:
-      'Бұл демо: төлем алынған жоқ, басу мен жеткізу кезеңдері мысал ретінде көрсетіледі.',
-    signature: 'Жылы лебізбен, Fabulka командасы',
+      'Бұл демо: төлем алынған жоқ, басып шығару мен жеткізу кезеңдері мысал ретінде көрсетіледі.',
+    signature: 'Жылы ықыласпен, Fabulka командасы',
   },
   en: {
     hello: (name: string) => `Hello, ${name}!`,
@@ -188,13 +188,13 @@ const TEXT = {
     untitled: 'tu libro',
     orderSubject: (n: string) => `Pedido n.º ${n} recibido — Fabulka`,
     orderIntro: (title: string) =>
-      `¡Gracias por tu pedido! Imprimiremos «${title}» y te lo llevaremos a casa.`,
+      `¡Gracias por tu pedido! Imprimiremos «${title}» y te lo enviaremos.`,
     details: 'Detalles del pedido',
     number: 'Número de pedido',
     copies: (n: number) => (n === 1 ? '1 ejemplar' : `${n} ejemplares`),
-    delivery: 'Entrega',
+    delivery: 'Envío',
     total: 'Total',
-    track: 'Seguir mi pedido',
+    track: 'Ver el estado del pedido',
     openBook: 'Abrir el libro',
     statusSubject: (n: string, status: string) =>
       `Pedido n.º ${n}: ${status} — Fabulka`,
@@ -202,21 +202,21 @@ const TEXT = {
       `Novedades sobre tu pedido de «${title}»: ahora está ${status}.`,
     receiptSubject: 'Recibo de compra de tu libro — Fabulka',
     receiptIntro: (kind: string) =>
-      `¡Gracias! Has comprado un libro más (${kind}). Puedes crearlo ahora mismo.`,
+      `¡Gracias! Ya tienes un libro más (${kind}). Puedes crearlo ahora mismo.`,
     receiptDemo:
-      'Este es un pago de demostración: no se ha cobrado nada ni se ha guardado ninguna tarjeta.',
+      'Este es un pago de demostración: no se cobró nada ni se guardó ninguna tarjeta.',
     amount: 'Importe',
     create: 'Crear un libro',
     demoOrder:
-      'Esto es una demostración: no se ha cobrado nada, y las etapas de impresión y entrega se muestran como ejemplo.',
+      'Esto es una demostración: no se cobró nada, y las etapas de impresión y envío se muestran a modo de ejemplo.',
     signature: 'Con cariño, el equipo de Fabulka',
   },
   de: {
     hello: (name: string) => `Hallo ${name}!`,
     untitled: 'dein Buch',
-    orderSubject: (n: string) => `Bestellung Nr. ${n} eingegangen — Fabulka`,
+    orderSubject: (n: string) => `Bestellung Nr. ${n} eingegangen – Fabulka`,
     orderIntro: (title: string) =>
-      `Danke für deine Bestellung! Wir drucken „${title}“ und liefern das Buch zu dir.`,
+      `Danke für deine Bestellung! Wir drucken „${title}“ und schicken dir das Buch.`,
     details: 'Bestelldetails',
     number: 'Bestellnummer',
     copies: (n: number) => (n === 1 ? '1 Exemplar' : `${n} Exemplare`),
@@ -225,10 +225,10 @@ const TEXT = {
     track: 'Bestellung verfolgen',
     openBook: 'Buch öffnen',
     statusSubject: (n: string, status: string) =>
-      `Bestellung Nr. ${n}: ${status} — Fabulka`,
+      `Bestellung Nr. ${n}: ${status} – Fabulka`,
     statusIntro: (title: string, status: string) =>
       `Neuigkeiten zu deiner Bestellung von „${title}“ – neuer Status: ${status}.`,
-    receiptSubject: 'Deine Quittung für den Buchkauf — Fabulka',
+    receiptSubject: 'Dein Beleg für den Buchkauf – Fabulka',
     receiptIntro: (kind: string) =>
       `Danke! Du hast ein weiteres Buch gekauft (${kind}). Du kannst es gleich erstellen.`,
     receiptDemo:
@@ -236,7 +236,7 @@ const TEXT = {
     amount: 'Betrag',
     create: 'Buch erstellen',
     demoOrder:
-      'Das ist eine Demo: Es wurde nichts abgebucht, und die Druck- und Lieferschritte werden nur als Beispiel gezeigt.',
+      'Das ist eine Demo: Es wurde nichts abgebucht, und Druck und Lieferung werden nur als Beispiel gezeigt.',
     signature: 'Herzliche Grüße, dein Fabulka-Team',
   },
 } satisfies Record<Language, unknown>;
