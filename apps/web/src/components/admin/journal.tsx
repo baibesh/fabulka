@@ -10,7 +10,7 @@ import {
   type ModelCallKind,
   type ModelCallStatus,
 } from "@fabulka/shared";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { journalCall, journalCalls, journalErrors, journalStats } from "@/lib/admin-api";
@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorText, Notice } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 
 export function CallStatus({ status }: { status: ModelCallStatus }) {
   const { t } = useAdminI18n();
@@ -53,18 +54,14 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
   const call = useQuery({ queryKey: ["admin", "journal", "call", id], queryFn: () => journalCall(id) });
   const c = call.data;
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onClose}>
-      <aside
-        data-testid="journal-call-detail"
-        className="flex h-full w-full max-w-xl flex-col gap-4 overflow-y-auto bg-card p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold">{c ? t(`admin.journal.kind.${c.kind}`) : t("admin.journal.call")}</h2>
-          <button type="button" aria-label={t("admin.close")} onClick={onClose} className="rounded-xl p-2 text-muted hover:text-foreground">
-            <X className="size-5" />
-          </button>
-        </div>
+    <Dialog
+      open
+      onClose={onClose}
+      variant="sheet"
+      testId="journal-call-detail"
+      title={c ? t(`admin.journal.kind.${c.kind}`) : t("admin.journal.call")}
+      closeLabel={t("admin.close")}
+    >
         {!c && <QueryState error={call.error} scope="admin" />}
         {c && (
           <>
@@ -122,8 +119,7 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
             )}
           </>
         )}
-      </aside>
-    </div>
+    </Dialog>
   );
 }
 

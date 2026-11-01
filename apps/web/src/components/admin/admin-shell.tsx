@@ -9,7 +9,7 @@ import type { MessageKey } from "@/i18n/messages";
 import { adminLogout, adminMe } from "@/lib/admin-api";
 import { logout as signOut } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
-import { LanguageSwitch } from "./language-switch";
+import { LanguagePicker } from "@/components/locale-pickers";
 import { useAdminI18n } from "./ui";
 
 const NAV: { href: string; label: MessageKey; icon: typeof BookOpen }[] = [
@@ -64,7 +64,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <LanguageSwitch className="self-center md:mx-3 md:mb-2 md:self-stretch" />
+        <LanguagePicker scope="admin" testId="admin-language" optionPrefix="admin-lang-" className="self-center md:mx-1 md:mb-2 md:self-start" />
         <button
           type="button"
           data-testid="admin-logout"

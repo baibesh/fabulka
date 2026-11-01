@@ -5,7 +5,7 @@ import { KeyRound, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { adminLogin, adminLoginOptions } from "@/lib/admin-api";
-import { LanguageSwitch } from "./language-switch";
+import { LanguagePicker } from "@/components/locale-pickers";
 import { useAdminI18n } from "./ui";
 import { Spinner } from "@/components/ui/spinner";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -42,7 +42,7 @@ export function LoginForm() {
       )}
       {keycloak && password && <p className="text-center text-xs text-muted">{t("admin.login.or")}</p>}
       {password && <PasswordForm />}
-      <LanguageSwitch className="self-center" />
+      <LanguagePicker scope="admin" testId="admin-language" optionPrefix="admin-lang-" className="self-center" />
     </div>
   );
 }

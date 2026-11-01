@@ -1,25 +1,44 @@
 "use client";
 
-import { OTHER_COUNTRY, type Country, type Language } from "@fabulka/shared";
+import { OTHER_COUNTRY, type Country } from "@fabulka/shared";
 import { Check, Search } from "lucide-react";
 import { useState } from "react";
 import { setCountry, setLocale, useI18n } from "@/i18n/i18n";
-import { LOCALE_NAMES, UI_LOCALES } from "@/i18n/messages";
+import { LOCALE_NAMES, UI_LOCALES, type UiLocale } from "@/i18n/messages";
 import { LANGUAGE_FLAGS, languageCode, regionName } from "@/lib/regions";
 import { useCountryName } from "@/hooks/use-country-name";
 import { Flag } from "./flag";
-import { Modal } from "./modal";
+import { cx } from "./ui/cx";
+import { Dialog } from "./ui/dialog";
 
 const option =
   "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-semibold hover:bg-accent/10 aria-[current=true]:bg-accent/15 aria-[current=true]:text-accent";
 
 
-/** Header button: the flag of the interface language; opens the languages the country offers. */
-export function LanguagePicker() {
-  const { t, locale, country, info } = useI18n();
+/**
+ * A flag button with the interface language's code; it opens a dialog of languages to choose from.
+ * On the site (`scope="site"`, the header) it offers the languages of the visitor's country; in the
+ * admin (`scope="admin"`, the sidebar and the sign-in card) all five, for the admin's own language
+ * store. Test ids: the button is `testId`, each option `${optionPrefix}${language}`.
+ */
+export function LanguagePicker({
+  scope = "site",
+  testId = "ui-language",
+  optionPrefix = "ui-language-option-",
+  className,
+}: {
+  scope?: "site" | "admin";
+  testId?: string;
+  optionPrefix?: string;
+  className?: string;
+}) {
+  const { t, locale, country, info } = useI18n(scope);
   const countryName = useCountryName();
   const [open, setOpen] = useState(false);
-  const choose = (language: Language) => {
+  const admin = scope === "admin";
+  const languages: readonly UiLocale[] = admin ? UI_LOCALES : info.languages;
+  const label = t(admin ? "admin.language" : "nav.language");
+  const choose = (language: UiLocale) => {
     setLocale(language);
     setOpen(false);
   };
@@ -27,30 +46,30 @@ export function LanguagePicker() {
     <>
       <button
         type="button"
-        data-testid="ui-language"
+        data-testid={testId}
         aria-haspopup="dialog"
-        aria-label={`${t("nav.language")}: ${LOCALE_NAMES[locale]}`}
-        title={t("nav.language")}
+        aria-label={`${label}: ${LOCALE_NAMES[locale]}`}
+        title={label}
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 rounded-lg px-1.5 py-1.5 text-sm font-semibold text-muted hover:text-foreground sm:px-2"
+        className={cx("flex items-center gap-1.5 rounded-lg px-1.5 py-1.5 text-sm font-semibold text-muted hover:text-foreground sm:px-2", className)}
       >
         <Flag code={LANGUAGE_FLAGS[locale]} className="text-base" />
         <span>{languageCode(locale)}</span>
       </button>
-      <Modal
+      <Dialog
         open={open}
         onClose={() => setOpen(false)}
-        testId="ui-language-dialog"
-        title={t("nav.language.choose")}
-        description={t("nav.language.hint", { country: countryName(country) })}
-        closeLabel={t("auth.error.close")}
+        testId={`${testId}-dialog`}
+        title={admin ? label : t("nav.language.choose")}
+        description={admin ? undefined : t("nav.language.hint", { country: countryName(country) })}
+        closeLabel={t(admin ? "admin.close" : "auth.error.close")}
       >
         <ul className="flex flex-col gap-1">
-          {info.languages.map((language) => (
+          {languages.map((language) => (
             <li key={language}>
               <button
                 type="button"
-                data-testid={`ui-language-option-${language}`}
+                data-testid={`${optionPrefix}${language}`}
                 aria-current={language === locale}
                 data-autofocus={language === locale ? "" : undefined}
                 onClick={() => choose(language)}
@@ -63,7 +82,7 @@ export function LanguagePicker() {
             </li>
           ))}
         </ul>
-      </Modal>
+      </Dialog>
     </>
   );
 }
@@ -119,7 +138,7 @@ export function CountryPicker() {
         <Flag code={country} className="text-base" />
         {countryName(country)}
       </button>
-      <Modal open={open} onClose={close} testId="ui-country-dialog" title={t("nav.country.choose")} description={t("nav.country.hint")} closeLabel={t("auth.error.close")}>
+      <Dialog open={open} onClose={close} testId="ui-country-dialog" title={t("nav.country.choose")} description={t("nav.country.hint")} closeLabel={t("auth.error.close")}>
         <label className="relative flex items-center">
           <Search className="pointer-events-none absolute left-3 size-4 text-muted" />
           <input
@@ -141,7 +160,7 @@ export function CountryPicker() {
           <li aria-hidden className="my-1 border-t border-border" />
           {row(OTHER_COUNTRY)}
         </ul>
-      </Modal>
+      </Dialog>
     </>
   );
 }

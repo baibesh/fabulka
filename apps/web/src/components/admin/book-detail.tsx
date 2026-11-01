@@ -14,6 +14,7 @@ import { ErrorText, Notice } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
 import { Button, buttonClass } from "@/components/ui/button";
 import { BackLink } from "@/components/ui/page";
+import { ConfirmDialog } from "@/components/ui/dialog";
 
 /** The book's model calls in order, timed from the first: where generation spent its time and money. */
 function BookCalls({ id, generating }: { id: string; generating: boolean }) {
@@ -53,7 +54,8 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
   const { t, date, bookStatus } = useAdminI18n();
   const book = useQuery({ queryKey: ["admin", "book", id], queryFn: () => adminBook(id) });
   const methodName = useMethodologyName();
-  const remove = useMutation({ mutationFn: () => deleteBook(id), onSuccess: () => router.replace("/admin/books") });
+  const [confirming, setConfirming] = useState(false);
+  const remove = useMutation({ mutationFn: () => deleteBook(id), onSuccess: () => router.replace("/admin/books"), onSettled: () => setConfirming(false) });
   const queryClient = useQueryClient();
   const feature = useMutation({
     mutationFn: (featured: boolean) => setFeatured(id, featured),
@@ -113,15 +115,7 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
                 {t("admin.book.pdf")}
               </a>
             )}
-            <Button
-              variant="danger-outline"
-              data-testid="delete-book"
-              loading={remove.isPending}
-              icon={<Trash2 className="size-4" />}
-              onClick={() => {
-                if (window.confirm(t("admin.book.deleteConfirm"))) remove.mutate();
-              }}
-            >
+            <Button variant="danger-outline" data-testid="delete-book" loading={remove.isPending} icon={<Trash2 className="size-4" />} onClick={() => setConfirming(true)}>
               {t("admin.delete")}
             </Button>
           </div>
@@ -179,6 +173,18 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
         </Card>
       </div>
       <BookCalls id={b.id} generating={b.status !== "done" && b.status !== "failed"} />
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={() => remove.mutate()}
+        pending={remove.isPending}
+        title={t("admin.book.deleteConfirm")}
+        confirmLabel={t("admin.method.remove.yes")}
+        cancelLabel={t("admin.method.remove.no")}
+        closeLabel={t("admin.close")}
+        testId="delete-book-dialog"
+        confirmTestId="delete-book-confirm"
+      />
     </>
   );
 }

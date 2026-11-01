@@ -1,5 +1,6 @@
-# The admin's language: Russian by default, the switch in the sidebar turns it to English, German
-# and Spanish and back, and the choice is the site's too.
+# The admin's language: Russian by default, the flag picker in the sidebar (the site's language
+# dialog, offering all five languages) turns it to English, German and Spanish and back, and the
+# choice is the site's too.
 appId: ${WEB}
 tags: [admin, i18n]
 commands:
@@ -18,6 +19,7 @@ commands:
   - assertVisible: { testId: admin-nav-books, text: "Книги" }
 
   # English: the nav and the page switch at once.
+  - tapOn: { testId: admin-language }
   - tapOn: { testId: admin-lang-en }
   - waitForVisible: { testId: admin-nav-books, text: "Books" }
   - assertVisible: { testId: admin-nav-journal, text: "Journal" }
@@ -32,16 +34,19 @@ commands:
   - assertVisible: { testId: admin-nav-books, text: "Books" }
 
   # German and Spanish too.
+  - tapOn: { testId: admin-language }
   - tapOn: { testId: admin-lang-de }
   - waitForVisible: { testId: admin-nav-books, text: "Bücher" }
   - assertVisible: { testId: admin-nav-journal, text: "Protokoll" }
   - tapOn: { testId: admin-nav-orders }
   - waitForVisible: "Druckbestellungen"
+  - tapOn: { testId: admin-language }
   - tapOn: { testId: admin-lang-es }
   - waitForVisible: "Pedidos de impresión"
   - assertVisible: { testId: admin-nav-books, text: "Libros" }
 
   # Back to Russian.
+  - tapOn: { testId: admin-language }
   - tapOn: { testId: admin-lang-ru }
   - waitForVisible: { testId: admin-nav-books, text: "Книги" }
   - assertVisible: { testId: admin-nav-dashboard, text: "Дашборд" }

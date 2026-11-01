@@ -26,6 +26,7 @@ import { useAdminMethodologies } from "./use-methodologies";
 import { ErrorText, Notice } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/dialog";
 
 /** Languages a method must have to be published; the others are optional. */
 const isBase = (language: Language) => (BASE_LANGUAGES as readonly Language[]).includes(language);
@@ -185,7 +186,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
         aside={
           <div className="flex flex-wrap items-center gap-3">
             {savedNow && <span data-testid="methodology-saved" className="text-sm text-success">{t("admin.saved")}</span>}
-            {initial && !confirming && (
+            {initial && (
               <Button
                 variant="danger-outline"
                 data-testid="methodology-delete"
@@ -207,17 +208,18 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
         {initial ? methodologyText(initial.texts, locale).name || initial.slug : t("admin.method.newTitle")}
       </PageTitle>
 
-      {confirming && (
-        <div role="alertdialog" className="flex flex-wrap items-center gap-3 rounded-xl border border-danger/40 bg-danger/10 p-4 text-sm">
-          <span className="font-semibold">{t("admin.method.remove.confirm")}</span>
-          <Button variant="danger" data-testid="methodology-delete-confirm" loading={remove.isPending} onClick={() => remove.mutate()}>
-            {t("admin.method.remove.yes")}
-          </Button>
-          <Button variant="secondary" onClick={() => setConfirming(false)}>
-            {t("admin.method.remove.no")}
-          </Button>
-        </div>
-      )}
+      <ConfirmDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={() => remove.mutate()}
+        pending={remove.isPending}
+        title={t("admin.method.remove.confirm")}
+        confirmLabel={t("admin.method.remove.yes")}
+        cancelLabel={t("admin.method.remove.no")}
+        closeLabel={t("admin.close")}
+        testId="methodology-delete-dialog"
+        confirmTestId="methodology-delete-confirm"
+      />
       {remove.isError && (
         <Notice data-testid="methodology-delete-error" role="alert" tone="warning" className="items-start">
           <p>{remove.error.message}</p>
