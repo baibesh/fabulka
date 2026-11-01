@@ -33,9 +33,8 @@ const privacyEs: LegalDoc = {
       ],
     },
     {
-      title: "Dónde y durante cuánto tiempo se conservan",
+      title: "Durante cuánto tiempo se conservan",
       text: [
-        "Los datos se almacenan en servidores ubicados en la República de Kazajistán, tal como exige la ley kazaja de protección de datos personales.",
         "El libro, sus archivos y los pedidos se conservan hasta que nos pidas eliminarlos. Escríbenos a hello@fabulka.com y borraremos todo lo relacionado con el libro.",
         "Los registros técnicos de las solicitudes a los modelos y de los errores se conservan hasta 90 días (el texto de las solicitudes fallidas, hasta 30 días) para poder detectar y corregir problemas.",
       ],
@@ -113,9 +112,8 @@ const privacyDe: LegalDoc = {
       ],
     },
     {
-      title: "Wo und wie lange die Daten gespeichert werden",
+      title: "Wie lange die Daten gespeichert werden",
       text: [
-        "Die Daten werden auf Servern in der Republik Kasachstan gespeichert, wie es das kasachische Gesetz über personenbezogene Daten vorschreibt.",
         "Ein Buch, seine Dateien und Bestellungen werden gespeichert, bis du uns bittest, sie zu löschen. Schreib an hello@fabulka.com, und wir löschen alles, was mit dem Buch verbunden ist.",
         "Technische Protokolle von Modellanfragen und Fehlern werden bis zu 90 Tage aufbewahrt (der Text fehlgeschlagener Anfragen bis zu 30 Tage), damit wir Probleme finden und beheben können.",
       ],
@@ -200,9 +198,8 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
           ],
         },
         {
-          title: "Где и сколько хранятся",
+          title: "Сколько хранятся",
           text: [
-            "Данные хранятся на серверах в Республике Казахстан в соответствии с законом РК «О персональных данных и их защите».",
             "Книга, её файлы и заказы хранятся, пока вы не попросите их удалить. Напишите на hello@fabulka.com — мы удалим всё, что связано с книгой.",
             "Технические журналы запросов к моделям и ошибок хранятся до 90 дней (тексты запросов, которые завершились ошибкой, — до 30 дней), чтобы находить и исправлять сбои.",
           ],
@@ -248,9 +245,8 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
           ],
         },
         {
-          title: "Қайда және қанша уақыт сақталады",
+          title: "Қанша уақыт сақталады",
           text: [
-            "Деректер ҚР «Дербес деректер және оларды қорғау туралы» заңына сәйкес Қазақстан Республикасындағы серверлерде сақталады.",
             "Кітап, оның файлдары мен тапсырыстары сіз жоюды сұрағанша сақталады. hello@fabulka.com мекенжайына жазыңыз — кітапқа қатысты бәрін жоямыз.",
             "Модельдерге сұраулар мен қателердің техникалық журналдары ақауларды табу және түзету үшін 90 күнге дейін сақталады (қатемен аяқталған сұраулардың мәтіндері — 30 күнге дейін).",
           ],
@@ -294,9 +290,8 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
           ],
         },
         {
-          title: "Where and how long it is kept",
+          title: "How long it is kept",
           text: [
-            "Data is stored on servers in the Republic of Kazakhstan, as Kazakhstan's personal data law requires.",
             "A book, its files and orders are kept until you ask us to delete them. Write to hello@fabulka.com and we will delete everything tied to the book.",
             "Technical logs of model requests and errors are kept for up to 90 days (the text of failed requests for up to 30 days) so we can find and fix problems.",
           ],

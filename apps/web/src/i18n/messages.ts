@@ -60,7 +60,7 @@ const ru = {
   "landing.trust.print": "Печать и доставка по Казахстану",
   "landing.trust.printed": "Печать и доставка",
   "landing.trust.pdf": "PDF за несколько минут — распечатайте дома",
-  "landing.trust.data": "Данные детей хранятся в Казахстане",
+  "landing.trust.data": "Данные не продаём и не используем для рекламы",
 
   "landing.how.title": "Как это работает",
   "landing.how.choose.title": "Выберите историю",
@@ -879,7 +879,7 @@ const kk: Messages = {
   "landing.trust.print": "Қазақстан бойынша басып шығару және жеткізу",
   "landing.trust.printed": "Басып шығару және жеткізу",
   "landing.trust.pdf": "Бірнеше минутта PDF — үйде басып шығарыңыз",
-  "landing.trust.data": "Балалардың деректері Қазақстанда сақталады",
+  "landing.trust.data": "Деректерді сатпаймыз және жарнамаға пайдаланбаймыз",
 
   "landing.how.title": "Бұл қалай жұмыс істейді",
   "landing.how.choose.title": "Ертегіні таңдаңыз",
@@ -1696,7 +1696,7 @@ const en: Messages = {
   "landing.trust.print": "Print and delivery across Kazakhstan",
   "landing.trust.printed": "Print and delivery",
   "landing.trust.pdf": "A PDF in minutes, ready to print at home",
-  "landing.trust.data": "Children's data stays in Kazakhstan",
+  "landing.trust.data": "We never sell data or use it for ads",
 
   "landing.how.title": "How it works",
   "landing.how.choose.title": "Choose a story",
@@ -2514,7 +2514,7 @@ const es: Messages = {
   "landing.trust.print": "Impresión y envío a todo Kazajistán",
   "landing.trust.printed": "Impresión y envío",
   "landing.trust.pdf": "Un PDF en minutos, listo para imprimir en casa",
-  "landing.trust.data": "Los datos de los niños se quedan en Kazajistán",
+  "landing.trust.data": "No vendemos datos ni los usamos para publicidad",
 
   "landing.how.title": "Cómo funciona",
   "landing.how.choose.title": "Elige una historia",
@@ -3332,7 +3332,7 @@ const de: Messages = {
   "landing.trust.print": "Druck und Lieferung in ganz Kasachstan",
   "landing.trust.printed": "Druck und Lieferung",
   "landing.trust.pdf": "PDF in wenigen Minuten, zum Ausdrucken zu Hause",
-  "landing.trust.data": "Die Daten deines Kindes bleiben in Kasachstan",
+  "landing.trust.data": "Wir verkaufen keine Daten und nutzen sie nicht für Werbung",
 
   "landing.how.title": "So funktioniert’s",
   "landing.how.choose.title": "Geschichte wählen",

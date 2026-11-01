@@ -20,6 +20,7 @@ import {
   SEEDED_FAQ_V2,
   SEEDED_FAQ_V3,
   SEEDED_FAQ_V4,
+  SEEDED_FAQ_V5,
 } from './seeded';
 
 /** The Setting table in memory behind the few Prisma calls the service makes. */
@@ -130,7 +131,7 @@ describe('ReferenceService seeding', () => {
   });
 
   it('upgrades every FAQ seed stored before the photo page to today’s', async () => {
-    const seeds = [SEEDED_FAQ_V1, SEEDED_FAQ_V2, SEEDED_FAQ_V3, SEEDED_FAQ_V4];
+    const seeds = [SEEDED_FAQ_V1, SEEDED_FAQ_V2, SEEDED_FAQ_V3, SEEDED_FAQ_V4, SEEDED_FAQ_V5];
     for (const seed of seeds) {
       expect(upgradeStored('faq', structuredClone(seed))).toEqual(DEFAULT_FAQ);
     }
@@ -147,7 +148,7 @@ describe('ReferenceService seeding', () => {
   });
 
   it('leaves an edited FAQ of the proofread seeds alone', () => {
-    for (const seed of [SEEDED_FAQ_V3, SEEDED_FAQ_V4]) {
+    for (const seed of [SEEDED_FAQ_V3, SEEDED_FAQ_V4, SEEDED_FAQ_V5]) {
       const faq = (structuredClone(seed) as { published: boolean }[]).map(
         (item, i) => (i === 0 ? { ...item, published: false } : item),
       );
