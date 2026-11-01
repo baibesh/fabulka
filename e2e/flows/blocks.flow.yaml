@@ -1,0 +1,110 @@
+# Book blocks before ordering: the parent takes out «поговорим», adds a drawing page, moves the
+# dedication after the story and writes their own dedication; the book is re-rendered each time and
+# padded with drawing pages to a multiple of 4, which the editor counts and the reader marks. The
+# story and the cover never move (mock models).
+appId: ${WEB}
+tags: [book, layout]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Блоки ${Date.now()}"
+  dedication: "Любимой Алие от мамы и папы"
+http:
+  baseUrl: ${API}
+commands:
+  # A book of your own from the wizard (a 5-year-old: «Сказка»).
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/create?lang=ru"
+  - tapOn: { testId: voice-manual }
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "кошки"
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "Книга готова", timeout: 30000 }
+  - sql:
+      query: 'select id, "clientKey" as key from "Book" where child->>''name'' = $1'
+      params: ["${childName}"]
+      readOnly: true
+      extract: { bookId: "$[0].id", browserKey: "$[0].key" }
+      assert: { rows: 1 }
+
+  # Cover, dedication, 4 story pages, «поговорим», a drawing page, the end: 3 drawing pages pad it to 12.
+  - waitForVisible: { testId: book-blocks }
+  - assertVisible: { css: "[data-testid=page-count][data-count='12'][data-fillers='3']" }
+  - assertVisible: { testId: padding-note }
+  - assertNotVisible: { css: "[data-testid=block-row][data-kind=story] [data-testid^=block-remove]" }
+  - assertNotVisible: { css: "[data-testid=block-row][data-kind=cover] [data-testid^=block-up]" }
+
+  # Without «поговорим» the book is exactly 8 pages: no padding.
+  - tapOn: { css: "[data-testid=block-row][data-kind=talk] [data-testid^=block-remove]" }
+  - waitForVisible: { css: "[data-testid=page-count][data-count='8'][data-fillers='0']", timeout: 20000 }
+  - assertNotVisible: { css: "[data-testid=block-row][data-kind=talk]" }
+  - assertNotVisible: { testId: padding-note }
+
+  # One more drawing page: 9 pages, padded to 12 again.
+  - tapOn: { testId: block-add-drawing }
+  - waitForVisible: { css: "[data-testid=page-count][data-count='12'][data-fillers='3']", timeout: 20000 }
+
+  # The dedication goes after the story.
+  - tapOn: { css: "[data-testid=block-row][data-kind=dedication] [data-testid^=block-down]" }
+  - waitForVisible: { css: "[data-testid=block-row][data-kind=story] + [data-testid=block-row][data-kind=dedication]", timeout: 20000 }
+
+  # The parent's own dedication.
+  - tapOn: { testId: dedication-input }
+  - eraseText: 200
+  - inputText: "${dedication}"
+  - tapOn: { testId: dedication-save }
+  - waitForVisible: { testId: dedication-reset, timeout: 20000 }
+  - sql:
+      query: >-
+        select (select string_agg(b->>'kind', ',' order by o) from jsonb_array_elements(layout->'blocks') with ordinality as t(b, o)) as blocks,
+        layout->>'dedication' as dedication, layout->'qa'->>'status' as qa
+        from "Book" where id = $1
+      params: ["${bookId}"]
+      readOnly: true
+      extract: { saved: "$[0].dedication" }
+      assert: { rows: 1, first: { blocks: "cover,story,dedication,drawing,drawing,end", qa: ok } }
+  - assertTrue: { equals: ["${saved}", "${dedication}"] }
+
+  # The reader shows the padding pages as added for print: the spread before the back cover.
+  - tapOn: { testId: reader-next }
+  - tapOn: { testId: reader-next }
+  - tapOn: { testId: reader-next }
+  - tapOn: { testId: reader-next }
+  - waitForVisible: { css: "[data-page-key=pad-1] [data-testid=filler-badge]" }
+  - assertVisible: { css: "[data-testid=book-reader][data-pages='12']" }
+
+  # The story cannot move, a block the template does not offer cannot be added, markup is refused.
+  - request:
+      method: PATCH
+      url: /books/${bookId}/layout
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { blocks: [cover, dedication, drawing, story, drawing, end] }
+      assert: { status: 200 }
+  - request:
+      method: PATCH
+      url: /books/${bookId}/layout
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { blocks: [story, cover, end] }
+      assert: { status: 400, json: { "$.code": blocks_refused, "$.reason": fixed-moved } }
+  - request:
+      method: PATCH
+      url: /books/${bookId}/layout
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { blocks: [cover, story, talk, talk, end] }
+      assert: { status: 400, json: { "$.code": blocks_refused } }
+  - request:
+      method: PATCH
+      url: /books/${bookId}/layout
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { dedication: "<b>Алия</b>" }
+      assert: { status: 400 }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

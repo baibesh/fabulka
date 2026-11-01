@@ -15,6 +15,8 @@ import {
   JournalStatsSchema,
   MethodologyPreviewResultSchema,
   PricesSchema,
+  PrintFormatSchema,
+  type PrintFormat,
   ModelCallDetailSchema,
   ModelCallPageSchema,
   ModelCallSchema,
@@ -161,6 +163,10 @@ export async function adminReference(): Promise<AdminReference> {
 
 export async function savePrices(prices: Prices): Promise<Prices> {
   return PricesSchema.parse(await request("/api/admin/reference/prices", json("PUT", prices)));
+}
+
+export async function saveFormats(formats: PrintFormat[]): Promise<PrintFormat[]> {
+  return PrintFormatSchema.array().parse(await request("/api/admin/reference/formats", json("PUT", formats)));
 }
 
 export async function saveCities(cities: City[]): Promise<City[]> {

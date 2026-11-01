@@ -5,6 +5,9 @@ import {
   bookDocument,
   chooseLayout,
   countWords,
+  cropNote,
+  printDocument,
+  printPageSize,
   type PageSubject,
   type PageTone,
   renderBook,
@@ -95,18 +98,27 @@ export class PdfService {
       const folder = join(this.storage.root, 'books', bookId);
       const tones = await measureTones(page, folder, book, pictures);
       let current: BookLayout = { ...layout, fits: {} };
+      const notes: LayoutQa['notes'] = [];
       if (pictures.length) {
-        current = chooseLayout(
-          current,
-          pictures.map((p) => ({
-            page: p.page,
-            subject: p.subject,
-            tone: tones[p.page],
-            words: countWords(
-              book.pages.find((b) => b.page === p.page)?.text ?? '',
-            ),
-          })),
-        );
+        const analyses = pictures.map((p) => ({
+          page: p.page,
+          subject: p.subject,
+          tone: tones[p.page],
+          words: countWords(
+            book.pages.find((b) => b.page === p.page)?.text ?? '',
+          ),
+        }));
+        current = chooseLayout(current, analyses);
+        // Layouts the format crops the picture too much for are left out; staff see which.
+        for (const analysis of analyses) {
+          const detail = cropNote(current, analysis);
+          if (detail)
+            notes.push({
+              page: `story-${analysis.page}`,
+              kind: 'crop',
+              detail,
+            });
+        }
       }
       let check: PageCheck = { fits: {}, overflow: [], fallback: [] };
       for (let round = 0; round < ROUNDS; round++) {
@@ -138,7 +150,7 @@ export class PdfService {
         preferCSSPageSize: true,
       });
       const pdfPath = await this.storage.save(`books/${bookId}/book.pdf`, pdf);
-      const qa = verdict(check);
+      const qa = verdict(check, new Date(), notes);
       if (qa.status === 'blocked') {
         const summary = qa.issues
           .map((i) => `${i.page}: ${i.kind} (${i.detail})`)
@@ -154,6 +166,53 @@ export class PdfService {
     } catch (error) {
       call.fail(error);
       throw error;
+    } finally {
+      await browser.close();
+    }
+  }
+
+  /**
+   * The print file of a frozen layout: every page with the format's bleed (pictures run on past the
+   * trim), on a sheet with crop marks and a label outside the bleed. Nothing is chosen or checked
+   * again — the layout, its page picks and its shrink are the ones the order froze. Written to
+   * `outPath` (a storage path); returns it.
+   */
+  async renderPrint(
+    bookId: string,
+    book: RenderableBook,
+    layout: BookLayout,
+    outPath: string,
+    label: string,
+  ): Promise<string> {
+    const hyphenate = hyphenatorFor(book.language);
+    const rendered = renderBook(book, layout, { hyphenate, bleed: true });
+    const html = printDocument(rendered, {
+      title: book.title ?? '',
+      language: book.language,
+      fontCss: this.fontCss,
+      format: layout.format,
+      label,
+    });
+    // Next to book.html, so the pictures' relative paths resolve the same way.
+    const htmlPath = await this.storage.save(
+      `books/${bookId}/print.html`,
+      Buffer.from(html),
+    );
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      await page.goto(pathToFileURL(join(this.storage.root, htmlPath)).href, {
+        waitUntil: 'load',
+      });
+      await page.evaluate(() => document.fonts.ready);
+      const size = printPageSize(layout.format);
+      const pdf = await page.pdf({
+        width: `${size.widthMm}mm`,
+        height: `${size.heightMm}mm`,
+        printBackground: true,
+        preferCSSPageSize: true,
+      });
+      return await this.storage.save(outPath, pdf);
     } finally {
       await browser.close();
     }
@@ -213,7 +272,11 @@ async function measureTones(
   return tones;
 }
 
-export function verdict(check: PageCheck, now = new Date()): LayoutQa {
+export function verdict(
+  check: PageCheck,
+  now = new Date(),
+  notes: LayoutQa['notes'] = [],
+): LayoutQa {
   const issues: RenderIssue[] = [
     ...check.overflow.map((o) => ({ ...o, kind: 'overflow' as const })),
     ...check.fallback.map((f) => ({ ...f, kind: 'fallback-font' as const })),
@@ -223,7 +286,7 @@ export function verdict(check: PageCheck, now = new Date()): LayoutQa {
     : Object.keys(check.fits).length
       ? 'shrunk'
       : 'ok';
-  return { status, checkedAt: now.toISOString(), issues };
+  return { status, checkedAt: now.toISOString(), issues, notes };
 }
 
 /**

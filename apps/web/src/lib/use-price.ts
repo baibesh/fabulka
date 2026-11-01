@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@/lib/query";
-import { bookPrice, orderPrice, type BookKind, type Cover } from "@fabulka/shared";
+import { bookPrice, lowestCoverPrice, orderPrice, type BookKind, type Cover } from "@fabulka/shared";
 import { useI18n } from "@/i18n/i18n";
 import { getReference } from "./api";
 import { formatKzt, formatPrice } from "./format";
@@ -21,14 +21,23 @@ export function useBookPrice(kind: BookKind): string | null {
   return prices ? formatPrice(bookPrice(kind, country, prices, countries)) : null;
 }
 
-/** One printed copy with this cover, "9 900 ₸"; null while loading. */
-export function useCoverPrice(cover: Cover): string | null {
-  const prices = useReference().data?.prices;
-  return prices ? formatKzt(prices.covers[cover]) : null;
+/**
+ * One printed copy with this cover, "9 900 ₸": in the book's format when it is offered, else the
+ * cheapest offered one; null while loading.
+ */
+export function useCoverPrice(cover: Cover, formatId?: string): string | null {
+  const formats = useReference().data?.formats;
+  if (!formats) return null;
+  const format = formats.find((f) => f.id === formatId);
+  return formatKzt(format ? format.prices[cover] : (lowestCoverPrice(formats, cover) ?? 0));
 }
 
-/** What a printed order to this city (by id) costs at the owner's prices; null while loading. The API prices it again. */
-export function useOrderPrice(cover: Cover, quantity: number, cityId: string) {
+/**
+ * What a printed order in this format to this city (by id) costs at the owner's prices; null while
+ * loading or for a format that is not offered. The API prices it again.
+ */
+export function useOrderPrice(formatId: string | undefined, cover: Cover, quantity: number, cityId: string) {
   const data = useReference().data;
-  return data ? orderPrice(cover, quantity, cityId, data.prices, data.cities) : null;
+  const format = data?.formats.find((f) => f.id === formatId);
+  return data && format ? orderPrice(format, cover, quantity, cityId, data.prices, data.cities) : null;
 }

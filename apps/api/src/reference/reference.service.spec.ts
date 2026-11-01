@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  DEFAULT_FORMATS,
   COUNTRY_BLOCKED,
   COUNTRY_POLICY_BLOCKED,
   DEFAULT_CITIES,
@@ -183,8 +184,14 @@ describe('ReferenceService seeding', () => {
         freeDelivery: true,
       },
     ]);
-    expect((await service.orderPrice('soft', 1, 'taraz')).delivery).toBe(0);
-    expect((await service.orderPrice('soft', 1, 'almaty')).delivery).toBe(1500);
+    expect(
+      (await service.orderPrice(DEFAULT_FORMATS[0], 'soft', 1, 'taraz'))
+        .delivery,
+    ).toBe(0);
+    expect(
+      (await service.orderPrice(DEFAULT_FORMATS[0], 'soft', 1, 'almaty'))
+        .delivery,
+    ).toBe(1500);
   });
 
   it('turns print off where an edited list priced it in dollars', async () => {
@@ -265,12 +272,56 @@ describe('ReferenceService edits', () => {
     await service.setCities(
       DEFAULT_CITIES.map((c) => ({ ...c, freeDelivery: c.id === 'taraz' })),
     );
-    expect(await service.orderPrice('soft', 1, 'taraz')).toEqual({
+    expect(
+      await service.orderPrice(DEFAULT_FORMATS[0], 'soft', 1, 'taraz'),
+    ).toEqual({
       books: 9900,
       delivery: 0,
       total: 9900,
     });
-    expect((await service.orderPrice('soft', 1, 'almaty')).delivery).toBe(1500);
+    expect(
+      (await service.orderPrice(DEFAULT_FORMATS[0], 'soft', 1, 'almaty'))
+        .delivery,
+    ).toBe(1500);
+  });
+});
+
+describe('ReferenceService formats', () => {
+  it('seeds the formats with the square book at the cover prices the owner had set', async () => {
+    const { service, rows } = settingsStore({
+      [REFERENCE_KEYS.prices]: {
+        ...DEFAULT_PRICES,
+        covers: { soft: 8800, hard: 13800 },
+      },
+    });
+    await service.onModuleInit();
+    const formats = rows.get(REFERENCE_KEYS.formats) as typeof DEFAULT_FORMATS;
+    expect(formats.map((f) => f.id)).toEqual([
+      'square-210',
+      'a4-landscape',
+      'a5-portrait',
+    ]);
+    expect(formats[0].prices).toEqual({ soft: 8800, hard: 13800 });
+    expect(formats[1].prices).toEqual(DEFAULT_FORMATS[1].prices);
+  });
+
+  it('offers only published formats on the site and refuses an unpublished one', async () => {
+    const { service } = settingsStore();
+    await service.setFormats(
+      DEFAULT_FORMATS.map((f) => ({
+        ...f,
+        published: f.id !== 'a4-landscape',
+      })),
+    );
+    expect((await service.public()).formats.map((f) => f.id)).toEqual([
+      'square-210',
+      'a5-portrait',
+    ]);
+    expect((await service.admin()).formats).toHaveLength(3);
+    await expect(service.publishedFormat('a4-landscape')).rejects.toThrow(
+      BadRequestException,
+    );
+    expect((await service.defaultFormat()).id).toBe('square-210');
   });
 });
 

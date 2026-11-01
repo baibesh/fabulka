@@ -1,6 +1,6 @@
 "use client";
 
-import { LANGUAGE_NAMES, OTHER_COUNTRY, bookPrice, cityName, faqFor, fillFaq, localized, type FaqPlaceholder } from "@fabulka/shared";
+import { LANGUAGE_NAMES, OTHER_COUNTRY, bookPrice, cityName, faqFor, fillFaq, localized, lowestCoverPrice, type FaqPlaceholder } from "@fabulka/shared";
 import { ChevronDown } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import { formatKzt, formatPrice } from "@/lib/format";
@@ -21,8 +21,8 @@ export function Faq() {
     ? {
         templatePrice: formatPrice(bookPrice("template", country, reference.prices, countries)),
         customPrice: formatPrice(bookPrice("custom", country, reference.prices, countries)),
-        softCover: formatKzt(reference.prices.covers.soft, locale),
-        hardCover: formatKzt(reference.prices.covers.hard, locale),
+        softCover: formatKzt(lowestCoverPrice(reference.formats, "soft") ?? 0, locale),
+        hardCover: formatKzt(lowestCoverPrice(reference.formats, "hard") ?? 0, locale),
         delivery: formatKzt(reference.prices.deliveryKzt, locale),
         freeCities: reference.cities
           .filter((c) => c.freeDelivery)

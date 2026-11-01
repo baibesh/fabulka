@@ -40,6 +40,17 @@ const MAX_BUSY = 46;
 /** How far beyond the estimate render QA's shrink may still make text fit. */
 const SHRINK_ROOM = 1.4;
 const PT_MM = 25.4 / 72;
+/**
+ * The least share of a picture (of its width or its height) a layout may keep after cropping it to
+ * its box. Pictures are drawn 3:2 with a safe margin; a tall A5 page or an A4 spread needs more
+ * picture than that, and such layouts give way to the plate (render QA notes it).
+ */
+export const MIN_VISIBLE = 0.5;
+
+/** The share of a picture of `imageAspect` that stays in view when it covers a box of `boxAspect`. */
+export function visibleShare(imageAspect: number, boxAspect: number): number {
+  return Math.min(boxAspect / imageAspect, imageAspect / boxAspect);
+}
 
 export function encodeGrid(cells: boolean[]): string {
   let hex = "";
@@ -120,7 +131,7 @@ export interface Verdict {
   ok: boolean;
   ink: "dark" | "light";
   /** Why it was turned down, for the admin and the tests. */
-  reason?: "overlap" | "contrast" | "busy" | "words" | "unknown";
+  reason?: "overlap" | "contrast" | "busy" | "words" | "unknown" | "crop";
   contrast?: number;
 }
 
@@ -159,6 +170,12 @@ export function judgePage(layout: BookLayout, page: PageAnalysis): Partial<PageL
   for (const variant of [...theme.variants, "plate" as const]) {
     const art = artRect(variant, format);
     let verdict: Verdict;
+    const share = visibleShare(aspect, art.w / art.h);
+    if (variant !== "plate" && share < MIN_VISIBLE - 1e-9) {
+      verdicts[variant] = { ok: false, ink: "dark", reason: "crop" };
+      ink[variant] = "dark";
+      continue;
+    }
     if (variant === "split" || variant === "facing") {
       verdict = { ok: true, ink: "dark" };
     } else if (variant === "spread") {
@@ -198,6 +215,26 @@ export function chooseLayout(layout: BookLayout, pages: PageAnalysis[]): BookLay
     next.pages[String(page.page)] = { ...current, ...judged, choice };
   }
   return next;
+}
+
+/**
+ * Render QA's note for a page whose picture is too narrow for some of the theme's layouts in this
+ * format (they would keep less than MIN_VISIBLE of it), so the chooser left them out — and fell back
+ * to the plate when none was left. Null when every layout keeps enough picture.
+ */
+export function cropNote(layout: BookLayout, page: PageAnalysis): string | null {
+  const aspect = page.tone?.aspect ?? 1.5;
+  const dropped = layout.theme.variants
+    .filter((v) => v !== "plate")
+    .map((v) => {
+      const art = artRect(v, layout.format);
+      return { variant: v, share: visibleShare(aspect, art.w / art.h) };
+    })
+    .filter((d) => d.share < MIN_VISIBLE - 1e-9);
+  if (!dropped.length) return null;
+  const list = dropped.map((d) => `${d.variant} ${Math.round(d.share * 100)}%`).join(", ");
+  const all = dropped.length === layout.theme.variants.filter((v) => v !== "plate").length;
+  return `${layout.format.id} crops the picture too much for ${list}${all ? "; plate used" : ""}`;
 }
 
 /** Words in a text, for the capacity check. */

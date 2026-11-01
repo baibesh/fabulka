@@ -62,6 +62,8 @@ export interface PlannedPage {
   /** 0 for a story page's first page, 1 for the second page of a two-page variant. */
   part?: 0 | 1;
   variant?: PageVariant;
+  /** A blank drawing page added only to make the page count a multiple of 4. */
+  filler?: boolean;
 }
 
 export const isLeft = (index: number) => index % 2 === 1;
@@ -94,31 +96,23 @@ export interface PlannableBook {
 }
 
 /**
- * The book's printed pages in order: the blocks as the layout orders them, each story page in its
- * variant, then drawing pages so the count is a multiple of 4 (a printed book is folded sheets) —
- * which also leaves the back cover alone on a left page.
+ * The book's printed pages in order: the blocks as the layout orders them (a drawing block is one
+ * page), each story page in its variant, then — just before the end — blank drawing pages so the
+ * count is a multiple of 4 (a printed book is folded sheets). Those are marked `filler`: the reader
+ * shows them as padding. The padding comes after the story, so it never moves a story page.
  */
 export function planBook(book: PlannableBook, layout: BookLayout): PlannedPage[] {
-  let fillers = 0;
-  for (let round = 0; round < 4; round++) {
-    const plan = build(book, layout, fillers);
-    const extra = (4 - (plan.length % 4)) % 4;
-    if (!extra) return plan;
-    fillers += extra;
-  }
-  return build(book, layout, fillers);
-}
-
-function build(book: PlannableBook, layout: BookLayout, fillers: number): PlannedPage[] {
   const pages: PlannedPage[] = [];
   const push = (page: Omit<PlannedPage, "index" | "side">) => {
     const index = pages.length;
     pages.push({ ...page, index, side: index === 0 ? "cover" : isLeft(index) ? "left" : "right" });
   };
-  const drawing = () => {
-    for (let n = 1; n <= fillers; n++) push({ key: `drawing-${n}`, kind: "drawing" });
+  let drawings = 0;
+  let ended = false;
+  const pad = () => {
+    const extra = (4 - ((pages.length + (ended ? 0 : 1)) % 4)) % 4;
+    for (let n = 1; n <= extra; n++) push({ key: `pad-${n}`, kind: "drawing", filler: true });
   };
-  const hasDrawing = layout.blocks.some((b) => b.kind === "drawing");
   for (const block of layout.blocks) {
     switch (block.kind) {
       case "cover":
@@ -138,13 +132,18 @@ function build(book: PlannableBook, layout: BookLayout, fillers: number): Planne
         if (book.talkQuestions.length) push({ key: "talk", kind: "talk" });
         break;
       case "drawing":
-        drawing();
+        push({ key: `drawing-${++drawings}`, kind: "drawing" });
         break;
       case "end":
-        if (!hasDrawing) drawing();
+        pad();
+        ended = true;
         push({ key: "end", kind: "end" });
         break;
     }
+  }
+  if (!ended) {
+    ended = true;
+    pad();
   }
   return pages;
 }

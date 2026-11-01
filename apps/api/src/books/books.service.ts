@@ -13,15 +13,21 @@ import {
   BOOK_LABELS,
   BOOK_THEMES,
   LAYOUT_LOCKED,
+  TemplateBlocksSchema,
   answersProblem,
+  arrangeBlocks,
   availableVariants,
   blankPage,
+  bookFormatOf,
   defaultThemeId,
   newLayout,
   planBook,
   progressFor,
+  withFormat,
   withTheme,
   wordsPerPage,
+  type BookTheme,
+  type TemplateBlocks,
   type Book,
   type BookLayout,
   type PageLayout,
@@ -49,7 +55,12 @@ import { toyUploadPath } from '../toy/toys.controller';
 import { layoutOf, withHeadingCheck } from '../layout/layout';
 import { PdfService } from '../pdf/pdf.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ReferenceService } from '../reference/reference.service';
 import { StorageService } from '../storage/storage.service';
+import { ThemesService } from '../themes/themes.service';
+
+/** Body of a 400 from PATCH /books/:id/layout: the new block order breaks the template's rules. */
+export const BLOCKS_REFUSED = 'blocks_refused';
 
 /** A page as stored in Book.pages. */
 export interface StoredPage {
@@ -98,7 +109,9 @@ export function ownsBook(
 interface Job {
   brief: StoryBrief;
   /** The book's theme: the template's, else by age. */
-  themeId: string;
+  theme: BookTheme;
+  /** The template's blocks; null: the default ones. */
+  blocks?: TemplateBlocks | null;
   /** Art style of a catalog book; the default one otherwise. */
   style?: string;
   /** The uploaded toy photo, when the parent sent one. */
@@ -126,6 +139,8 @@ export class BooksService implements OnModuleInit {
     private readonly methodologies: MethodologiesService,
     @Inject(MODEL_GATEWAY) private readonly models: ModelGateway,
     private readonly journal: JournalService,
+    private readonly reference: ReferenceService,
+    private readonly themes: ThemesService,
     config: ConfigService,
   ) {
     this.pageCount = Number(config.get('PAGE_COUNT', 10));
@@ -159,11 +174,10 @@ export class BooksService implements OnModuleInit {
     userId: string | null = null,
   ): Promise<Book> {
     const { child } = input;
-    const themeId = defaultThemeId(child.age);
     const job: Job = input.template
       ? await this.catalogJob(input.template, input)
       : {
-          themeId,
+          theme: BOOK_THEMES[defaultThemeId(child.age)],
           brief: {
             child,
             pageCount: this.pageCount,
@@ -175,7 +189,8 @@ export class BooksService implements OnModuleInit {
           },
         };
     // The theme's type size decides how many words fit on a page; the story is written to fit.
-    const layout = newLayout(job.themeId, child.age);
+    const format = bookFormatOf(await this.reference.defaultFormat());
+    const layout = newLayout(job.theme, child.age, format, job.blocks);
     job.brief.wordsPerPage = wordsPerPage(layout.theme, child.age);
     if (input.toy) {
       await this.storage.read(toyUploadPath(input.toy.upload)).catch(() => {
@@ -306,7 +321,31 @@ export class BooksService implements OnModuleInit {
     }
     let layout = layoutOf(row.layout);
     if (patch.theme && patch.theme !== layout.theme.id)
-      layout = withTheme(layout, patch.theme);
+      layout = withTheme(layout, await this.theme(patch.theme, row.language));
+    if (patch.format && patch.format !== layout.format.id) {
+      const format = await this.reference.publishedFormat(patch.format);
+      layout = withFormat(layout, bookFormatOf(format));
+    }
+    if (patch.blocks) {
+      const arranged = arrangeBlocks(layout, patch.blocks);
+      if ('problem' in arranged) {
+        throw new BadRequestException({
+          code: BLOCKS_REFUSED,
+          reason: arranged.problem,
+          message: `These blocks cannot be arranged so: ${arranged.problem}`,
+        });
+      }
+      layout = arranged.layout;
+    }
+    if (patch.dedication !== undefined) {
+      if (
+        patch.dedication !== null &&
+        !layout.blocks.some((b) => b.kind === 'dedication')
+      ) {
+        throw new BadRequestException('The book has no dedication page');
+      }
+      layout = { ...layout, dedication: patch.dedication };
+    }
     if (patch.choices) {
       const plan = planBook(storedBook(row), layout);
       for (const [page, choice] of Object.entries(patch.choices)) {
@@ -336,7 +375,7 @@ export class BooksService implements OnModuleInit {
       throw new ConflictException('The book is still being made');
     let layout = layoutOf(row.layout);
     if (patch.theme && patch.theme !== layout.theme.id)
-      layout = withTheme(layout, patch.theme);
+      layout = withTheme(layout, await this.theme(patch.theme, row.language));
     const pages = row.pages as unknown as StoredPage[];
     for (const [page, pin] of Object.entries(patch.pins ?? {})) {
       if (!pages.some((p) => String(p.page) === page))
@@ -344,6 +383,29 @@ export class BooksService implements OnModuleInit {
       layout = setPage(layout, page, { pin });
     }
     await this.rerender(id, layout);
+  }
+
+  /** A theme the book may switch to: selectable and covering its language; 400 otherwise. */
+  private async theme(id: string, language: string): Promise<BookTheme> {
+    const theme = await this.themes.pick(id, language as Language);
+    if (!theme)
+      throw new BadRequestException(`Theme ${id} cannot be used for this book`);
+    return theme;
+  }
+
+  /**
+   * Lays an unordered book out at another published format before it is ordered (the order form's
+   * pick); nothing happens when it already has that format. Returns the new layout.
+   */
+  async ensureFormat(id: string, formatId: string): Promise<BookLayout> {
+    const row = await this.prisma.book.findUniqueOrThrow({ where: { id } });
+    const layout = layoutOf(row.layout);
+    if (layout.format.id === formatId) return layout;
+    const format = await this.reference.publishedFormat(formatId);
+    await this.rerender(id, withFormat(layout, bookFormatOf(format)));
+    return layoutOf(
+      (await this.prisma.book.findUniqueOrThrow({ where: { id } })).layout,
+    );
   }
 
   /** Renders the PDF again with a changed layout and stores both. */
@@ -366,7 +428,7 @@ export class BooksService implements OnModuleInit {
     const labels = BOOK_LABELS[book.language];
     const checked = withHeadingCheck(layout, [
       book.title ?? '',
-      labels.madeFor(book.childName),
+      layout.dedication ?? labels.madeFor(book.childName),
       labels.talk,
       labels.end,
     ]);
@@ -408,15 +470,13 @@ export class BooksService implements OnModuleInit {
       );
     }
     // A theme the template names, if it still covers the book's language; else by age.
-    const theme = template.layoutTheme
-      ? BOOK_THEMES[template.layoutTheme]
-      : undefined;
-    const themeId =
-      theme && !theme.legacy && theme.languages.includes(child.language)
-        ? theme.id
-        : defaultThemeId(child.age);
+    const named = template.layoutTheme
+      ? await this.themes.pick(template.layoutTheme, child.language)
+      : null;
+    const blocks = TemplateBlocksSchema.safeParse(template.blocks);
     return {
-      themeId,
+      theme: named ?? BOOK_THEMES[defaultThemeId(child.age)],
+      blocks: blocks.success ? blocks.data : null,
       brief: {
         child,
         pageCount: this.pageCount,
@@ -436,12 +496,12 @@ export class BooksService implements OnModuleInit {
 
   private async generate(
     id: string,
-    { brief, style, toyUpload, themeId }: Job,
+    { brief, style, toyUpload, theme }: Job,
     spent: Spend,
   ): Promise<void> {
     const { child } = brief;
     // Pictures leave calm space where the theme prints text over them.
-    const textSpace = BOOK_THEMES[themeId]?.textSpace ?? undefined;
+    const textSpace = theme.textSpace ?? undefined;
 
     // The toy first: SAM cuts it out of the photo, Muse Spark puts it into words for the story.
     let toyReference: Buffer | null = null;

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_FORMATS,
+  FormatsSchema,
+  lowestCoverPrice,
   CountriesSchema,
   DEFAULT_COUNTRIES,
   DEFAULT_FAQ,
@@ -78,20 +81,34 @@ describe("progressFor", () => {
 });
 
 describe("orders", () => {
+  const square = DEFAULT_FORMATS[0];
   it("prices delivery by city id", () => {
-    expect(orderPrice("hard", 2, "almaty", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 29800, delivery: 0, total: 29800 });
-    expect(orderPrice("soft", 1, "shymkent", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 9900, delivery: 1500, total: 11400 });
+    expect(orderPrice(square, "hard", 2, "almaty", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 29800, delivery: 0, total: 29800 });
+    expect(orderPrice(square, "soft", 1, "shymkent", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 9900, delivery: 1500, total: 11400 });
     // A name is not an id: no free delivery by the Russian name any more.
-    expect(orderPrice("soft", 1, "Алматы", DEFAULT_PRICES, DEFAULT_CITIES).delivery).toBe(1500);
+    expect(orderPrice(square, "soft", 1, "Алматы", DEFAULT_PRICES, DEFAULT_CITIES).delivery).toBe(1500);
   });
 
-  it("prices by the owner's prices and free-delivery cities", () => {
-    const prices = { ...DEFAULT_PRICES, covers: { soft: 5000, hard: 8000 }, deliveryKzt: 700 };
+  it("prices copies by the format and delivery by the owner's free-delivery cities", () => {
+    const prices = { ...DEFAULT_PRICES, deliveryKzt: 700 };
+    const format = { ...square, prices: { soft: 5000, hard: 8000 } };
     const cities = DEFAULT_CITIES.map((c) => ({ ...c, freeDelivery: c.id === "shymkent" }));
-    expect(orderPrice("soft", 2, "shymkent", prices, cities)).toEqual({ books: 10000, delivery: 0, total: 10000 });
-    expect(orderPrice("hard", 1, "almaty", prices, cities)).toEqual({ books: 8000, delivery: 700, total: 8700 });
+    expect(orderPrice(format, "soft", 2, "shymkent", prices, cities)).toEqual({ books: 10000, delivery: 0, total: 10000 });
+    expect(orderPrice(format, "hard", 1, "almaty", prices, cities)).toEqual({ books: 8000, delivery: 700, total: 8700 });
     // A city that is no longer listed pays the fee.
-    expect(orderPrice("soft", 1, "tirana", prices, cities).delivery).toBe(700);
+    expect(orderPrice(format, "soft", 1, "tirana", prices, cities).delivery).toBe(700);
+    const a4 = DEFAULT_FORMATS.find((f) => f.id === "a4-landscape")!;
+    expect(orderPrice(a4, "soft", 1, "almaty", DEFAULT_PRICES, DEFAULT_CITIES).total).toBe(13900);
+  });
+
+  it("checks print formats", () => {
+    expect(FormatsSchema.safeParse(DEFAULT_FORMATS).success).toBe(true);
+    expect(FormatsSchema.safeParse([...DEFAULT_FORMATS, DEFAULT_FORMATS[0]]).success).toBe(false);
+    expect(FormatsSchema.safeParse(DEFAULT_FORMATS.map((f) => ({ ...f, published: false }))).success).toBe(false);
+    expect(FormatsSchema.safeParse([{ ...square, prices: { soft: 0, hard: 1 } }]).success).toBe(false);
+    expect(FormatsSchema.safeParse([{ ...square, safeMm: 80 }]).success).toBe(false);
+    expect(lowestCoverPrice(DEFAULT_FORMATS, "soft")).toBe(6900);
+    expect(lowestCoverPrice(DEFAULT_FORMATS.map((f) => ({ ...f, published: f.id === "square-210" })), "hard")).toBe(14900);
   });
 
   it("makes city ids from Russian and Kazakh names", () => {
@@ -473,7 +490,6 @@ describe("reference data", () => {
     const books = DEFAULT_PRICES.books;
     expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, books: { ...books, template: { KZT: 1900.5, USD: 3.9 } } }).success).toBe(false);
     expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, books: { ...books, custom: { KZT: 2900, USD: 5.999 } } }).success).toBe(false);
-    expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, covers: { soft: 0, hard: 14900 } }).success).toBe(false);
     expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, deliveryKzt: -1 }).success).toBe(false);
     expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, deliveryKzt: 0 }).success).toBe(true);
   });

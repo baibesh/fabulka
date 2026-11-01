@@ -27,12 +27,12 @@ const finished = (status: BookStatus | undefined) => status === "done" || status
 export function BookView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { t, info } = useI18n();
-  const printPrice = useCoverPrice("soft");
   const { data: book, error } = useQuery({
     queryKey: ["book", id],
     queryFn: () => getBook(id),
     refetchInterval: (query) => (finished(query.state.data?.status) ? false : 1000),
   });
+  const printPrice = useCoverPrice("soft", book?.layout.format.id);
   const { data: methods } = useMethodologies();
 
   if (!book) return <QueryState error={error} />;

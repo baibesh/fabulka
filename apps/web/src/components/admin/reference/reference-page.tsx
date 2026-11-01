@@ -11,10 +11,11 @@ import { BlockedTab } from "./blocked-tab";
 import { CitiesTab } from "./cities-tab";
 import { CountriesTab } from "./countries-tab";
 import { FaqTab } from "./faq-tab";
+import { FormatsTab } from "./formats-tab";
 import { PricesTab } from "./prices-tab";
 import { QUERY } from "./shared";
 
-const TABS = ["prices", "countries", "faq", "cities", "blocked"] as const;
+const TABS = ["prices", "formats", "countries", "faq", "cities", "blocked"] as const;
 type Tab = (typeof TABS)[number];
 
 /** /admin/reference: prices, countries, the landing's FAQ, delivery cities and blocked countries, edited without touching code. */
@@ -40,6 +41,8 @@ export function ReferencePage() {
           <QueryState error={reference.error} scope="admin" />
         ) : tab === "prices" ? (
           <PricesTab initial={data.prices} />
+        ) : tab === "formats" ? (
+          <FormatsTab initial={data.formats} />
         ) : tab === "countries" ? (
           <CountriesTab initial={data.countries} blocked={data.blocked} />
         ) : tab === "faq" ? (

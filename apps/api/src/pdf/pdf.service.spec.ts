@@ -1,4 +1,10 @@
-import { newLayout, type RenderableBook } from '@fabulka/shared';
+import {
+  BOOK_FORMATS,
+  newLayout,
+  printPageSize,
+  withFormat,
+  type RenderableBook,
+} from '@fabulka/shared';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -73,6 +79,28 @@ describe('PdfService (Chromium)', () => {
     expect(result.layout.qa).toMatchObject({ status: 'ok', issues: [] });
     expect(result.layout.fits).toEqual({});
     expect(calls.at(-1)).toBe('render:ok');
+  });
+
+  it('prints the print file with bleed and crop marks at the sheet size', async () => {
+    const layout = withFormat(newLayout('fairy'), BOOK_FORMATS['a5-portrait']);
+    const path = await pdf.renderPrint(
+      'b',
+      book((n) => `${n}-бет. Айгерим Алматыда.`),
+      layout,
+      'orders/o1/print.pdf',
+      'Fabulka · o1',
+    );
+    const file = await readFile(join(root, path));
+    expect(file.subarray(0, 5).toString()).toBe('%PDF-');
+    // Points: (148 + 2 × (3 + 10)) mm × (210 + 2 × (3 + 10)) mm.
+    const size = printPageSize(layout.format);
+    const pt = (mm: number) => (mm / 25.4) * 72;
+    const box = /\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/.exec(
+      file.toString('latin1'),
+    );
+    expect(box).not.toBeNull();
+    expect(Number(box![1])).toBeCloseTo(pt(size.widthMm), 0);
+    expect(Number(box![2])).toBeCloseTo(pt(size.heightMm), 0);
   });
 
   it('shrinks text a little too long for its box', async () => {

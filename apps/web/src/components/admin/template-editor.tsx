@@ -1,8 +1,20 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { methodologyText, themesFor, type AdminTemplate, type SelectableTheme, type TemplateQuestion } from "@fabulka/shared";
-import { Plus, Save, Trash2 } from "lucide-react";
+import {
+  BLOCK_LIMITS,
+  DEFAULT_ADDABLE,
+  DEFAULT_BLOCKS,
+  OPTIONAL_KINDS,
+  TemplateBlocksSchema,
+  methodologyText,
+  themesFor,
+  type AdminTemplate,
+  type SelectableTheme,
+  type TemplateBlocks,
+  type TemplateQuestion,
+} from "@fabulka/shared";
+import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from "lucide-react";
 import { use, useState } from "react";
 import { adminTemplate, updateTemplate } from "@/lib/admin-api";
 import { Card, PageTitle, useAdminI18n } from "./ui";
@@ -36,9 +48,12 @@ function Editor({ initial }: { initial: AdminTemplate }) {
       draft.questions.map((q, i) => (i === index ? { ...q, ...patch } : q)),
     );
 
+  const [blocks, setBlocks] = useState<TemplateBlocks>(() => initial.blocks ?? { order: DEFAULT_BLOCKS, addable: [...DEFAULT_ADDABLE] as TemplateBlocks["addable"] });
+  const blocksOk = TemplateBlocksSchema.safeParse(blocks).success;
   const save = useMutation({
     mutationFn: () =>
       updateTemplate(initial.slug, {
+        blocks,
         title: draft.title,
         summary: draft.summary,
         ageMin: draft.ageMin,
@@ -71,7 +86,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
         aside={
           <div className="flex items-center gap-3">
             {save.isSuccess && <span data-testid="template-saved" className="text-sm text-success">{t("admin.saved")}</span>}
-            <Button type="submit" data-testid="template-save" loading={save.isPending} icon={<Save className="size-4" />}>
+            <Button type="submit" data-testid="template-save" loading={save.isPending} disabled={!blocksOk} icon={<Save className="size-4" />}>
               {t("admin.save")}
             </Button>
           </div>
@@ -145,6 +160,8 @@ function Editor({ initial }: { initial: AdminTemplate }) {
         </Card>
       </div>
 
+      <BlocksCard blocks={blocks} onChange={setBlocks} valid={blocksOk} />
+
       <Card
         title={t("admin.template.questions")}
         action={
@@ -202,5 +219,101 @@ function Editor({ initial }: { initial: AdminTemplate }) {
         ))}
       </Card>
     </form>
+  );
+}
+
+/**
+ * The blocks the template's books get, in order, and what parents may do with them: move a block,
+ * leave it out, add the optional kinds ticked below. The cover, the story and the end never move.
+ */
+function BlocksCard({ blocks, onChange, valid }: { blocks: TemplateBlocks; onChange: (next: TemplateBlocks) => void; valid: boolean }) {
+  const { t } = useAdminI18n();
+  const { order, addable } = blocks;
+  const optional = (kind: string) => (OPTIONAL_KINDS as readonly string[]).includes(kind);
+  const setOrder = (next: TemplateBlocks["order"]) => onChange({ ...blocks, order: next });
+  const move = (i: number, by: -1 | 1) => {
+    const next = [...order];
+    [next[i], next[i + by]] = [next[i + by], next[i]];
+    setOrder(next);
+  };
+  const canMove = (i: number, by: -1 | 1) => optional(order[i].kind) && i + by > 0 && i + by < order.length - 1;
+  return (
+    <Card title={t("admin.template.blocks")} data-testid="template-blocks">
+      <p className="-mt-2 text-sm text-muted">{t("admin.template.blocks.hint")}</p>
+      <ol className="flex flex-col gap-2">
+        {order.map((block, i) => (
+          <li key={`${block.kind}-${i}`} data-testid="template-block" data-kind={block.kind} className="flex flex-wrap items-center gap-3 rounded-xl border border-border p-2 text-sm">
+            <span className="w-6 text-right text-muted">{i + 1}</span>
+            <span className="min-w-32 flex-1 font-medium">{t(`admin.template.block.${block.kind}`)}</span>
+            {optional(block.kind) && (
+              <>
+                <ChoiceLabel>
+                  <Checkbox
+                    data-testid={`template-block-movable-${i}`}
+                    checked={block.movable}
+                    onChange={(e) => setOrder(order.map((b, j) => (j === i ? { ...b, movable: e.target.checked } : b)))}
+                  />
+                  {t("admin.template.block.movable")}
+                </ChoiceLabel>
+                <ChoiceLabel>
+                  <Checkbox
+                    data-testid={`template-block-optional-${i}`}
+                    checked={block.optional}
+                    onChange={(e) => setOrder(order.map((b, j) => (j === i ? { ...b, optional: e.target.checked } : b)))}
+                  />
+                  {t("admin.template.block.optional")}
+                </ChoiceLabel>
+                <IconButton label={t("admin.reference.city.up")} disabled={!canMove(i, -1)} onClick={() => move(i, -1)}>
+                  <ArrowUp className="size-4" />
+                </IconButton>
+                <IconButton label={t("admin.reference.city.down")} disabled={!canMove(i, 1)} onClick={() => move(i, 1)}>
+                  <ArrowDown className="size-4" />
+                </IconButton>
+                <IconButton
+                  data-testid={`template-block-remove-${i}`}
+                  variant="ghost"
+                  label={t("admin.template.block.remove")}
+                  onClick={() => setOrder(order.filter((_, j) => j !== i))}
+                >
+                  <Trash2 className="size-4" />
+                </IconButton>
+              </>
+            )}
+          </li>
+        ))}
+      </ol>
+      <div className="flex flex-wrap gap-2">
+        {OPTIONAL_KINDS.filter((kind) => order.filter((b) => b.kind === kind).length < BLOCK_LIMITS[kind]).map((kind) => (
+          <Button
+            key={kind}
+            variant="secondary"
+            size="sm"
+            data-testid={`template-block-add-${kind}`}
+            icon={<Plus className="size-4" />}
+            onClick={() => {
+              const next = [...order];
+              next.splice(next.length - 1, 0, { kind, movable: true, optional: true });
+              setOrder(next);
+            }}
+          >
+            {t(`admin.template.block.${kind}`)}
+          </Button>
+        ))}
+      </div>
+      <fieldset className="flex flex-wrap items-center gap-4 text-sm">
+        <legend className="mb-1 font-semibold">{t("admin.template.blocks.addable")}</legend>
+        {OPTIONAL_KINDS.map((kind) => (
+          <ChoiceLabel key={kind}>
+            <Checkbox
+              data-testid={`template-addable-${kind}`}
+              checked={addable.includes(kind)}
+              onChange={(e) => onChange({ ...blocks, addable: e.target.checked ? [...addable, kind] : addable.filter((k) => k !== kind) })}
+            />
+            {t(`admin.template.block.${kind}`)}
+          </ChoiceLabel>
+        ))}
+      </fieldset>
+      {!valid && <ErrorText>{t("admin.template.blocks.invalid")}</ErrorText>}
+    </Card>
   );
 }

@@ -323,7 +323,6 @@ after:
       url: ${API}/admin/reference/prices
       json:
         books: { template: { KZT: 1900, USD: 3.9 }, custom: { KZT: 2900, USD: 5.9 } }
-        covers: { soft: 9900, hard: 14900 }
         deliveryKzt: 1500
       assert: { status: 200 }
   - request:

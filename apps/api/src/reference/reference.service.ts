@@ -13,8 +13,11 @@ import {
   DEFAULT_CITIES,
   DEFAULT_COUNTRIES,
   DEFAULT_FAQ,
+  DEFAULT_FORMATS,
   DEFAULT_PRICES,
+  FORMAT_UNKNOWN,
   FaqSchema,
+  FormatsSchema,
   PRINT_CURRENCY,
   PricesSchema,
   REFERENCE_KEYS,
@@ -33,6 +36,7 @@ import {
   type Cover,
   type FaqItem,
   type Prices,
+  type PrintFormat,
   type Reference,
 } from '@fabulka/shared';
 import type { ZodType } from 'zod';
@@ -57,6 +61,8 @@ interface Snapshot {
   countries: CountryEntry[];
   /** The landing's questions, drafts included. */
   faq: FaqItem[];
+  /** Print formats, unpublished ones included. */
+  formats: PrintFormat[];
 }
 
 const DEFAULTS: Snapshot = {
@@ -65,6 +71,7 @@ const DEFAULTS: Snapshot = {
   extraBlocked: [],
   countries: DEFAULT_COUNTRIES,
   faq: DEFAULT_FAQ,
+  formats: DEFAULT_FORMATS,
 };
 
 const SCHEMAS: { [K in keyof Snapshot]: ZodType<Snapshot[K]> } = {
@@ -73,6 +80,7 @@ const SCHEMAS: { [K in keyof Snapshot]: ZodType<Snapshot[K]> } = {
   extraBlocked: UpdateBlockedSchema.shape.extra,
   countries: CountriesSchema,
   faq: FaqSchema,
+  formats: FormatsSchema,
 };
 
 const FIELDS = Object.keys(REFERENCE_KEYS) as (keyof Snapshot)[];
@@ -146,16 +154,36 @@ export class ReferenceService implements OnModuleInit {
    * never edited (see upgradeStored); never overwrites the owner's edits.
    */
   async onModuleInit() {
+    const formats = await this.seedFormats();
     const { count } = await this.prisma.setting.createMany({
       data: FIELDS.map((field) => ({
         key: REFERENCE_KEYS[field],
-        value: DEFAULTS[field],
+        value: field === 'formats' ? formats : DEFAULTS[field],
       })),
       skipDuplicates: true,
     });
     if (count) this.logger.log(`seeded ${count} reference settings`);
     await this.upgrade();
     this.invalidate();
+  }
+
+  /**
+   * The formats to seed: today's defaults, with the square book at the cover prices the owner set
+   * before prices moved to formats (reference.prices.covers), if they had set any.
+   */
+  private async seedFormats(): Promise<PrintFormat[]> {
+    const [row] = await this.prisma.setting.findMany({
+      where: { key: { in: [REFERENCE_KEYS.prices] } },
+    });
+    const covers = (
+      row?.value as { covers?: { soft?: unknown; hard?: unknown } }
+    )?.covers;
+    const soft = Number(covers?.soft);
+    const hard = Number(covers?.hard);
+    if (!(soft > 0 && hard > 0)) return DEFAULT_FORMATS;
+    return DEFAULT_FORMATS.map((f) =>
+      f.id === 'square-210' ? { ...f, prices: { soft, hard } } : f,
+    );
   }
 
   private async upgrade() {
@@ -212,7 +240,37 @@ export class ReferenceService implements OnModuleInit {
       extraBlocked: pick('extraBlocked'),
       countries: pick('countries'),
       faq: pick('faq'),
+      formats: pick('formats'),
     };
+  }
+
+  /** Every format, unpublished ones too (an order or a book may have one that is no longer offered). */
+  async formats(): Promise<PrintFormat[]> {
+    return (await this.snapshot()).formats;
+  }
+
+  /** The published format with this id; 400 format_unknown otherwise. */
+  async publishedFormat(id: string): Promise<PrintFormat> {
+    const format = (await this.formats()).find(
+      (f) => f.id === id && f.published,
+    );
+    if (!format) {
+      throw new BadRequestException({
+        code: FORMAT_UNKNOWN,
+        message: `No print format ${id}`,
+      });
+    }
+    return format;
+  }
+
+  /** The format new books are laid out in: the first published one. */
+  async defaultFormat(): Promise<PrintFormat> {
+    const formats = await this.formats();
+    return formats.find((f) => f.published) ?? formats[0];
+  }
+
+  async setFormats(formats: PrintFormat[]): Promise<PrintFormat[]> {
+    return (await this.save('formats', FormatsSchema.parse(formats))).formats;
   }
 
   async prices(): Promise<Prices> {
@@ -237,9 +295,10 @@ export class ReferenceService implements OnModuleInit {
 
   /** GET /reference: prices, cities, the offered countries and the published FAQ for the site. */
   async public(): Promise<Reference> {
-    const { prices, cities, faq } = await this.snapshot();
+    const { prices, cities, faq, formats } = await this.snapshot();
     return {
       prices,
+      formats: formats.filter((f) => f.published),
       cities,
       countries: await this.countries(),
       faq: faq.filter((item) => item.published),
@@ -247,9 +306,16 @@ export class ReferenceService implements OnModuleInit {
   }
 
   async admin(): Promise<AdminReference> {
-    const { prices, cities, extraBlocked, countries, faq } =
+    const { prices, cities, extraBlocked, countries, faq, formats } =
       await this.snapshot();
-    return { prices, cities, countries, faq, blocked: blocked(extraBlocked) };
+    return {
+      prices,
+      formats,
+      cities,
+      countries,
+      faq,
+      blocked: blocked(extraBlocked),
+    };
   }
 
   /**
@@ -279,10 +345,15 @@ export class ReferenceService implements OnModuleInit {
     );
   }
 
-  /** What a printed order to the city with this id costs, at the stored prices and cities. */
-  async orderPrice(cover: Cover, quantity: number, cityId: string) {
+  /** What a printed order in this format to the city with this id costs, at the stored prices and cities. */
+  async orderPrice(
+    format: PrintFormat,
+    cover: Cover,
+    quantity: number,
+    cityId: string,
+  ) {
     const { prices, cities } = await this.snapshot();
-    return orderPrice(cover, quantity, cityId, prices, cities);
+    return orderPrice(format, cover, quantity, cityId, prices, cities);
   }
 
   /**

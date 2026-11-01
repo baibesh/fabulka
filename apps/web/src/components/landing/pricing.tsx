@@ -1,6 +1,6 @@
 "use client";
 
-import { cityName } from "@fabulka/shared";
+import { cityName, formatName, lowestCoverPrice } from "@fabulka/shared";
 import { Check, Gift } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
@@ -44,10 +44,14 @@ export function Pricing() {
       ? {
           testId: "price-print",
           title: t("landing.pricing.print.title"),
-          price: reference ? t("landing.pricing.from", { price: formatKzt(reference.prices.covers.soft) }) : null,
+          price: reference ? t("landing.pricing.from", { price: formatKzt(lowestCoverPrice(reference.formats, "soft") ?? 0) }) : null,
           points: reference
             ? [
-                t("landing.pricing.print.covers", { soft: formatKzt(reference.prices.covers.soft), hard: formatKzt(reference.prices.covers.hard) }),
+                t("landing.pricing.print.formats", { formats: reference.formats.map((f) => formatName(f, locale)).join(", ") }),
+                t("landing.pricing.print.covers", {
+                  soft: formatKzt(lowestCoverPrice(reference.formats, "soft") ?? 0),
+                  hard: formatKzt(lowestCoverPrice(reference.formats, "hard") ?? 0),
+                }),
                 t("landing.pricing.print.delivery", {
                   cities: reference.cities
                     .filter((c) => c.freeDelivery)

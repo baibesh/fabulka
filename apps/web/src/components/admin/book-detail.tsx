@@ -45,6 +45,10 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
           {t(`design.theme.${layout.theme.id as SelectableTheme}`)} · {layout.theme.fonts.body.family} / {layout.theme.fonts.heading.family}
           {layout.headingFallback && ` → ${layout.theme.fonts.body.family}`}
         </dd>
+        <dt className="text-muted">{t("admin.book.layout.format")}</dt>
+        <dd data-testid="layout-format" data-format={layout.format.id}>
+          {layout.format.id} · {layout.format.widthMm}×{layout.format.heightMm} {t("admin.orders.mm")}
+        </dd>
         <dt className="text-muted">{t("admin.book.layout.qa")}</dt>
         <dd>
           <Badge data-testid="render-qa" data-status={layout.qa.status} tone={QA_TONE[layout.qa.status]}>
@@ -59,6 +63,16 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
             <li key={i} className="text-danger">
               <span className="font-semibold">{issue.page}</span> — {t(`admin.book.layout.issue.${issue.kind}`)}
               <span className="block text-xs text-muted">{issue.detail}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {layout.qa.notes.length > 0 && (
+        <ul data-testid="render-notes" className="flex flex-col gap-1 text-sm">
+          {layout.qa.notes.map((note, i) => (
+            <li key={i} data-kind={note.kind} className="text-warning">
+              <span className="font-semibold">{note.page}</span> — {t(`admin.book.layout.note.${note.kind}`)}
+              <span className="block text-xs text-muted">{note.detail}</span>
             </li>
           ))}
         </ul>

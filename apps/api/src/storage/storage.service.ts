@@ -31,6 +31,14 @@ export class StorageService {
     return readFile(join(this.root, relativePath));
   }
 
+  /** Whether a file is there. */
+  exists(relativePath: string): Promise<boolean> {
+    return stat(join(this.root, relativePath)).then(
+      (s) => s.isFile(),
+      () => false,
+    );
+  }
+
   remove(relativePath: string): Promise<void> {
     return rm(join(this.root, relativePath), { force: true });
   }

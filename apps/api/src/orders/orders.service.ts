@@ -28,7 +28,8 @@ import {
   type OrderStatus,
   type OrderStatusEvent,
 } from '@fabulka/shared';
-import { ownsBook } from '../books/books.service';
+import { BooksService, ownsBook, storedBook } from '../books/books.service';
+import { PdfService } from '../pdf/pdf.service';
 import { layoutOf } from '../layout/layout';
 import { MailService } from '../mail/mail.service';
 import { orderConfirmation, orderStatusChanged } from '../mail/templates';
@@ -37,6 +38,13 @@ import { ReferenceService } from '../reference/reference.service';
 import { StorageService } from '../storage/storage.service';
 
 type OrderWith = OrderRow & { book: BookRow; events: EventRow[] };
+
+/** The printed size from an order's frozen layout; null for orders made before layouts. */
+function formatOf(stored: unknown): Order['format'] {
+  if (!stored) return null;
+  const { id, widthMm, heightMm, bleedMm } = layoutOf(stored).format;
+  return { id, widthMm, heightMm, bleedMm };
+}
 
 const withBookAndEvents = {
   book: true,
@@ -87,6 +95,8 @@ export class OrdersService {
     config: ConfigService,
     private readonly reference: ReferenceService,
     private readonly storage: StorageService,
+    private readonly books: BooksService,
+    private readonly pdf: PdfService,
   ) {
     this.stageMs = Number(config.get('ORDER_STAGE_MS', 20_000));
   }
@@ -116,8 +126,13 @@ export class OrdersService {
     if (book.status !== 'done') {
       throw new ConflictException('The book is still being made');
     }
+    // The format the parent picked (published only); the book is laid out at it before it is frozen.
+    const format = await this.reference.publishedFormat(
+      input.format ?? layoutOf(book.layout).format.id,
+    );
+    const layout = await this.books.ensureFormat(book.id, format.id);
     // Render QA found text that does not fit or a letter without its font: not sent to print.
-    if (layoutOf(book.layout).qa.status === 'blocked') {
+    if (layout.qa.status === 'blocked') {
       throw new ConflictException({
         code: PRINT_BLOCKED,
         message: 'This book cannot be printed yet: its layout needs a fix',
@@ -135,6 +150,7 @@ export class OrdersService {
     }
     // Priced here from the owner's prices; the body carries no amounts (the schema drops them).
     const price = await this.reference.orderPrice(
+      format,
       input.cover,
       input.quantity,
       city.id,
@@ -150,7 +166,7 @@ export class OrdersService {
         address: input.address,
         cover: input.cover,
         // Frozen here: what this order prints, whatever happens to the book later.
-        layout: layoutOf(book.layout),
+        layout: layout,
         quantity: input.quantity,
         locale: input.locale,
         booksKzt: price.books,
@@ -263,6 +279,30 @@ export class OrdersService {
     return this.adminDto(row);
   }
 
+  /**
+   * The print file of an order (admin): its frozen layout rendered with bleed and crop marks, made
+   * on first request and kept. Returns the file's storage path.
+   */
+  async printFile(id: string): Promise<{ path: string; name: string }> {
+    const row = await this.prisma.order.findUnique({
+      where: { id },
+      include: { book: true },
+    });
+    if (!row) throw new NotFoundException(`order ${id} not found`);
+    const name = `fabulka-${row.id}-print.pdf`;
+    const path = `orders/${row.id}/print.pdf`;
+    if (await this.storage.exists(path)) return { path, name };
+    const layout = layoutOf(row.layout ?? row.book.layout);
+    await this.pdf.renderPrint(
+      row.bookId,
+      storedBook(row.book),
+      layout,
+      path,
+      `Fabulka · ${row.id} · ${layout.format.id} ${layout.format.widthMm}×${layout.format.heightMm} mm + ${layout.format.bleedMm} mm bleed · ${row.cover} ×${row.quantity}`,
+    );
+    return { path, name };
+  }
+
   /** The stage the parent sees: set by hand, else where the demo timer is. */
   private statusOf(row: OrderRow): OrderStatus {
     return (
@@ -346,6 +386,7 @@ export class OrdersService {
       cityId: row.cityId,
       address: row.address,
       cover: row.cover,
+      format: formatOf(row.layout),
       quantity: row.quantity,
       booksKzt: row.booksKzt,
       deliveryKzt: row.deliveryKzt,

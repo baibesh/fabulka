@@ -191,6 +191,9 @@ model BookTemplate {
   stylePrompt  String?
   /// Book theme (BOOK_THEMES in @fabulka/shared) its books get; null: by the child's age.
   layoutTheme  String?
+  /// Blocks its books get and the optional ones parents may add (TemplateBlocks in @fabulka/shared);
+  /// null: the default blocks.
+  blocks       Json?
   coverUrl     String?
   /// Kazakh and English text by language: TemplateTranslation in @fabulka/shared.
   translations Json     @default("{}")

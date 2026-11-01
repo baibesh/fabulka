@@ -13,6 +13,7 @@ export const REFERENCE_KEYS = {
   extraBlocked: "geo.extra_blocked",
   countries: "reference.countries",
   faq: "reference.faq",
+  formats: "reference.formats",
 } as const;
 
 const tenge = z.number().int().min(0).max(10_000_000);
@@ -29,12 +30,111 @@ export const BookPriceSchema = z.object({ KZT: tenge.min(1), USD: dollars.min(0.
 export const PricesSchema = z.object({
   /** One more generated (digital) book once the free ones are used, by kind. */
   books: z.object({ template: BookPriceSchema, custom: BookPriceSchema }),
-  /** One printed copy, by cover, in tenge. */
-  covers: z.object({ soft: tenge.min(1), hard: tenge.min(1) }),
-  /** Flat delivery fee to a city without free delivery, in tenge. */
+  /** Flat delivery fee to a city without free delivery, in tenge. Copies are priced by format (reference.formats). */
   deliveryKzt: tenge,
 });
 export type Prices = z.infer<typeof PricesSchema>;
+
+// ---- Print formats ---------------------------------------------------------------------------
+
+/** A format's stable id: Latin letters, digits and hyphens ("a5-portrait"). Never changes once made. */
+export const FormatIdSchema = z
+  .string()
+  .max(40)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+
+const millimetres = (min: number, max: number) => z.number().min(min).max(max);
+
+/**
+ * A printed size the parent can order: its page (trim) size, the bleed the printer trims off, the
+ * safe zone text stays inside, and the price of one copy by cover — in tenge, as print is offered
+ * only where the site charges tenge. Only published ones are offered in the order form.
+ */
+export const PrintFormatSchema = z
+  .object({
+    id: FormatIdSchema,
+    /** By language code; Russian and English required, the rest fall back to them. */
+    name: localizedTextSchema(60),
+    widthMm: millimetres(90, 420),
+    heightMm: millimetres(90, 420),
+    bleedMm: millimetres(0, 10),
+    safeMm: millimetres(3, 40),
+    prices: z.object({ soft: tenge.min(1), hard: tenge.min(1) }),
+    published: z.boolean(),
+  })
+  .refine((f) => 2 * f.safeMm < Math.min(f.widthMm, f.heightMm) - 60, { path: ["safeMm"], message: "The safe zone leaves no room" });
+export type PrintFormat = z.infer<typeof PrintFormatSchema>;
+
+/** Body of PUT /admin/reference/formats: the whole list in the order the order form shows it. */
+export const FormatsSchema = z
+  .array(PrintFormatSchema)
+  .min(1)
+  .max(20)
+  .superRefine((formats, ctx) => {
+    const ids = new Set<string>();
+    formats.forEach((format, i) => {
+      if (ids.has(format.id)) ctx.addIssue({ code: "custom", path: [i, "id"], message: "Duplicate format" });
+      ids.add(format.id);
+    });
+    if (!formats.some((f) => f.published)) ctx.addIssue({ code: "custom", path: [0, "published"], message: "Publish at least one format" });
+  });
+
+/** The size part of a format, as a book's layout keeps it. */
+export function bookFormatOf(format: PrintFormat): { id: string; widthMm: number; heightMm: number; bleedMm: number; safeMm: number } {
+  return { id: format.id, widthMm: format.widthMm, heightMm: format.heightMm, bleedMm: format.bleedMm, safeMm: format.safeMm };
+}
+
+/** The format's name in `language` (falling back to Russian, then English). */
+export function formatName(format: PrintFormat, language: Language): string {
+  return localized(format.name, language);
+}
+
+/** The cheapest copy with this cover among the published formats: the "from" price on the landing. */
+export function lowestCoverPrice(formats: readonly PrintFormat[], cover: "soft" | "hard"): number | null {
+  const prices = formats.filter((f) => f.published).map((f) => f.prices[cover]);
+  return prices.length ? Math.min(...prices) : null;
+}
+
+/**
+ * The formats the site launches with; the seed of reference.formats. The square book is today's,
+ * at the cover prices the site launched with; A4 landscape and A5 portrait are priced roughly by
+ * paper area (A4 ×1.4, A5 ×0.7), rounded to the nearest 1 000 ₸ minus 100.
+ */
+export const DEFAULT_FORMATS: PrintFormat[] = [
+  {
+    id: "square-210",
+    name: { ru: "Квадрат 21×21 см", kk: "Шаршы 21×21 см", en: "Square 21×21 cm", es: "Cuadrado 21×21 cm", de: "Quadrat 21×21 cm" },
+    widthMm: 210,
+    heightMm: 210,
+    bleedMm: 3,
+    safeMm: 12,
+    prices: { soft: 9900, hard: 14900 },
+    published: true,
+  },
+  {
+    id: "a4-landscape",
+    name: { ru: "A4 альбомный", kk: "A4 көлденең", en: "A4 landscape", es: "A4 apaisado", de: "A4 quer" },
+    widthMm: 297,
+    heightMm: 210,
+    bleedMm: 3,
+    safeMm: 12,
+    prices: { soft: 13900, hard: 19900 },
+    published: true,
+  },
+  {
+    id: "a5-portrait",
+    name: { ru: "A5 книжный", kk: "A5 тік", en: "A5 portrait", es: "A5 vertical", de: "A5 hoch" },
+    widthMm: 148,
+    heightMm: 210,
+    bleedMm: 3,
+    safeMm: 10,
+    prices: { soft: 6900, hard: 10900 },
+    published: true,
+  },
+];
+
+/** Body of a 400 from POST /orders or PATCH /books/:id/layout: no published format has this id. */
+export const FORMAT_UNKNOWN = "format_unknown";
 
 /** A city's stable id: Latin letters, digits and hyphens ("ust-kamenogorsk"). */
 export const CityIdSchema = z
@@ -172,7 +272,7 @@ export interface CountryInfo {
 export const OTHER_COUNTRY_INFO: CountryInfo = { languages: ["en", "es", "de", "ru"], currency: "USD", print: false };
 
 /**
- * The currency print is priced in (reference.prices.covers and deliveryKzt are tenge): a country
+ * The currency print is priced in (reference.formats prices and deliveryKzt are tenge): a country
  * with print must charge in it, so an order's total is always in the currency the site shows.
  */
 export const PRINT_CURRENCY: Currency = "KZT";
@@ -339,6 +439,8 @@ export function fillFaq(text: string, vars: Partial<Record<FaqPlaceholder, strin
  */
 export const ReferenceSchema = z.object({
   prices: PricesSchema,
+  /** Print formats; the site gets only the published ones. */
+  formats: z.array(PrintFormatSchema),
   cities: z.array(CitySchema),
   countries: z.array(CountryEntrySchema),
   /** The landing's questions; the site gets only the published ones and picks those for its country. */
@@ -366,7 +468,6 @@ export const DEFAULT_PRICES: Prices = {
     template: { KZT: 1900, USD: 3.9 },
     custom: { KZT: 2900, USD: 5.9 },
   },
-  covers: { soft: 9900, hard: 14900 },
   deliveryKzt: 1500,
 };
 

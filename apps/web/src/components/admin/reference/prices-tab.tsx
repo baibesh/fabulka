@@ -16,8 +16,6 @@ const PRICE_FIELDS = {
   "template-usd": { path: "books.template.USD", error: "admin.reference.error.usd" },
   "custom-kzt": { path: "books.custom.KZT", error: "admin.reference.error.tenge" },
   "custom-usd": { path: "books.custom.USD", error: "admin.reference.error.usd" },
-  "cover-soft": { path: "covers.soft", error: "admin.reference.error.tenge" },
-  "cover-hard": { path: "covers.hard", error: "admin.reference.error.tenge" },
   delivery: { path: "deliveryKzt", error: "admin.reference.error.delivery" },
 } satisfies Record<string, { path: string; error: MessageKey }>;
 type PriceField = keyof typeof PRICE_FIELDS;
@@ -28,8 +26,6 @@ const toPriceDraft = (p: Prices): PriceDraft => ({
   "template-usd": String(p.books.template.USD),
   "custom-kzt": String(p.books.custom.KZT),
   "custom-usd": String(p.books.custom.USD),
-  "cover-soft": String(p.covers.soft),
-  "cover-hard": String(p.covers.hard),
   delivery: String(p.deliveryKzt),
 });
 
@@ -41,11 +37,10 @@ const fromPriceDraft = (d: PriceDraft): Prices => ({
     template: { KZT: amount(d["template-kzt"]), USD: amount(d["template-usd"]) },
     custom: { KZT: amount(d["custom-kzt"]), USD: amount(d["custom-usd"]) },
   },
-  covers: { soft: amount(d["cover-soft"]), hard: amount(d["cover-hard"]) },
   deliveryKzt: amount(d.delivery),
 });
 
-/** Book prices in tenge and dollars, the covers and delivery of a printed copy. */
+/** Book prices in tenge and dollars and delivery of a printed copy (copies are priced on the «Форматы» tab). */
 export function PricesTab({ initial }: { initial: Prices }) {
   const { t } = useAdminI18n();
   const saved = useSaved();
@@ -103,8 +98,6 @@ export function PricesTab({ initial }: { initial: Prices }) {
       <Card title={t("admin.reference.print")}>
         <p className="-mt-2 text-sm text-muted">{t("admin.reference.print.hint")}</p>
         <div className="grid gap-4 sm:grid-cols-3">
-          {field("cover-soft", t("admin.reference.cover.soft"), "1")}
-          {field("cover-hard", t("admin.reference.cover.hard"), "1")}
           {field("delivery", t("admin.reference.delivery"), "1")}
         </div>
       </Card>

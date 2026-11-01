@@ -7,8 +7,14 @@ import {
   DEFAULT_CITIES,
   DEFAULT_PRICES,
   REFERENCE_KEYS,
+  BOOK_FORMATS,
+  DEFAULT_FORMATS,
+  FORMAT_UNKNOWN,
+  legacyLayout,
 } from '@fabulka/shared';
+import type { BooksService } from '../books/books.service';
 import type { MailService } from '../mail/mail.service';
+import type { PdfService } from '../pdf/pdf.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { ReferenceService } from '../reference/reference.service';
 import { StorageService } from '../storage/storage.service';
@@ -51,6 +57,12 @@ function makeService(stored: Record<string, unknown>) {
     },
   };
   const mail = { send: jest.fn(), publicUrl: 'http://localhost' };
+  // The book is already in the format asked for (or switching re-renders it): its layout comes back.
+  const books = {
+    ensureFormat: jest.fn((_: string, format: string) =>
+      Promise.resolve({ ...legacyLayout(), format: BOOK_FORMATS[format] }),
+    ),
+  };
   const service = new OrdersService(
     prisma as unknown as PrismaService,
     mail as unknown as MailService,
@@ -59,8 +71,10 @@ function makeService(stored: Record<string, unknown>) {
     new StorageService({
       get: (_: string, fallback: unknown) => fallback,
     } as ConfigService),
+    books as unknown as BooksService,
+    {} as PdfService,
   );
-  return { service, create, prisma, mail };
+  return { service, create, prisma, mail, books };
 }
 
 const body = {
@@ -77,11 +91,12 @@ const body = {
 describe('OrdersService.create', () => {
   it('totals the order with the owner’s prices, ignoring amounts the client sends', async () => {
     const { service, create } = makeService({
-      [REFERENCE_KEYS.prices]: {
-        ...DEFAULT_PRICES,
-        covers: { soft: 5000, hard: 8000 },
-        deliveryKzt: 700,
-      },
+      [REFERENCE_KEYS.prices]: { ...DEFAULT_PRICES, deliveryKzt: 700 },
+      [REFERENCE_KEYS.formats]: DEFAULT_FORMATS.map((f) =>
+        f.id === 'square-210'
+          ? { ...f, prices: { soft: 5000, hard: 8000 } }
+          : f,
+      ),
       [REFERENCE_KEYS.cities]: DEFAULT_CITIES,
     });
     const input = CreateOrderSchema.parse({
@@ -156,6 +171,43 @@ describe('OrdersService.create', () => {
     await expect(
       service.create(CreateOrderSchema.parse(body), 'k', null, 'other'),
     ).rejects.toThrow(BadRequestException);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('prices the copies by the format picked and lays the book out at it', async () => {
+    const { service, books, create } = makeService({});
+    const order = await service.create(
+      CreateOrderSchema.parse({
+        ...body,
+        cover: 'soft',
+        quantity: 1,
+        format: 'a4-landscape',
+      }),
+      'k',
+    );
+    expect(books.ensureFormat).toHaveBeenCalledWith('b1', 'a4-landscape');
+    expect(order).toMatchObject({
+      booksKzt: 13900,
+      format: { id: 'a4-landscape', widthMm: 297 },
+    });
+    expect(create.mock.calls[0][0].data.layout).toMatchObject({
+      format: { id: 'a4-landscape' },
+    });
+  });
+
+  it('refuses a format that is not published', async () => {
+    const { service, create } = makeService({
+      [REFERENCE_KEYS.formats]: DEFAULT_FORMATS.map((f) => ({
+        ...f,
+        published: f.id !== 'a5-portrait',
+      })),
+    });
+    const error = await service
+      .create(CreateOrderSchema.parse({ ...body, format: 'a5-portrait' }), 'k')
+      .catch((e: unknown) => e);
+    expect((error as BadRequestException).getResponse()).toMatchObject({
+      code: FORMAT_UNKNOWN,
+    });
     expect(create).not.toHaveBeenCalled();
   });
 

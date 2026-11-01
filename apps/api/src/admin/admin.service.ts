@@ -14,8 +14,9 @@ import {
   type ChildProfile,
   type Language,
   type UpdateTemplate,
-  themesFor,
+  TemplateBlocksSchema,
 } from '@fabulka/shared';
+import { Prisma } from '@prisma/client';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BooksService, withTemplate } from '../books/books.service';
@@ -25,6 +26,7 @@ import { QuotaService, startOfDay } from '../quota/quota.service';
 import { SettingsService } from '../settings/settings.service';
 import { StorageService } from '../storage/storage.service';
 import { questions, TemplatesService } from '../templates/templates.service';
+import { ThemesService } from '../themes/themes.service';
 
 /** What the admin reads and changes; every route behind AdminGuard. */
 @Injectable()
@@ -39,6 +41,7 @@ export class AdminService {
     private readonly storage: StorageService,
     private readonly templates: TemplatesService,
     private readonly methodologies: MethodologiesService,
+    private readonly themes: ThemesService,
     config: ConfigService,
   ) {
     this.budgetUsd = Number(config.get('MODEL_BUDGET_USD', 150));
@@ -254,16 +257,23 @@ export class AdminService {
     // Only a theme whose fonts cover every language the template is written in.
     if (
       patch.layoutTheme &&
-      !themesFor(current.languages).some((t) => t.id === patch.layoutTheme)
+      !(await this.themes.selectable(current.languages)).some(
+        (t) => t.id === patch.layoutTheme,
+      )
     ) {
       throw new BadRequestException(
         `Тема «${patch.layoutTheme}» не подходит для языков ${current.languages.join(', ')}`,
       );
     }
+    const { blocks, ...rest } = patch;
     await this.prisma.bookTemplate.update({
       where: { slug },
       data: {
-        ...patch,
+        ...rest,
+        ...(blocks !== undefined && {
+          blocks:
+            blocks === null ? Prisma.DbNull : (blocks as Prisma.InputJsonValue),
+        }),
       },
     });
     return this.template(slug);
@@ -306,6 +316,7 @@ export class AdminService {
       plot: row.plot as string[],
       stylePrompt: row.stylePrompt,
       layoutTheme: row.layoutTheme,
+      blocks: TemplateBlocksSchema.safeParse(row.blocks).data ?? null,
       sampleBookId: row.sampleBookId,
       books,
     };

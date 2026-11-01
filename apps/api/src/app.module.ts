@@ -42,6 +42,7 @@ import { StorageModule } from './storage/storage.service';
 import { TemplatesController } from './templates/templates.controller';
 import { ToysController, ToyUploadsCleaner } from './toy/toys.controller';
 import { TemplatesService } from './templates/templates.service';
+import { ThemesService } from './themes/themes.service';
 import { VoiceController } from './voice/voice.controller';
 import { VoiceService } from './voice/voice.service';
 
@@ -93,6 +94,7 @@ class HealthController {
     QuotaService,
     OrdersService,
     TemplatesService,
+    ThemesService,
     MethodologiesService,
     SettingsService,
     ToyUploadsCleaner,

@@ -53,7 +53,8 @@ commands:
   - tapOn: { testId: free-books }
   - assertVisible: { text: "1 900 ₸", childOf: { testId: price-template } }
   - assertVisible: { text: "2 900 ₸", childOf: { testId: price-custom } }
-  - assertVisible: { text: "от 9 900 ₸", childOf: { testId: price-print } }
+  # The cheapest published format (A5) gives the "from" price.
+  - assertVisible: { text: "от 6 900 ₸", childOf: { testId: price-print } }
   - tapOn: "Нужно ли регистрироваться?"
   - waitForVisible: { contains: "Книги сохраняются в вашем браузере" }
   # The FAQ is the owner's, for the visitor's country: in Kazakhstan print comes with delivery,

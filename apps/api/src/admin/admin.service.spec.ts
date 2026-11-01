@@ -6,6 +6,7 @@ import type { QuotaService } from '../quota/quota.service';
 import type { SettingsService } from '../settings/settings.service';
 import type { StorageService } from '../storage/storage.service';
 import type { TemplatesService } from '../templates/templates.service';
+import { ThemesService } from '../themes/themes.service';
 import { AdminService } from './admin.service';
 
 function makeService(prisma: unknown) {
@@ -18,6 +19,7 @@ function makeService(prisma: unknown) {
     {} as StorageService,
     {} as TemplatesService,
     {} as MethodologiesService,
+    new ThemesService(),
     { get: () => 150 } as unknown as ConfigService,
   );
 }

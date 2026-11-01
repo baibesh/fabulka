@@ -77,6 +77,20 @@ export function OrdersTable() {
                   </td>
                   <td className="whitespace-nowrap">
                     {order.cover === "hard" ? t("admin.orders.hard") : t("admin.orders.soft")} × {order.quantity}
+                    {order.format && (
+                      <div data-testid="order-format" data-format={order.format.id} className="text-xs text-muted">
+                        {order.format.id} · {order.format.widthMm}×{order.format.heightMm} {t("admin.orders.mm")}
+                      </div>
+                    )}
+                    {/* The printer's file: the frozen layout with bleed and crop marks (made on first click). */}
+                    <a
+                      data-testid="order-print-file"
+                      href={`/api/admin/orders/${order.id}/print.pdf`}
+                      download
+                      className="block text-xs font-semibold text-accent"
+                    >
+                      {t("admin.orders.printFile")}
+                    </a>
                   </td>
                   <td className="text-right tabular-nums">{kzt(order.totalKzt)}</td>
                   <td>

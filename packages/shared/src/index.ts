@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { MethodologySlugSchema } from "./methodologies";
 import { LanguageSchema, type Language } from "./language";
-import { BookLayoutSchema, PageVariantSchema, SELECTABLE_THEMES } from "./layout";
-import { countryInfo, type City, type Country, type CountryEntry, type Currency, type Prices } from "./reference";
+import { BlockKindSchema, BookLayoutSchema, DedicationSchema, PageVariantSchema, TemplateBlocksSchema } from "./layout";
+import { countryInfo, type City, type Country, type CountryEntry, type Currency, type PrintFormat, type Prices } from "./reference";
 
 export * from "./language";
 export * from "./methodologies";
@@ -191,14 +191,21 @@ export type Book = z.infer<typeof BookSchema>;
  * pick among each story page's layouts (by page number; null goes back to the automatic one).
  */
 export const UpdateLayoutSchema = z.object({
-  theme: z.enum(SELECTABLE_THEMES).optional(),
+  /** A curated theme's id, or a published AI theme's (the API checks). */
+  theme: z.string().trim().min(1).max(60).optional(),
   choices: z.record(z.string().regex(/^\d{1,3}$/), PageVariantSchema.nullable()).optional(),
+  /** The blocks in the parent's order, by kind (the API keeps the template's rules). */
+  blocks: z.array(BlockKindSchema).min(3).max(12).optional(),
+  /** The parent's dedication; null goes back to the default one. */
+  dedication: DedicationSchema.nullable().optional(),
+  /** A published print format's id: the book is laid out again at that size. */
+  format: z.string().trim().min(1).max(40).optional(),
 });
 export type UpdateLayout = z.infer<typeof UpdateLayoutSchema>;
 
 /** Body of PATCH /admin/books/:id/layout: staff pin a page's layout (null unpins), or change the theme. */
 export const PinLayoutSchema = z.object({
-  theme: z.enum(SELECTABLE_THEMES).optional(),
+  theme: z.string().trim().min(1).max(60).optional(),
   pins: z.record(z.string().regex(/^\d{1,3}$/), PageVariantSchema.nullable()).optional(),
 });
 export type PinLayout = z.infer<typeof PinLayoutSchema>;
@@ -375,6 +382,8 @@ export const CreateOrderSchema = z.object({
   cityId: z.string().trim().min(1).max(60),
   address: z.string().trim().min(5).max(200),
   cover: CoverSchema,
+  /** A published print format's id (reference.formats); the book's current format when left out. */
+  format: z.string().trim().min(1).max(40).optional(),
   quantity: z.coerce.number().int().min(1).max(5),
   /** Language of the emails; the book's language when left out. */
   locale: LanguageSchema.optional(),
@@ -385,8 +394,8 @@ export type CreateOrderInput = z.infer<typeof CreateOrderSchema>;
  * What a printed order costs at the owner's prices: the copies, plus the flat delivery fee unless
  * the city (by id) is one with free delivery.
  */
-export function orderPrice(cover: Cover, quantity: number, cityId: string, prices: Prices, cities: readonly City[]) {
-  const books = prices.covers[cover] * quantity;
+export function orderPrice(format: PrintFormat, cover: Cover, quantity: number, cityId: string, prices: Prices, cities: readonly City[]) {
+  const books = format.prices[cover] * quantity;
   const free = cities.some((c) => c.freeDelivery && c.id === cityId);
   const delivery = free ? 0 : prices.deliveryKzt;
   return { books, delivery, total: books + delivery };
@@ -433,6 +442,8 @@ export const OrderSchema = z.object({
   cityId: z.string().nullable(),
   address: z.string(),
   cover: CoverSchema,
+  /** The printed size, from the layout frozen with the order; null for orders made before formats. */
+  format: z.object({ id: z.string(), widthMm: z.number(), heightMm: z.number(), bleedMm: z.number() }).nullable(),
   quantity: z.number().int(),
   booksKzt: z.number().int(),
   deliveryKzt: z.number().int(),
@@ -577,6 +588,8 @@ export const AdminTemplateSchema = TemplateSchema.omit({ sampleDetails: true }).
   stylePrompt: z.string().nullable(),
   /** The theme books from this template get; null: by the child's age. */
   layoutTheme: z.string().nullable(),
+  /** The blocks its books get; null: the default ones (DEFAULT_BLOCKS). */
+  blocks: TemplateBlocksSchema.nullable(),
   books: z.number().int(),
 });
 export type AdminTemplate = z.infer<typeof AdminTemplateSchema>;
@@ -593,7 +606,9 @@ export const UpdateTemplateSchema = z
     questions: z.array(TemplateQuestionSchema).max(8),
     stylePrompt: z.string().trim().max(400).nullable(),
     /** One of the themes that cover all the template's languages, or null to pick by age. */
-    layoutTheme: z.enum(SELECTABLE_THEMES).nullable(),
+    layoutTheme: z.string().trim().min(1).max(60).nullable(),
+    /** The blocks its books get and which optional ones the parent may add; null: the default ones. */
+    blocks: TemplateBlocksSchema.nullable(),
     /** A finished book made from this template to show on its page, or null for none. */
     sampleBookId: z.string().min(1).nullable(),
     published: z.boolean(),

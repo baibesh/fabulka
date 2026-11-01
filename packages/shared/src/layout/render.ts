@@ -32,6 +32,11 @@ export interface RenderOptions {
   hyphenate?: (text: string) => string;
   /** Marks words of the body text and title (the site's sample book). */
   mark?: (text: string) => MarkedPiece[];
+  /**
+   * For the print file: each page grows by the format's bleed on every side, pictures that touch
+   * the trim run on into it, and the trimmed page sits in the middle exactly as on screen.
+   */
+  bleed?: boolean;
 }
 
 export interface RenderedPage extends PlannedPage {
@@ -69,14 +74,14 @@ const mm = (n: number) => `${Math.round(n * 100) / 100}mm`;
 const place = (r: Rect) => `left:${mm(r.x)};top:${mm(r.y)};width:${mm(r.w)};height:${mm(r.h)}`;
 
 /** The theme as CSS variables on each page, so a page can be shown on its own. */
-function themeStyle(layout: BookLayout, fit: number): string {
+function themeStyle(layout: BookLayout, fit: number, bleed: number): string {
   const { theme, format } = layout;
   const size = theme.sizes[layout.ageGroup];
   const heading = layout.headingFallback ? { family: theme.fonts.body.family, weight: 700 } : theme.fonts.heading;
   const p = theme.palette;
   return [
-    `--w:${mm(format.widthMm)}`,
-    `--h:${mm(format.heightMm)}`,
+    `--w:${mm(format.widthMm + 2 * bleed)}`,
+    `--h:${mm(format.heightMm + 2 * bleed)}`,
     `--safe:${mm(format.safeMm)}`,
     `--paper:${p.paper}`,
     `--ink:${p.ink}`,
@@ -104,26 +109,29 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
 
   const body = (text: string) => inline(text, options, true);
   const title = (text: string) => inline(text, options, false);
+  const bleed = options.bleed ? layout.format.bleedMm : 0;
+  const bleedArt = (r: Rect) => (bleed ? place(grow(r, layout.format, bleed)) + ";" : "");
 
   const pages = plan.map((planned): RenderedPage => {
     const fit = layout.fits[planned.key] ?? 1;
-    const style = themeStyle(layout, fit);
+    const style = themeStyle(layout, fit, bleed);
     const classes = [`fb-page`, `fb-${planned.kind}`, `fb-${planned.side}`];
+    if (planned.filler) classes.push("fb-filler");
     let inner = "";
     switch (planned.kind) {
       case "cover":
-        inner = cover(book, layout, title, labels.madeFor(book.childName));
+        inner = cover(book, layout, title, labels.madeFor(book.childName), bleedArt);
         classes.push(`fb-cover-${layout.theme.cover}`);
         break;
       case "dedication":
         inner = `<div class="fb-box fb-center" data-fit-box style="${place(paperRect(layout))}"><div class="fb-flow">
   <div class="fb-ornament">${ornament(layout.theme.ornament)}</div>
-  <p class="fb-dedication-text" data-qa-text>${title(labels.madeFor(book.childName))}</p></div></div>`;
+  <p class="fb-dedication-text" data-qa-text>${title(layout.dedication ?? labels.madeFor(book.childName))}</p></div></div>`;
         break;
       case "story": {
         const page = byPage.get(planned.story!)!;
         const state = layout.pages[String(planned.story)];
-        inner = story(planned, page, state, layout, body);
+        inner = story(planned, page, state, layout, body, bleedArt);
         classes.push(`fb-v-${planned.variant}`);
         break;
       }
@@ -144,10 +152,27 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
     }
     const folio = planned.kind === "story" && planned.index > 0 ? `<span class="fb-folio">${planned.index}</span>` : "";
     const variant = planned.variant ? ` data-variant="${planned.variant}"` : "";
-    const html = `<section class="${classes.join(" ")}" data-key="${planned.key}"${variant} style="${style}">${inner}${folio}</section>`;
+    const filler = planned.filler ? ` data-filler="true"` : "";
+    const content = bleed
+      ? `<div class="fb-trim" style="left:${mm(bleed)};top:${mm(bleed)};width:${mm(layout.format.widthMm)};height:${mm(layout.format.heightMm)}">${inner}${folio}</div>`
+      : `${inner}${folio}`;
+    const html = `<section class="${classes.join(" ")}" data-key="${planned.key}"${variant}${filler} style="${style}">${content}</section>`;
     return { ...planned, html };
   });
   return { pages, widthMm: layout.format.widthMm, heightMm: layout.format.heightMm };
+}
+
+/**
+ * A picture's box grown into the bleed on every side where it touches the trim (for a spread, the
+ * box spans both pages, so on each page it reaches past the trim on the outer side).
+ */
+function grow(r: Rect, format: BookLayout["format"], bleed: number): Rect {
+  const near = (a: number, b: number) => Math.abs(a - b) < 0.01;
+  const x0 = r.x <= 0.01 ? r.x - bleed : r.x;
+  const y0 = r.y <= 0.01 ? r.y - bleed : r.y;
+  const x1 = r.x + r.w >= format.widthMm - 0.01 || near(r.x + r.w, format.widthMm) ? r.x + r.w + bleed : r.x + r.w;
+  const y1 = r.y + r.h >= format.heightMm - 0.01 ? r.y + r.h + bleed : r.y + r.h;
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
 /** The safe area of a paper page. */
@@ -156,7 +181,13 @@ function paperRect(layout: BookLayout): Rect {
   return { x: s + 6, y: s + 6, w: w - 2 * s - 12, h: h - 2 * s - 12 };
 }
 
-function cover(book: RenderableBook, layout: BookLayout, title: (t: string) => string, madeFor: string): string {
+function cover(
+  book: RenderableBook,
+  layout: BookLayout,
+  title: (t: string) => string,
+  madeFor: string,
+  bleedArt: (r: Rect) => string,
+): string {
   const heading = `<div class="fb-cover-title" data-fit-box><div class="fb-flow">
   <h1 data-qa-text>${title(book.title ?? "")}</h1>
   <p class="fb-for" data-qa-text>${escapeHtml(madeFor)}</p></div></div>`;
@@ -164,7 +195,7 @@ function cover(book: RenderableBook, layout: BookLayout, title: (t: string) => s
     const first = book.pages[0];
     const state = layout.pages[String(first?.page)];
     const { widthMm: w, heightMm: h } = layout.format;
-    return `${image(first?.image ?? book.heroImage, "fb-art", crop(state, w / h))}${heading}`;
+    return `${image(first?.image ?? book.heroImage, "fb-art", crop(state, w / h), bleedArt({ x: 0, y: 0, w, h }))}${heading}`;
   }
   return `<div class="fb-hero-frame">${image(book.heroImage, "fb-hero")}</div>${heading}`;
 }
@@ -175,6 +206,7 @@ function story(
   state: PageLayout | undefined,
   layout: BookLayout,
   body: (t: string) => string,
+  bleedArt: (r: Rect) => string,
 ): string {
   const variant = planned.variant as PageVariant;
   const ink = state?.ink?.[variant] ?? "dark";
@@ -183,23 +215,25 @@ function story(
   const box = artRect(variant, layout.format);
   const art = (cls = "fb-art", style = "") => image(page.image, cls, crop(state, box.w / box.h), style);
   const rect = textRect(variant, layout.format, state);
+  const full = bleedArt(box);
   switch (variant) {
     case "overlay-top":
     case "overlay-bottom":
-      return art() + text(rect, variant === "overlay-top" ? "fb-top" : "fb-bottom");
+      return art("fb-art", full) + text(rect, variant === "overlay-top" ? "fb-top" : "fb-bottom");
     case "split":
-      return art("fb-art", `${place(box)};`) + text(rect, "fb-on-paper");
+      return art("fb-art", full || `${place(box)};`) + text(rect, "fb-on-paper");
     case "facing":
-      if (planned.part === 0) return art();
+      if (planned.part === 0) return art("fb-art", full);
       return `<div class="fb-ornament fb-facing-ornament">${ornament(layout.theme.ornament)}</div>${text(rect, "fb-on-paper fb-center")}`;
     case "spread": {
       const left = planned.part === 0;
       const side = state?.spreadSide ?? "right";
-      const pic = art("fb-art fb-spread-art", left ? "left:0" : "left:-100%");
+      const shifted = { ...box, x: left ? 0 : -layout.format.widthMm };
+      const pic = art("fb-art fb-spread-art", bleedArt(shifted) || (left ? "left:0" : "left:-100%"));
       return pic + ((left ? "left" : "right") === side ? text(rect, "fb-bottom") : "");
     }
     case "plate":
-      return art() + text(rect, `fb-plate ${state?.plateBand === "top" ? "fb-top" : "fb-bottom"}`);
+      return art("fb-art", full) + text(rect, `fb-plate ${state?.plateBand === "top" ? "fb-top" : "fb-bottom"}`);
   }
 }
 
@@ -252,6 +286,7 @@ export const BOOK_CSS = `
 .fb-page * { box-sizing: border-box; margin: 0; padding: 0; }
 .fb-page p, .fb-page li { hyphens: manual; -webkit-hyphens: manual; widows: 2; orphans: 2; }
 .fb-page img { display: block; }
+.fb-trim { position: absolute; overflow: visible; }
 .fb-art { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
 .fb-spread-art { width: 200%; }
 .fb-empty { background: #e6dccb; }
@@ -319,6 +354,82 @@ ${BOOK_CSS}
 </head>
 <body>
 ${rendered.pages.map((p) => p.html).join("\n")}
+</body>
+</html>`;
+}
+
+/** Room around the bleed for crop marks and the page label in the print file, in millimetres. */
+export const PRINT_SLUG_MM = 10;
+/** Crop marks: their length and their gap from the bleed edge. */
+const MARK_MM = 5;
+const MARK_GAP_MM = 1.5;
+
+/** The print file's page size: trim plus bleed on every side plus the slug for the marks. */
+export function printPageSize(format: BookLayout["format"]): { widthMm: number; heightMm: number } {
+  const extra = 2 * (format.bleedMm + PRINT_SLUG_MM);
+  return { widthMm: format.widthMm + extra, heightMm: format.heightMm + extra };
+}
+
+/**
+ * The print file for the printer: every page rendered with bleed (renderBook with `bleed`), centred
+ * on a sheet with crop marks at the trim corners outside the bleed and a label in the slug. Separate
+ * from the screen PDF, which is the trimmed pages only.
+ */
+export function printDocument(
+  rendered: RenderedBook,
+  meta: { title: string; language: Language; fontCss: string; format: BookLayout["format"]; label: string },
+): string {
+  const { format } = meta;
+  const b = format.bleedMm;
+  const s = PRINT_SLUG_MM;
+  const sheet = printPageSize(format);
+  const x0 = s + b;
+  const y0 = s + b;
+  const x1 = x0 + format.widthMm;
+  const y1 = y0 + format.heightMm;
+  const line = (xa: number, ya: number, xb: number, yb: number) =>
+    `<line x1="${xa}" y1="${ya}" x2="${xb}" y2="${yb}" stroke="#000" stroke-width="0.25"/>`;
+  const out = b + MARK_GAP_MM;
+  const marks = [
+    // Horizontal marks on the trim lines, left and right of the bleed.
+    line(x0 - out - MARK_MM, y0, x0 - out, y0),
+    line(x1 + out, y0, x1 + out + MARK_MM, y0),
+    line(x0 - out - MARK_MM, y1, x0 - out, y1),
+    line(x1 + out, y1, x1 + out + MARK_MM, y1),
+    // Vertical marks on the trim lines, above and below the bleed.
+    line(x0, y0 - out - MARK_MM, x0, y0 - out),
+    line(x1, y0 - out - MARK_MM, x1, y0 - out),
+    line(x0, y1 + out, x0, y1 + out + MARK_MM),
+    line(x1, y1 + out, x1, y1 + out + MARK_MM),
+  ].join("");
+  const total = rendered.pages.length;
+  const sheets = rendered.pages.map(
+    (p, i) => `<div class="fb-sheet" data-key="${p.key}">
+<div class="fb-sheet-page">${p.html}</div>
+<svg class="fb-marks" viewBox="0 0 ${sheet.widthMm} ${sheet.heightMm}" width="${sheet.widthMm}mm" height="${sheet.heightMm}mm">${marks}</svg>
+<div class="fb-slug">${escapeHtml(meta.label)} · ${i + 1}/${total} · ${p.key}</div>
+</div>`,
+  );
+  return `<!doctype html>
+<html lang="${meta.language}">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(meta.title)}</title>
+<style>
+${meta.fontCss}
+@page { size: ${sheet.widthMm}mm ${sheet.heightMm}mm; margin: 0; }
+html, body { margin: 0; padding: 0; background: #fff; }
+${BOOK_CSS}
+.fb-sheet { position: relative; width: ${sheet.widthMm}mm; height: ${sheet.heightMm}mm; overflow: hidden; background: #fff;
+  break-after: page; page-break-after: always; }
+.fb-sheet:last-child { break-after: auto; page-break-after: auto; }
+.fb-sheet-page { position: absolute; left: ${s}mm; top: ${s}mm; }
+.fb-marks { position: absolute; left: 0; top: 0; }
+.fb-slug { position: absolute; left: ${x0}mm; bottom: 2mm; font: 6pt/1 sans-serif; color: #000; }
+</style>
+</head>
+<body>
+${sheets.join("\n")}
 </body>
 </html>`;
 }

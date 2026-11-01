@@ -25,7 +25,7 @@ export type BlockKind = z.infer<typeof BlockKindSchema>;
 
 /**
  * A block in the book's order. The template decides which blocks there are and which the parent
- * may move or leave out (phase 3); the cover, the story and the end never move.
+ * may move or leave out; the cover, the story and the end never move. A drawing block is one page.
  */
 export const LayoutBlockSchema = z.object({
   kind: BlockKindSchema,
@@ -127,6 +127,8 @@ export const PageLayoutSchema = z.object({
 export type PageLayout = z.infer<typeof PageLayoutSchema>;
 
 export const RENDER_ISSUE_KINDS = ["overflow", "fallback-font"] as const;
+/** Things render QA tells staff without blocking print: "crop" — a picture too narrow for the format's layouts. */
+export const RENDER_NOTE_KINDS = ["crop"] as const;
 export const RenderIssueSchema = z.object({
   /** The rendered page's key: "cover", "story-3", "talk"… */
   page: z.string(),
@@ -143,6 +145,8 @@ export const LayoutQaSchema = z.object({
   status: z.enum(["pending", "ok", "shrunk", "blocked"]),
   checkedAt: z.string().nullable(),
   issues: z.array(RenderIssueSchema),
+  /** Not blocking: e.g. a page that fell back to the plate because the format crops its picture too much. */
+  notes: z.array(z.object({ page: z.string(), kind: z.enum(RENDER_NOTE_KINDS), detail: z.string() })).default([]),
 });
 export type LayoutQa = z.infer<typeof LayoutQaSchema>;
 
@@ -158,6 +162,10 @@ export const BookLayoutSchema = z.object({
   /** The child's age band, which picks the theme's type sizes. */
   ageGroup: z.enum(AGE_GROUPS).default("middle"),
   blocks: z.array(LayoutBlockSchema),
+  /** Optional blocks the template lets the parent add (a drawing block may be added more than once). */
+  addable: z.array(BlockKindSchema).default(["dedication", "talk", "drawing"]),
+  /** The parent's own dedication; null: the default «Специально для тебя, …!». Plain text, escaped. */
+  dedication: z.string().nullable().default(null),
   /** The title has a letter the heading font lacks: the cover and headings use the body font. */
   headingFallback: z.boolean().default(false),
   /** By story page number. */

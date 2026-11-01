@@ -56,6 +56,7 @@ const FLIP_EASE = [0.45, 0, 0.25, 1] as const;
  * words that came from the parent are marked and explained (a sample book).
  */
 export function BookReader({ book, highlights }: { book: Book; highlights?: Highlight[] }) {
+  const { t } = useI18n();
   const rendered = useRenderedBook(book, highlights);
   const { widthMm, heightMm } = book.layout.format;
   if (!rendered) {
@@ -65,15 +66,38 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
       </section>
     );
   }
+  // Drawing pages added only to make the count a multiple of 4 carry a note on screen (not in print).
   const pages = rendered.pages.map((p) => (
-    <div key={p.key} data-page-key={p.key} className="h-full w-full">
+    <div key={p.key} data-page-key={p.key} className="relative h-full w-full">
       <BookPage html={p.html} widthMm={widthMm} heightMm={heightMm} />
+      {p.filler && (
+        <span
+          data-testid="filler-badge"
+          className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold whitespace-nowrap text-white"
+        >
+          {t("reader.filler")}
+        </span>
+      )}
     </div>
   ));
-  return <Reader pages={pages} widthMm={widthMm} heightMm={heightMm} theme={book.layout.theme.id} />;
+  return <Reader pages={pages} widthMm={widthMm} heightMm={heightMm} theme={book.layout.theme.id} format={book.layout.format.id} pageCount={pages.length} />;
 }
 
-function Reader({ pages, widthMm, heightMm, theme }: { pages: ReactNode[]; widthMm: number; heightMm: number; theme: string }) {
+function Reader({
+  pages,
+  widthMm,
+  heightMm,
+  theme,
+  format,
+  pageCount,
+}: {
+  pages: ReactNode[];
+  widthMm: number;
+  heightMm: number;
+  theme: string;
+  format: string;
+  pageCount: number;
+}) {
   const { t } = useI18n();
   const wide = useMediaQuery("(min-width: 768px)", true);
   // Wide: view k shows pages 2k-1 (left) and 2k (right); view 0 is the cover alone.
@@ -185,6 +209,8 @@ function Reader({ pages, widthMm, heightMm, theme }: { pages: ReactNode[]; width
     <motion.section
       data-testid="book-reader"
       data-theme={theme}
+      data-format={format}
+      data-pages={pageCount}
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: "easeOut" }}

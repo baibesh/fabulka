@@ -18,6 +18,7 @@ import {
   CountriesSchema,
   CreateMethodologySchema,
   FaqSchema,
+  FormatsSchema,
   JournalCallsQuerySchema,
   JournalPeriodQuerySchema,
   MethodologyPreviewSchema,
@@ -39,6 +40,7 @@ import {
   type MethodologyPreview,
   type PinLayout,
   type Prices,
+  type PrintFormat,
   type UpdateBlocked,
   type UpdateBook,
   type UpdateMethodology,
@@ -54,6 +56,7 @@ import { JournalAdminService } from '../journal/journal-admin.service';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import { OrdersService } from '../orders/orders.service';
 import { ReferenceService } from '../reference/reference.service';
+import { StorageService } from '../storage/storage.service';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminGuard } from './admin.guard';
 import { AdminService } from './admin.service';
@@ -103,6 +106,7 @@ export class AdminController {
     private readonly journal: JournalAdminService,
     private readonly methodologies: MethodologiesService,
     private readonly reference: ReferenceService,
+    private readonly storage: StorageService,
   ) {}
 
   @Get('me')
@@ -164,6 +168,21 @@ export class AdminController {
   @Get('orders')
   listOrders() {
     return this.orders.list();
+  }
+
+  /** The order's print file: its frozen layout with bleed and crop marks (made on first request). */
+  @Get('orders/:id/print.pdf')
+  async printFile(
+    @Param('id') id: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    const file = await this.orders.printFile(id);
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.name}"`,
+    );
+    response.sendFile(file.path, { root: this.storage.root });
   }
 
   @Patch('orders/:id')
@@ -291,6 +310,12 @@ export class AdminController {
   @Put('reference/faq')
   setFaq(@Body(new ZodPipe(FaqSchema)) body: FaqItem[]) {
     return this.reference.setFaq(body);
+  }
+
+  /** Print formats in the order form's order: sizes, bleed, safe zone and prices by cover (tenge). */
+  @Put('reference/formats')
+  setFormats(@Body(new ZodPipe(FormatsSchema)) body: PrintFormat[]) {
+    return this.reference.setFormats(body);
   }
 
   /** 400 country_policy_blocked for a code on Meta's list: that list cannot be edited here. */

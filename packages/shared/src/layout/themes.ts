@@ -1,6 +1,7 @@
 import { LANGUAGES, type Language } from "../language";
 import { ageBand } from "../methodologies";
 import type { AgeGroup, BookFormat, BookLayout, BookTheme, LayoutBlock, PageLayout, TypeScale } from "./model";
+import type { TemplateBlocks } from "./blocks";
 
 /**
  * Font families books may use, from @fontsource packages (the API embeds the files in the PDF, the
@@ -17,9 +18,15 @@ export const BOOK_FONTS: Record<string, { package: string; weights: number[]; ge
   Comfortaa: { package: "@fontsource/comfortaa", weights: [700], generic: "sans-serif", body: false },
 };
 
+/**
+ * The page sizes of the formats the reference data is seeded with (reference.formats holds the
+ * owner's list with names and prices). A book keeps a copy of its format in its layout.
+ */
 export const BOOK_FORMATS: Record<string, BookFormat> = {
-  /** The square picture book printed today. */
+  /** The square picture book printed since launch. */
   "square-210": { id: "square-210", widthMm: 210, heightMm: 210, bleedMm: 3, safeMm: 12 },
+  "a4-landscape": { id: "a4-landscape", widthMm: 297, heightMm: 210, bleedMm: 3, safeMm: 12 },
+  "a5-portrait": { id: "a5-portrait", widthMm: 148, heightMm: 210, bleedMm: 3, safeMm: 10 },
 };
 export const DEFAULT_FORMAT = "square-210";
 
@@ -153,19 +160,28 @@ export function wordsPerPage(theme: BookTheme, age: number): number {
   return Math.min(ageBand(age).maxWordsPerPage, typeScale(theme, age).maxWords);
 }
 
-/** A fresh layout for a child of `age`: nothing chosen yet, QA pending. */
-export function newLayout(themeId: string, age = 6, formatId = DEFAULT_FORMAT): BookLayout {
-  const theme = BOOK_THEMES[themeId] ?? BOOK_THEMES[defaultThemeId(age)];
+/** The optional blocks a parent may add when the template says nothing. */
+export const DEFAULT_ADDABLE: LayoutBlock["kind"][] = ["dedication", "talk", "drawing"];
+
+/**
+ * A fresh layout for a child of `age`: nothing chosen yet, QA pending. `theme` is a theme or the id
+ * of a curated one; `format` defaults to the square book; `blocks` are the template's.
+ */
+export function newLayout(theme: BookTheme | string, age = 6, format?: BookFormat | string, blocks?: TemplateBlocks | null): BookLayout {
+  const picked = typeof theme === "string" ? (BOOK_THEMES[theme] ?? BOOK_THEMES[defaultThemeId(age)]) : theme;
+  const size = typeof format === "string" ? BOOK_FORMATS[format] : format;
   return {
     v: 1,
-    format: BOOK_FORMATS[formatId] ?? BOOK_FORMATS[DEFAULT_FORMAT],
-    theme: clone(theme),
+    format: clone(size ?? BOOK_FORMATS[DEFAULT_FORMAT]),
+    theme: clone(picked),
     ageGroup: ageGroup(age),
-    blocks: clone(DEFAULT_BLOCKS),
+    blocks: clone(blocks?.order ?? DEFAULT_BLOCKS),
+    addable: [...(blocks?.addable ?? DEFAULT_ADDABLE)],
+    dedication: null,
     headingFallback: false,
     pages: {},
     fits: {},
-    qa: { status: "pending", checkedAt: null, issues: [] },
+    qa: { status: "pending", checkedAt: null, issues: [], notes: [] },
   };
 }
 
@@ -179,13 +195,26 @@ export function legacyLayout(): BookLayout {
   return newLayout("classic");
 }
 
-/** Another theme for the same book: the page picks that do not depend on the theme stay. */
-export function withTheme(layout: BookLayout, themeId: string): BookLayout {
-  const next: BookLayout = { ...newLayout(themeId, 6, layout.format.id), ageGroup: layout.ageGroup };
-  for (const [page, state] of Object.entries(layout.pages)) {
-    next.pages[page] = { ...state, choice: null, tooFull: [] };
-  }
-  return { ...next, blocks: layout.blocks };
+/**
+ * Another theme for the same book (a theme, or a curated theme's id): the format, the blocks, the
+ * dedication and the page picks that do not depend on the theme stay.
+ */
+export function withTheme(layout: BookLayout, theme: BookTheme | string): BookLayout {
+  const picked = typeof theme === "string" ? BOOK_THEMES[theme] : theme;
+  if (!picked) return layout;
+  const pages: BookLayout["pages"] = {};
+  for (const [page, state] of Object.entries(layout.pages)) pages[page] = { ...state, choice: null, tooFull: [] };
+  return { ...layout, theme: clone(picked), pages, fits: {}, headingFallback: false, qa: { status: "pending", checkedAt: null, issues: [], notes: [] } };
+}
+
+/**
+ * Another page size for the same book: the theme, blocks and picks stay; the chooser judges every
+ * page again for the new shape when the book is rendered (pictures crop differently).
+ */
+export function withFormat(layout: BookLayout, format: BookFormat): BookLayout {
+  const pages: BookLayout["pages"] = {};
+  for (const [page, state] of Object.entries(layout.pages)) pages[page] = { ...state, tooFull: [] };
+  return { ...layout, format: clone(format), pages, fits: {}, qa: { status: "pending", checkedAt: null, issues: [], notes: [] } };
 }
 
 function clone<T>(value: T): T {

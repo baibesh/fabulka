@@ -1,10 +1,16 @@
 import type { ConfigService } from '@nestjs/config';
-import { DEFAULT_METHODOLOGIES, type BookLayout } from '@fabulka/shared';
+import {
+  DEFAULT_FORMATS,
+  DEFAULT_METHODOLOGIES,
+  type BookLayout,
+} from '@fabulka/shared';
 import { MockGateway } from '../meta/mock.gateway';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import { JournalService } from '../journal/journal.service';
 import type { PdfService } from '../pdf/pdf.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { ReferenceService } from '../reference/reference.service';
+import { ThemesService } from '../themes/themes.service';
 import type { StorageService } from '../storage/storage.service';
 import { SEED_TEMPLATES } from '../templates/catalog';
 import { SEED_TRANSLATIONS } from '../templates/catalog-i18n';
@@ -60,6 +66,10 @@ function makeService(
     } as unknown as PrismaService),
     models,
     new JournalService(prisma as PrismaService),
+    {
+      defaultFormat: () => Promise.resolve(DEFAULT_FORMATS[0]),
+    } as unknown as ReferenceService,
+    new ThemesService(),
     { get: () => 2 } as unknown as ConfigService,
   );
 }

@@ -1,0 +1,128 @@
+# Print formats in the reference data: the owner changes the A4 price in «Справочники» → «Форматы»;
+# the parent picks A4 landscape in the order form, the book is laid out again at 297×210 mm (render QA
+# notes the spread layout it drops because it would crop the picture too much) and the total follows
+# the owner's price; the order freezes that format, and the admin downloads the print file — a PDF
+# with bleed and crop marks around the trimmed page (mock models).
+appId: ${WEB}
+tags: [order, layout, admin]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Форматы ${Date.now()}"
+  email: "formats+${Date.now()}@e2e.test"
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+commands:
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/create?lang=ru"
+  - tapOn: { testId: voice-manual }
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "поезда"
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "Книга готова", timeout: 30000 }
+  - sql:
+      query: 'select id, layout->''format''->>''id'' as format from "Book" where child->>''name'' = $1'
+      params: ["${childName}"]
+      readOnly: true
+      extract: { bookId: "$[0].id" }
+      assert: { rows: 1, first: { format: square-210 } }
+
+  # The owner raises the A4 landscape softcover price.
+  - openLink: "${WEB}/admin/login?lang=ru"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - openLink: "${WEB}/admin/reference?lang=ru"
+  - waitForVisible: { testId: reference-tabs }
+  - tapOn: { testId: reference-tab-formats }
+  - waitForVisible: { testId: reference-formats }
+  - assertVisible: { css: "[data-testid=format-row][data-id=a5-portrait]" }
+  - tapOn: { css: "[data-testid=format-row][data-id=a4-landscape] [data-testid=format-soft]" }
+  - eraseText: 10
+  - inputText: "15500"
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-saved }
+  - request:
+      url: /reference
+      assert: { status: 200, json: { "$.formats[1].id": a4-landscape, "$.formats[1].prices.soft": 15500 } }
+
+  # The parent's order form: the square book at today's price, then A4 landscape at the new one.
+  - openLink: "${WEB}/books/${bookId}/order?lang=ru"
+  - waitForVisible: { testId: order-form }
+  - waitForVisible: { css: "[data-testid=order-format-preview][data-format=square-210][data-width-mm='210']" }
+  - assertVisible: { testId: order-total, text: "9 900 ₸" }
+  - tapOn: { testId: format-a4-landscape }
+  - waitForVisible: { css: "[data-testid=order-format-preview][data-format=a4-landscape][data-width-mm='297'][data-height-mm='210']", timeout: 30000 }
+  - assertVisible: { testId: order-total, text: "15 500 ₸" }
+  - assertVisible: { text: "29.7 × 21 см" }
+  - sql:
+      query: >-
+        select layout->'format'->>'id' as format, (layout->'format'->>'widthMm')::int as width,
+        layout->'qa'->>'status' as qa, layout->'qa'->'notes'->0->>'kind' as note
+        from "Book" where id = $1
+      params: ["${bookId}"]
+      readOnly: true
+      assert: { rows: 1, first: { format: a4-landscape, width: 297, qa: ok, note: crop } }
+
+  - tapOn: { testId: recipient-name }
+  - inputText: "Айгерим Сапарова"
+  - tapOn: { testId: phone }
+  - inputText: "701 123 45 67"
+  - tapOn: { testId: order-email }
+  - inputText: "${email}"
+  - tapOn: { testId: address }
+  - inputText: "ул. Абая, 10, кв. 5"
+  - tapOn: { testId: place-order }
+  - waitForVisible: { text: "Заказ оформлен", timeout: 15000 }
+  - sql:
+      query: >-
+        select id, "totalKzt" as total, layout->'format'->>'id' as format from "Order" where "bookId" = $1
+      params: ["${bookId}"]
+      readOnly: true
+      extract: { orderId: "$[0].id" }
+      assert: { rows: 1, first: { total: 15500, format: a4-landscape } }
+
+  # The admin sees the format and downloads the print file: 297×210 mm plus 3 mm bleed and 10 mm for
+  # the crop marks on every side: 323×236 mm.
+  - openLink: "${WEB}/admin/orders?lang=ru"
+  - waitForVisible: { css: "[data-testid=order-format][data-format=a4-landscape]" }
+  - assertVisible: { css: "[data-testid=order-print-file][href='/api/admin/orders/${orderId}/print.pdf']" }
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      url: /admin/orders/${orderId}/print.pdf
+      timeout: 60000
+      assert: { status: 200, headers: { content-type: application/pdf } }
+  # Chromium writes the 323×236 mm page as 916.08×669.12 pt (it rounds to whole CSS pixels).
+  - assertTrue: { contains: ["${response.body}", "/MediaBox [0 0 916.07996 669.12]"] }
+after:
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+  - request:
+      method: PUT
+      url: /admin/reference/formats
+      json:
+        - { id: square-210, name: { ru: "Квадрат 21×21 см", kk: "Шаршы 21×21 см", en: "Square 21×21 cm", es: "Cuadrado 21×21 cm", de: "Quadrat 21×21 cm" }, widthMm: 210, heightMm: 210, bleedMm: 3, safeMm: 12, prices: { soft: 9900, hard: 14900 }, published: true }
+        - { id: a4-landscape, name: { ru: "A4 альбомный", kk: "A4 көлденең", en: "A4 landscape", es: "A4 apaisado", de: "A4 quer" }, widthMm: 297, heightMm: 210, bleedMm: 3, safeMm: 12, prices: { soft: 13900, hard: 19900 }, published: true }
+        - { id: a5-portrait, name: { ru: "A5 книжный", kk: "A5 тік", en: "A5 portrait", es: "A5 vertical", de: "A5 hoch" }, widthMm: 148, heightMm: 210, bleedMm: 3, safeMm: 10, prices: { soft: 6900, hard: 10900 }, published: true }
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

@@ -1,21 +1,23 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@/lib/query";
-import { CreateOrderSchema, cityName, type CreateOrderInput } from "@fabulka/shared";
+import { CreateOrderSchema, cityName, formatName, type Book, type CreateOrderInput } from "@fabulka/shared";
 import { Printer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
-import { createOrder, getBook } from "@/lib/api";
+import { createOrder, getBook, updateLayout } from "@/lib/api";
 import { useI18n } from "@/i18n/i18n";
 import { useFormat } from "@/hooks/use-format";
 import { useMe } from "@/lib/auth";
 import { useCities } from "@/lib/cities";
 import { useOrderPrice, useReference } from "@/lib/use-price";
 import { PriceSkeleton } from "../book/price-skeleton";
+import { BookPage, BookStyles, PX_PER_MM, useRenderedBook } from "../book/book-pages";
+import { Spinner } from "../ui/spinner";
 import { ErrorText } from "../ui/notice";
 import { Button } from "../ui/button";
 import { ChoiceCard, Radio } from "../ui/choice";
@@ -48,7 +50,17 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
   // Shown for the parent to check; the API prices the order again from the same reference data.
   const reference = useReference();
   const cities = useCities();
-  const price = useOrderPrice(cover, Number(quantity) || 1, cityId);
+  const formats = reference.data?.formats ?? [];
+  // The book's own format when it is offered, else the first offered one.
+  const bookFormat = book.data?.layout.format.id;
+  const format = formats.find((f) => f.id === bookFormat)?.id ?? formats[0]?.id;
+  const price = useOrderPrice(format, cover, Number(quantity) || 1, cityId);
+  // Another format lays the book out again at that size (the API re-renders it); the preview follows.
+  const queryClient = useQueryClient();
+  const reformat = useMutation({
+    mutationFn: (next: string) => updateLayout(id, { format: next }),
+    onSuccess: (updated) => queryClient.setQueryData(["book", id], updated),
+  });
   // The owner may have taken the default city off the list: start from the first one listed then.
   useEffect(() => {
     if (cities.length && !cities.some((c) => c.id === form.getValues("cityId"))) form.setValue("cityId", cities[0].id);
@@ -73,18 +85,62 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
   }
 
   return (
-    <form data-testid="order-form" noValidate onSubmit={form.handleSubmit((values) => order.mutate({ ...values, locale }))} className="flex flex-col gap-6">
+    <form
+      data-testid="order-form"
+      noValidate
+      onSubmit={form.handleSubmit((values) => order.mutate({ ...values, format, locale }))}
+      className="flex flex-col gap-6"
+    >
       <PageHeader size="md" title={t("order.title")} lead={book.data?.title && `«${book.data.title}»`} />
 
+      <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+        <fieldset data-testid="order-formats" aria-busy={reformat.isPending} className="flex flex-col gap-2">
+          <legend className="mb-2 font-bold">{t("order.format")}</legend>
+          {formats.map((f) => (
+            <ChoiceCard
+              key={f.id}
+              data-testid={`format-${f.id}`}
+              control={
+                <Radio
+                  name="format"
+                  value={f.id}
+                  checked={format === f.id}
+                  disabled={reformat.isPending || !book.data}
+                  onChange={() => format !== f.id && reformat.mutate(f.id)}
+                />
+              }
+            >
+              <span className="flex flex-1 flex-wrap items-baseline justify-between gap-x-3">
+                <span className="font-bold">{formatName(f, locale)}</span>
+                <span className="text-sm text-muted">
+                  {t("order.format.size", { width: f.widthMm / 10, height: f.heightMm / 10 })} · {formatKzt(f.prices[cover])}
+                </span>
+              </span>
+            </ChoiceCard>
+          ))}
+          {reformat.isPending && (
+            <p data-testid="format-saving" className="flex items-center gap-2 text-sm text-muted">
+              <Spinner size="sm" />
+              {t("design.saving")}
+            </p>
+          )}
+          {reformat.isError && <ErrorText>{reformat.error.message}</ErrorText>}
+        </fieldset>
+        {book.data && <CoverPreview book={book.data} />}
+      </div>
+
       <fieldset className="grid gap-3 sm:grid-cols-2">
-        {(["soft", "hard"] as const).map((value) => (
-          <ChoiceCard key={value} control={<Radio value={value} data-testid={`cover-${value}`} {...form.register("cover")} />}>
-            <span className="flex flex-col">
-              <span className="font-bold">{t(value === "soft" ? "order.cover.soft" : "order.cover.hard")}</span>
-              <span className="text-muted">{reference.data ? formatKzt(reference.data.prices.covers[value]) : <PriceSkeleton />}</span>
-            </span>
-          </ChoiceCard>
-        ))}
+        {(["soft", "hard"] as const).map((value) => {
+          const copy = formats.find((f) => f.id === format)?.prices[value];
+          return (
+            <ChoiceCard key={value} control={<Radio value={value} data-testid={`cover-${value}`} {...form.register("cover")} />}>
+              <span className="flex flex-col">
+                <span className="font-bold">{t(value === "soft" ? "order.cover.soft" : "order.cover.hard")}</span>
+                <span className="text-muted">{copy !== undefined ? formatKzt(copy) : <PriceSkeleton />}</span>
+              </span>
+            </ChoiceCard>
+          );
+        })}
       </fieldset>
 
       <Card as="div" radius="lg" padding="lg" className="grid gap-5 sm:grid-cols-2">
@@ -135,11 +191,46 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </Card>
 
-      <Button type="submit" size="lg" data-testid="place-order" loading={order.isPending} disabled={!price} icon={<Printer className="size-5" />}>
+      <Button
+        type="submit"
+        size="lg"
+        data-testid="place-order"
+        loading={order.isPending}
+        disabled={!price || reformat.isPending}
+        icon={<Printer className="size-5" />}
+      >
         {t("order.submit")}
       </Button>
       <p className="text-center text-xs text-muted">{t("order.demo")}</p>
       {order.isError && <ErrorText>{t("order.error", { message: order.error.message })}</ErrorText>}
     </form>
+  );
+}
+
+/** The cover at the chosen format's proportions, from the same renderer as the print file. */
+function CoverPreview({ book }: { book: Book }) {
+  const { t } = useI18n();
+  const rendered = useRenderedBook(book);
+  const { widthMm, heightMm, id } = book.layout.format;
+  const boxPx = 180;
+  const scale = boxPx / (Math.max(widthMm, heightMm) * PX_PER_MM);
+  const cover = rendered?.pages[0];
+  return (
+    <figure
+      data-testid="order-format-preview"
+      data-format={id}
+      data-width-mm={widthMm}
+      data-height-mm={heightMm}
+      className="flex flex-col items-center gap-2"
+    >
+      <BookStyles />
+      <div
+        className="overflow-hidden rounded-md shadow-lg"
+        style={{ width: widthMm * PX_PER_MM * scale, height: heightMm * PX_PER_MM * scale, ["--fb-scale" as string]: String(scale) }}
+      >
+        {cover && <BookPage html={cover.html} widthMm={widthMm} heightMm={heightMm} />}
+      </div>
+      <figcaption className="text-xs text-muted">{t("order.format.size", { width: widthMm / 10, height: heightMm / 10 })}</figcaption>
+    </figure>
   );
 }
