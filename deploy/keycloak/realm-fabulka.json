@@ -25,7 +25,9 @@
   "supportedLocales": [
     "ru",
     "kk",
-    "en"
+    "en",
+    "es",
+    "de"
   ],
   "defaultLocale": "ru",
   "loginTheme": "fabulka",

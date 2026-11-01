@@ -13,6 +13,8 @@
 #   3. sets the Google identity provider client id/secret and the auto-link-by-email flow
 #   4. sets the SMTP password (RESEND_API_KEY) when it is present
 #   5. creates the realm role admin and grants it to FABULKA_ADMINS (comma-separated emails), with 2FA
+#   6. sets the realm's languages (supportedLocales, defaultLocale) from realm-fabulka.json, which
+#      is imported only once, so a language added later reaches the live realm here
 set -euo pipefail
 cd "$(dirname "$0")"
 umask 077
@@ -186,5 +188,13 @@ for user in $(env_get FABULKA_ADMINS | tr ',' ' '); do
         echo "admin: role granted to $user, authenticator app required"
     fi
 done
+
+# --- 6. languages ---------------------------------------------------------------
+python3 -c '
+import json
+realm = json.load(open("realm-fabulka.json"))
+print(json.dumps({k: realm[k] for k in ("internationalizationEnabled", "supportedLocales", "defaultLocale")}))
+' | kc update "realms/$REALM" --merge -f - >/dev/null
+echo "realm: languages $(python3 -c 'import json; print(",".join(json.load(open("realm-fabulka.json"))["supportedLocales"]))')"
 
 echo "done"
