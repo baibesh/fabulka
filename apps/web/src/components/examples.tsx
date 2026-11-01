@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@/lib/query";
-import Link from "next/link";
+import { BookCard } from "./book-card";
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { listExamples } from "@/lib/api";
@@ -26,23 +26,9 @@ export function Examples() {
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {examples?.map((book) => (
           <li key={book.id}>
-            <Link
-              href={`/books/${book.id}`}
-              data-testid={`example-${book.id}`}
-              className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition duration-300 hover:-translate-y-1.5 hover:shadow-lg"
-            >
-              {book.heroImageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
-                <img
-                  src={book.heroImageUrl}
-                  alt=""
-                  className="aspect-square w-full bg-white object-contain transition duration-500 group-hover:scale-105"
-                />
-              ) : (
-                <div className="aspect-square w-full bg-border" />
-              )}
+            <BookCard href={`/books/${book.id}`} data-testid={`example-${book.id}`} image={book.heroImageUrl} fit="contain" radius="md">
               <span className="p-4 font-bold">{book.title}</span>
-            </Link>
+            </BookCard>
           </li>
         ))}
       </ul>

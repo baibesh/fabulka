@@ -8,11 +8,9 @@ import { listTemplates } from "@/lib/api";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { useBookPrice } from "@/lib/use-price";
 import { PriceSkeleton } from "./price-skeleton";
+import { BookCard, bookCardClass } from "./book-card";
 import { ErrorNotice } from "./error-notice";
 import { Badge } from "./ui/badge";
-
-const card =
-  "group flex flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-sm transition duration-300 hover:-translate-y-1.5 hover:shadow-lg";
 
 /** How many books the home page shows before sending visitors to the whole catalog. */
 const PREVIEW_BOOKS = 6;
@@ -42,17 +40,7 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
     >
       {templates?.slice(0, preview ? PREVIEW_BOOKS : undefined).map((book) => (
         <li key={book.slug} className={preview ? "max-sm:w-[78%] max-sm:shrink-0 max-sm:snap-start" : undefined}>
-          <Link href={`/catalog/${book.slug}`} data-testid={`template-${book.slug}`} className={`${card} h-full`}>
-            {book.coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- covers are static files of any size
-              <img
-                src={book.coverUrl}
-                alt=""
-                className="aspect-square w-full object-cover transition duration-500 group-hover:scale-105"
-              />
-            ) : (
-              <div className="aspect-square w-full bg-border" />
-            )}
+          <BookCard href={`/catalog/${book.slug}`} data-testid={`template-${book.slug}`} image={book.coverUrl}>
             <div className="flex flex-1 flex-col gap-2 p-5">
               <div className="flex flex-wrap gap-2">
                 <Badge tone="accent" size="md">
@@ -68,7 +56,7 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
                 </Badge>
               </p>
             </div>
-          </Link>
+          </BookCard>
         </li>
       ))}
       {/* A whole row under the books on wider screens, so it never sits alone under a full row. */}
@@ -76,7 +64,7 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
         <Link
           href="/create"
           data-testid="create-own"
-          className={`${card} h-full items-center justify-center gap-3 border-dashed p-8 text-center sm:flex-row sm:gap-5 sm:text-left`}
+          className={`${bookCardClass} items-center justify-center gap-3 rounded-3xl border-dashed p-8 text-center sm:flex-row sm:gap-5 sm:text-left`}
         >
           <Wand2 className="size-10 shrink-0 text-accent transition duration-300 group-hover:-rotate-12 group-hover:scale-110" />
           <div className="flex flex-col gap-1">

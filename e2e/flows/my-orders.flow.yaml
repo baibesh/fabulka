@@ -1,6 +1,7 @@
 # «Мои заказы»: an anonymous printed order shows up in /my with its status timeline and address; the
 # admin moves it on and the timeline shows the new step with its date; signing in (the test provider,
-# AUTH_MOCK) moves the order to the account; nobody else can open it.
+# AUTH_MOCK) moves the order to the account; nobody else can open it; the admin's list changes the
+# status with a note the parent then reads.
 appId: ${WEB}
 tags: [smoke, order, auth]
 db: ${DATABASE_URL}
@@ -16,6 +17,7 @@ env:
   adminEmail: admin@e2e.test
   adminPassword: e2e-admin-password
   note: "Трек KZ-${Date.now()}"
+  deliveredNote: "Вручён лично ${Date.now()}"
 commands:
   # An anonymous book and a printed order of it, from this browser.
   - launchApp: { appId: "${WEB}", clearState: true }
@@ -158,6 +160,25 @@ commands:
   - waitForVisible: { testId: order-history }
   - assertVisible: { text: "${note}" }
   - assertVisible: { testId: order-history-event, containsDescendants: { text: "Отправлен" } }
+
+  # From the list the admin marks it delivered, with a note; the parent sees it on the timeline.
+  - selectOption: { testId: order-status-select, index: 0, optionValue: delivered }
+  - waitForVisible: { testId: order-status-note }
+  - tapOn: { testId: order-status-note }
+  - inputText: "${deliveredNote}"
+  - tapOn: { testId: order-status-save }
+  - assertNotVisible: { testId: order-status-change, timeout: 10000 }
+  - sql:
+      query: >-
+        select count(*)::int as events from "OrderStatusEvent" e
+        where e."orderId" = $1 and e.status = 'delivered' and e.note = $2
+      params: ["${orderId}", "${deliveredNote}"]
+      readOnly: true
+      assert:
+        first: { events: 1 }
+  - openLink: "${WEB}/orders/${orderId}"
+  - waitForVisible: { testId: order-step-delivered, containsDescendants: { testId: order-step-date }, timeout: 10000 }
+  - assertVisible: { text: "${deliveredNote}" }
 after:
   - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }
   - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${email}"] }

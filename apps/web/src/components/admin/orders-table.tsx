@@ -8,17 +8,24 @@ import { adminOrders, setOrderStatus } from "@/lib/admin-api";
 import { PageTitle, useAdminI18n } from "./ui";
 import { ErrorText } from "@/components/ui/notice";
 import { Table, TableEmpty, TableFrame } from "@/components/ui/table";
-import { Select } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input, Select } from "@/components/ui/input";
 
 export function OrdersTable() {
   const { t, date, kzt, orderStatus } = useAdminI18n();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<OrderStatus | "">("");
   const [open, setOpen] = useState<string | null>(null);
+  // A status picked but not saved yet, with the note for the parent typed under it.
+  const [change, setChange] = useState<{ id: string; status: OrderStatus; note: string } | null>(null);
   const orders = useQuery({ queryKey: ["admin", "orders"], queryFn: adminOrders, refetchInterval: 10_000 });
   const update = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: OrderStatus }) => setOrderStatus(id, status),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin", "orders"] }),
+    mutationFn: ({ id, status, note }: { id: string; status: OrderStatus; note: string }) => setOrderStatus(id, status, note.trim() || undefined),
+    onSuccess: () => {
+      setChange(null);
+      void queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
   });
 
   return (
@@ -78,9 +85,12 @@ export function OrdersTable() {
                       data-testid="order-status-select"
                       aria-label={t("admin.orders.status")}
                       className="w-36"
-                      value={order.status}
+                      value={change?.id === order.id ? change.status : order.status}
                       disabled={update.isPending}
-                      onChange={(e) => update.mutate({ id: order.id, status: e.target.value as OrderStatus })}
+                      onChange={(e) => {
+                        const status = e.target.value as OrderStatus;
+                        setChange(status === order.status ? null : { id: order.id, status, note: "" });
+                      }}
                     >
                       {ORDER_STATUSES.map((s) => (
                         <option key={s} value={s}>
@@ -88,6 +98,36 @@ export function OrdersTable() {
                         </option>
                       ))}
                     </Select>
+                    {change?.id === order.id && (
+                      <form
+                        data-testid="order-status-change"
+                        aria-label={t("admin.orders.change", { status: orderStatus(change.status) })}
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          update.mutate(change);
+                        }}
+                        className="mt-2 flex w-60 flex-col gap-2"
+                      >
+                        <Field label={t("admin.orders.note")} hint={t("admin.orders.note.hint")}>
+                          <Input
+                            small
+                            data-testid="order-status-note"
+                            maxLength={200}
+                            value={change.note}
+                            onChange={(e) => setChange({ ...change, note: e.target.value })}
+                          />
+                        </Field>
+                        <div className="flex gap-2">
+                          <Button type="submit" size="sm" data-testid="order-status-save" loading={update.isPending}>
+                            {t("admin.orders.change.save")}
+                          </Button>
+                          <Button variant="ghost" size="sm" data-testid="order-status-cancel" onClick={() => setChange(null)}>
+                            {t("admin.orders.change.cancel")}
+                          </Button>
+                        </div>
+                        {update.isError && <ErrorText className="text-xs">{update.error.message}</ErrorText>}
+                      </form>
+                    )}
                     <div className="text-xs text-muted">{order.manual ? t("admin.orders.manual") : t("admin.orders.timer")}</div>
                   </td>
                   <td className="whitespace-nowrap text-muted">

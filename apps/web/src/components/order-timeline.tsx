@@ -4,7 +4,7 @@ import { orderTimeline, type Order, type OrderStatus } from "@fabulka/shared";
 import { CheckCircle2, Circle, Home, PackageCheck, Printer, Truck } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import { cityName, useCities } from "@/lib/cities";
-import { formatDayTime } from "@/lib/format";
+import { useFormat } from "@/hooks/use-format";
 
 const ICONS: Record<OrderStatus, typeof Circle> = { paid: PackageCheck, printing: Printer, shipped: Truck, delivered: Home };
 
@@ -13,7 +13,8 @@ const ICONS: Record<OrderStatus, typeof Circle> = { paid: PackageCheck, printing
  * with its date, the current one highlighted.
  */
 export function OrderTimeline({ order, compact = false }: { order: Order; compact?: boolean }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
+  const { dayTime } = useFormat();
   const steps = orderTimeline(order);
   const current = steps.findLastIndex((s) => s.reached);
   const notes = new Map(order.history.filter((e) => e.note).map((e) => [e.status, e.note]));
@@ -47,7 +48,7 @@ export function OrderTimeline({ order, compact = false }: { order: Order; compac
               </span>
               {step.at && (
                 <time data-testid="order-step-date" dateTime={step.at} className="text-xs text-muted">
-                  {formatDayTime(step.at, locale)}
+                  {dayTime(step.at)}
                 </time>
               )}
               {step.reached && notes.get(step.status) && <span className="text-xs text-muted">{notes.get(step.status)}</span>}

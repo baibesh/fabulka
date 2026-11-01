@@ -84,8 +84,9 @@ export async function adminOrders(): Promise<AdminOrder[]> {
   return AdminOrderSchema.array().parse(await request("/api/admin/orders"));
 }
 
-export async function setOrderStatus(id: string, status: OrderStatus): Promise<AdminOrder> {
-  return AdminOrderSchema.parse(await request(`/api/admin/orders/${id}`, json("PATCH", { status })));
+/** Moves an order to `status`; a `note` (up to 200 characters) is shown to the parent on that step. */
+export async function setOrderStatus(id: string, status: OrderStatus, note?: string): Promise<AdminOrder> {
+  return AdminOrderSchema.parse(await request(`/api/admin/orders/${id}`, json("PATCH", note ? { status, note } : { status })));
 }
 
 export async function adminTemplates(): Promise<AdminTemplate[]> {
