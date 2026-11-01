@@ -131,7 +131,13 @@ describe('ReferenceService seeding', () => {
   });
 
   it('upgrades every FAQ seed stored before the photo page to today’s', async () => {
-    const seeds = [SEEDED_FAQ_V1, SEEDED_FAQ_V2, SEEDED_FAQ_V3, SEEDED_FAQ_V4, SEEDED_FAQ_V5];
+    const seeds = [
+      SEEDED_FAQ_V1,
+      SEEDED_FAQ_V2,
+      SEEDED_FAQ_V3,
+      SEEDED_FAQ_V4,
+      SEEDED_FAQ_V5,
+    ];
     for (const seed of seeds) {
       expect(upgradeStored('faq', structuredClone(seed))).toEqual(DEFAULT_FAQ);
     }

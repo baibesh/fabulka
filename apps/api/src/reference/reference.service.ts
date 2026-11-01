@@ -95,7 +95,13 @@ const FIELDS = Object.keys(REFERENCE_KEYS) as (keyof Snapshot)[];
  */
 const SEEDED: Partial<Record<keyof Snapshot, unknown[]>> = {
   countries: [SEEDED_COUNTRIES_V1, SEEDED_COUNTRIES_V2],
-  faq: [SEEDED_FAQ_V1, SEEDED_FAQ_V2, SEEDED_FAQ_V3, SEEDED_FAQ_V4, SEEDED_FAQ_V5],
+  faq: [
+    SEEDED_FAQ_V1,
+    SEEDED_FAQ_V2,
+    SEEDED_FAQ_V3,
+    SEEDED_FAQ_V4,
+    SEEDED_FAQ_V5,
+  ],
 };
 
 /**
