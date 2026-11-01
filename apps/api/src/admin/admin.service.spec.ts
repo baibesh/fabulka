@@ -83,3 +83,95 @@ describe('AdminService.setFeatured', () => {
     ).rejects.toThrow('book nope not found');
   });
 });
+
+describe('AdminService.updateTemplate samples', () => {
+  const templateRow = {
+    id: 't1',
+    slug: 'bath-time',
+    title: 'Купание',
+    summary: 'Вечер',
+    ageMin: 2,
+    ageMax: 4,
+    methodology: 'toddler-routine',
+    languages: ['ru', 'kk', 'en', 'es', 'de'],
+    coverUrl: null,
+    questions: [],
+    published: true,
+    sortOrder: 0,
+    theme: 'bath',
+    plot: [],
+    stylePrompt: null,
+    layoutTheme: null,
+    blocks: null,
+    _count: { books: 2 },
+    samples: [{ language: 'ru', bookId: 'ru-book' }],
+  };
+
+  function setup(book: Record<string, unknown> | null) {
+    const tx = {
+      bookTemplate: { update: jest.fn().mockResolvedValue({ id: 't1' }) },
+      templateSample: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const prisma = {
+      bookTemplate: { findUnique: jest.fn().mockResolvedValue(templateRow) },
+      book: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue(book),
+      },
+      $transaction: (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+    };
+    return { service: makeService(prisma), tx };
+  }
+
+  const book = (patch: Record<string, unknown> = {}) => ({
+    status: 'done',
+    language: 'en',
+    template: { slug: 'bath-time' },
+    sampleOf: null,
+    ...patch,
+  });
+
+  it('shows the samples by language', async () => {
+    const { service } = setup(null);
+    expect((await service.template('bath-time')).samples).toEqual({
+      ru: 'ru-book',
+    });
+  });
+
+  it('sets a sample in its language and clears another', async () => {
+    const { service, tx } = setup(book());
+    await service.updateTemplate('bath-time', {
+      samples: { en: 'en-book', kk: null },
+    });
+    expect(tx.templateSample.deleteMany).toHaveBeenCalledWith({
+      where: { templateId: 't1', language: 'en' },
+    });
+    expect(tx.templateSample.create).toHaveBeenCalledWith({
+      data: { templateId: 't1', language: 'en', bookId: 'en-book' },
+    });
+    expect(tx.templateSample.deleteMany).toHaveBeenCalledWith({
+      where: { templateId: 't1', language: 'kk' },
+    });
+    expect(tx.templateSample.create).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['a book in another language', book({ language: 'ru' })],
+    ['an unfinished book', book({ status: 'pages' })],
+    ['a book from another template', book({ template: { slug: 'not-yet' } })],
+    [
+      'the sample of another template',
+      book({ sampleOf: { template: { slug: 'not-yet' } } }),
+    ],
+    ['a missing book', null],
+  ])('refuses %s', async (_, found) => {
+    const { service, tx } = setup(found);
+    await expect(
+      service.updateTemplate('bath-time', { samples: { en: 'en-book' } }),
+    ).rejects.toThrow();
+    expect(tx.templateSample.create).not.toHaveBeenCalled();
+  });
+});

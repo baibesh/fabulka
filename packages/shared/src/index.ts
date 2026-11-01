@@ -72,8 +72,13 @@ export type TemplateSummary = z.infer<typeof TemplateSummarySchema>;
 
 export const TemplateSchema = TemplateSummarySchema.extend({
   questions: z.array(TemplateQuestionSchema),
-  /** A finished book made from this template to show as an example (GET /books/:id), or null. */
+  /**
+   * A finished book made from this template to show as an example (GET /books/:id), or null: the
+   * one in the requested language, else in its fallback (pickLanguage).
+   */
   sampleBookId: z.string().nullable(),
+  /** The sample's language; another than the requested one when it fell back. */
+  sampleLanguage: LanguageSchema.nullable(),
   /**
    * What the sample book was made from, so its page can point out what a book of your own changes;
    * null without a sample. Answers are by question key, as the sample's parent gave them.
@@ -610,7 +615,25 @@ export const UpdateOrderStatusSchema = z.object({
   note: z.string().trim().max(200).optional(),
 });
 
-export const AdminTemplateSchema = TemplateSchema.omit({ sampleDetails: true }).extend({
+/** A template's sample book in one language, by language. */
+export const TemplateSamplesSchema = z.partialRecord(LanguageSchema, z.string());
+export type TemplateSamples = z.infer<typeof TemplateSamplesSchema>;
+
+/** A finished book from a template that staff may pick as its sample in the book's language. */
+export const SampleOptionSchema = z.object({
+  id: z.string(),
+  title: z.string().nullable(),
+  childName: z.string(),
+  language: LanguageSchema,
+  createdAt: z.string(),
+});
+export type SampleOption = z.infer<typeof SampleOptionSchema>;
+
+export const AdminTemplateSchema = TemplateSchema.omit({ sampleDetails: true, sampleBookId: true, sampleLanguage: true }).extend({
+  /** The sample book per language. */
+  samples: TemplateSamplesSchema,
+  /** Finished books from this template, newest first: the ones staff may pick as samples. */
+  sampleOptions: z.array(SampleOptionSchema),
   published: z.boolean(),
   sortOrder: z.number().int(),
   theme: z.string(),
@@ -639,8 +662,11 @@ export const UpdateTemplateSchema = z
     layoutTheme: z.string().trim().min(1).max(60).nullable(),
     /** The blocks its books get and which optional ones the parent may add; null: the default ones. */
     blocks: TemplateBlocksSchema.nullable(),
-    /** A finished book made from this template to show on its page, or null for none. */
-    sampleBookId: z.string().min(1).nullable(),
+    /**
+     * Samples to change, by language: a finished book from this template in that language to show
+     * on its page, or null for none there. Languages left out keep theirs.
+     */
+    samples: z.partialRecord(LanguageSchema, z.string().min(1).nullable()),
     published: z.boolean(),
     sortOrder: z.number().int(),
   })

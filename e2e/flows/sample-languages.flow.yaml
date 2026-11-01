@@ -1,0 +1,173 @@
+# A catalog book's samples per language: the admin picks a finished book for each language, and the
+# book's page shows the one in the visitor's language, else the one in its fallback language
+# (Kazakh → Russian, Spanish and German → English), saying which language it is in (mock models).
+appId: ${WEB}
+tags: [catalog, sample, i18n]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  enName: "Aliya ${Date.now()}"
+  ruName: "Алия ${Date.now()}"
+  slug: not-yet
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+  headers:
+    X-Client-Key: "e2e-samples-${enName}"
+    X-Demo-Code: E2E-DEMO
+commands:
+  # Two finished (mock) books from the template, one in English and one in Russian.
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${enName}", age: 6, gender: girl, interests: [dinosaurs], pet: "ginger cat Barsik", city: Almaty, language: en }
+        template: ${slug}
+        answers: { skill: "to ride a bike", helper: dad }
+      extract: { enBook: "$.id" }
+      assert: { status: 201 }
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${ruName}", age: 6, gender: girl, interests: [динозавры], pet: "рыжий кот Барсик", city: Алматы, language: ru }
+        template: ${slug}
+        answers: { skill: "кататься на велосипеде", helper: папа }
+      extract: { ruBook: "$.id" }
+      assert: { status: 201 }
+  - request:
+      url: /books/${enBook}
+      retryUntil:
+        status: 200
+        json: { "$.status": done }
+      timeout: 30000
+  - request:
+      url: /books/${ruBook}
+      retryUntil:
+        status: 200
+        json: { "$.status": done }
+      timeout: 30000
+
+  # The admin sets the English sample; a book is the sample only in its own language.
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: PATCH
+      url: /admin/templates/${slug}
+      json: { samples: { ru: "${enBook}" } }
+      assert: { status: 400 }
+  - request:
+      method: PATCH
+      url: /admin/templates/${slug}
+      json: { samples: { en: "${enBook}" } }
+      extract: { adminEn: "$.samples.en" }
+      assert: { status: 200 }
+  - assertTrue: { equals: ["${adminEn}", "${enBook}"] }
+
+  # English gets its own; Spanish falls back to English; Russian, with no Russian sample yet, too.
+  - request:
+      url: /templates/${slug}?lang=en
+      extract: { enId: "$.sampleBookId", enLang: "$.sampleLanguage", enCity: "$.sampleDetails.city" }
+      assert: { status: 200 }
+  - assertTrue: { equals: ["${enId}", "${enBook}"] }
+  - assertTrue: { equals: ["${enLang}", "en"] }
+  - assertTrue: { equals: ["${enCity}", "Almaty"] }
+  - request:
+      url: /templates/${slug}?lang=es
+      extract: { esLang: "$.sampleLanguage" }
+      assert: { status: 200 }
+  - assertTrue: { equals: ["${esLang}", "en"] }
+  - request:
+      url: /templates/${slug}?lang=ru
+      extract: { ruLang: "$.sampleLanguage" }
+      assert: { status: 200 }
+  - assertTrue: { equals: ["${ruLang}", "en"] }
+
+  # Staff see the English sample in the template editor and pick the Russian book for Russian.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login?lang=en"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - openLink: "${WEB}/admin/catalog/${slug}"
+  - waitForVisible: { testId: template-samples }
+  - assertVisible: "Samples by language"
+  - assertVisible: { css: "[data-testid=template-sample-en][data-value='${enBook}']" }
+  - assertVisible: { css: "[data-testid=template-sample-ru][data-value='']" }
+  - selectOption: { testId: template-sample-ru, optionValue: "${ruBook}" }
+  - tapOn: { testId: template-save }
+  - waitForVisible: { testId: template-saved }
+
+  # With a Russian sample too, Kazakh falls back to Russian and German to English.
+  - request:
+      url: /templates/${slug}?lang=kk
+      extract: { kkId: "$.sampleBookId", kkLang: "$.sampleLanguage" }
+      assert: { status: 200 }
+  - assertTrue: { equals: ["${kkId}", "${ruBook}"] }
+  - assertTrue: { equals: ["${kkLang}", "ru"] }
+  - request:
+      url: /templates/${slug}?lang=de
+      extract: { deLang: "$.sampleLanguage" }
+      assert: { status: 200 }
+  - assertTrue: { equals: ["${deLang}", "en"] }
+
+  # In English the page shows the English sample with its words marked and explained in English.
+  - openLink: "${WEB}/catalog/${slug}?lang=en"
+  - waitForVisible: { testId: sample-book }
+  - assertVisible: "This is what the book looks like — yours will be your own"
+  - assertVisible: { contains: "This one was made for a child named ${enName}" }
+  - assertNotVisible: { testId: sample-language }
+  - tapOn: { testId: template-start }
+  - assertVisible: { testId: sample-highlight }
+  - scrollUntilVisible: { testId: sample-highlight, direction: up, centerElement: true }
+  - hover: { testId: sample-highlight }
+  - assertVisible: "Your child's name goes here"
+  # The page text marks the city, spelt the English way.
+  - tapOn: { testId: reader-next }
+  - tapOn: { testId: reader-next }
+  - assertVisible: { testId: sample-highlight, text: "Almaty" }
+
+  # In Kazakh there is no Kazakh sample: the Russian one is shown, and the page says so in Kazakh.
+  - openLink: "${WEB}/catalog/${slug}?lang=kk"
+  - waitForVisible: { testId: sample-book }
+  - assertVisible: { contains: "${ruName}" }
+  - assertVisible: { css: "[data-testid=sample-language][data-language=ru]" }
+  - assertVisible: { contains: "Бұл үлгінің тілі — «Русский»" }
+
+  # In Spanish (offered in another country, not in Kazakhstan) the English one, with the note in
+  # Spanish.
+  - tapOn: { testId: ui-country }
+  - waitForVisible: { testId: ui-country-search }
+  - tapOn: { testId: ui-country-option-other }
+  - openLink: "${WEB}/catalog/${slug}?lang=es"
+  - waitForVisible: { testId: sample-book }
+  - assertVisible: { contains: "${enName}" }
+  - assertVisible: { css: "[data-testid=sample-language][data-language=en]" }
+  - assertVisible: { contains: "Este ejemplo está en English" }
+
+  # Cleared in both languages: the page goes back to the changes and the form alone.
+  - request:
+      method: PATCH
+      url: /admin/templates/${slug}
+      json: { samples: { en: null, ru: null } }
+      assert: { status: 200 }
+  - request:
+      url: /templates/${slug}?lang=en
+      assert: { status: 200, json: { "$.sampleBookId": null, "$.sampleLanguage": null } }
+  - openLink: "${WEB}/catalog/${slug}?lang=en"
+  - waitForVisible: { testId: template-changes }
+  - assertNotVisible: { testId: sample-book }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' in ($1, $2)", params: ["${enName}", "${ruName}"] }

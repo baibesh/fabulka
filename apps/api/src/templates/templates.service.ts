@@ -8,6 +8,7 @@ import type { BookTemplate, Prisma } from '@prisma/client';
 import {
   FALLBACK_LANGUAGES,
   LANGUAGES,
+  pickLanguage,
   type Answers,
   type ChildProfile,
   type Language,
@@ -106,19 +107,29 @@ export class TemplatesService implements OnModuleInit {
 
   async get(slug: string, lang: Language = 'ru'): Promise<Template> {
     const row = await this.find(slug);
-    // The sample is shown only once it is a finished book; a deleted one is unset by the database.
-    const sample = row.sampleBookId
-      ? await this.prisma.book.findFirst({
-          where: { id: row.sampleBookId, status: 'done' },
+    // A sample is shown only once it is a finished book; a deleted one goes with its row.
+    const samples = await this.prisma.templateSample.findMany({
+      where: { templateId: row.id, book: { status: 'done' } },
+      select: {
+        language: true,
+        book: {
           select: { id: true, child: true, toyName: true, answers: true },
-        })
-      : null;
+        },
+      },
+    });
+    // The visitor's language, else the one they read next (Russian for Kazakh, English for Spanish).
+    const language = pickLanguage(
+      samples.map((s) => s.language as Language),
+      lang,
+    );
+    const sample = samples.find((s) => s.language === language)?.book;
     // The sample's child is shown publicly anyway: the admin picked the book to be seen.
     const child = sample?.child as unknown as ChildProfile | undefined;
     return {
       ...summary(row, lang),
       questions: localizedQuestions(row, lang),
       sampleBookId: sample?.id ?? null,
+      sampleLanguage: sample ? language : null,
       sampleDetails:
         sample && child
           ? {

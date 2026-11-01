@@ -42,7 +42,7 @@ export function useRenderedBook(book: PreviewableBook, highlights?: Highlight[])
       book.layout,
       {
         hyphenate: hyphenate.fn,
-        mark: highlights?.length ? (text) => markPersonal(text, highlights) : undefined,
+        mark: highlights?.length ? (text) => markPersonal(text, highlights, book.language) : undefined,
       },
     );
   }, [ready, hyphenate, book, highlights]);

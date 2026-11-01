@@ -16,6 +16,7 @@ import {
   defaultThemeId,
   methodologyText,
   newLayout,
+  pickLanguage,
   themesFor,
   withTheme,
   type AdminBook,
@@ -23,11 +24,13 @@ import {
   type BookTheme,
   type Language,
   type TemplateBlocks,
+  type TemplateSamples,
   type TemplateQuestion,
 } from "@fabulka/shared";
 import { BookPage, BookStyles, PX_PER_MM, useRenderedBook, type PreviewableBook } from "@/components/book/book-pages";
 import { themeName } from "@/lib/themes";
-import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, Plus, Save, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { adminBook, adminTemplate, adminThemes, updateTemplate } from "@/lib/admin-api";
 import { Card, PageTitle, useAdminI18n } from "./ui";
@@ -82,6 +85,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
         questions: draft.questions,
         stylePrompt: draft.stylePrompt?.trim() || null,
         layoutTheme: draft.layoutTheme ?? null,
+        samples: Object.fromEntries(LANGUAGES.map((l) => [l, draft.samples[l] ?? null])),
         published: draft.published,
       }),
     onSuccess: (saved) => {
@@ -181,6 +185,8 @@ function Editor({ initial }: { initial: AdminTemplate }) {
       </div>
 
       <BlocksCard blocks={blocks} onChange={setBlocks} valid={blocksOk} />
+
+      <SamplesCard template={draft} onChange={(samples) => set("samples", samples)} />
 
       <TemplatePreview template={draft} blocks={blocksOk ? blocks : null} theme={themes.find((x) => x.id === draft.layoutTheme) ?? null} />
 
@@ -341,17 +347,72 @@ function BlocksCard({ blocks, onChange, valid }: { blocks: TemplateBlocks; onCha
 }
 
 /**
+ * The sample book per language: a finished book from this template in that language, picked from
+ * the ones made so far. Visitors see the one in their language, else in its fallback.
+ */
+function SamplesCard({ template, onChange }: { template: AdminTemplate; onChange: (samples: TemplateSamples) => void }) {
+  const { t, date } = useAdminI18n();
+  return (
+    <Card title={t("admin.template.samples")} data-testid="template-samples">
+      <p className="-mt-2 text-sm text-muted">{t("admin.template.samples.hint")}</p>
+      <ul className="flex flex-col gap-2">
+        {LANGUAGES.map((language) => {
+          const options = template.sampleOptions.filter((o) => o.language === language);
+          const current = template.samples[language] ?? "";
+          return (
+            <li key={language} className="grid items-center gap-2 sm:grid-cols-[8rem_1fr_auto]">
+              <span className="text-sm font-medium">{LANGUAGE_NAMES[language]}</span>
+              <Select
+                data-testid={`template-sample-${language}`}
+                data-value={current}
+                aria-label={`${t("admin.template.samples")}: ${LANGUAGE_NAMES[language]}`}
+                value={current}
+                disabled={!options.length && !current}
+                onChange={(e) => onChange({ ...template.samples, [language]: e.target.value || undefined })}
+              >
+                <option value="">{options.length ? t("admin.template.samples.none") : t("admin.template.samples.empty")}</option>
+                {/* A sample that is not among the options (an older book) stays selectable. */}
+                {current && !options.some((o) => o.id === current) && <option value={current}>{current}</option>}
+                {options.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {t("admin.template.samples.option", { title: o.title ?? o.id, name: o.childName, date: date(o.createdAt) })}
+                  </option>
+                ))}
+              </Select>
+              {current ? (
+                <Link href={`/admin/books/${current}`} className="flex items-center gap-1 text-sm font-semibold text-accent">
+                  <ExternalLink className="size-4" />
+                  {t("admin.template.samples.open")}
+                </Link>
+              ) : (
+                <span />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+/**
  * The template's sample book as it will print, through the same renderer as the reader and the PDF,
- * in a chosen language: the sample book's own text in its language, the shared sample text in the
- * others, always with its pictures; in the theme and blocks picked above (saved or not).
+ * in a chosen language: the sample in that language (else in its fallback) with its own text when
+ * it is in that language, the shared sample text otherwise, always with its pictures; in the theme
+ * and blocks picked above (saved or not).
  */
 function TemplatePreview({ template, blocks, theme }: { template: AdminTemplate; blocks: TemplateBlocks | null; theme: BookTheme | null }) {
   const { t } = useAdminI18n();
   const [language, setLanguage] = useState<Language>(template.languages[0] ?? "ru");
+  const sampleLanguage = pickLanguage(
+    LANGUAGES.filter((l) => template.samples[l]),
+    language,
+  );
+  const sampleId = sampleLanguage ? template.samples[sampleLanguage] : undefined;
   const sample = useQuery({
-    queryKey: ["admin", "book", template.sampleBookId],
-    queryFn: () => adminBook(template.sampleBookId!),
-    enabled: !!template.sampleBookId,
+    queryKey: ["admin", "book", sampleId],
+    queryFn: () => adminBook(sampleId!),
+    enabled: !!sampleId,
   });
   const book = previewBook(sample.data ?? null, language, theme ?? BOOK_THEMES[defaultThemeId(template.ageMin)], blocks, template.ageMin);
   return (
@@ -370,7 +431,7 @@ function TemplatePreview({ template, blocks, theme }: { template: AdminTemplate;
         </Select>
       }
     >
-      <p className="-mt-2 text-sm text-muted">{template.sampleBookId ? t("admin.template.preview.hint") : t("admin.template.preview.noSample")}</p>
+      <p className="-mt-2 text-sm text-muted">{sampleId ? t("admin.template.preview.hint") : t("admin.template.preview.noSample")}</p>
       <PreviewPages book={book} />
     </Card>
   );

@@ -68,9 +68,17 @@ export const FALLBACK_LANGUAGES: Record<Language, readonly Language[]> = {
  * Kazakh, English then Russian for Spanish and German), else any there is.
  */
 export function localized(texts: LocalizedText, language: Language): string {
-  for (const l of FALLBACK_LANGUAGES[language]) {
-    const text = texts[l];
-    if (text) return text;
-  }
-  return Object.values(texts).find(Boolean) ?? "";
+  const found = pickLanguage(
+    LANGUAGES.filter((l) => texts[l]),
+    language,
+  );
+  return found ? texts[found]! : "";
+}
+
+/**
+ * Which of the `available` languages to show someone reading in `language`: their own, else its
+ * fallbacks in order (FALLBACK_LANGUAGES), else the first available; null when none is.
+ */
+export function pickLanguage(available: readonly Language[], language: Language): Language | null {
+  return FALLBACK_LANGUAGES[language].find((l) => available.includes(l)) ?? available[0] ?? null;
 }

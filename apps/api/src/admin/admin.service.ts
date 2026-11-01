@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { BookTemplate } from '@prisma/client';
 import {
   type AdminBook,
   type AdminBookRow,
@@ -13,6 +12,7 @@ import {
   type Answers,
   type ChildProfile,
   type Language,
+  type SampleOption,
   type UpdateTemplate,
   TemplateBlocksSchema,
 } from '@fabulka/shared';
@@ -27,6 +27,15 @@ import { SettingsService } from '../settings/settings.service';
 import { StorageService } from '../storage/storage.service';
 import { questions, TemplatesService } from '../templates/templates.service';
 import { ThemesService } from '../themes/themes.service';
+
+/** A catalog book with its samples and how many books were made from it. */
+const withSamples = {
+  _count: { select: { books: true } },
+  samples: { select: { language: true, bookId: true } },
+} satisfies Prisma.BookTemplateInclude;
+type TemplateWithSamples = Prisma.BookTemplateGetPayload<{
+  include: typeof withSamples;
+}>;
 
 /** What the admin reads and changes; every route behind AdminGuard. */
 @Injectable()
@@ -215,21 +224,43 @@ export class AdminService {
     });
   }
 
+  /** The catalog books; sampleOptions is filled for one book only (template()). */
   async listTemplates(): Promise<AdminTemplate[]> {
     const rows = await this.prisma.bookTemplate.findMany({
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { books: true } } },
+      include: withSamples,
     });
-    return rows.map((row) => this.templateDto(row, row._count.books));
+    return rows.map((row) => this.templateDto(row, []));
   }
 
   async template(slug: string): Promise<AdminTemplate> {
     const row = await this.prisma.bookTemplate.findUnique({
       where: { slug },
-      include: { _count: { select: { books: true } } },
+      include: withSamples,
     });
     if (!row) throw new NotFoundException(`template ${slug} not found`);
-    return this.templateDto(row, row._count.books);
+    const options = await this.prisma.book.findMany({
+      where: { templateId: row.id, status: 'done' },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        title: true,
+        child: true,
+        language: true,
+        createdAt: true,
+      },
+    });
+    return this.templateDto(
+      row,
+      options.map((book) => ({
+        id: book.id,
+        title: book.title,
+        childName: (book.child as unknown as ChildProfile).name,
+        language: book.language as Language,
+        createdAt: book.createdAt.toISOString(),
+      })),
+    );
   }
 
   async updateTemplate(
@@ -253,7 +284,9 @@ export class AdminService {
       !(await this.methodologies.find(patch.methodology))
     )
       throw new BadRequestException(`Методики «${patch.methodology}» нет`);
-    if (patch.sampleBookId) await this.assertSample(slug, patch.sampleBookId);
+    for (const [language, bookId] of Object.entries(patch.samples ?? {})) {
+      if (bookId) await this.assertSample(slug, language, bookId);
+    }
     // Only a theme whose fonts cover every language the template is written in.
     if (
       patch.layoutTheme &&
@@ -265,41 +298,75 @@ export class AdminService {
         `Тема «${patch.layoutTheme}» не подходит для языков ${current.languages.join(', ')}`,
       );
     }
-    const { blocks, ...rest } = patch;
-    await this.prisma.bookTemplate.update({
-      where: { slug },
-      data: {
-        ...rest,
-        ...(blocks !== undefined && {
-          blocks:
-            blocks === null ? Prisma.DbNull : (blocks as Prisma.InputJsonValue),
-        }),
-      },
+    const { blocks, samples, ...rest } = patch;
+    await this.prisma.$transaction(async (tx) => {
+      const row = await tx.bookTemplate.update({
+        where: { slug },
+        data: {
+          ...rest,
+          ...(blocks !== undefined && {
+            blocks:
+              blocks === null
+                ? Prisma.DbNull
+                : (blocks as Prisma.InputJsonValue),
+          }),
+        },
+      });
+      for (const [language, bookId] of Object.entries(samples ?? {})) {
+        await tx.templateSample.deleteMany({
+          where: { templateId: row.id, language },
+        });
+        if (bookId)
+          await tx.templateSample.create({
+            data: { templateId: row.id, language, bookId },
+          });
+      }
     });
     return this.template(slug);
   }
 
-  /** A template's sample must be a finished book that is not already another template's sample. */
-  private async assertSample(slug: string, bookId: string): Promise<void> {
+  /**
+   * A template's sample in a language must be a finished book made from it in that language, and
+   * not already another template's sample.
+   */
+  private async assertSample(
+    slug: string,
+    language: string,
+    bookId: string,
+  ): Promise<void> {
     const book = await this.prisma.book.findUnique({
       where: { id: bookId },
-      select: { status: true, sampleOf: { select: { slug: true } } },
+      select: {
+        status: true,
+        language: true,
+        template: { select: { slug: true } },
+        sampleOf: { select: { template: { select: { slug: true } } } },
+      },
     });
     if (!book) throw new BadRequestException(`Книги ${bookId} нет`);
     if (book.status !== 'done')
       throw new BadRequestException('Образцом может быть только готовая книга');
-    if (book.sampleOf && book.sampleOf.slug !== slug) {
+    if (book.template?.slug !== slug)
       throw new BadRequestException(
-        `Эта книга уже образец для «${book.sampleOf.slug}»`,
+        'Образцом может быть только книга по этому шаблону',
       );
-    }
+    if (book.language !== language)
+      throw new BadRequestException(
+        `Эта книга на языке «${book.language}», а не «${language}»`,
+      );
+    const other = book.sampleOf?.template.slug;
+    if (other && other !== slug)
+      throw new BadRequestException(`Эта книга уже образец для «${other}»`);
   }
 
   setPaused(paused: boolean) {
     return this.settings.setPaused(paused);
   }
 
-  private templateDto(row: BookTemplate, books: number): AdminTemplate {
+  private templateDto(
+    row: TemplateWithSamples,
+    sampleOptions: SampleOption[],
+  ): AdminTemplate {
     return {
       slug: row.slug,
       title: row.title,
@@ -317,8 +384,11 @@ export class AdminService {
       stylePrompt: row.stylePrompt,
       layoutTheme: row.layoutTheme,
       blocks: TemplateBlocksSchema.safeParse(row.blocks).data ?? null,
-      sampleBookId: row.sampleBookId,
-      books,
+      samples: Object.fromEntries(
+        row.samples.map((s) => [s.language, s.bookId]),
+      ),
+      sampleOptions,
+      books: row._count.books,
     };
   }
 }

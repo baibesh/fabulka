@@ -40,7 +40,7 @@ commands:
   - request:
       method: PATCH
       url: /admin/templates/${slug}
-      json: { sampleBookId: "${bookId}" }
+      json: { samples: { ru: "${bookId}" } }
       assert: { status: 401 }
   - request:
       method: POST
@@ -50,14 +50,15 @@ commands:
   - request:
       method: PATCH
       url: /admin/templates/${slug}
-      json: { sampleBookId: "${bookId}" }
+      json: { samples: { ru: "${bookId}" } }
       assert: { status: 200 }
   - request:
       url: /templates/${slug}?lang=ru
-      extract: { sampleId: "$.sampleBookId", sampleCity: "$.sampleDetails.city", sampleFriend: "$.sampleDetails.answers.friend" }
+      extract: { sampleId: "$.sampleBookId", sampleLanguage: "$.sampleLanguage", sampleCity: "$.sampleDetails.city", sampleFriend: "$.sampleDetails.answers.friend" }
       assert: { status: 200 }
   # Assert values are taken as written, so the extracted ones are compared here.
   - assertTrue: { equals: ["${sampleId}", "${bookId}"] }
+  - assertTrue: { equals: ["${sampleLanguage}", "ru"] }
   - assertTrue: { equals: ["${sampleCity}", "Алматы"] }
   - assertTrue: { equals: ["${sampleFriend}", "Айша"] }
 
@@ -94,14 +95,14 @@ commands:
   - request:
       method: PATCH
       url: /admin/templates/${slug}
-      json: { sampleBookId: null }
+      json: { samples: { ru: null } }
       assert: { status: 200 }
   - request:
       url: /templates/${slug}
-      assert: { status: 200, json: { "$.sampleBookId": null, "$.sampleDetails": null } }
+      assert: { status: 200, json: { "$.sampleBookId": null, "$.sampleLanguage": null, "$.sampleDetails": null } }
   - openLink: "${WEB}/catalog/${slug}?lang=ru"
   - waitForVisible: { testId: template-changes }
   - assertNotVisible: { testId: sample-book }
 after:
-  # Deleting the book unsets the sample too (on delete set null).
+  # Deleting the book removes it as a sample too (on delete cascade).
   - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

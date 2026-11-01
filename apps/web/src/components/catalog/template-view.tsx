@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 
 import { useQuery } from "@/lib/query";
-import type { Book, Template } from "@fabulka/shared";
+import { LANGUAGE_NAMES, type Book, type Template } from "@fabulka/shared";
 import { ArrowDown, Baby, BookOpen, Camera, Heart, MapPin, MessageCircleQuestion, PawPrint } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import { getBook, getTemplate } from "@/lib/api";
@@ -82,9 +82,12 @@ export function TemplateView() {
   );
 }
 
-/** A finished book from this template, with the words that will be the parent's own marked. */
+/**
+ * A finished book from this template, with the words that will be the parent's own marked: in the
+ * visitor's language, else in the one they read next (the API picks it).
+ */
 function SampleBook({ book, template }: { book: Book; template: Template }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const details = template.sampleDetails;
   const toy = book.toy?.name ?? details?.toyName;
   const highlights: Highlight[] = [
@@ -107,6 +110,11 @@ function SampleBook({ book, template }: { book: Book; template: Template }) {
           </mark>{" "}
           — {t("sample.legend")}
         </p>
+        {book.language !== locale && (
+          <p data-testid="sample-language" data-language={book.language} className="text-sm text-muted">
+            {t("sample.otherLanguage", { language: LANGUAGE_NAMES[book.language] })}
+          </p>
+        )}
       </SectionHeader>
       <BookReader book={book} highlights={highlights} />
     </section>

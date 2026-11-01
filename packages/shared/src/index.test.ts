@@ -12,6 +12,8 @@ import {
   fillFaq,
   localized,
   localizedTextSchema,
+  pickLanguage,
+  UpdateTemplateSchema,
   methodologyText,
   cityId,
   cityName,
@@ -381,6 +383,16 @@ describe("localized texts", () => {
     expect(localized({ ru: "Привет", en: "Hi", de: "Hallo" }, "de")).toBe("Hallo");
   });
 
+  it("picks the language to show from the available ones in the same order", () => {
+    expect(pickLanguage(["ru", "en", "kk"], "kk")).toBe("kk");
+    expect(pickLanguage(["ru", "en"], "kk")).toBe("ru");
+    expect(pickLanguage(["ru", "en"], "es")).toBe("en");
+    expect(pickLanguage(["ru"], "de")).toBe("ru");
+    expect(pickLanguage(["en"], "ru")).toBe("en");
+    expect(pickLanguage(["kk"], "en")).toBe("kk");
+    expect(pickLanguage([], "en")).toBeNull();
+  });
+
   it("requires the base languages and drops empty optional ones", () => {
     const schema = localizedTextSchema(20);
     expect(schema.parse({ ru: " а ", en: "b", kk: "  " })).toEqual({ ru: "а", en: "b" });
@@ -511,5 +523,13 @@ describe("reference data", () => {
     expect(UpdateBlockedSchema.safeParse({ extra: ["XX"] }).success).toBe(false);
     expect(UpdateBlockedSchema.safeParse({ extra: ["NLD"] }).success).toBe(false);
     expect(UpdateBlockedSchema.safeParse({ extra: ["NL", "nl"] }).success).toBe(false);
+  });
+});
+
+describe("template samples", () => {
+  it("sets or clears a sample per language and refuses other keys", () => {
+    expect(UpdateTemplateSchema.parse({ samples: { en: "abc", kk: null } })).toEqual({ samples: { en: "abc", kk: null } });
+    expect(UpdateTemplateSchema.safeParse({ samples: { fr: "abc" } }).success).toBe(false);
+    expect(UpdateTemplateSchema.safeParse({ samples: { en: "" } }).success).toBe(false);
   });
 });

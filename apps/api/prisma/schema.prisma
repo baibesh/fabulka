@@ -71,8 +71,8 @@ model Book {
   printInterest   PrintInterest[]
   /// Every request to the models made for this book (the journal in the admin).
   modelCalls      ModelCall[]
-  /// The catalog book this one is the sample of, if the admin picked it.
-  sampleOf        BookTemplate?   @relation("TemplateSample")
+  /// The catalog book this one is the sample of (in its language), if the admin picked it.
+  sampleOf        TemplateSample?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -200,11 +200,24 @@ model BookTemplate {
   published    Boolean  @default(true)
   sortOrder    Int      @default(0)
   books        Book[]   @relation("TemplateBooks")
-  /// A finished book made from this template, shown on its page as an example.
-  sampleBook   Book?    @relation("TemplateSample", fields: [sampleBookId], references: [id], onDelete: SetNull)
-  sampleBookId String?  @unique
+  /// Finished books made from this template, shown on its page as examples: one per language.
+  samples      TemplateSample[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+/// A catalog book's example in one language: a finished book made from it in that language. A book
+/// is the sample of one catalog book at most; deleting either removes the row.
+model TemplateSample {
+  template   BookTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId String
+  /// The book's language (Language in @fabulka/shared).
+  language   String
+  book       Book         @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  bookId     String       @unique
+  createdAt  DateTime     @default(now())
+
+  @@id([templateId, language])
 }
 
 /// A story method a book follows, edited in the admin; seeded from DEFAULT_METHODOLOGIES in
