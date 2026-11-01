@@ -5,12 +5,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Book as BookRow, Order as OrderRow } from '@prisma/client';
+import type {
+  Book as BookRow,
+  Order as OrderRow,
+  OrderStatusEvent as EventRow,
+  Prisma,
+} from '@prisma/client';
 import {
   LanguageSchema,
   CITY_UNKNOWN,
   PRINT_UNAVAILABLE,
+  ORDER_STATUSES,
   cityName,
+  maskPhone,
   orderStatusAt,
   type AdminOrder,
   type Country,
@@ -18,12 +25,51 @@ import {
   type Language,
   type Order,
   type OrderStatus,
+  type OrderStatusEvent,
 } from '@fabulka/shared';
 import { ownsBook } from '../books/books.service';
 import { MailService } from '../mail/mail.service';
 import { orderConfirmation, orderStatusChanged } from '../mail/templates';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReferenceService } from '../reference/reference.service';
+import { StorageService } from '../storage/storage.service';
+
+type OrderWith = OrderRow & { book: BookRow; events: EventRow[] };
+
+const withBookAndEvents = {
+  book: true,
+  events: { orderBy: { createdAt: 'asc' } },
+} as const satisfies Prisma.OrderInclude;
+
+/**
+ * Orders placed in this browser before anyone signed in to it: they move to whoever signs in
+ * (like books, see anonymousBooksOf).
+ */
+export function anonymousOrdersOf(clientKey: string): Prisma.OrderWhereInput {
+  return { clientKey, userId: null };
+}
+
+/** "My orders": the signed-in parent's plus this browser's anonymous ones. */
+export function myOrdersWhere(
+  clientKey: string,
+  userId?: string | null,
+): Prisma.OrderWhereInput {
+  const anonymous = anonymousOrdersOf(clientKey);
+  return userId ? { OR: [{ userId }, anonymous] } : anonymous;
+}
+
+/**
+ * An order carries a name, phone and address: only its account sees it once it has one, else only
+ * the browser it was placed in.
+ */
+export function ownsOrder(
+  order: { clientKey: string; userId: string | null },
+  clientKey: string,
+  userId?: string | null,
+): boolean {
+  if (order.userId === null) return order.clientKey === clientKey;
+  return !!userId && order.userId === userId;
+}
 
 /**
  * Printed-book orders. Payment is a demo (nothing is charged) and the print and
@@ -38,6 +84,7 @@ export class OrdersService {
     private readonly mail: MailService,
     config: ConfigService,
     private readonly reference: ReferenceService,
+    private readonly storage: StorageService,
   ) {
     this.stageMs = Number(config.get('ORDER_STAGE_MS', 20_000));
   }
@@ -98,7 +145,11 @@ export class OrdersService {
         booksKzt: price.books,
         deliveryKzt: price.delivery,
         totalKzt: price.total,
+        clientKey,
+        userId: userId ?? null,
+        events: { create: { status: ORDER_STATUSES[0] } },
       },
+      include: withBookAndEvents,
     });
     void this.mail.send(
       row.email,
@@ -108,10 +159,10 @@ export class OrdersService {
         this.mail.publicUrl,
       ),
     );
-    return this.toDto(row, book);
+    return this.toDto(row);
   }
 
-  /** An order carries a name and address: only whoever may order the book can see it. */
+  /** Only the order's owner (account, else browser) sees it; anyone else gets a 404. */
   async get(
     id: string,
     clientKey: string,
@@ -119,37 +170,75 @@ export class OrdersService {
   ): Promise<Order> {
     const row = await this.prisma.order.findUnique({
       where: { id },
-      include: { book: true },
+      include: withBookAndEvents,
     });
-    if (!row || !ownsBook(row.book, clientKey, userId)) {
+    if (!row || !ownsOrder(row, clientKey, userId)) {
       throw new NotFoundException(`order ${id} not found`);
     }
-    return this.toDto(row, row.book);
+    return this.toDto(row);
+  }
+
+  /** The parent's orders (the account's and this browser's anonymous ones), newest first. */
+  async mine(clientKey: string, userId?: string | null): Promise<Order[]> {
+    const rows = await this.prisma.order.findMany({
+      where: myOrdersWhere(clientKey, userId),
+      orderBy: { createdAt: 'desc' },
+      include: withBookAndEvents,
+      take: 100,
+    });
+    return rows.map((row) => this.toDto(row));
   }
 
   /** All orders, newest first, with what the admin needs to ship them. */
   async list(): Promise<AdminOrder[]> {
     const rows = await this.prisma.order.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { book: true },
+      include: withBookAndEvents,
       take: 200,
     });
-    return rows.map((row) => this.adminDto(row, row.book));
+    return rows.map((row) => this.adminDto(row));
   }
 
   /**
-   * Sets the stage by hand; from then on the demo timer no longer moves it. The parent gets an
-   * email when the stage they see changes.
+   * Sets the stage by hand; from then on the demo timer no longer moves it. The change goes into
+   * the order's history (with the timer's stages it had passed before it, so their dates stay), and
+   * the parent gets an email when the stage they see changes.
    */
-  async setStatus(id: string, status: OrderStatus): Promise<AdminOrder> {
-    const before = await this.prisma.order.findUnique({ where: { id } });
+  async setStatus(
+    id: string,
+    status: OrderStatus,
+    note?: string,
+  ): Promise<AdminOrder> {
+    const before = await this.prisma.order.findUnique({
+      where: { id },
+      include: withBookAndEvents,
+    });
     if (!before) throw new NotFoundException(`order ${id} not found`);
+    const changed = this.statusOf(before) !== status;
+    const events: Prisma.OrderStatusEventCreateManyOrderInput[] = [];
+    if (before.status === null) {
+      // The timer's stages before the new one happened: keep them with the times they were reached.
+      const target = ORDER_STATUSES.indexOf(status);
+      for (const event of this.timerEvents(before)) {
+        if (ORDER_STATUSES.indexOf(event.status) < target) {
+          events.push({ status: event.status, createdAt: new Date(event.at) });
+        }
+      }
+    }
+    if (changed || note) events.push({ status, note: note || null });
     const row = await this.prisma.order
-      .update({ where: { id }, data: { status }, include: { book: true } })
+      .update({
+        where: { id },
+        data: {
+          status,
+          ...(events.length && { events: { createMany: { data: events } } }),
+        },
+        include: withBookAndEvents,
+      })
       .catch(() => {
         throw new NotFoundException(`order ${id} not found`);
       });
-    if (this.statusOf(before) !== status) {
+    if (changed) {
       void this.mail.send(
         row.email,
         orderStatusChanged(
@@ -160,7 +249,7 @@ export class OrdersService {
         ),
       );
     }
-    return this.adminDto(row, row.book);
+    return this.adminDto(row);
   }
 
   /** The stage the parent sees: set by hand, else where the demo timer is. */
@@ -194,21 +283,53 @@ export class OrdersService {
     };
   }
 
-  private adminDto(row: OrderRow, book: BookRow): AdminOrder {
+  /**
+   * Stages the demo timer has moved an order through (it runs orders nobody set by hand), at the
+   * times it reached them; the first stage is the stored one written when the order was placed.
+   */
+  private timerEvents(row: OrderRow): OrderStatusEvent[] {
+    if (row.status !== null) return [];
+    const reached = ORDER_STATUSES.indexOf(this.statusOf(row));
+    return ORDER_STATUSES.slice(1, reached + 1).map((status, i) => ({
+      status,
+      at: new Date(
+        row.createdAt.getTime() + (i + 1) * this.stageMs,
+      ).toISOString(),
+      note: null,
+    }));
+  }
+
+  /** The order's history, oldest first: stored stages, plus the timer's while it runs the order. */
+  private history(row: OrderWith): OrderStatusEvent[] {
+    const stored = row.events.flatMap((e): OrderStatusEvent[] => {
+      const status = ORDER_STATUSES.find((s) => s === e.status);
+      return status
+        ? [{ status, at: e.createdAt.toISOString(), note: e.note }]
+        : [];
+    });
+    return [...stored, ...this.timerEvents(row)].sort((a, b) =>
+      a.at.localeCompare(b.at),
+    );
+  }
+
+  private adminDto(row: OrderWith): AdminOrder {
     return {
-      ...this.toDto(row, book),
+      ...this.toDto(row),
       phone: row.phone,
       manual: row.status !== null,
     };
   }
 
-  private toDto(row: OrderRow, book: BookRow): Order {
+  private toDto(row: OrderWith): Order {
     return {
       id: row.id,
       bookId: row.bookId,
-      bookTitle: book.title,
+      bookTitle: row.book.title,
+      bookImageUrl: this.storage.url(row.book.heroImagePath),
       status: this.statusOf(row),
+      history: this.history(row),
       recipientName: row.recipientName,
+      phoneMasked: maskPhone(row.phone),
       email: row.email,
       city: row.city,
       cityId: row.cityId,

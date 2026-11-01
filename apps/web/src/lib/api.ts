@@ -210,3 +210,8 @@ export async function createOrder(order: CreateOrderInput): Promise<Order> {
 export async function getOrder(id: string): Promise<Order> {
   return OrderSchema.parse(await request(`/api/orders/${id}`));
 }
+
+/** «Мои заказы»: the account's orders, or this browser's while signed out, newest first. */
+export async function listMyOrders(): Promise<Order[]> {
+  return OrderSchema.array().parse(await request("/api/orders/mine"));
+}

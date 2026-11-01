@@ -24,3 +24,7 @@ Things noticed while using tapstep on Fabulka. Version: 0.13.11.
    (as documented), so `{ text: "Books in English", childOf: { testId: trust } }` never matches an
    item two levels down, while the screenshot clearly shows it. A hint such as "found inside
    testId=trust, but not as a direct child — use containsDescendants" would have saved three runs.
+8. **`${var}` is not filled in an `assert.json` expected value.** `json: { "$[0].id": "${orderId}" }`
+   compares against the literal `${orderId}` (the failure reads "expected ${orderId}"), while the
+   same variable works in `url`, `headers` and `params`. Workaround: `extract` the value and compare
+   with `assertTrue: { equals: [...] }`.

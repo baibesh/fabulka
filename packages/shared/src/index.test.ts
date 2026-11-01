@@ -38,6 +38,8 @@ import {
   languageFor,
   orderPrice,
   orderStatusAt,
+  orderTimeline,
+  maskPhone,
   progressFor,
 } from "./index";
 
@@ -146,6 +148,34 @@ describe("orders", () => {
     expect(orderStatusAt(0, 1000)).toBe("paid");
     expect(orderStatusAt(2500, 1000)).toBe("shipped");
     expect(orderStatusAt(99_000, 1000)).toBe("delivered");
+  });
+
+  it("hides all but the last four digits of a phone", () => {
+    expect(maskPhone("+77011234567")).toBe("+7 *** *** 45 67");
+    expect(maskPhone("87011234567")).toBe("*** *** 45 67");
+    expect(maskPhone("12")).toBe("***");
+  });
+
+  it("dates each stage reached by its latest time in the history", () => {
+    const timeline = orderTimeline({
+      status: "printing",
+      createdAt: "2026-01-01T10:00:00.000Z",
+      history: [
+        { status: "paid", at: "2026-01-01T10:00:00.000Z", note: null },
+        { status: "shipped", at: "2026-01-02T10:00:00.000Z", note: null },
+        { status: "printing", at: "2026-01-03T10:00:00.000Z", note: null },
+      ],
+    });
+    expect(timeline).toEqual([
+      { status: "paid", at: "2026-01-01T10:00:00.000Z", reached: true },
+      { status: "printing", at: "2026-01-03T10:00:00.000Z", reached: true },
+      // A step back in the admin: shipped is no longer reached.
+      { status: "shipped", at: null, reached: false },
+      { status: "delivered", at: null, reached: false },
+    ]);
+    expect(orderTimeline({ status: "paid", createdAt: "2026-01-01T10:00:00.000Z", history: [] })[0].at).toBe(
+      "2026-01-01T10:00:00.000Z",
+    );
   });
 });
 

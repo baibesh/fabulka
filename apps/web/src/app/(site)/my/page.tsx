@@ -1,4 +1,5 @@
 import { MyAccountNote, MyBooks } from "@/components/my-books";
+import { MyOrders } from "@/components/my-orders";
 import { T } from "@/components/t";
 
 export default function MyBooksPage() {
@@ -9,6 +10,7 @@ export default function MyBooksPage() {
       </h1>
       <MyAccountNote />
       <MyBooks />
+      <MyOrders />
     </main>
   );
 }

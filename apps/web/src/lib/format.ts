@@ -33,3 +33,19 @@ export function formatNumber(value: number, locale: UiLocale = "ru"): string {
 export function formatDateTime(iso: string, locale: UiLocale = "ru"): string {
   return new Date(iso).toLocaleString(intlLocale(locale), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
+
+/** A day and time for parents, in their language: "1 нояб. 2026 г., 14:20" / "Nov 1, 2026, 2:20 PM". */
+export function formatDayTime(iso: string, locale: UiLocale = "ru"): string {
+  return new Date(iso).toLocaleString(intlLocale(locale), {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** A day for parents, in their language: "1 нояб. 2026 г." / "Nov 1, 2026". */
+export function formatDay(iso: string, locale: UiLocale = "ru"): string {
+  return new Date(iso).toLocaleDateString(intlLocale(locale), { day: "numeric", month: "short", year: "numeric" });
+}

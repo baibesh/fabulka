@@ -386,12 +386,26 @@ export const ORDER_STATUSES = ["paid", "printing", "shipped", "delivered"] as co
 export const OrderStatusSchema = z.enum(ORDER_STATUSES);
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
 
+/** A stage an order reached and when (ISO time); the admin may add a note. */
+export const OrderStatusEventSchema = z.object({
+  status: OrderStatusSchema,
+  at: z.string(),
+  note: z.string().nullable(),
+});
+export type OrderStatusEvent = z.infer<typeof OrderStatusEventSchema>;
+
 export const OrderSchema = z.object({
   id: z.string(),
   bookId: z.string(),
   bookTitle: z.string().nullable(),
+  /** The book's hero picture, a thumbnail for the order. */
+  bookImageUrl: z.string().nullable(),
   status: OrderStatusSchema,
+  /** Stages reached, oldest first (the demo timer's stages included while it runs the order). */
+  history: z.array(OrderStatusEventSchema),
   recipientName: z.string(),
+  /** The phone with all but the last four digits hidden: "+7 *** *** 45 67". */
+  phoneMasked: z.string(),
   email: z.string(),
   /** The city's Russian name when ordered. */
   city: z.string(),
@@ -406,6 +420,30 @@ export const OrderSchema = z.object({
   createdAt: z.string(),
 });
 export type Order = z.infer<typeof OrderSchema>;
+
+/** A phone with all but its last four digits hidden: "+77011234567" → "+7 *** *** 45 67". */
+export function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 4) return "***";
+  const tail = digits.slice(-4);
+  const prefix = phone.trim().startsWith("+") && digits.length > 10 ? `+${digits.slice(0, digits.length - 10)} ` : "";
+  return `${prefix}*** *** ${tail.slice(0, 2)} ${tail.slice(2)}`;
+}
+
+/**
+ * The date each stage was reached, from an order's history: the latest time it was set, for stages up
+ * to the current one (a stage after it, left by a step back in the admin, is not reached). The first
+ * stage is the order's own time when its history has none.
+ */
+export function orderTimeline(order: Pick<Order, "status" | "history" | "createdAt">): { status: OrderStatus; at: string | null; reached: boolean }[] {
+  const current = ORDER_STATUSES.indexOf(order.status);
+  return ORDER_STATUSES.map((status, index) => {
+    const reached = index <= current;
+    const last = [...order.history].reverse().find((e) => e.status === status);
+    const at = reached ? (last?.at ?? (index === 0 ? order.createdAt : null)) : null;
+    return { status, at, reached };
+  });
+}
 
 /** Stage an order has reached `elapsedMs` after it was paid, given the time each stage takes. */
 export function orderStatusAt(elapsedMs: number, stageMs: number): OrderStatus {
@@ -505,7 +543,11 @@ export const AdminOrderSchema = OrderSchema.extend({
 });
 export type AdminOrder = z.infer<typeof AdminOrderSchema>;
 
-export const UpdateOrderStatusSchema = z.object({ status: OrderStatusSchema });
+export const UpdateOrderStatusSchema = z.object({
+  status: OrderStatusSchema,
+  /** Shown to the parent next to the stage, e.g. a tracking number. */
+  note: z.string().trim().max(200).optional(),
+});
 
 export const AdminTemplateSchema = TemplateSchema.omit({ sampleDetails: true }).extend({
   published: z.boolean(),

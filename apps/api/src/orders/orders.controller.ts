@@ -33,6 +33,15 @@ export class OrdersController {
     return this.orders.create(body, client.key, user?.id, country);
   }
 
+  /** «Мои заказы»: the signed-in parent's orders, or this browser's while anonymous. */
+  @Get('mine')
+  mine(
+    @CurrentClient() client: Client,
+    @CurrentUser() user: SessionUser | null,
+  ): Promise<Order[]> {
+    return this.orders.mine(client.key, user?.id);
+  }
+
   @Get(':id')
   get(
     @Param('id') id: string,

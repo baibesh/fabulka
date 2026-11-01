@@ -85,6 +85,7 @@ model User {
   id        String   @id @default(cuid())
   sub       String   @unique
   books     Book[]
+  orders    Order[]
   createdAt DateTime @default(now())
 }
 
@@ -109,8 +110,8 @@ enum Cover {
 
 /// A printed copy of a book (demo payment; the delivery timeline is simulated).
 model Order {
-  id            String   @id @default(cuid(2))
-  book          Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  id            String             @id @default(cuid(2))
+  book          Book               @relation(fields: [bookId], references: [id], onDelete: Cascade)
   bookId        String
   recipientName String
   phone         String
@@ -130,9 +131,31 @@ model Order {
   totalKzt      Int
   /// Set by hand in the admin (ORDER_STATUSES); until then the stage follows the demo timer.
   status        String?
-  createdAt     DateTime @default(now())
+  /// Anonymous visitor key the order was placed with; it moves to the account on sign-in.
+  clientKey     String
+  /// The signed-in parent's account (set when ordered signed in, or on sign-in later).
+  user          User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId        String?
+  /// Stages the order reached and when (written on create and on each change in the admin).
+  events        OrderStatusEvent[]
+  createdAt     DateTime           @default(now())
 
   @@index([bookId])
+  @@index([clientKey])
+  @@index([userId])
+}
+
+/// One stage an order reached (ORDER_STATUSES) and when.
+model OrderStatusEvent {
+  id        String   @id @default(cuid())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  status    String
+  /// What the admin wrote along with the change, if anything.
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
 }
 
 /// Service-wide switches changed in the admin, such as pausing generation.

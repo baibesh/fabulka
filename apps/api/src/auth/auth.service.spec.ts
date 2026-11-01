@@ -14,6 +14,7 @@ function setup(env: Record<string, string> = {}) {
   const prisma = {
     user: { upsert: jest.fn().mockResolvedValue({ id: 'user-1' }) },
     book: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
+    order: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
   };
   const admin = new AdminAuthService(config({ ADMIN_SECRET: 'a', ...values }));
   const auth = new AuthService(
@@ -55,7 +56,7 @@ async function signIn(
 }
 
 describe('AuthService (mock provider)', () => {
-  it('signs in, moves the visitor’s anonymous books and returns', async () => {
+  it('signs in, moves the visitor’s anonymous books and orders and returns', async () => {
     const { auth, prisma } = setup();
     const result = await signIn(auth);
     expect(result.location).toBe('/my');
@@ -63,6 +64,10 @@ describe('AuthService (mock provider)', () => {
       expect.objectContaining({ where: { sub: 'mock:parent@example.com' } }),
     );
     expect(prisma.book.updateMany).toHaveBeenCalledWith({
+      where: { clientKey: 'visitor-1', userId: null },
+      data: { userId: 'user-1' },
+    });
+    expect(prisma.order.updateMany).toHaveBeenCalledWith({
       where: { clientKey: 'visitor-1', userId: null },
       data: { userId: 'user-1' },
     });

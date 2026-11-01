@@ -1,0 +1,163 @@
+# «Мои заказы»: an anonymous printed order shows up in /my with its status timeline and address; the
+# admin moves it on and the timeline shows the new step with its date; signing in (the test provider,
+# AUTH_MOCK) moves the order to the account; nobody else can open it.
+appId: ${WEB}
+tags: [smoke, order, auth]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Мои заказы ${Date.now()}"
+  email: "orders+${Date.now()}@e2e.test"
+  stranger: "e2e-orders-stranger-${Date.now()}"
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+  note: "Трек KZ-${Date.now()}"
+commands:
+  # An anonymous book and a printed order of it, from this browser.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/create?lang=ru"
+  - tapOn: { testId: voice-manual }
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "кораблики"
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "Книга готова", timeout: 30000 }
+  - tapOn: { testId: order-print }
+  - waitForVisible: { testId: order-form }
+  - selectOption: { testId: city, option: "Алматы" }
+  - tapOn: { testId: recipient-name }
+  - inputText: "Айгерим Сапарова"
+  - tapOn: { testId: phone }
+  - inputText: "701 123 45 67"
+  - tapOn: { testId: order-email }
+  - inputText: "${email}"
+  - tapOn: { testId: address }
+  - inputText: "ул. Абая, 10, кв. 5"
+  - tapOn: { testId: place-order }
+  - waitForVisible: { text: "Заказ оформлен", timeout: 10000 }
+  - waitForVisible: { testId: order-step-paid }
+
+  # The order keeps this browser's key and its first stage; no account yet.
+  - sql:
+      query: >-
+        select o.id, o."clientKey" as key, o."userId" is null as anonymous,
+        (select count(*)::int from "OrderStatusEvent" e where e."orderId" = o.id and e.status = 'paid') as paid
+        from "Order" o join "Book" b on b.id = o."bookId" where b.child->>'name' = $1
+      params: ["${childName}"]
+      readOnly: true
+      extract: { orderId: "$[0].id", browserKey: "$[0].key" }
+      assert:
+        rows: 1
+        first: { anonymous: true, paid: 1 }
+
+  # Another visitor key cannot open it, nor see it among its orders.
+  - request:
+      url: ${API}/orders/${orderId}
+      headers: { X-Client-Key: "${stranger}" }
+      assert: { status: 404 }
+  - request:
+      url: ${API}/orders/mine
+      headers: { X-Client-Key: "${stranger}" }
+      assert: { status: 200 }
+  - assertTrue: { equals: ["${response.body}", "[]"] }
+  - request:
+      url: ${API}/orders/mine
+      headers: { X-Client-Key: "${browserKey}" }
+      extract: { firstOrder: "$[0].id" }
+      assert:
+        status: 200
+        json: { "$[0].phoneMasked": "+7 *** *** 45 67", "$[0].history[0].status": paid }
+  - assertTrue: { equals: ["${firstOrder}", "${orderId}"] }
+
+  # The admin hands it to delivery, with a note for the parent.
+  - request:
+      method: POST
+      url: ${API}/admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: PATCH
+      url: ${API}/admin/orders/${orderId}
+      json: { status: shipped, note: "${note}" }
+      assert: { status: 200, json: { "$.status": shipped, "$.manual": true } }
+  - sql:
+      query: >-
+        select count(*)::int as events from "OrderStatusEvent" e
+        where e."orderId" = $1 and e.status = 'shipped' and e.note = $2
+      params: ["${orderId}", "${note}"]
+      readOnly: true
+      assert:
+        first: { events: 1 }
+
+  # My orders, signed out: the card with the timeline (shipped is the current step, dated), the address.
+  - openLink: "${WEB}/my"
+  - waitForVisible: { testId: my-order, timeout: 10000 }
+  - assertVisible: { text: "Мои заказы" }
+  - assertVisible: { testId: order-step-shipped, containsDescendants: { testId: order-step-date } }
+  - assertVisible: { text: "Передан в доставку" }
+  - assertVisible: { text: "${note}" }
+  - assertNotVisible: { testId: order-step-delivered, containsDescendants: { testId: order-step-date } }
+  - assertVisible: { contains: "Алматы, ул. Абая, 10, кв. 5" }
+  - assertVisible: { text: "+7 *** *** 45 67" }
+
+  # Sign in from the header: back on /my, the order moved to the account and is still there.
+  - tapOn: { testId: auth-login }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${email}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { testId: auth-account, timeout: 15000 }
+  - waitForVisible: { testId: my-order, timeout: 10000 }
+  - assertVisible: { text: "${note}" }
+  - sql:
+      query: >-
+        select count(*)::int as orders from "Order" o join "User" u on u.id = o."userId"
+        where o.id = $1 and u.sub = $2
+      params: ["${orderId}", "mock:${email}"]
+      readOnly: true
+      assert:
+        first: { orders: 1 }
+  # Once it is in the account, the browser key alone (signed out) no longer opens it.
+  - request:
+      url: ${API}/orders/${orderId}
+      headers: { X-Client-Key: "${browserKey}" }
+      assert: { status: 404 }
+
+  # The account menu leads to the orders; the order page shows the same timeline.
+  - tapOn: { testId: auth-account }
+  - tapOn: { testId: auth-orders }
+  - waitForVisible: { testId: my-orders }
+  - assertUrl: { contains: "/my#orders" }
+  - tapOn: { testId: my-order-open }
+  - waitForVisible: { testId: order-status }
+  - assertUrl: { contains: "/orders/${orderId}" }
+  - assertVisible: { testId: order-step-shipped, containsDescendants: { testId: order-step-date } }
+  - assertVisible: { text: "${note}" }
+  - assertVisible: { text: "Итого: 9 900 ₸" }
+
+  # The admin's orders list shows the order's history (the newest order is this one).
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - tapOn: { testId: admin-nav-orders }
+  - waitForVisible: { testId: orders-table }
+  - tapOn: { testId: order-history-toggle, index: 0 }
+  - waitForVisible: { testId: order-history }
+  - assertVisible: { text: "${note}" }
+  - assertVisible: { testId: order-history-event, containsDescendants: { text: "Отправлен" } }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }
+  - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${email}"] }

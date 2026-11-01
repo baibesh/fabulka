@@ -158,7 +158,7 @@ export class AdminController {
     @Body(new ZodPipe(UpdateOrderStatusSchema))
     body: z.infer<typeof UpdateOrderStatusSchema>,
   ) {
-    return this.orders.setStatus(id, body.status);
+    return this.orders.setStatus(id, body.status, body.note);
   }
 
   @Get('journal/stats')

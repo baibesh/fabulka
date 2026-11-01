@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { AdminAuthService, readCookie } from '../admin/admin-auth.service';
 import { anonymousBooksOf } from '../books/books.service';
 import { cookieHeader, sameString, seal, unseal } from '../common/signed';
+import { anonymousOrdersOf } from '../orders/orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   clientKeyParam,
@@ -61,7 +62,7 @@ export interface AuthRedirect {
 
 /**
  * Optional sign-in with Keycloak (OIDC authorization code + PKCE S256). Anonymous use keeps
- * working; signing in moves the visitor's books to their account and, for the realm role
+ * working; signing in moves the visitor's books and orders to their account and, for the realm role
  * `admin`, opens the admin. AUTH_MOCK=true swaps Keycloak for a fake provider inside the API,
  * for E2E runs; it is refused in production.
  */
@@ -157,7 +158,7 @@ export class AuthService {
 
   /**
    * Back from Keycloak: checks state, trades the code, signs the parent in, moves this
-   * visitor's anonymous books to them and goes back to where they started. Every failure
+   * visitor's anonymous books and orders to them and goes back to where they started. Every failure
    * returns there with ?auth=error instead of an error page.
    */
   async callback(
@@ -219,6 +220,13 @@ export class AuthService {
           data: { userId: user.id },
         });
         if (count) this.logger.log(`${count} anonymous books moved to a user`);
+        const orders = await this.prisma.order.updateMany({
+          where: anonymousOrdersOf(login.key),
+          data: { userId: user.id },
+        });
+        if (orders.count) {
+          this.logger.log(`${orders.count} anonymous orders moved to a user`);
+        }
       }
       const session: SessionPayload = {
         uid: user.id,
