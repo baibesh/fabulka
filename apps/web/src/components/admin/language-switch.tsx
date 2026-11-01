@@ -2,9 +2,10 @@
 
 import { setLocale } from "@/i18n/i18n";
 import { LOCALE_NAMES, UI_LOCALES } from "@/i18n/messages";
+import { languageCode } from "@/lib/regions";
 import { useAdminI18n } from "./ui";
 
-/** RU / ҚАЗ / EN: the admin's language, saved together with the site's. */
+/** RU / ҚАЗ / EN / ES / DE: the admin's language, saved together with the site's. */
 export function LanguageSwitch({ className = "" }: { className?: string }) {
   const { t, locale } = useAdminI18n();
   return (
@@ -19,7 +20,7 @@ export function LanguageSwitch({ className = "" }: { className?: string }) {
           onClick={() => setLocale(l)}
           className={`flex-1 rounded-lg px-2 py-1 text-xs font-bold ${locale === l ? "bg-card text-accent shadow-sm" : "text-muted hover:text-foreground"}`}
         >
-          {l === "kk" ? "ҚАЗ" : l.toUpperCase()}
+          {languageCode(l)}
         </button>
       ))}
     </div>

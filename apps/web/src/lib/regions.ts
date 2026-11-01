@@ -37,8 +37,8 @@ export function regionName(code: string, locale: UiLocale, fallback?: string): s
   return name && name !== code ? name : (fallback ?? code);
 }
 
-/** The flag shown for each language: Kazakhstan's for Kazakh, Russia's for Russian, Britain's for English. */
-export const LANGUAGE_FLAGS: Record<Language, string> = { kk: "KZ", ru: "RU", en: "GB" };
+/** The flag shown for each language: Kazakhstan's for Kazakh, Russia's for Russian, Britain's for English, Spain's for Spanish, Germany's for German. */
+export const LANGUAGE_FLAGS: Record<Language, string> = { kk: "KZ", ru: "RU", en: "GB", es: "ES", de: "DE" };
 
 /** The short label of a language next to its flag. */
 export const languageCode = (language: Language) => (language === "kk" ? "ҚАЗ" : language.toUpperCase());

@@ -1,6 +1,6 @@
 # Interface language and country: the language button in the header and the country button in the
-# footer, each opening a dialog; the catalog in Kazakh and English, and print offered only in
-# Kazakhstan.
+# footer, each opening a dialog; the catalog in Kazakh, English, German and Spanish, print offered
+# only in Kazakhstan, and a book written in Spanish.
 appId: ${WEB}
 tags: [smoke, i18n]
 db: ${DATABASE_URL}
@@ -69,5 +69,85 @@ commands:
       readOnly: true
       assert:
         first: { requests: 1 }
+
+  # Another country offers English, Spanish, German and Russian, never Kazakh.
+  - tapOn: { testId: ui-language }
+  - waitForVisible: { testId: ui-language-option-es }
+  - assertVisible: { testId: ui-language-option-de }
+  - assertVisible: { testId: ui-language-option-ru }
+  - assertNotVisible: { testId: ui-language-option-kk }
+  - tapOn: { testId: ui-language-option-ru }
+  - openLink: "${WEB}/catalog"
+  - waitForVisible: "Каталог книг"
+
+  # Germany speaks German and English: a Russian interface gives way to German.
+  - tapOn: { testId: ui-country }
+  - waitForVisible: { testId: ui-country-search }
+  - tapOn: { testId: ui-country-search }
+  - inputText: "Герм"
+  - waitForVisible: { testId: ui-country-option-DE }
+  - tapOn: { testId: ui-country-option-DE }
+  - waitForVisible: "Buchkatalog"
+  - assertVisible: "Das Geheimnis des Schneeleoparden"
+  - assertVisible: { testId: ui-country, contains: "Deutschland" }
+  - assertVisible: { testId: ui-language, contains: "DE" }
+  - assertVisible: { testId: custom-price, text: "$5.90" }
+  - tapOn: { testId: ui-language }
+  - waitForVisible: { testId: ui-language-option-de }
+  - assertVisible: { testId: ui-language-option-en }
+  - assertNotVisible: { testId: ui-language-option-ru }
+  - assertNotVisible: { testId: ui-language-option-es }
+  - assertNotVisible: { testId: ui-language-option-kk }
+  - pressKey: escape
+  - tapOn: { testId: nav-home }
+  - waitForVisible: "Ein Buch, in dem dein Kind der Held ist"
+  - tapOn: "In welchen Sprachen gibt es die Bücher?"
+  - waitForVisible: { contains: "Die Sprache des Buches wählst du im Formular: Deutsch, English" }
+
+  # Spain: Spanish and English; a German interface gives way to Spanish.
+  - openLink: "${WEB}/catalog"
+  - waitForVisible: "Buchkatalog"
+  - tapOn: { testId: ui-country }
+  - waitForVisible: { testId: ui-country-search }
+  - tapOn: { testId: ui-country-search }
+  - inputText: "Spanien"
+  - waitForVisible: { testId: ui-country-option-ES }
+  - tapOn: { testId: ui-country-option-ES }
+  - waitForVisible: "Catálogo de libros"
+  - assertVisible: "El secreto del leopardo de las nieves"
+  - assertVisible: { testId: ui-country, contains: "España" }
+  - tapOn: { testId: ui-language }
+  - waitForVisible: { testId: ui-language-option-es }
+  - assertVisible: { testId: ui-language-option-en }
+  - assertNotVisible: { testId: ui-language-option-de }
+  - pressKey: escape
+  - tapOn: { testId: nav-home }
+  - waitForVisible: "Un libro en el que tu hijo es el protagonista"
+  - tapOn: "¿Cuánto cuesta un libro?"
+  - waitForVisible: { contains: "$3.90" }
+
+  # A book made in the Spanish interface is written in Spanish.
+  - tapOn: { testId: nav-create }
+  - tapOn: { testId: voice-manual, contains: "Rellenar a mano" }
+  - tapOn: { testId: child-name }
+  - inputText: "${childName} ES"
+  - tapOn: { testId: child-interests }
+  - inputText: "dinosaurios"
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { testId: wizard-review }
+  - assertVisible: { text: "Español" }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "El libro está listo", timeout: 30000 }
+  - assertVisible: { contains: "${childName} ES y el viaje de las estrellas" }
+  - assertVisible: { testId: want-print }
+  - sql:
+      query: >-
+        select child->>'language' as language from "Book" where child->>'name' = $1
+      params: ["${childName} ES"]
+      readOnly: true
+      assert:
+        first: { language: es }
 after:
-  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }
+  - sql: { exec: "delete from \"Book\" where child->>'name' in ($1, $2)", params: ["${childName}", "${childName} ES"] }

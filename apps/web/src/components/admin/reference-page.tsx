@@ -33,7 +33,7 @@ import { intlLocale } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
 import { adminReference, saveBlocked, saveCities, saveCountries, saveFaq, savePrices } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
-import { regionName } from "@/lib/regions";
+import { languageCode, regionName } from "@/lib/regions";
 import { Flag } from "../flag";
 import { button, Card, ghostButton, input, PageTitle, useAdminI18n } from "./ui";
 
@@ -335,9 +335,16 @@ function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; blocked: 
                       const isDefault = country.languages[0] === language;
                       return (
                         <span key={language} className="flex items-center gap-1.5 text-sm">
-                          <label className="flex items-center gap-1.5">
-                            <input type="checkbox" data-testid={`country-lang-${language}`} checked={on} onChange={() => toggleLanguage(i, language)} />
-                            {LANGUAGE_NAMES[language]}
+                          {/* Short codes keep all five languages on one line; the full name is the hint. */}
+                          <label className="flex items-center gap-1.5 font-semibold" title={LANGUAGE_NAMES[language]}>
+                            <input
+                              type="checkbox"
+                              data-testid={`country-lang-${language}`}
+                              aria-label={LANGUAGE_NAMES[language]}
+                              checked={on}
+                              onChange={() => toggleLanguage(i, language)}
+                            />
+                            {languageCode(language)}
                           </label>
                           <input
                             type="radio"

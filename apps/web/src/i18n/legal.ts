@@ -6,6 +6,166 @@ export interface LegalDoc {
   sections: { title: string; text: string[] }[];
 }
 
+const privacyEs: LegalDoc = {
+  title: "Política de privacidad",
+  updated: "Actualizado el 31 de octubre de 2026",
+  sections: [
+    {
+      title: "Quiénes somos",
+      text: ["Fabulka es un servicio de libros infantiles personalizados con sede en Kazajistán. Para cualquier consulta sobre tus datos, escríbenos a hello@fabulka.com."],
+    },
+    {
+      title: "Qué datos recopilamos",
+      text: [
+        "Sobre el niño o la niña: nombre, edad, sexo, ciudad, intereses, mascota, respuestas a las preguntas del libro y, si la subes, una foto de un juguete. Nunca pedimos una foto del niño o la niña: el protagonista se dibuja a partir de una descripción en texto.",
+        "Para la impresión: el nombre del destinatario, su número de teléfono y la dirección de entrega.",
+        "Datos técnicos: una clave anónima del navegador (para contar los libros gratuitos), el idioma y el país que elegiste, y el país de tu dirección IP.",
+      ],
+    },
+    {
+      title: "Para qué",
+      text: ["Para escribir e ilustrar el libro, generar el PDF, imprimirlo y entregarlo, así como para aplicar los límites y proteger el servicio contra abusos."],
+    },
+    {
+      title: "Quién los trata",
+      text: [
+        "Las respuestas y la foto del juguete se envían a Meta Model API (Muse Spark, Muse Image y SAM 3.1) únicamente para crear el libro. No vendemos los datos ni los usamos con fines publicitarios.",
+      ],
+    },
+    {
+      title: "Dónde y durante cuánto tiempo se conservan",
+      text: [
+        "Los datos se almacenan en servidores ubicados en la República de Kazajistán, tal como exige la ley kazaja de protección de datos personales.",
+        "El libro, sus archivos y los pedidos se conservan hasta que nos pidas eliminarlos. Escríbenos a hello@fabulka.com y borraremos todo lo relacionado con el libro.",
+        "Los registros técnicos de las solicitudes a los modelos y de los errores se conservan hasta 90 días (el texto de las solicitudes fallidas, hasta 30 días) para poder detectar y corregir problemas.",
+      ],
+    },
+    {
+      title: "Dónde no está disponible el servicio",
+      text: ["Las normas de Meta no permiten ofrecer el servicio en varios países, entre ellos Rusia y Bielorrusia. Los visitantes de esos países no pueden crear libros."],
+    },
+    {
+      title: "Tus derechos",
+      text: [
+        "Puedes preguntarnos qué datos tenemos sobre ti, corregirlos o eliminarlos. Solo usamos el almacenamiento del navegador que el sitio necesita (idioma, país, clave anónima) y ningún rastreador publicitario.",
+      ],
+    },
+  ],
+};
+
+const termsEs: LegalDoc = {
+  title: "Condiciones de uso",
+  updated: "Actualizado el 31 de octubre de 2026",
+  sections: [
+    {
+      title: "Qué hace el servicio",
+      text: [
+        "Fabulka crea libros infantiles personalizados con los modelos de IA de Meta. Cada libro es único, pero los modelos pueden cometer errores: lee el libro antes de enseñárselo a tu hijo o hija o de encargar una copia impresa.",
+      ],
+    },
+    {
+      title: "Demo",
+      text: ["Por ahora el servicio funciona en modo demo: no se cobra nada, y la impresión y la entrega se muestran a modo de ejemplo."],
+    },
+    {
+      title: "Libros gratuitos y límites",
+      text: ["Cada visitante puede crear algunos libros gratis. Para que no se agote el presupuesto de los modelos, el número de libros al día está limitado."],
+    },
+    {
+      title: "Tu libro",
+      text: ["El libro creado para tu hijo o hija es tuyo: puedes leerlo, imprimirlo y regalarlo. Las ilustraciones las dibuja Muse Image y el texto lo escribe Muse Spark."],
+    },
+    {
+      title: "Qué no debes hacer",
+      text: ["No introduzcas contenido ofensivo o que no sea seguro para niños, ni datos de otros niños sin el consentimiento de sus padres."],
+    },
+    {
+      title: "Disponibilidad",
+      text: ["El servicio no está disponible en todos los países (consulta la política de privacidad). Consultas: hello@fabulka.com."],
+    },
+  ],
+};
+
+const privacyDe: LegalDoc = {
+  title: "Datenschutzerklärung",
+  updated: "Aktualisiert am 31. Oktober 2026",
+  sections: [
+    {
+      title: "Wer wir sind",
+      text: ["Fabulka ist ein Dienst für personalisierte Kinderbücher aus Kasachstan. Bei allen Fragen zu deinen Daten schreib an hello@fabulka.com."],
+    },
+    {
+      title: "Welche Daten wir erheben",
+      text: [
+        "Über das Kind: Name, Alter, Geschlecht, Stadt, Interessen, Haustier, Antworten auf die Fragen zum Buch und, falls du eines hochlädst, ein Foto eines Spielzeugs. Wir fragen niemals nach einem Foto des Kindes: Der Held wird nach einer Textbeschreibung gezeichnet.",
+        "Für den Druck: Name des Empfängers, Telefonnummer und Lieferadresse.",
+        "Technische Daten: ein anonymer Browserschlüssel (zum Zählen der kostenlosen Bücher), die von dir gewählte Sprache und das gewählte Land sowie das Land deiner IP-Adresse.",
+      ],
+    },
+    {
+      title: "Wozu",
+      text: ["Um das Buch zu schreiben und zu illustrieren, das PDF zu erstellen, das Buch zu drucken und zu liefern sowie um Limits einzuhalten und den Dienst vor Missbrauch zu schützen."],
+    },
+    {
+      title: "Wer die Daten verarbeitet",
+      text: [
+        "Die Antworten und das Foto des Spielzeugs werden ausschließlich zur Erstellung des Buchs an die Meta Model API (Muse Spark, Muse Image und SAM 3.1) übermittelt. Wir verkaufen keine Daten und nutzen sie nicht für Werbung.",
+      ],
+    },
+    {
+      title: "Wo und wie lange die Daten gespeichert werden",
+      text: [
+        "Die Daten werden auf Servern in der Republik Kasachstan gespeichert, wie es das kasachische Gesetz über personenbezogene Daten vorschreibt.",
+        "Ein Buch, seine Dateien und Bestellungen werden gespeichert, bis du uns bittest, sie zu löschen. Schreib an hello@fabulka.com, und wir löschen alles, was mit dem Buch verbunden ist.",
+        "Technische Protokolle von Modellanfragen und Fehlern werden bis zu 90 Tage aufbewahrt (der Text fehlgeschlagener Anfragen bis zu 30 Tage), damit wir Probleme finden und beheben können.",
+      ],
+    },
+    {
+      title: "Wo der Dienst nicht verfügbar ist",
+      text: ["Die Regeln von Meta erlauben es nicht, den Dienst in einer Reihe von Ländern anzubieten, darunter Russland und Belarus. Besucher aus diesen Ländern können keine Bücher erstellen."],
+    },
+    {
+      title: "Deine Rechte",
+      text: [
+        "Du kannst erfragen, welche Daten wir über dich gespeichert haben, sie berichtigen oder löschen lassen. Wir nutzen nur den Browserspeicher, den die Website benötigt (Sprache, Land, anonymer Schlüssel), und keine Werbetracker.",
+      ],
+    },
+  ],
+};
+
+const termsDe: LegalDoc = {
+  title: "Nutzungsbedingungen",
+  updated: "Aktualisiert am 31. Oktober 2026",
+  sections: [
+    {
+      title: "Was der Dienst macht",
+      text: [
+        "Fabulka erstellt personalisierte Kinderbücher mit den KI-Modellen von Meta. Jedes Buch ist einzigartig, doch Modelle können Fehler machen: Bitte lies das Buch, bevor du es deinem Kind zeigst oder einen Druck bestellst.",
+      ],
+    },
+    {
+      title: "Demo",
+      text: ["Der Dienst läuft derzeit als Demo: Es wird nichts berechnet, und Druck und Lieferung werden nur beispielhaft gezeigt."],
+    },
+    {
+      title: "Kostenlose Bücher und Limits",
+      text: ["Jeder Besucher kann einige Bücher kostenlos erstellen. Damit das Modellbudget nicht aufgebraucht wird, ist die Anzahl der Bücher pro Tag begrenzt."],
+    },
+    {
+      title: "Dein Buch",
+      text: ["Ein Buch, das für dein Kind erstellt wurde, gehört dir: Lies es, drucke es aus und verschenke es. Die Illustrationen zeichnet Muse Image, den Text schreibt Muse Spark."],
+    },
+    {
+      title: "Was nicht erlaubt ist",
+      text: ["Gib keine Inhalte ein, die beleidigend oder für Kinder nicht sicher sind, und keine Angaben zu anderen Kindern ohne die Zustimmung ihrer Eltern."],
+    },
+    {
+      title: "Verfügbarkeit",
+      text: ["Der Dienst ist nicht in allen Ländern verfügbar (siehe Datenschutzerklärung). Fragen: hello@fabulka.com."],
+    },
+  ],
+};
+
 /** The privacy policy and terms, written to match what the service actually does. */
 export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
   privacy: {
@@ -153,6 +313,8 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         },
       ],
     },
+    es: privacyEs,
+    de: privacyDe,
   },
   terms: {
     ru: {
@@ -257,5 +419,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         },
       ],
     },
+    es: termsEs,
+    de: termsDe,
   },
 };

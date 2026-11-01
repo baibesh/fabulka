@@ -121,6 +121,9 @@ commands:
   - waitForVisible: { testId: reference-countries }
   - assertVisible: { css: "[data-testid=country-row][data-code=KZ]" }
   - assertVisible: { testId: country-other }
+  # The list is long: bring its end (the plain "another country" row, the picker under it) into view.
+  - tapOn: { testId: country-other }
+  - scrollUntilVisible: { testId: country-add-select, centerElement: true }
   - selectOption: { testId: country-add-select, optionValue: PT }
   - tapOn: { testId: country-add }
   - waitForVisible: { css: "[data-testid=country-row][data-code=PT]" }
@@ -137,7 +140,7 @@ commands:
       url: ${API}/reference
       assert:
         status: 200
-        json: { "$.countries[0].code": KZ, "$.countries[19].code": PT, "$.countries[19].languages[0]": en, "$.countries[19].currency": USD }
+        json: { "$.countries[0].code": KZ, "$.countries[26].code": PT, "$.countries[26].languages[0]": en, "$.countries[26].currency": USD }
   - openLink: "${WEB}/catalog?lang=ru"
   - waitForVisible: { testId: template-first-day-kindergarten }
   - tapOn: { testId: ui-country }
@@ -348,7 +351,14 @@ after:
         - { code: MN, languages: [en], currency: USD, print: false }
         - { code: TR, languages: [en], currency: USD, print: false }
         - { code: AE, languages: [en], currency: USD, print: false }
-        - { code: DE, languages: [en], currency: USD, print: false }
+        - { code: DE, languages: [de, en], currency: USD, print: false }
+        - { code: AT, languages: [de, en], currency: USD, print: false }
+        - { code: CH, languages: [de, en], currency: USD, print: false }
+        - { code: ES, languages: [es, en], currency: USD, print: false }
+        - { code: MX, languages: [es, en], currency: USD, print: false }
+        - { code: AR, languages: [es, en], currency: USD, print: false }
+        - { code: CO, languages: [es, en], currency: USD, print: false }
+        - { code: CL, languages: [es, en], currency: USD, print: false }
         - { code: PL, languages: [en], currency: USD, print: false }
         - { code: CZ, languages: [en], currency: USD, print: false }
         - { code: GB, languages: [en], currency: USD, print: false }

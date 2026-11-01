@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, LogIn, UserRound } from "lucide-react";
 import Link from "next/link";
+import { intlLocale } from "@/i18n/format";
 import { useI18n } from "@/i18n/i18n";
 import { listMyBooks } from "@/lib/api";
 import { loginUrl, useMe } from "@/lib/auth";
@@ -40,7 +41,7 @@ export function MyBooks() {
             <div className="flex min-w-0 flex-col gap-1">
               <span className="truncate font-bold">{book.title ?? book.childName}</span>
               <span className="text-sm text-muted">{book.status === "done" ? t("my.status.done") : book.status === "failed" ? t("my.status.failed") : t("my.status.working")}</span>
-              <span className="text-xs text-muted">{new Date(book.createdAt).toLocaleDateString(locale === "kk" ? "kk-KZ" : locale)}</span>
+              <span className="text-xs text-muted">{new Date(book.createdAt).toLocaleDateString(intlLocale(locale))}</span>
             </div>
           </Link>
         </li>

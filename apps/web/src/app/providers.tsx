@@ -19,7 +19,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // Errors visitors run into go to the admin's journal (message and page only, no form values).
   useEffect(() => installErrorReporting(), []);
 
-  // A link can choose the language: ?lang=kk, ?lang=en (and it sticks, like the header switch).
+  // A link can choose the language: ?lang=kk, ?lang=de (and it sticks, like the header switch).
   useEffect(() => {
     const lang = new URLSearchParams(window.location.search).get("lang");
     if (lang && (UI_LOCALES as readonly string[]).includes(lang)) setLocale(lang as UiLocale);

@@ -1,5 +1,5 @@
-# The admin's language: Russian by default, the switch in the sidebar turns it to English and back,
-# and the choice is the site's too.
+# The admin's language: Russian by default, the switch in the sidebar turns it to English, German
+# and Spanish and back, and the choice is the site's too.
 appId: ${WEB}
 tags: [admin, i18n]
 commands:
@@ -30,6 +30,16 @@ commands:
   - openLink: "${WEB}/admin/books"
   - waitForVisible: { testId: books-table }
   - assertVisible: { testId: admin-nav-books, text: "Books" }
+
+  # German and Spanish too.
+  - tapOn: { testId: admin-lang-de }
+  - waitForVisible: { testId: admin-nav-books, text: "Bücher" }
+  - assertVisible: { testId: admin-nav-journal, text: "Protokoll" }
+  - tapOn: { testId: admin-nav-orders }
+  - waitForVisible: "Druckbestellungen"
+  - tapOn: { testId: admin-lang-es }
+  - waitForVisible: "Pedidos de impresión"
+  - assertVisible: { testId: admin-nav-books, text: "Libros" }
 
   # Back to Russian.
   - tapOn: { testId: admin-lang-ru }

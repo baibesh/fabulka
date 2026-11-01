@@ -11,7 +11,7 @@ const nunito = Nunito({
 });
 
 const description =
-  "Персональная детская книга, где ваш ребёнок — главный герой: сказка по детской методике и иллюстрации на казахском, русском или английском. Powered by Meta Muse models.";
+  "Персональная детская книга, где ваш ребёнок — главный герой: сказка по детской методике и иллюстрации — на казахском, русском, английском, испанском или немецком. Powered by Meta Muse models.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.SITE_URL ?? "https://fabulka.com"),

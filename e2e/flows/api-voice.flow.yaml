@@ -53,5 +53,5 @@ commands:
   - request:
       method: POST
       url: /voice
-      body: "--fabulka\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nde\r\n--fabulka\r\nContent-Disposition: form-data; name=\"audio\"; filename=\"x.wav\"\r\nContent-Type: audio/wav\r\n\r\nRIFFd\0\0\0WAVEfmt \x10\0\0\0\x01\0\x01\0@\x1F\0\0@\x1F\0\0\x01\0\x08\0data@\0\0\0@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n--fabulka--\r\n"
+      body: "--fabulka\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nfr\r\n--fabulka\r\nContent-Disposition: form-data; name=\"audio\"; filename=\"x.wav\"\r\nContent-Type: audio/wav\r\n\r\nRIFFd\0\0\0WAVEfmt \x10\0\0\0\x01\0\x01\0@\x1F\0\0@\x1F\0\0\x01\0\x08\0data@\0\0\0@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n--fabulka--\r\n"
       assert: { status: 400 }

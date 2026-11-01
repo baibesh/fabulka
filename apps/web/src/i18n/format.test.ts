@@ -20,9 +20,10 @@ describe("pluralCategory", () => {
     ]);
   });
 
-  it("has only one / other in Kazakh and English", () => {
-    expect([1, 2, 5].map((n) => pluralCategory("kk", n))).toEqual(["one", "other", "other"]);
-    expect([1, 2, 5].map((n) => pluralCategory("en", n))).toEqual(["one", "other", "other"]);
+  it("has only one / other in Kazakh, English, Spanish and German for everyday numbers", () => {
+    for (const locale of ["kk", "en", "es", "de"] as const) {
+      expect([1, 2, 5].map((n) => pluralCategory(locale, n))).toEqual(["one", "other", "other"]);
+    }
   });
 });
 
@@ -62,7 +63,7 @@ describe("format", () => {
 
 describe("messages", () => {
   it("read right for 1, 2 and 5 methods in every language", () => {
-    const say = (locale: "ru" | "kk" | "en", count: number) => format(MESSAGES[locale]["landing.trust.methods"], { count }, locale);
+    const say = (locale: "ru" | "kk" | "en" | "es" | "de", count: number) => format(MESSAGES[locale]["landing.trust.methods"], { count }, locale);
     expect([1, 2, 5].map((n) => say("ru", n))).toEqual([
       "1 методика детского развития",
       "2 методики детского развития",
@@ -70,12 +71,15 @@ describe("messages", () => {
     ]);
     expect([1, 5].map((n) => say("en", n))).toEqual(["1 child-development method", "5 child-development methods"]);
     expect(say("kk", 5)).toBe("Бала дамуының 5 әдістемесі");
+    for (const locale of ["es", "de"] as const) {
+      expect(say(locale, 1)).not.toBe(say(locale, 5).replace("5", "1"));
+    }
   });
 
   it("exist in every language and give an `other` form wherever they pluralise", () => {
     const plurals = (text: string) => [...text.matchAll(/\{(\w+), plural,/g)].map((m) => m[1]).sort();
     for (const [key, ru] of Object.entries(MESSAGES.ru)) {
-      for (const locale of ["kk", "en"] as const) {
+      for (const locale of ["kk", "en", "es", "de"] as const) {
         expect(MESSAGES[locale][key as keyof typeof MESSAGES.ru], `${locale} ${key}`).toBeDefined();
         // Every language that pluralises a number gives at least an `other` form.
         for (const text of [ru, MESSAGES[locale][key as keyof typeof MESSAGES.ru]]) {

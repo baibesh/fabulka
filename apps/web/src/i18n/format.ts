@@ -35,4 +35,4 @@ export function format(text: string, vars: Vars | undefined, locale: UiLocale): 
 }
 
 /** The locale Intl formats dates and numbers with for an interface language. */
-export const intlLocale = (locale: UiLocale) => ({ ru: "ru-RU", kk: "kk-KZ", en: "en-US" })[locale];
+export const intlLocale = (locale: UiLocale) => ({ ru: "ru-RU", kk: "kk-KZ", en: "en-US", es: "es-ES", de: "de-DE" })[locale];
