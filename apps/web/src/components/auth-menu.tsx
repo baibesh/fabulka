@@ -4,7 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { BookHeart, Loader2, LogIn, LogOut, Package, ShieldCheck, UserRound, X } from "lucide-react";
 import { AUTH_ERROR } from "@fabulka/shared";
 import Link from "next/link";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useClientValue } from "@/hooks/use-hydrated";
 import { useI18n } from "@/i18n/i18n";
 import { loginUrl, logout, useMe } from "@/lib/auth";
 
@@ -136,13 +137,12 @@ export function AuthMenu({ pathname }: { pathname: string }) {
   );
 }
 
-const noSubscribe = () => () => undefined;
 const authFailed = () => new URLSearchParams(window.location.search).get("auth") === AUTH_ERROR;
 
 /** After a sign-in that did not go through (?auth=error): a small note; the page works as before. */
 export function AuthNotice() {
   const { t } = useI18n();
-  const failed = useSyncExternalStore(noSubscribe, authFailed, () => false);
+  const failed = useClientValue(authFailed, false);
   const [closed, setClosed] = useState(false);
   if (!failed || closed) return null;
   return (

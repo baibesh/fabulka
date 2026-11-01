@@ -3,9 +3,10 @@
 import { BOOK_LABELS, type Book } from "@fabulka/shared";
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
 import { motion } from "motion/react";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { useI18n } from "@/i18n/i18n";
 import { type Highlight, markPersonal } from "@/lib/personalization";
-import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState, useSyncExternalStore } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 /** One page. Pages keep paper colors in dark mode: it is a printed book, not app chrome. */
@@ -145,12 +146,6 @@ function bookPages(book: Book, highlights?: Highlight[]): ReactNode[] {
   return pages;
 }
 
-const wideQuery = "(min-width: 768px)";
-const subscribeWide = (onChange: () => void) => {
-  const query = window.matchMedia(wideQuery);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-};
 
 interface Turn {
   direction: 1 | -1;
@@ -169,7 +164,7 @@ const FLIP_EASE = [0.45, 0, 0.25, 1] as const;
 export function BookReader({ book, highlights }: { book: Book; highlights?: Highlight[] }) {
   const { t } = useI18n();
   const pages = bookPages(book, highlights);
-  const wide = useSyncExternalStore(subscribeWide, () => window.matchMedia(wideQuery).matches, () => true);
+  const wide = useMediaQuery("(min-width: 768px)", true);
   // Wide: view k shows pages 2k-1 (left) and 2k (right); view 0 is the cover alone.
   // Narrow: view k shows page k.
   const views = wide ? pages.length / 2 + 1 : pages.length;

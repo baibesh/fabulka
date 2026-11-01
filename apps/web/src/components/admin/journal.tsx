@@ -14,11 +14,11 @@ import { ChevronDown, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { journalCall, journalCalls, journalErrors, journalStats } from "@/lib/admin-api";
-import { Badge, Card, formatUsd, ghostButton, input, PageTitle, table, useAdminI18n } from "./ui";
+import { Badge, Card, formatSpendUsd, ghostButton, input, PageTitle, table, useAdminI18n } from "./ui";
 
 export function CallStatus({ status }: { status: ModelCallStatus }) {
   const { t } = useAdminI18n();
-  return <Badge tone={status === "ok" ? "bg-emerald-500/15 text-emerald-600" : "bg-red-500/15 text-red-600"}>{t(`admin.journal.status.${status}`)}</Badge>;
+  return <Badge tone={status === "ok" ? "bg-success/15 text-success" : "bg-danger/15 text-danger"}>{t(`admin.journal.status.${status}`)}</Badge>;
 }
 
 /** Tokens in → out, or the number of images: what the call was billed for. */
@@ -60,7 +60,7 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
             <X className="size-5" />
           </button>
         </div>
-        {call.isError && <p role="alert" className="text-red-600">{call.error.message}</p>}
+        {call.isError && <p role="alert" className="text-danger">{call.error.message}</p>}
         {!c && !call.isError && <p className="text-muted">{t("admin.loading")}</p>}
         {c && (
           <>
@@ -75,7 +75,7 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
                   [t("admin.journal.model"), c.model],
                   [t("admin.journal.duration"), ms(c.latencyMs)],
                   [t("admin.journal.usage"), usage(c)],
-                  [t("admin.journal.cost"), formatUsd(c.costUsd)],
+                  [t("admin.journal.cost"), formatSpendUsd(c.costUsd)],
                   [t("admin.journal.response"), c.responseId ?? "—"],
                 ] as const
               ).map(([label, value]) => (
@@ -96,7 +96,7 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
               </dd>
             </dl>
             {c.errorMessage && (
-              <p role="alert" className="rounded-xl bg-red-500/10 p-4 text-sm break-words text-red-600">
+              <p role="alert" className="rounded-xl bg-danger/10 p-4 text-sm break-words text-danger">
                 {c.errorCode && <span className="font-bold">{c.errorCode}: </span>}
                 {c.errorMessage}
               </p>
@@ -126,7 +126,7 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
 function Summary({ period }: { period: JournalPeriod }) {
   const { t, number, percent, ms } = useAdminI18n();
   const stats = useQuery({ queryKey: ["admin", "journal", "stats", period], queryFn: () => journalStats(period), refetchInterval: 10_000 });
-  if (stats.isError) return <p role="alert" className="text-red-600">{stats.error.message}</p>;
+  if (stats.isError) return <p role="alert" className="text-danger">{stats.error.message}</p>;
   const s = stats.data;
   return (
     <section data-testid="journal-summary" className="flex flex-col gap-4">
@@ -141,7 +141,7 @@ function Summary({ period }: { period: JournalPeriod }) {
           value={s ? (s.calls ? percent(s.errors / s.calls, 1) : "—") : "…"}
           hint={s ? t("admin.journal.errors", { count: number(s.errors) }) : undefined}
         />
-        <Stat label={t("admin.journal.spend")} value={s ? formatUsd(s.costUsd) : "…"} />
+        <Stat label={t("admin.journal.spend")} value={s ? formatSpendUsd(s.costUsd) : "…"} />
         <Stat label={t("admin.journal.clientErrors")} value={s ? number(s.clientErrors) : "…"} />
       </div>
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
@@ -163,10 +163,10 @@ function Summary({ period }: { period: JournalPeriod }) {
                 <td className="whitespace-nowrap">{t(`admin.journal.kind.${row.kind}`)}</td>
                 <td className="text-muted">{row.model}</td>
                 <td className="text-right tabular-nums">{number(row.calls)}</td>
-                <td className={`text-right tabular-nums ${row.errors ? "font-bold text-red-600" : "text-muted"}`}>{number(row.errors)}</td>
+                <td className={`text-right tabular-nums ${row.errors ? "font-bold text-danger" : "text-muted"}`}>{number(row.errors)}</td>
                 <td className="text-right tabular-nums">{ms(row.p50Ms)}</td>
                 <td className="text-right tabular-nums">{ms(row.p95Ms)}</td>
-                <td className="text-right tabular-nums">{formatUsd(row.avgCostUsd)}</td>
+                <td className="text-right tabular-nums">{formatSpendUsd(row.avgCostUsd)}</td>
               </tr>
             ))}
             {s?.byModel.length === 0 && (
@@ -217,7 +217,7 @@ function Calls({ period }: { period: JournalPeriod }) {
           </select>
         </div>
       </div>
-      {calls.isError && <p role="alert" className="text-red-600">{calls.error.message}</p>}
+      {calls.isError && <p role="alert" className="text-danger">{calls.error.message}</p>}
       <div className="-mx-5 overflow-x-auto">
         <table data-testid="journal-calls" className={table}>
           <thead>
@@ -253,11 +253,11 @@ function Calls({ period }: { period: JournalPeriod }) {
                 </td>
                 <td>
                   <CallStatus status={call.status} />
-                  {call.errorCode && <div className="text-xs text-red-600">{call.errorCode}</div>}
+                  {call.errorCode && <div className="text-xs text-danger">{call.errorCode}</div>}
                 </td>
                 <td className="text-right tabular-nums">{ms(call.latencyMs)}</td>
                 <td className="text-right whitespace-nowrap tabular-nums text-muted">{usage(call)}</td>
-                <td className="text-right tabular-nums">{formatUsd(call.costUsd)}</td>
+                <td className="text-right tabular-nums">{formatSpendUsd(call.costUsd)}</td>
                 <td>
                   {call.bookId ? (
                     <Link href={`/admin/books/${call.bookId}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-accent">
@@ -302,7 +302,7 @@ function ErrorRow({ group }: { group: ClientErrorGroup }) {
             {group.path} · {t("admin.journal.lastSeen", { date: date(group.lastSeen) })}
           </span>
         </span>
-        <span className="shrink-0 rounded-full bg-red-500/15 px-2.5 py-0.5 text-xs font-bold text-red-600 tabular-nums">{number(group.count)}</span>
+        <span className="shrink-0 rounded-full bg-danger/15 px-2.5 py-0.5 text-xs font-bold text-danger tabular-nums">{number(group.count)}</span>
       </button>
       {open && (
         <ul className="flex flex-col gap-2 px-5 pb-4 pl-12 text-xs text-muted">
@@ -328,7 +328,7 @@ function Errors({ period }: { period: JournalPeriod }) {
   const errors = useQuery({ queryKey: ["admin", "journal", "errors", period], queryFn: () => journalErrors(period), refetchInterval: 10_000 });
   return (
     <section data-testid="journal-errors" className="overflow-hidden rounded-2xl border border-border bg-card">
-      {errors.isError && <p role="alert" className="p-5 text-red-600">{errors.error.message}</p>}
+      {errors.isError && <p role="alert" className="p-5 text-danger">{errors.error.message}</p>}
       {!errors.data && !errors.isError && <p className="p-5 text-muted">{t("admin.loading")}</p>}
       {errors.data?.length === 0 && <p className="p-8 text-center text-muted">{t("admin.journal.noErrors")}</p>}
       <ul>

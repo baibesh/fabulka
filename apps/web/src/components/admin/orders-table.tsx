@@ -34,7 +34,7 @@ export function OrdersTable() {
       >
         {t("admin.orders.title")}
       </PageTitle>
-      {orders.isError && <p role="alert" className="text-red-600">{orders.error.message}</p>}
+      {orders.isError && <p role="alert" className="text-danger">{orders.error.message}</p>}
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <table data-testid="orders-table" className={table}>
           <thead>

@@ -36,7 +36,7 @@ export function OrderTimeline({ order, compact = false }: { order: Order; compac
             className={`flex items-start gap-3 ${step.reached ? "" : "text-muted"}`}
           >
             {step.reached ? (
-              <CheckCircle2 className={`mt-0.5 size-5 shrink-0 ${isCurrent ? "text-accent" : "text-emerald-600"}`} />
+              <CheckCircle2 className={`mt-0.5 size-5 shrink-0 ${isCurrent ? "text-accent" : "text-success"}`} />
             ) : (
               <Circle className="mt-0.5 size-5 shrink-0" />
             )}

@@ -19,7 +19,7 @@ export function CatalogTable() {
   return (
     <>
       <PageTitle>{t("admin.catalog.title")}</PageTitle>
-      {templates.isError && <p role="alert" className="text-red-600">{templates.error.message}</p>}
+      {templates.isError && <p role="alert" className="text-danger">{templates.error.message}</p>}
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <table data-testid="catalog-table" className={table}>
           <thead>
@@ -55,7 +55,7 @@ export function CatalogTable() {
                     disabled={toggle.isPending}
                     onClick={() => toggle.mutate({ slug: item.slug, published: !item.published })}
                   >
-                    <Badge tone={item.published ? "bg-emerald-500/15 text-emerald-600" : "bg-border text-muted"}>
+                    <Badge tone={item.published ? "bg-success/15 text-success" : "bg-border text-muted"}>
                       {item.published ? t("admin.published") : t("admin.draft")}
                     </Badge>
                   </button>

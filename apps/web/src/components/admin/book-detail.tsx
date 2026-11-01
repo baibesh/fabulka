@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 import { adminBook, bookCalls, deleteBook, setFeatured } from "@/lib/admin-api";
 import { CallDetail, CallStatus } from "./journal";
-import { Badge, BOOK_STATUS_TONE, Card, formatUsd, ghostButton, PageTitle, useAdminI18n } from "./ui";
+import { Badge, BOOK_STATUS_TONE, Card, formatSpendUsd, ghostButton, PageTitle, useAdminI18n } from "./ui";
 import { useMethodologyName } from "./use-methodologies";
 
 /** The book's model calls in order, timed from the first: where generation spent its time and money. */
@@ -18,7 +18,7 @@ function BookCalls({ id, generating }: { id: string; generating: boolean }) {
   const start = calls.data?.[0] ? new Date(calls.data[0].createdAt).getTime() : 0;
   return (
     <Card title={t("admin.book.calls")}>
-      {calls.isError && <p role="alert" className="text-red-600">{calls.error.message}</p>}
+      {calls.isError && <p role="alert" className="text-danger">{calls.error.message}</p>}
       <ol data-testid="book-calls" className="flex flex-col text-sm">
         {calls.data?.map((call) => (
           <li key={call.id} className="border-t border-border first:border-t-0">
@@ -27,11 +27,11 @@ function BookCalls({ id, generating }: { id: string; generating: boolean }) {
               <span className="min-w-0">
                 <span className="font-semibold">{t(`admin.journal.kind.${call.kind}`)}</span>
                 {call.attempt > 1 && <span className="text-muted"> · {t("admin.attempt", { n: call.attempt })}</span>}
-                {call.errorMessage && <span className="block truncate text-xs text-red-600">{call.errorMessage}</span>}
+                {call.errorMessage && <span className="block truncate text-xs text-danger">{call.errorMessage}</span>}
               </span>
               <CallStatus status={call.status} />
               <span className="hidden text-right tabular-nums sm:block">{ms(call.latencyMs)}</span>
-              <span className="hidden text-right tabular-nums text-muted sm:block">{formatUsd(call.costUsd)}</span>
+              <span className="hidden text-right tabular-nums text-muted sm:block">{formatSpendUsd(call.costUsd)}</span>
             </button>
           </li>
         ))}
@@ -55,7 +55,7 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
     onSuccess: (updated) => queryClient.setQueryData(["admin", "book", id], updated),
   });
 
-  if (book.isError) return <p role="alert" className="text-red-600">{book.error.message}</p>;
+  if (book.isError) return <p role="alert" className="text-danger">{book.error.message}</p>;
   if (!book.data) return <p className="text-muted">{t("admin.loading")}</p>;
   const b = book.data;
   const facts: [string, string][] = [
@@ -75,7 +75,7 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
     [t("admin.book.theme"), b.theme ?? "—"],
     [t("admin.book.language"), b.language.toUpperCase()],
     [t("admin.book.country"), b.country ?? "—"],
-    [t("admin.book.spend"), formatUsd(b.costUsd)],
+    [t("admin.book.spend"), formatSpendUsd(b.costUsd)],
     [t("admin.book.created"), date(b.createdAt)],
   ];
 
@@ -118,7 +118,7 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
               onClick={() => {
                 if (window.confirm(t("admin.book.deleteConfirm"))) remove.mutate();
               }}
-              className={`${ghostButton} flex items-center gap-2 text-red-600`}
+              className={`${ghostButton} flex items-center gap-2 text-danger`}
             >
               <Trash2 className="size-4" />
               {t("admin.delete")}
@@ -133,8 +133,8 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
         {b.demo && <span className="ml-2 text-sm text-muted">{t("admin.book.demo")}</span>}
         {b.featured && <span className="ml-2 text-sm text-muted">{t("admin.book.featured")}</span>}
       </div>
-      {feature.isError && <p role="alert" className="text-red-600">{feature.error.message}</p>}
-      {b.error && <p role="alert" className="rounded-xl bg-red-500/10 p-4 text-sm text-red-600">{b.error}</p>}
+      {feature.isError && <p role="alert" className="text-danger">{feature.error.message}</p>}
+      {b.error && <p role="alert" className="rounded-xl bg-danger/10 p-4 text-sm text-danger">{b.error}</p>}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
         <Card title={t("admin.book.facts")}>

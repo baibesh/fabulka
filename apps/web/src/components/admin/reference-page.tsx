@@ -33,7 +33,8 @@ import { intlLocale } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
 import { adminReference, saveBlocked, saveCities, saveCountries, saveFaq, savePrices } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
-import { languageCode, regionName } from "@/lib/regions";
+import { useCountryName } from "@/hooks/use-country-name";
+import { languageCode } from "@/lib/regions";
 import { Flag } from "../flag";
 import { button, Card, ghostButton, input, PageTitle, useAdminI18n } from "./ui";
 
@@ -41,7 +42,7 @@ const TABS = ["prices", "countries", "faq", "cities", "blocked"] as const;
 type Tab = (typeof TABS)[number];
 
 const label = "flex flex-col gap-1.5 text-sm font-semibold";
-const errorText = "text-sm font-normal text-red-600";
+const errorText = "text-sm font-normal text-danger";
 const QUERY = ["admin", "reference"];
 
 /** /admin/reference: prices, countries, the landing's FAQ, delivery cities and blocked countries, edited without touching code. */
@@ -62,7 +63,7 @@ export function ReferencePage() {
           </button>
         ))}
       </div>
-      {reference.isError && <p role="alert" className="text-red-600">{reference.error.message}</p>}
+      {reference.isError && <p role="alert" className="text-danger">{reference.error.message}</p>}
       {!reference.data ? (
         !reference.isError && <p className="text-muted">{t("admin.loading")}</p>
       ) : tab === "prices" ? (
@@ -105,17 +106,17 @@ function SaveBar({ testId = "reference-save", pending, saved, error, problems }:
         {t("admin.save")}
       </button>
       {saved && (
-        <span data-testid="reference-saved" className="text-sm text-emerald-600">
+        <span data-testid="reference-saved" className="text-sm text-success">
           {t("admin.saved")}
         </span>
       )}
       {problems && (
-        <span role="alert" data-testid="reference-problems" className="text-sm text-red-600">
+        <span role="alert" data-testid="reference-problems" className="text-sm text-danger">
           {t("admin.reference.check")}
         </span>
       )}
       {error && (
-        <span role="alert" className="text-sm text-red-600">
+        <span role="alert" className="text-sm text-danger">
           {error.message}
         </span>
       )}
@@ -190,7 +191,7 @@ function PricesTab({ initial }: { initial: Prices }) {
           value={draft[id]}
           aria-invalid={!!problem}
           onChange={(e) => setDraft((d) => ({ ...d, [id]: e.target.value }))}
-          className={`${input} aria-[invalid=true]:border-red-600`}
+          className={`${input} aria-[invalid=true]:border-danger`}
         />
         {problem && (
           <span data-testid="reference-error" className={errorText}>
@@ -246,7 +247,7 @@ const withCountryKey = (country: CountryEntry): CountryDraft => ({ ...country, k
 
 function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; blocked: BlockedCountries }) {
   const { t, locale } = useAdminI18n();
-  const countryName = useCountryName();
+  const countryName = useCountryName("admin");
   const saved = useSaved();
   const [rows, setRows] = useState(() => initial.map(withCountryKey));
   const [pick, setPick] = useState("");
@@ -367,7 +368,7 @@ function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; blocked: 
                     </span>
                   )}
                   {isBlocked && (
-                    <span data-testid="country-blocked" className="text-xs font-semibold text-red-600">
+                    <span data-testid="country-blocked" className="text-xs font-semibold text-danger">
                       {t("admin.reference.country.blocked")}
                     </span>
                   )}
@@ -411,7 +412,7 @@ function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; blocked: 
                       testId="country-remove"
                       label={t("admin.reference.country.remove", { country: name })}
                       onClick={() => reshape(() => setRows((list) => list.filter((_, j) => j !== i)))}
-                      className="text-red-600"
+                      className="text-danger"
                     >
                       <Trash2 className="size-4" />
                     </IconButton>
@@ -487,12 +488,11 @@ const fromFaqDraft = (d: FaqDraft) => ({
 
 function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: CountryEntry[] }) {
   const { t, locale } = useAdminI18n();
-  const countryName = useCountryName();
+  const countryName = useCountryName("admin");
   const saved = useSaved();
   const [rows, setRows] = useState(() => initial.map(toFaqDraft));
   const [open, setOpen] = useState<Set<number>>(() => new Set());
   const [problems, setProblems] = useState<Record<string, string>>({});
-  const nameOf = (code: string) => (code === OTHER_COUNTRY ? t("admin.reference.other.title") : countryName(code));
 
   const save = useMutation({
     mutationFn: async (next: FaqDraft[]) => {
@@ -547,7 +547,7 @@ function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: Country
         ? t("admin.reference.faq.withPrint")
         : row.audience === "noPrint"
           ? t("admin.reference.faq.withoutPrint")
-          : t(row.audience === "only" ? "admin.reference.faq.only" : "admin.reference.faq.except", { countries: row.countries.map(nameOf).join(", ") || "—" });
+          : t(row.audience === "only" ? "admin.reference.faq.only" : "admin.reference.faq.except", { countries: row.countries.map((code) => countryName(code)).join(", ") || "—" });
 
   return (
     <form
@@ -605,7 +605,7 @@ function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: Country
                               value={row.q[language] ?? ""}
                               aria-invalid={!!qProblem}
                               onChange={(e) => setText(i, "q", language, e.target.value)}
-                              className={`${input} aria-[invalid=true]:border-red-600`}
+                              className={`${input} aria-[invalid=true]:border-danger`}
                             />
                             {qProblem && (
                               <span data-testid="reference-error" className={errorText}>
@@ -621,7 +621,7 @@ function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: Country
                               rows={3}
                               aria-invalid={!!aProblem}
                               onChange={(e) => setText(i, "a", language, e.target.value)}
-                              className={`${input} font-normal aria-[invalid=true]:border-red-600`}
+                              className={`${input} font-normal aria-[invalid=true]:border-danger`}
                             />
                             {aProblem && (
                               <span data-testid="reference-error" className={errorText}>
@@ -654,7 +654,7 @@ function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: Country
                             <label key={code} className="flex items-center gap-1.5 text-sm">
                               <input type="checkbox" data-testid={`faq-country-${code}`} checked={row.countries.includes(code)} onChange={() => toggleCountry(i, code)} />
                               <Flag code={code} />
-                              {nameOf(code)}
+                              {countryName(code)}
                             </label>
                           ))}
                         </div>
@@ -681,7 +681,7 @@ function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: Country
                           testId="faq-remove"
                           label={t("admin.reference.faq.remove")}
                           onClick={() => reshape(() => setRows((list) => list.filter((_, j) => j !== i)))}
-                          className="text-red-600"
+                          className="text-danger"
                         >
                           <Trash2 className="size-4" />
                         </IconButton>
@@ -785,7 +785,7 @@ function CitiesTab({ initial }: { initial: City[] }) {
                           value={city.name[lang] ?? ""}
                           aria-invalid={!!problem}
                           onChange={(e) => update(i, (row) => ({ name: { ...row.name, [lang]: e.target.value } }))}
-                          className={`${input} aria-[invalid=true]:border-red-600`}
+                          className={`${input} aria-[invalid=true]:border-danger`}
                         />
                         {problem && (
                           <span data-testid="reference-error" className={errorText}>
@@ -820,7 +820,7 @@ function CitiesTab({ initial }: { initial: City[] }) {
                     testId="city-remove"
                     label={t("admin.reference.city.remove")}
                     onClick={() => reshape(() => setRows((list) => list.filter((_, j) => j !== i)))}
-                    className="text-red-600"
+                    className="text-danger"
                   >
                     <Trash2 className="size-4" />
                   </IconButton>
@@ -862,15 +862,9 @@ function IconButton({ testId, label, disabled, onClick, className = "", children
 
 // ---- Blocked countries -----------------------------------------------------------------------
 
-/** Country names in the admin's language, falling back to `fallback` (the API's English name). */
-function useCountryName() {
-  const { locale } = useAdminI18n();
-  return (code: string, fallback?: string) => regionName(code, locale, fallback);
-}
-
 function BlockedTab({ initial }: { initial: BlockedCountries }) {
   const { t } = useAdminI18n();
-  const countryName = useCountryName();
+  const countryName = useCountryName("admin");
   const queryClient = useQueryClient();
   const [extra, setExtra] = useState(initial.extra);
   const [code, setCode] = useState("");
@@ -931,7 +925,7 @@ function BlockedTab({ initial }: { initial: BlockedCountries }) {
             ) : (
               <ul className="flex flex-wrap gap-2">
                 {extra.map((c) => (
-                  <li key={c} data-testid="blocked-row" data-code={c} className="flex items-center gap-1.5 rounded-full bg-red-500/10 py-1 pr-1 pl-3 text-sm">
+                  <li key={c} data-testid="blocked-row" data-code={c} className="flex items-center gap-1.5 rounded-full bg-danger/10 py-1 pr-1 pl-3 text-sm">
                     <span className="font-mono text-xs font-bold">{c}</span>
                     {countryName(c)}
                     <button
@@ -940,7 +934,7 @@ function BlockedTab({ initial }: { initial: BlockedCountries }) {
                       aria-label={t("admin.reference.extra.remove", { country: countryName(c) })}
                       title={t("admin.reference.extra.remove", { country: countryName(c) })}
                       onClick={() => setExtra((list) => list.filter((x) => x !== c))}
-                      className="rounded-full p-1 hover:bg-red-500/20"
+                      className="rounded-full p-1 hover:bg-danger/20"
                     >
                       <X className="size-3.5" />
                     </button>
@@ -967,7 +961,7 @@ function BlockedTab({ initial }: { initial: BlockedCountries }) {
                       add();
                     }
                   }}
-                  className={`${input} max-w-xs font-mono uppercase placeholder:font-sans placeholder:normal-case aria-[invalid=true]:border-red-600`}
+                  className={`${input} max-w-xs font-mono uppercase placeholder:font-sans placeholder:normal-case aria-[invalid=true]:border-danger`}
                 />
                 <button type="button" data-testid="blocked-add" onClick={add} className={`${ghostButton} flex shrink-0 items-center gap-2`}>
                   <Plus className="size-4" />

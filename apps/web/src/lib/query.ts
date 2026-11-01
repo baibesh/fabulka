@@ -1,18 +1,9 @@
 "use client";
 
 import { useQuery as useTanstackQuery, type DefaultError, type QueryKey, type UseQueryOptions, type UseQueryResult } from "@tanstack/react-query";
-import { useSyncExternalStore } from "react";
+import { useHydrated } from "@/hooks/use-hydrated";
 
-const noSubscribe = () => () => undefined;
-
-/** False while React hydrates server HTML, true from then on (and on every later client render). */
-export function useHydrated(): boolean {
-  return useSyncExternalStore(
-    noSubscribe,
-    () => true,
-    () => false,
-  );
-}
+export { useHydrated };
 
 /**
  * React Query's useQuery, but it reports "still loading" while its component hydrates. Parts of a

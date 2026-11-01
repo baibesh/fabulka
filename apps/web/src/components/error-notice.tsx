@@ -18,7 +18,7 @@ export function ErrorNotice({ error }: { error: Error }) {
     );
   }
   return (
-    <p role="alert" className="text-red-600">
+    <p role="alert" className="text-danger">
       {error.message}
     </p>
   );

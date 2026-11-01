@@ -275,7 +275,7 @@ export function BookForm({ template }: { template?: Template }) {
           <label className={label}>
             {t("form.name")}
             <input data-testid="child-name" className={field} placeholder={t("form.name.placeholder")} {...form.register("name")} />
-            {errors.name && <span className="text-red-600">{t("form.name.error")}</span>}
+            {errors.name && <span className="text-danger">{t("form.name.error")}</span>}
           </label>
 
           <label className={label}>
@@ -315,13 +315,13 @@ export function BookForm({ template }: { template?: Template }) {
           <label className={`${label} sm:col-span-2`}>
             {t("form.interests")}
             <input data-testid="child-interests" className={field} placeholder={t("form.interests.placeholder")} {...form.register("interests")} />
-            {errors.interests && <span className="text-red-600">{t("form.interests.error")}</span>}
+            {errors.interests && <span className="text-danger">{t("form.interests.error")}</span>}
           </label>
 
           <label className={label}>
             {t("form.city")}
             <input data-testid="child-city" className={field} {...form.register("city")} />
-            {errors.city && <span className="text-red-600">{t("form.city.error")}</span>}
+            {errors.city && <span className="text-danger">{t("form.city.error")}</span>}
           </label>
         </div>
       )}
@@ -354,7 +354,7 @@ export function BookForm({ template }: { template?: Template }) {
               </label>
             ))}
             {errors.root?.answers && (
-              <p role="alert" className="text-red-600 sm:col-span-2">
+              <p role="alert" className="text-danger sm:col-span-2">
                 {errors.root.answers.message}
               </p>
             )}
@@ -481,7 +481,7 @@ export function BookForm({ template }: { template?: Template }) {
             </p>
           )}
           {create.isError && !limitReached && !paused && (
-            <p role="alert" className="text-red-600">
+            <p role="alert" className="text-danger">
               {t("form.error", { message: create.error.message })}
             </p>
           )}

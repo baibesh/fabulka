@@ -11,7 +11,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { createOrder, getBook } from "@/lib/api";
 import { useI18n } from "@/i18n/i18n";
-import { formatKzt } from "@/lib/format";
+import { useFormat } from "@/hooks/use-format";
 import { useMe } from "@/lib/auth";
 import { useCities } from "@/lib/cities";
 import { useOrderPrice, useReference } from "@/lib/use-price";
@@ -26,6 +26,7 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const { t, locale, info } = useI18n();
+  const { kzt: formatKzt } = useFormat();
   const book = useQuery({ queryKey: ["book", id], queryFn: () => getBook(id) });
   const form = useForm<FormValues, unknown, CreateOrderInput>({
     resolver: zodResolver(CreateOrderSchema),
@@ -90,12 +91,12 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
         <label className={label}>
           {t("order.recipient")}
           <input data-testid="recipient-name" className={field} placeholder={t("order.recipient.placeholder")} {...form.register("recipientName")} />
-          {errors.recipientName && <span className="text-red-600">{t("order.recipient.error")}</span>}
+          {errors.recipientName && <span className="text-danger">{t("order.recipient.error")}</span>}
         </label>
         <label className={label}>
           {t("order.phone")}
           <input data-testid="phone" className={field} inputMode="tel" {...form.register("phone")} />
-          {errors.phone && <span className="text-red-600">{t("order.phone.error")}</span>}
+          {errors.phone && <span className="text-danger">{t("order.phone.error")}</span>}
         </label>
         <label className={`${label} sm:col-span-2`}>
           {t("order.email")}
@@ -107,7 +108,7 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
             placeholder={t("order.email.placeholder")}
             {...form.register("email")}
           />
-          {errors.email && <span className="text-red-600">{t("order.email.error")}</span>}
+          {errors.email && <span className="text-danger">{t("order.email.error")}</span>}
         </label>
         <label className={label}>
           {t("order.city")}
@@ -132,7 +133,7 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
         <label className={`${label} sm:col-span-2`}>
           {t("order.address")}
           <input data-testid="address" className={field} placeholder={t("order.address.placeholder")} {...form.register("address")} />
-          {errors.address && <span className="text-red-600">{t("order.address.error")}</span>}
+          {errors.address && <span className="text-danger">{t("order.address.error")}</span>}
         </label>
       </div>
 
@@ -162,7 +163,7 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
       </button>
       <p className="text-center text-xs text-muted">{t("order.demo")}</p>
       {order.isError && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="text-danger">
           {t("order.error", { message: order.error.message })}
         </p>
       )}

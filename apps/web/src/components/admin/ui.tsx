@@ -7,13 +7,13 @@ import { formatDateTime, formatKzt, formatNumber } from "@/lib/format";
 /** The badge colour of each book status; the label comes from the messages (admin.bookStatus.*). */
 export const BOOK_STATUS_TONE: Record<BookStatus, string> = {
   queued: "bg-border text-muted",
-  toy: "bg-amber-500/15 text-amber-600",
-  story: "bg-amber-500/15 text-amber-600",
-  hero: "bg-amber-500/15 text-amber-600",
-  pages: "bg-amber-500/15 text-amber-600",
-  pdf: "bg-amber-500/15 text-amber-600",
-  done: "bg-emerald-500/15 text-emerald-600",
-  failed: "bg-red-500/15 text-red-600",
+  toy: "bg-warning/15 text-warning",
+  story: "bg-warning/15 text-warning",
+  hero: "bg-warning/15 text-warning",
+  pages: "bg-warning/15 text-warning",
+  pdf: "bg-warning/15 text-warning",
+  done: "bg-success/15 text-success",
+  failed: "bg-danger/15 text-danger",
 };
 
 /**
@@ -72,4 +72,4 @@ export const button = "rounded-xl bg-accent px-4 py-2 font-bold text-accent-fore
 export const ghostButton = "rounded-xl border border-border px-4 py-2 font-semibold hover:border-accent disabled:opacity-50";
 
 /** Dollars of model spend: three decimals under a dollar, where single calls cost cents. */
-export const formatUsd = (usd: number) => `$${usd.toFixed(usd < 1 ? 3 : 2)}`;
+export const formatSpendUsd = (usd: number) => `$${usd.toFixed(usd < 1 ? 3 : 2)}`;

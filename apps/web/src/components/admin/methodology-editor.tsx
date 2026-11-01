@@ -28,7 +28,7 @@ import { useAdminMethodologies } from "./use-methodologies";
 const isBase = (language: Language) => (BASE_LANGUAGES as readonly Language[]).includes(language);
 
 const label = "flex flex-col gap-1.5 text-sm font-semibold";
-const error = "text-sm font-normal text-red-600";
+const error = "text-sm font-normal text-danger";
 
 /** What the form holds: lists as one item per line, the way the owner types them. */
 interface Draft {
@@ -77,7 +77,7 @@ export function MethodologyPage({ params }: { params: Promise<{ slug: string }> 
   const { slug } = use(params);
   const { t } = useAdminI18n();
   const method = useQuery({ queryKey: ["admin", "methodology", slug], queryFn: () => adminMethodology(slug) });
-  if (method.isError) return <p role="alert" className="text-red-600">{method.error.message}</p>;
+  if (method.isError) return <p role="alert" className="text-danger">{method.error.message}</p>;
   if (!method.data) return <p className="text-muted">{t("admin.loading")}</p>;
   // Keyed so the form starts over from the saved method after each save.
   return <MethodologyEditor key={method.data.updatedAt} initial={method.data} />;
@@ -183,7 +183,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       <PageTitle
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            {savedNow && <span data-testid="methodology-saved" className="text-sm text-emerald-600">{t("admin.saved")}</span>}
+            {savedNow && <span data-testid="methodology-saved" className="text-sm text-success">{t("admin.saved")}</span>}
             {initial && !confirming && (
               <button
                 type="button"
@@ -192,7 +192,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
                   remove.reset();
                   setConfirming(true);
                 }}
-                className={`${ghostButton} flex items-center gap-2 text-red-600`}
+                className={`${ghostButton} flex items-center gap-2 text-danger`}
               >
                 <Trash2 className="size-4" />
                 {t("admin.delete")}
@@ -209,14 +209,14 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       </PageTitle>
 
       {confirming && (
-        <div role="alertdialog" className="flex flex-wrap items-center gap-3 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm">
+        <div role="alertdialog" className="flex flex-wrap items-center gap-3 rounded-xl border border-danger/40 bg-danger/10 p-4 text-sm">
           <span className="font-semibold">{t("admin.method.remove.confirm")}</span>
           <button
             type="button"
             data-testid="methodology-delete-confirm"
             disabled={remove.isPending}
             onClick={() => remove.mutate()}
-            className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-50"
+            className="rounded-xl bg-danger px-4 py-2 font-bold text-white disabled:opacity-50"
           >
             {t("admin.method.remove.yes")}
           </button>
@@ -226,7 +226,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
         </div>
       )}
       {remove.isError && (
-        <div data-testid="methodology-delete-error" role="alert" className="flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+        <div data-testid="methodology-delete-error" role="alert" className="flex flex-col gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
           <p>{remove.error.message}</p>
           {inUse && draft.published && (
             <button
@@ -245,9 +245,9 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
           )}
         </div>
       )}
-      {save.isError && <p role="alert" className="text-red-600">{save.error.message}</p>}
+      {save.isError && <p role="alert" className="text-danger">{save.error.message}</p>}
       {Object.keys(problems).length > 0 && (
-        <div role="alert" data-testid="methodology-problems" className="rounded-xl bg-red-500/10 p-4 text-sm text-red-600">
+        <div role="alert" data-testid="methodology-problems" className="rounded-xl bg-danger/10 p-4 text-sm text-danger">
           {t("admin.method.check")}
           <ul className="list-disc pl-5">
             {Object.values(problems).map((message) => (
@@ -274,7 +274,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
               >
                 {LANGUAGE_NAMES[code]}
                 {(unfilled(code) || langProblem(code)) && (
-                  <span title={t("admin.method.missing")} className={`size-1.5 rounded-full ${langProblem(code) ? "bg-red-600" : "bg-amber-500"}`} />
+                  <span title={t("admin.method.missing")} className={`size-1.5 rounded-full ${langProblem(code) ? "bg-danger" : "bg-amber-500"}`} />
                 )}
               </button>
             ))}
@@ -426,7 +426,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
             {problem("avoid")}
           </label>
         </div>
-        {preview.isError && <p role="alert" className="text-red-600">{preview.error.message}</p>}
+        {preview.isError && <p role="alert" className="text-danger">{preview.error.message}</p>}
         {preview.data && (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-muted">{t("admin.method.preview.lead", { age: preview.data.age })}</p>

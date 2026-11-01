@@ -15,7 +15,7 @@ export function TemplateEditor({ params }: { params: Promise<{ slug: string }> }
   const { slug } = use(params);
   const { t } = useAdminI18n();
   const template = useQuery({ queryKey: ["admin", "template", slug], queryFn: () => adminTemplate(slug) });
-  if (template.isError) return <p role="alert" className="text-red-600">{template.error.message}</p>;
+  if (template.isError) return <p role="alert" className="text-danger">{template.error.message}</p>;
   if (!template.data) return <p className="text-muted">{t("admin.loading")}</p>;
   // Keyed so the form starts over from the saved book after each save.
   return <Editor key={template.data.title + template.data.plot.join()} initial={template.data} />;
@@ -69,7 +69,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
       <PageTitle
         aside={
           <div className="flex items-center gap-3">
-            {save.isSuccess && <span data-testid="template-saved" className="text-sm text-emerald-600">{t("admin.saved")}</span>}
+            {save.isSuccess && <span data-testid="template-saved" className="text-sm text-success">{t("admin.saved")}</span>}
             <button type="submit" data-testid="template-save" disabled={save.isPending} className={`${button} flex items-center gap-2`}>
               <Save className="size-4" />
               {t("admin.save")}
@@ -79,7 +79,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
       >
         {initial.title}
       </PageTitle>
-      {save.isError && <p role="alert" className="text-red-600">{save.error.message}</p>}
+      {save.isError && <p role="alert" className="text-danger">{save.error.message}</p>}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title={t("admin.template.card")}>
@@ -162,7 +162,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
               <option value="text">{t("admin.template.question.text")}</option>
               <option value="choice">{t("admin.template.question.choice")}</option>
             </select>
-            <button type="button" aria-label={t("admin.template.question.remove")} className="text-muted hover:text-red-600" onClick={() => set("questions", draft.questions.filter((_, j) => j !== i))}>
+            <button type="button" aria-label={t("admin.template.question.remove")} className="text-muted hover:text-danger" onClick={() => set("questions", draft.questions.filter((_, j) => j !== i))}>
               <Trash2 className="size-4" />
             </button>
             {q.kind === "choice" ? (

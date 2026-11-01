@@ -5,7 +5,7 @@ import type { AdminStats } from "@fabulka/shared";
 import { Pause, Play } from "lucide-react";
 import { adminStats, setPaused } from "@/lib/admin-api";
 import { intlLocale } from "@/i18n/format";
-import { Card, formatUsd, PageTitle, useAdminI18n } from "./ui";
+import { Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
 
 function Stat({ label, value, hint, testId }: { label: string; value: string; hint?: string; testId?: string }) {
   return (
@@ -65,7 +65,7 @@ export function Dashboard() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin", "stats"] }),
   });
 
-  if (stats.isError) return <p role="alert" className="text-red-600">{stats.error.message}</p>;
+  if (stats.isError) return <p role="alert" className="text-danger">{stats.error.message}</p>;
   if (!stats.data) return <p className="text-muted">{t("admin.loading")}</p>;
   const s: AdminStats = stats.data;
   const success = s.books.successRate === null ? "—" : percent(s.books.successRate);
@@ -81,7 +81,7 @@ export function Dashboard() {
         data-testid="pause-card"
         data-paused={s.paused}
         className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-5 ${
-          s.paused ? "border-red-500/40 bg-red-500/10" : "border-border bg-card"
+          s.paused ? "border-danger/40 bg-danger/10" : "border-border bg-card"
         }`}
       >
         <div>
@@ -96,7 +96,7 @@ export function Dashboard() {
           disabled={pause.isPending}
           onClick={() => pause.mutate(!s.paused)}
           className={`flex items-center gap-2 rounded-xl px-4 py-2 font-bold disabled:opacity-50 ${
-            s.paused ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+            s.paused ? "bg-success text-white" : "bg-danger text-white"
           }`}
         >
           {s.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
@@ -113,12 +113,12 @@ export function Dashboard() {
         />
         <Stat label={t("admin.dashboard.success")} value={success} hint={t("admin.dashboard.failed", { count: number(s.books.byStatus.failed ?? 0) })} />
         <Stat label={t("admin.dashboard.time")} value={avg} hint={t("admin.dashboard.time.hint")} />
-        <Stat label={t("admin.dashboard.spend")} value={formatUsd(s.spend.totalUsd)} hint={t("admin.dashboard.spend.today", { amount: formatUsd(s.spend.todayUsd) })} />
+        <Stat label={t("admin.dashboard.spend")} value={formatSpendUsd(s.spend.totalUsd)} hint={t("admin.dashboard.spend.today", { amount: formatSpendUsd(s.spend.todayUsd) })} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title={t("admin.dashboard.limits")}>
-          <Meter label={t("admin.dashboard.limits.budget")} used={s.spend.totalUsd} limit={s.spend.budgetUsd} format={formatUsd} />
+          <Meter label={t("admin.dashboard.limits.budget")} used={s.spend.totalUsd} limit={s.spend.budgetUsd} format={formatSpendUsd} />
           <Meter label={t("admin.dashboard.limits.regular")} used={s.caps.regular.used} limit={s.caps.regular.limit} />
           <Meter label={t("admin.dashboard.limits.demo")} used={s.caps.demo.used} limit={s.caps.demo.limit} />
         </Card>
@@ -129,7 +129,7 @@ export function Dashboard() {
               <p className="text-2xl font-extrabold tabular-nums">{number(s.sales.purchases)}</p>
               <p className="text-xs text-muted">
                 {kzt(s.sales.purchasesKzt)}
-                {s.sales.purchasesUsd > 0 && ` · ${formatUsd(s.sales.purchasesUsd)}`}
+                {s.sales.purchasesUsd > 0 && ` · ${formatSpendUsd(s.sales.purchasesUsd)}`}
               </p>
             </div>
             <div>

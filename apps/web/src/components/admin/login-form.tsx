@@ -73,7 +73,7 @@ function PasswordForm() {
         />
       </label>
       {login.isError && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger">
           {login.error.message}
         </p>
       )}

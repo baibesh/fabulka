@@ -23,7 +23,7 @@ export function MethodologiesTable() {
         {t("admin.methods.title")}
       </PageTitle>
       <p className="-mt-3 max-w-3xl text-sm text-muted">{t("admin.methods.lead")}</p>
-      {methods.isError && <p role="alert" className="text-red-600">{methods.error.message}</p>}
+      {methods.isError && <p role="alert" className="text-danger">{methods.error.message}</p>}
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <table data-testid="methodologies-table" className={table}>
           <thead>
@@ -47,7 +47,7 @@ export function MethodologiesTable() {
                   {m.ageMin}–{m.ageMax}
                 </td>
                 <td>
-                  <Badge tone={m.published ? "bg-emerald-500/15 text-emerald-600" : "bg-border text-muted"}>
+                  <Badge tone={m.published ? "bg-success/15 text-success" : "bg-border text-muted"}>
                     {m.published ? t("admin.published") : t("admin.draft")}
                   </Badge>
                 </td>

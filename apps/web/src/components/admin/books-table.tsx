@@ -5,7 +5,7 @@ import { BOOK_STATUSES, type BookStatus } from "@fabulka/shared";
 import Link from "next/link";
 import { useState } from "react";
 import { adminBooks } from "@/lib/admin-api";
-import { Badge, BOOK_STATUS_TONE, formatUsd, input, PageTitle, table, useAdminI18n } from "./ui";
+import { Badge, BOOK_STATUS_TONE, formatSpendUsd, input, PageTitle, table, useAdminI18n } from "./ui";
 import { useMethodologyName } from "./use-methodologies";
 
 export function BooksTable() {
@@ -46,7 +46,7 @@ export function BooksTable() {
       >
         {t("admin.books.title")}
       </PageTitle>
-      {books.isError && <p role="alert" className="text-red-600">{books.error.message}</p>}
+      {books.isError && <p role="alert" className="text-danger">{books.error.message}</p>}
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <table data-testid="books-table" className={table}>
           <thead>
@@ -85,7 +85,7 @@ export function BooksTable() {
                 <td className="text-muted">{methodName(book.methodology)}</td>
                 <td className="uppercase text-muted">{book.language}</td>
                 <td className="text-muted">{book.country ?? "—"}</td>
-                <td className="text-right tabular-nums">{formatUsd(book.costUsd)}</td>
+                <td className="text-right tabular-nums">{formatSpendUsd(book.costUsd)}</td>
                 <td className="whitespace-nowrap text-muted">{date(book.createdAt)}</td>
               </tr>
             ))}

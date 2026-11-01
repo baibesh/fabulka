@@ -3,7 +3,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { VOICE_DISABLED, VOICE_RATE_LIMITED, type Template, type VoicePrefill } from "@fabulka/shared";
 import { Loader2, Mic, ShieldCheck, Square } from "lucide-react";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useClientValue } from "@/hooks/use-hydrated";
 import { ApiError, transcribeVoice } from "@/lib/api";
 import { canRecord, startRecording, type Recorder } from "@/lib/recorder";
 import { encodeWav, recordingToWav, VOICE_SAMPLE_RATE } from "@/lib/wav";
@@ -14,7 +15,6 @@ import type { MessageKey } from "@/i18n/messages";
 const MAX_SECONDS = 60;
 /** Shorter than this is a tap by mistake, not a story. */
 const MIN_SECONDS = 1.5;
-const noSubscription = () => () => {};
 
 type State =
   | { kind: "idle" }
@@ -41,11 +41,7 @@ export function VoiceStep({
   const recorder = useRef<Recorder | null>(null);
   const startedAt = useRef(0);
   // ?voiceTest=1 offers a silent recording, for end-to-end tests that have no microphone.
-  const testHook = useSyncExternalStore(
-    noSubscription,
-    () => new URLSearchParams(window.location.search).get("voiceTest") === "1",
-    () => false,
-  );
+  const testHook = useClientValue(() => new URLSearchParams(window.location.search).get("voiceTest") === "1", false);
 
   // Leaving the step mid-recording releases the microphone.
   useEffect(() => () => recorder.current?.cancel(), []);
@@ -114,7 +110,7 @@ export function VoiceStep({
           data-testid="voice-stop"
           onClick={() => void stop()}
           aria-label={t("voice.stop")}
-          className="flex size-28 animate-pulse items-center justify-center rounded-full bg-red-600 text-white shadow-lg"
+          className="flex size-28 animate-pulse items-center justify-center rounded-full bg-danger text-white shadow-lg"
         >
           <Square className="size-10 fill-current" />
         </button>
@@ -135,7 +131,7 @@ export function VoiceStep({
         {state.kind === "idle" && t("voice.start")}
         {state.kind === "recording" && t("voice.recording", { seconds: state.left })}
         {state.kind === "sending" && t("voice.sending")}
-        {state.kind === "problem" && <span className="text-red-600">{t(state.message)}</span>}
+        {state.kind === "problem" && <span className="text-danger">{t(state.message)}</span>}
       </p>
 
       <p className="flex items-center gap-2 text-sm text-muted">

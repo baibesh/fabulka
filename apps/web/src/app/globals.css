@@ -8,6 +8,27 @@
   --border: #eadfce;
   --accent: #e8833a;
   --accent-foreground: #ffffff;
+  /* Status colours: Tailwind's red, emerald and amber 600, the shades the site already used. */
+  --danger: oklch(57.7% 0.245 27.325);
+  --success: oklch(59.6% 0.145 163.225);
+  --warning: oklch(66.6% 0.179 58.318);
+
+  /* One height for buttons, inputs and selects, in three sizes; one size for checkboxes and radios. */
+  --control-h: 3rem;
+  --control-h-sm: 2.5rem;
+  --control-h-lg: 3.5rem;
+  --control-px: 1rem;
+  --control-font: 1rem;
+  --check-size: 1.125rem;
+}
+
+/* The admin is denser: smaller controls in the same shapes (set on its <main> and its login card). */
+[data-density="compact"] {
+  --control-h: 2.5rem;
+  --control-h-sm: 2rem;
+  --control-h-lg: 3rem;
+  --control-px: 0.75rem;
+  --control-font: 0.875rem;
 }
 
 @theme inline {
@@ -18,6 +39,18 @@
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  /* h-control, h-control-sm, h-control-lg, px-control, size-check … follow the density above. */
+  --spacing-control: var(--control-h);
+  --spacing-control-sm: var(--control-h-sm);
+  --spacing-control-lg: var(--control-h-lg);
+  --spacing-control-x: var(--control-px);
+  --spacing-check: var(--check-size);
+  --radius-control: 0.75rem;
+  --radius-card: 1rem;
+  --radius-panel: 1.5rem;
   --font-sans: var(--font-nunito);
 }
 
@@ -34,6 +67,14 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* One keyboard focus ring for every control; an element that draws its own sets outline-none. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
 }
 
 /*

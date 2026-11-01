@@ -39,7 +39,7 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
     <div className="flex flex-col gap-8">
       <section data-testid="book-status" data-status={book.status} className="flex flex-col gap-3">
         <div className="flex items-center gap-2 text-lg font-bold">
-          {book.status === "failed" ? <AlertTriangle className="size-5 text-red-600" /> : <Sparkles className="size-5 text-accent" />}
+          {book.status === "failed" ? <AlertTriangle className="size-5 text-danger" /> : <Sparkles className="size-5 text-accent" />}
           <span data-testid="book-stage">{t(`book.stage.${book.status}`)}</span>
           {!done && <span className="text-muted">{book.progress}%</span>}
         </div>
@@ -48,7 +48,7 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
             <motion.div className="h-full bg-accent" animate={{ width: `${book.progress}%` }} transition={{ duration: 0.8 }} />
           </div>
         )}
-        {book.error && <p role="alert" className="text-red-600">{book.error}</p>}
+        {book.error && <p role="alert" className="text-danger">{book.error}</p>}
       </section>
 
       {book.title && (
@@ -205,7 +205,7 @@ function WantPrint({ bookId }: { bookId: string }) {
     <div className="flex flex-col items-center gap-2 text-center text-sm text-muted">
       <span>{t("book.print.unavailable")}</span>
       {want.isSuccess ? (
-        <span data-testid="want-print-thanks" className="flex items-center gap-1 text-emerald-600">
+        <span data-testid="want-print-thanks" className="flex items-center gap-1 text-success">
           <Check className="size-4" />
           {t("book.print.thanks")}
         </span>

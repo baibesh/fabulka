@@ -51,9 +51,9 @@ export function Paywall({ kind, onUnlocked }: { kind: BookKind; onUnlocked: () =
           onChange={(event) => setTyped(event.target.value)}
           placeholder="name@mail.kz"
           aria-invalid={!emailValid}
-          className="w-full rounded-xl border border-border bg-background px-4 py-2 font-normal aria-[invalid=true]:border-red-600"
+          className="w-full rounded-xl border border-border bg-background px-4 py-2 font-normal aria-[invalid=true]:border-danger"
         />
-        {!emailValid && <span className="font-normal text-red-600">{t("order.email.error")}</span>}
+        {!emailValid && <span className="font-normal text-danger">{t("order.email.error")}</span>}
       </label>
       <button
         type="button"
@@ -66,7 +66,7 @@ export function Paywall({ kind, onUnlocked }: { kind: BookKind; onUnlocked: () =
         {price ? t("paywall.buy", { price }) : <PriceSkeleton className="w-40" />}
       </button>
       {buy.isError && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger">
           {buy.error.message}
         </p>
       )}

@@ -6,17 +6,13 @@ import { useState } from "react";
 import { setCountry, setLocale, useI18n } from "@/i18n/i18n";
 import { LOCALE_NAMES, UI_LOCALES } from "@/i18n/messages";
 import { LANGUAGE_FLAGS, languageCode, regionName } from "@/lib/regions";
+import { useCountryName } from "@/hooks/use-country-name";
 import { Flag } from "./flag";
 import { Modal } from "./modal";
 
 const option =
   "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-semibold hover:bg-accent/10 aria-[current=true]:bg-accent/15 aria-[current=true]:text-accent";
 
-/** The country's name in the interface language; "other" is «Другая страна». */
-function useCountryName() {
-  const { t, locale } = useI18n();
-  return (country: Country) => (country === OTHER_COUNTRY ? t("country.other") : regionName(country, locale));
-}
 
 /** Header button: the flag of the interface language; opens the languages the country offers. */
 export function LanguagePicker() {
