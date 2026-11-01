@@ -18,12 +18,16 @@ function namer(locale: UiLocale): Intl.DisplayNames | null {
   return namers.get(locale) ?? null;
 }
 
+/** Official names where the browser's Russian name is an old one («Киргизия»). */
+const RU_REGION_NAMES: Record<string, string> = { KG: "Кыргызстан" };
+
 /**
  * A country's name in this language ("KZ" → «Казахстан»), else `fallback`, else the code. Kazakh
  * names come from our own table: browsers have none and would answer in English.
  */
 export function regionName(code: string, locale: UiLocale, fallback?: string): string {
   if (locale === "kk" && KK_REGION_NAMES[code]) return KK_REGION_NAMES[code];
+  if (locale === "ru" && RU_REGION_NAMES[code]) return RU_REGION_NAMES[code];
   let name: string | undefined;
   try {
     name = namer(locale)?.of(code);
