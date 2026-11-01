@@ -17,6 +17,8 @@ import {
   type CreateBookInput,
   type ExampleBook,
   type MyBook,
+  type PhotoUpload,
+  PhotoUploadSchema,
   type UpdateLayout,
   UpdateLayoutSchema,
 } from '@fabulka/shared';
@@ -116,5 +118,20 @@ export class BooksController {
     @CurrentUser() user: SessionUser | null,
   ): Promise<Book> {
     return this.books.updateLayout(id, body, client.key, user?.id);
+  }
+
+  /**
+   * The parent's photo of the child for the photo page (before ordering): JPEG, PNG or HEIC up to
+   * 8 MB as a data URL; 400 photo_refused with a `reason` otherwise. To remove it, the parent takes
+   * the photo page out (PATCH layout); its file is deleted.
+   */
+  @Post(':id/photo')
+  uploadPhoto(
+    @Param('id') id: string,
+    @Body(new ZodPipe(PhotoUploadSchema)) body: PhotoUpload,
+    @CurrentClient() client: Client,
+    @CurrentUser() user: SessionUser | null,
+  ): Promise<Book> {
+    return this.books.uploadPhoto(id, body, client.key, user?.id);
   }
 }

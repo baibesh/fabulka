@@ -169,7 +169,7 @@ export function wordsPerPage(theme: BookTheme, age: number): number {
 }
 
 /** The optional blocks a parent may add when the template says nothing. */
-export const DEFAULT_ADDABLE: LayoutBlock["kind"][] = ["dedication", "talk", "drawing"];
+export const DEFAULT_ADDABLE: LayoutBlock["kind"][] = ["dedication", "talk", "drawing", "photo"];
 
 /**
  * A fresh layout for a child of `age`: nothing chosen yet, QA pending. `theme` is a theme or the id
@@ -186,6 +186,7 @@ export function newLayout(theme: BookTheme | string, age = 6, format?: BookForma
     blocks: clone(blocks?.order ?? DEFAULT_BLOCKS),
     addable: [...(blocks?.addable ?? DEFAULT_ADDABLE)],
     dedication: null,
+    photo: null,
     headingFallback: false,
     pages: {},
     fits: {},

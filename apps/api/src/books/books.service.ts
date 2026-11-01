@@ -13,6 +13,7 @@ import {
   BOOK_LABELS,
   BOOK_THEMES,
   LAYOUT_LOCKED,
+  PHOTO_REFUSED,
   TemplateBlocksSchema,
   answersProblem,
   arrangeBlocks,
@@ -34,6 +35,8 @@ import {
   type PageSubject,
   type PageTone,
   type PinLayout,
+  type PhotoRefusal,
+  type PhotoUpload,
   type UpdateLayout,
   type ChildProfile,
   type CreateBookInput,
@@ -41,6 +44,7 @@ import {
   type Language,
   type MyBook,
 } from '@fabulka/shared';
+import { randomBytes } from 'node:crypto';
 import { basename } from 'node:path';
 import { JournalService } from '../journal/journal.service';
 import { MODEL_GATEWAY, type ModelGateway } from '../meta/model-gateway';
@@ -54,6 +58,7 @@ import {
 import { toyUploadPath } from '../toy/toys.controller';
 import { layoutOf, withHeadingCheck } from '../layout/layout';
 import { PdfService } from '../pdf/pdf.service';
+import { cleanPhoto, PhotoRefused } from '../photos/photo';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReferenceService } from '../reference/reference.service';
 import { StorageService } from '../storage/storage.service';
@@ -61,6 +66,13 @@ import { ThemesService } from '../themes/themes.service';
 
 /** Body of a 400 from PATCH /books/:id/layout: the new block order breaks the template's rules. */
 export const BLOCKS_REFUSED = 'blocks_refused';
+
+/** What a refused photo's 400 says (the site shows its own text by `reason`). */
+const PHOTO_MESSAGES: Record<PhotoRefusal, string> = {
+  type: 'A photo must be a JPEG, PNG or HEIC file',
+  size: 'The photo is too big: at most 8 MB',
+  decode: 'The photo could not be read',
+};
 
 /** A page as stored in Book.pages. */
 export interface StoredPage {
@@ -305,21 +317,9 @@ export class BooksService implements OnModuleInit {
     clientKey: string,
     userId?: string | null,
   ): Promise<Book> {
-    const row = await this.prisma.book.findUnique({
-      where: { id },
-      include: { _count: { select: { orders: true } } },
-    });
-    if (!row || !ownsBook(row, clientKey, userId))
-      throw new NotFoundException(`book ${id} not found`);
-    if (row.status !== 'done')
-      throw new ConflictException('The book is still being made');
-    if (row._count.orders > 0) {
-      throw new ConflictException({
-        code: LAYOUT_LOCKED,
-        message: 'The book is ordered: its layout is frozen',
-      });
-    }
-    let layout = layoutOf(row.layout);
+    const row = await this.editableRow(id, clientKey, userId);
+    const before = layoutOf(row.layout);
+    let layout = before;
     if (patch.theme && patch.theme !== layout.theme.id)
       layout = withTheme(layout, await this.theme(patch.theme, row.language));
     if (patch.format && patch.format !== layout.format.id) {
@@ -346,6 +346,14 @@ export class BooksService implements OnModuleInit {
       }
       layout = { ...layout, dedication: patch.dedication };
     }
+    if (patch.photoCaption !== undefined) {
+      if (!layout.photo)
+        throw new BadRequestException('The book has no photo page');
+      layout = {
+        ...layout,
+        photo: { ...layout.photo, caption: patch.photoCaption },
+      };
+    }
     if (patch.choices) {
       const plan = planBook(storedBook(row), layout);
       for (const [page, choice] of Object.entries(patch.choices)) {
@@ -364,7 +372,95 @@ export class BooksService implements OnModuleInit {
       }
     }
     await this.rerender(id, layout);
+    // The photo page was taken out: its photo goes too.
+    if (before.photo && !layout.photo)
+      await this.storage.remove(before.photo.path);
     return this.get(id, clientKey, userId);
+  }
+
+  /**
+   * The parent's photo of the child for the photo page: checked by its bytes (JPEG, PNG or HEIC),
+   * re-encoded as a JPEG without metadata (location included) next to the book's pictures, and the
+   * photo page added before the end if the book has none yet (when the template offers it). A new
+   * photo replaces the old one, whose file is deleted. The photo is never sent to any model.
+   */
+  async uploadPhoto(
+    id: string,
+    upload: PhotoUpload,
+    clientKey: string,
+    userId?: string | null,
+  ): Promise<Book> {
+    const row = await this.editableRow(id, clientKey, userId);
+    let layout = layoutOf(row.layout);
+    if (!layout.blocks.some((b) => b.kind === 'photo')) {
+      const kinds = layout.blocks.map((b) => b.kind);
+      kinds.splice(kinds.lastIndexOf('end'), 0, 'photo');
+      const arranged = arrangeBlocks(layout, kinds);
+      if ('problem' in arranged) {
+        throw new BadRequestException({
+          code: BLOCKS_REFUSED,
+          reason: arranged.problem,
+          message: `This book has no photo page: ${arranged.problem}`,
+        });
+      }
+      layout = arranged.layout;
+    }
+    const bytes = Buffer.from(
+      upload.image.slice(upload.image.indexOf(',') + 1),
+      'base64',
+    );
+    const photo = await cleanPhoto(bytes).catch((error: unknown) => {
+      if (!(error instanceof PhotoRefused)) throw error;
+      throw new BadRequestException({
+        code: PHOTO_REFUSED,
+        reason: error.reason,
+        message: PHOTO_MESSAGES[error.reason],
+      });
+    });
+    const path = await this.storage.save(
+      `books/${id}/photo-${randomBytes(6).toString('hex')}.jpg`,
+      photo.data,
+    );
+    const old = layout.photo?.path;
+    layout = {
+      ...layout,
+      photo: {
+        path,
+        caption: upload.caption ?? layout.photo?.caption ?? null,
+        aspect: photo.width / photo.height,
+      },
+    };
+    try {
+      await this.rerender(id, layout);
+    } catch (error) {
+      await this.storage.remove(path);
+      throw error;
+    }
+    if (old && old !== path) await this.storage.remove(old);
+    return this.get(id, clientKey, userId);
+  }
+
+  /** A book this visitor may still change: theirs, finished and not ordered (404 / 409 otherwise). */
+  private async editableRow(
+    id: string,
+    clientKey: string,
+    userId?: string | null,
+  ) {
+    const row = await this.prisma.book.findUnique({
+      where: { id },
+      include: { _count: { select: { orders: true } } },
+    });
+    if (!row || !ownsBook(row, clientKey, userId))
+      throw new NotFoundException(`book ${id} not found`);
+    if (row.status !== 'done')
+      throw new ConflictException('The book is still being made');
+    if (row._count.orders > 0) {
+      throw new ConflictException({
+        code: LAYOUT_LOCKED,
+        message: 'The book is ordered: its layout is frozen',
+      });
+    }
+    return row;
   }
 
   /** Staff pin a page's layout (any variant; null unpins) or change the theme, then re-render. */
@@ -429,6 +525,7 @@ export class BooksService implements OnModuleInit {
     const checked = withHeadingCheck(layout, [
       book.title ?? '',
       layout.dedication ?? labels.madeFor(book.childName),
+      layout.photo?.caption ?? '',
       labels.talk,
       labels.end,
     ]);

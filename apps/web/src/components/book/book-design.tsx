@@ -5,20 +5,26 @@ import {
   BLOCK_LIMITS,
   BOOK_LABELS,
   DEDICATION_MAX,
+  PHOTO_CAPTION_MAX,
+  PHOTO_MAX_BYTES,
+  PHOTO_REFUSED,
+  PHOTO_REFUSALS,
+  PHOTO_TYPES,
   SELECTABLE_THEMES,
   BOOK_THEMES,
   availableVariants,
   planBook,
   type BlockKind,
   type Book,
+  type PhotoRefusal,
   type UpdateLayout,
 } from "@fabulka/shared";
-import { ArrowDown, ArrowUp, Palette, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { ArrowDown, ArrowUp, ImagePlus, Lock, Palette, Plus, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
 import { Button, IconButton } from "../ui/button";
-import { Textarea } from "../ui/input";
+import { Input, Textarea } from "../ui/input";
 import { useI18n } from "@/i18n/i18n";
-import { getThemes, updateLayout } from "@/lib/api";
+import { ApiError, getThemes, updateLayout, uploadPhoto } from "@/lib/api";
 import { useQuery } from "@/lib/query";
 import { themeName, themeNote } from "@/lib/themes";
 import { Card } from "../ui/card";
@@ -151,6 +157,7 @@ function Blocks({ book, pending, onSave }: { book: Book; pending: boolean; onSav
             <span className="w-6 text-right text-muted">{i + 1}</span>
             <span className="flex-1 font-medium">
               {block.kind === "story" ? t("design.block.story", { count: book.pages.length }) : t(`design.block.${block.kind}`)}
+              {block.kind === "photo" && !book.layout.photo && <span className="ml-2 text-xs font-normal text-muted">{t("design.photo.empty")}</span>}
             </span>
             {block.movable && (
               <>
@@ -178,11 +185,13 @@ function Blocks({ book, pending, onSave }: { book: Book; pending: boolean; onSav
       </ol>
       {offered.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {offered.map((kind) => (
-            <Button key={kind} variant="secondary" size="sm" data-testid={`block-add-${kind}`} disabled={pending} icon={<Plus className="size-4" />} onClick={() => add(kind)}>
-              {t(`design.block.add.${kind}`)}
-            </Button>
-          ))}
+          {offered
+            .filter((kind) => kind !== "photo")
+            .map((kind) => (
+              <Button key={kind} variant="secondary" size="sm" data-testid={`block-add-${kind}`} disabled={pending} icon={<Plus className="size-4" />} onClick={() => add(kind)}>
+                {t(`design.block.add.${kind}`)}
+              </Button>
+            ))}
         </div>
       )}
       <p data-testid="page-count" data-count={plan.length} data-fillers={fillers} className="text-sm text-muted">
@@ -190,6 +199,7 @@ function Blocks({ book, pending, onSave }: { book: Book; pending: boolean; onSav
         {fillers > 0 && <span data-testid="padding-note"> {t("design.padding", { count: fillers })}</span>}
       </p>
       {kinds.includes("dedication") && <Dedication key={book.layout.dedication ?? ""} book={book} pending={pending} onSave={onSave} />}
+      {(kinds.includes("photo") || offered.includes("photo")) && <PhotoPage book={book} pending={pending} onSave={onSave} />}
     </div>
   );
 }
@@ -230,6 +240,129 @@ function Dedication({ book, pending, onSave }: { book: Book; pending: boolean; o
           onClick={() => onSave({ dedication: trimmed })}
         >
           {t("design.dedication.save")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** What the site accepts before sending: the API checks the bytes again and re-encodes the photo. */
+function photoProblem(file: File): PhotoRefusal | null {
+  const heic = /\.(heic|heif)$/i.test(file.name);
+  if (!(PHOTO_TYPES as readonly string[]).includes(file.type) && !heic) return "type";
+  if (file.size > PHOTO_MAX_BYTES) return "size";
+  return null;
+}
+
+const readDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
+
+/**
+ * The photo page: the parent picks a photo of the child (JPEG, PNG or HEIC up to 8 MB), which the API
+ * re-encodes without metadata and puts in a frame in the theme's colors, with an optional caption.
+ * Uploading adds the page; taking the page out (the bin in the list) deletes the photo. The privacy
+ * note says what happens to the photo.
+ */
+function PhotoPage({ book, pending, onSave }: { book: Book; pending: boolean; onSave: (patch: UpdateLayout) => void }) {
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const input = useRef<HTMLInputElement>(null);
+  const [problem, setProblem] = useState<PhotoRefusal | null>(null);
+  const upload = useMutation({
+    mutationFn: async (file: File) => uploadPhoto(book.id, await readDataUrl(file)),
+    onSuccess: (updated) => queryClient.setQueryData(["book", book.id], updated),
+    onError: (error) => {
+      const reason = error instanceof ApiError && error.code === PHOTO_REFUSED ? (error.body as { reason?: string } | undefined)?.reason : undefined;
+      setProblem((PHOTO_REFUSALS as readonly string[]).includes(reason ?? "") ? (reason as PhotoRefusal) : "decode");
+    },
+  });
+  const photo = book.layout.photo;
+  const busy = pending || upload.isPending;
+  const pick = (file: File | undefined) => {
+    if (!file) return;
+    const found = photoProblem(file);
+    setProblem(found);
+    if (!found) upload.mutate(file);
+  };
+  return (
+    <div data-testid="photo-page" data-has-photo={photo ? "true" : "false"} className="flex flex-col gap-3 rounded-xl border border-border p-3">
+      <h4 className="text-sm font-bold">{t("design.photo.title")}</h4>
+      <div className="flex flex-wrap items-center gap-3">
+        {photo && (
+          // eslint-disable-next-line @next/next/no-img-element -- the stored photo, shown small.
+          <img data-testid="photo-thumb" src={`/files/${photo.path}`} alt={t("design.photo.alt")} className="h-20 rounded-lg border border-border object-cover" />
+        )}
+        <input
+          ref={input}
+          type="file"
+          data-testid="photo-input"
+          className="sr-only"
+          tabIndex={-1}
+          accept={[...PHOTO_TYPES, ".heic", ".heif"].join(",")}
+          onChange={(e) => {
+            pick(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          data-testid="photo-upload"
+          loading={upload.isPending}
+          disabled={busy}
+          icon={<ImagePlus className="size-4" />}
+          onClick={() => input.current?.click()}
+        >
+          {photo ? t("design.photo.replace") : t("design.photo.upload")}
+        </Button>
+        <span className="text-xs text-muted">{t("design.photo.hint")}</span>
+      </div>
+      {upload.isPending && <p className="text-sm text-muted">{t("design.photo.uploading")}</p>}
+      {problem && (
+        <ErrorText data-testid="photo-error" data-reason={problem}>
+          {t(`design.photo.error.${problem}`)}
+        </ErrorText>
+      )}
+      <p data-testid="photo-privacy" className="flex gap-2 text-xs text-muted">
+        <Lock className="mt-0.5 size-3.5 shrink-0" />
+        {t("design.photo.privacy")}
+      </p>
+      {photo && <PhotoCaption key={photo.caption ?? ""} caption={photo.caption} pending={busy} onSave={onSave} />}
+    </div>
+  );
+}
+
+function PhotoCaption({ caption, pending, onSave }: { caption: string | null; pending: boolean; onSave: (patch: UpdateLayout) => void }) {
+  const { t } = useI18n();
+  const [text, setText] = useState(caption ?? "");
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  return (
+    <div className="flex flex-col gap-2">
+      <label htmlFor="photo-caption" className="text-sm font-bold">
+        {t("design.photo.caption")}
+      </label>
+      <Input id="photo-caption" data-testid="photo-caption" maxLength={PHOTO_CAPTION_MAX} value={text} onChange={(e) => setText(e.target.value)} />
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+        <span>{t("design.dedication.limit", { count: PHOTO_CAPTION_MAX - text.length })}</span>
+        {/[<>]/.test(text) && <span className="text-danger">{t("design.dedication.markup")}</span>}
+        <span className="flex-1" />
+        {caption && (
+          <Button variant="ghost" size="sm" data-testid="photo-caption-remove" disabled={pending} onClick={() => onSave({ photoCaption: null })}>
+            {t("design.photo.caption.remove")}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          data-testid="photo-caption-save"
+          disabled={pending || !trimmed || /[<>]/.test(trimmed) || trimmed === (caption ?? "")}
+          onClick={() => onSave({ photoCaption: trimmed })}
+        >
+          {t("design.photo.caption.save")}
         </Button>
       </div>
     </div>

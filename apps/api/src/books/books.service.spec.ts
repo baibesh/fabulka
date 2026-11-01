@@ -2,9 +2,14 @@ import type { ConfigService } from '@nestjs/config';
 import {
   DEFAULT_FORMATS,
   DEFAULT_METHODOLOGIES,
+  PHOTO_REFUSED,
+  newLayout,
   type BookLayout,
 } from '@fabulka/shared';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { MockGateway } from '../meta/mock.gateway';
+import type { ModelGateway } from '../meta/model-gateway';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import { JournalService } from '../journal/journal.service';
 import type { PdfService } from '../pdf/pdf.service';
@@ -42,9 +47,10 @@ const methodRows = (unpublished: string[] = []) =>
 
 function makeService(
   prisma: unknown,
-  models = new MockGateway(0),
+  models: unknown = new MockGateway(0),
   methods = methodRows(),
   template: Record<string, unknown> = {},
+  files: { storage?: unknown; pdf?: unknown; format?: string } = {},
 ) {
   const templates = {
     find: jest.fn().mockResolvedValue({
@@ -58,16 +64,20 @@ function makeService(
   } as unknown as TemplatesService;
   return new BooksService(
     prisma as PrismaService,
-    { url: () => null } as unknown as StorageService,
-    {} as PdfService,
+    (files.storage ?? { url: () => null }) as StorageService,
+    (files.pdf ?? {}) as PdfService,
     templates,
     new MethodologiesService({
       methodology: { findMany: jest.fn().mockResolvedValue(methods) },
     } as unknown as PrismaService),
-    models,
+    models as ModelGateway,
     new JournalService(prisma as PrismaService),
     {
-      defaultFormat: () => Promise.resolve(DEFAULT_FORMATS[0]),
+      defaultFormat: () =>
+        Promise.resolve(
+          DEFAULT_FORMATS.find((f) => f.id === files.format) ??
+            DEFAULT_FORMATS[0],
+        ),
     } as unknown as ReferenceService,
     curatedThemes(),
     { get: () => 2 } as unknown as ConfigService,
@@ -444,6 +454,175 @@ describe('BooksService', () => {
         ),
       ).rejects.toThrow('нет такого варианта');
     });
+  });
+});
+
+describe('the photo page', () => {
+  const jpeg = readFileSync(
+    join(__dirname, '../photos/fixtures/child-gps.jpg'),
+  );
+  const dataUrl = (data: Buffer, type = 'image/jpeg') =>
+    `data:${type};base64,${data.toString('base64')}`;
+
+  /** A finished, unordered book of this browser, with a storage and PDF renderer that record calls. */
+  function setup(layout: BookLayout = newLayout('fairy', 5)) {
+    const row = {
+      id: 'b1',
+      status: 'done',
+      clientKey: 'k',
+      userId: null,
+      child,
+      language: 'ru',
+      progress: 100,
+      title: 'Сказка',
+      heroImagePath: null,
+      pages: [],
+      talkQuestions: [],
+      pdfPath: null,
+      error: null,
+      layout,
+      createdAt: new Date(),
+      _count: { orders: 0 },
+    };
+    const update = jest.fn(({ data }: { data: { layout: BookLayout } }) => {
+      row.layout = data.layout;
+      return Promise.resolve(row);
+    });
+    const storage = {
+      root: '/tmp',
+      url: (p: string | null) => p && `/files/${p}`,
+      save: jest.fn((path: string) => Promise.resolve(path)),
+      remove: jest.fn(() => Promise.resolve()),
+    };
+    const pdf = {
+      render: jest.fn((_id: string, _book: unknown, l: BookLayout) =>
+        Promise.resolve({ pdfPath: 'books/b1/book.pdf', layout: l, tones: {} }),
+      ),
+    };
+    // Any model call would throw: the photo is never sent to a model.
+    const models = new Proxy(
+      {},
+      {
+        get: (_target, name) => {
+          throw new Error(`model ${String(name)} called`);
+        },
+      },
+    );
+    const service = makeService(
+      {
+        book: {
+          findUnique: jest.fn(() => Promise.resolve(row)),
+          findUniqueOrThrow: jest.fn(() => Promise.resolve(row)),
+          update,
+        },
+      },
+      models,
+      methodRows(),
+      {},
+      { storage, pdf },
+    );
+    return { service, row, storage, pdf };
+  }
+
+  it('stores the cleaned photo next to the book and adds the photo page before the end', async () => {
+    const { service, storage, pdf } = setup();
+    const book = await service.uploadPhoto(
+      'b1',
+      { image: dataUrl(jpeg), caption: 'Арман в три года' },
+      'k',
+    );
+    const [path, data] = storage.save.mock.calls[0] as unknown as [
+      string,
+      Buffer,
+    ];
+    expect(path).toMatch(/^books\/b1\/photo-[0-9a-f]{12}\.jpg$/);
+    // Re-encoded: no EXIF (the fixture has a GPS position), upright (480×640).
+    expect(data.toString('latin1')).not.toContain('TestCam');
+    expect(book.layout.photo).toEqual({
+      path,
+      caption: 'Арман в три года',
+      aspect: 0.75,
+    });
+    expect(book.layout.blocks.map((b) => b.kind).slice(-2)).toEqual([
+      'photo',
+      'end',
+    ]);
+    expect(pdf.render).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaces an earlier photo and deletes its file', async () => {
+    const { service, storage } = setup();
+    const first = await service.uploadPhoto(
+      'b1',
+      { image: dataUrl(jpeg) },
+      'k',
+    );
+    const second = await service.uploadPhoto(
+      'b1',
+      { image: dataUrl(jpeg) },
+      'k',
+    );
+    expect(second.layout.photo!.path).not.toBe(first.layout.photo!.path);
+    expect(storage.remove).toHaveBeenCalledWith(first.layout.photo!.path);
+    expect(second.layout.blocks.filter((b) => b.kind === 'photo')).toHaveLength(
+      1,
+    );
+  });
+
+  it('deletes the photo when the parent takes the photo page out', async () => {
+    const { service, storage } = setup();
+    const book = await service.uploadPhoto('b1', { image: dataUrl(jpeg) }, 'k');
+    const path = book.layout.photo!.path;
+    const after = await service.updateLayout(
+      'b1',
+      {
+        blocks: book.layout.blocks
+          .map((b) => b.kind)
+          .filter((k) => k !== 'photo'),
+      },
+      'k',
+    );
+    expect(after.layout.photo).toBeNull();
+    expect(storage.remove).toHaveBeenCalledWith(path);
+  });
+
+  it('refuses a file that is not a photo whatever its declared type, storing nothing', async () => {
+    const { service, storage } = setup();
+    const gif = Buffer.from(
+      'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==',
+      'base64',
+    );
+    await expect(
+      service.uploadPhoto('b1', { image: dataUrl(gif, 'image/jpeg') }, 'k'),
+    ).rejects.toMatchObject({
+      response: { code: PHOTO_REFUSED, reason: 'type' },
+    });
+    expect(storage.save).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the template does not offer a photo page, and on someone else's book", async () => {
+    const layout = { ...newLayout('fairy', 5), addable: ['drawing' as const] };
+    const { service } = setup(layout);
+    await expect(
+      service.uploadPhoto('b1', { image: dataUrl(jpeg) }, 'k'),
+    ).rejects.toMatchObject({ response: { reason: 'not-addable' } });
+    await expect(
+      service.uploadPhoto('b1', { image: dataUrl(jpeg) }, 'other'),
+    ).rejects.toThrow('not found');
+  });
+
+  it('sets and clears the caption only when there is a photo', async () => {
+    const { service } = setup();
+    await expect(
+      service.updateLayout('b1', { photoCaption: 'Привет' }, 'k'),
+    ).rejects.toThrow('no photo page');
+    await service.uploadPhoto('b1', { image: dataUrl(jpeg) }, 'k');
+    const book = await service.updateLayout(
+      'b1',
+      { photoCaption: 'Привет' },
+      'k',
+    );
+    expect(book.layout.photo!.caption).toBe('Привет');
   });
 });
 

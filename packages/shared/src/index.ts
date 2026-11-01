@@ -1,7 +1,17 @@
 import { z } from "zod";
 import { MethodologySlugSchema } from "./methodologies";
 import { LanguageSchema, type Language } from "./language";
-import { BlockKindSchema, BookLayoutSchema, BookThemeSchema, DedicationSchema, PageVariantSchema, TemplateBlocksSchema, ThemeCheckSchema } from "./layout";
+import {
+  BlockKindSchema,
+  BookLayoutSchema,
+  BookThemeSchema,
+  DedicationSchema,
+  PHOTO_MAX_BYTES,
+  PageVariantSchema,
+  PhotoCaptionSchema,
+  TemplateBlocksSchema,
+  ThemeCheckSchema,
+} from "./layout";
 import { countryInfo, type City, type Country, type CountryEntry, type Currency, type PrintFormat, type Prices } from "./reference";
 
 export * from "./language";
@@ -198,10 +208,30 @@ export const UpdateLayoutSchema = z.object({
   blocks: z.array(BlockKindSchema).min(3).max(12).optional(),
   /** The parent's dedication; null goes back to the default one. */
   dedication: DedicationSchema.nullable().optional(),
+  /** The caption under the parent's photo; null takes it away. */
+  photoCaption: PhotoCaptionSchema.nullable().optional(),
   /** A published print format's id: the book is laid out again at that size. */
   format: z.string().trim().min(1).max(40).optional(),
 });
 export type UpdateLayout = z.infer<typeof UpdateLayoutSchema>;
+
+/**
+ * Body of POST /books/:id/photo: the parent's photo of the child as a data URL of the file as picked
+ * (JPEG, PNG or HEIC, at most PHOTO_MAX_BYTES). The API checks the bytes, not the declared type,
+ * re-encodes it as JPEG without metadata and adds the photo page.
+ */
+export const PhotoUploadSchema = z.object({
+  image: z
+    .string()
+    .regex(/^data:[\w.+/-]*;base64,[A-Za-z0-9+/=]+$/, "A base64 data URL")
+    .max(Math.ceil((PHOTO_MAX_BYTES * 4) / 3) + 100),
+  caption: PhotoCaptionSchema.optional(),
+});
+export type PhotoUpload = z.infer<typeof PhotoUploadSchema>;
+/** Body of a 400 from POST /books/:id/photo: `reason` is "type" (not a JPEG, PNG or HEIC), "size" or "decode". */
+export const PHOTO_REFUSED = "photo_refused";
+export const PHOTO_REFUSALS = ["type", "size", "decode"] as const;
+export type PhotoRefusal = (typeof PHOTO_REFUSALS)[number];
 
 /** Body of PATCH /admin/books/:id/layout: staff pin a page's layout (null unpins), or change the theme. */
 export const PinLayoutSchema = z.object({

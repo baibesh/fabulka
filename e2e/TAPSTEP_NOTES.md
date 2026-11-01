@@ -35,3 +35,8 @@ Things noticed while using tapstep on Fabulka. Version: 0.13.11.
    screens", and its `timeout:` does not lift that cap. A real mouse (or `--viewport 1280x1000`, or a
    few plain `scroll` steps first) clicks it fine. A tap that cannot reach its element should fail
    with the same message, and `timeout:` should replace the screen limit as documented.
+10. **`uploadFile` with a relative path attaches a file the page cannot read.** `files: ../fixtures/child.jpg`
+    passes validation and the step (the file is found next to the flow), and the input gets a file
+    with the right name and type — but `FileReader` fails on it, as if Chromium got the relative path
+    unresolved. An absolute path works: `files: "${PWD}/e2e/fixtures/child.jpg"` (run from the repo
+    root). The step should hand Chromium the path it resolved.

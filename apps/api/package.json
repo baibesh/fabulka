@@ -42,13 +42,16 @@
     "@nestjs/serve-static": "^5.0.5",
     "@prisma/client": "^6.19.3",
     "fontkit": "^2.0.4",
+    "heic-decode": "2.1.0",
     "hyphen": "^1.14.1",
     "jpeg-js": "0.4.4",
     "maxmind": "5.0.7",
     "openai": "^6.49.0",
+    "pdf-lib": "1.17.1",
     "playwright": "^1.64.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sharp": "0.35.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {

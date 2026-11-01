@@ -146,6 +146,9 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
   <h2 class="fb-heading" data-qa-text>${escapeHtml(labels.talk)}</h2>
   <ol class="fb-questions">${book.talkQuestions.map((q) => `<li data-qa-text>${body(q)}</li>`).join("")}</ol></div></div>`;
         break;
+      case "photo":
+        inner = photoPage(layout, asset, ornament, title);
+        break;
       case "drawing":
         inner = `<div class="fb-drawing-frame"></div><p class="fb-drawing-label" data-qa-text>${escapeHtml(labels.drawing)}</p>`;
         break;
@@ -185,6 +188,24 @@ function grow(r: Rect, format: BookLayout["format"], bleed: number): Rect {
 function paperRect(layout: BookLayout): Rect {
   const { widthMm: w, heightMm: h, safeMm: s } = layout.format;
   return { x: s + 6, y: s + 6, w: w - 2 * s - 12, h: h - 2 * s - 12 };
+}
+
+/**
+ * The parent's photo of the child in a frame in the theme's colors, its ornament above and the
+ * caption below. The photo keeps its shape: it is scaled to the room the caption leaves.
+ */
+function photoPage(layout: BookLayout, asset: (path: string) => string, ornament: () => string, title: (t: string) => string): string {
+  const photo = layout.photo!;
+  const rect = paperRect(layout);
+  const caption = photo.caption ? `<p class="fb-photo-caption" data-qa-text>${title(photo.caption)}</p>` : "";
+  // Room for the ornament (12 mm + 4 mm), the frame's mat and border (~8 mm) and a caption.
+  const maxH = rect.h - 16 - 8 - (caption ? 26 : 0);
+  const maxW = rect.w - 8;
+  const w = Math.min(maxW, maxH * photo.aspect);
+  return `<div class="fb-box fb-center" data-fit-box style="${place(rect)}"><div class="fb-flow">
+  <div class="fb-ornament">${ornament()}</div>
+  <div class="fb-photo-frame"><img class="fb-photo" src="${escapeHtml(asset(photo.path))}" alt="" style="width:${mm(w)};height:${mm(w / photo.aspect)};object-fit:cover"></div>
+  ${caption}</div></div>`;
 }
 
 function cover(
@@ -345,6 +366,11 @@ export const BOOK_CSS = `
 .fb-cover-scene .fb-cover-title.fb-at-bottom { top: auto; bottom: var(--safe); }
 .fb-cover-scene .fb-cover-title .fb-flow { background: color-mix(in srgb, var(--plate) 88%, transparent); border-radius: 6mm;
   padding: 5mm 6mm; box-shadow: 0 .8mm 3mm rgba(0,0,0,.15); }
+.fb-photo-frame { display: inline-block; padding: 3mm; background: #fff; border: .7mm solid var(--accent); border-radius: 4mm;
+  box-shadow: 0 .8mm 3mm rgba(0,0,0,.14); line-height: 0; }
+.fb-photo { display: block; border-radius: 2mm; }
+.fb-photo-caption { margin-top: 5mm; font-family: var(--heading); font-weight: var(--heading-weight);
+  font-size: calc(var(--heading-size) * .8 * var(--fit)); line-height: 1.25; color: var(--ink); }
 .fb-drawing-frame { position: absolute; inset: calc(var(--safe) + 4mm); bottom: calc(var(--safe) + 16mm);
   border: .6mm dashed color-mix(in srgb, var(--muted) 60%, transparent); border-radius: 6mm; }
 .fb-drawing-label { position: absolute; left: var(--safe); right: var(--safe); bottom: calc(var(--safe) + 2mm); text-align: center;

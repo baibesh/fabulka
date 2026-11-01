@@ -2,11 +2,17 @@ import { z } from "zod";
 import { type BlockKind, BlockKindSchema, type BookLayout, type LayoutBlock, LayoutBlockSchema } from "./model";
 
 /** Kinds a parent may add, remove and move (when the template allows): never the cover, story or end. */
-export const OPTIONAL_KINDS = ["dedication", "talk", "drawing"] as const satisfies readonly BlockKind[];
+export const OPTIONAL_KINDS = ["dedication", "talk", "drawing", "photo"] as const satisfies readonly BlockKind[];
 /** How many of each optional block a book may have. */
-export const BLOCK_LIMITS: Record<BlockKind, number> = { cover: 1, dedication: 1, story: 1, talk: 1, drawing: 4, end: 1 };
+export const BLOCK_LIMITS: Record<BlockKind, number> = { cover: 1, dedication: 1, story: 1, talk: 1, drawing: 4, photo: 1, end: 1 };
 /** A parent's dedication, in characters. */
 export const DEDICATION_MAX = 160;
+/** The caption under the parent's photo, in characters. */
+export const PHOTO_CAPTION_MAX = 80;
+/** The photo file the parent may upload, in bytes (before the API re-encodes it). */
+export const PHOTO_MAX_BYTES = 8 * 1024 * 1024;
+/** File types the photo page takes; HEIC (iPhone photos) is converted to JPEG by the API. */
+export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/heic", "image/heif"] as const;
 
 /**
  * The parent's dedication: plain text, one to DEDICATION_MAX characters, no markup (the renderer
@@ -20,6 +26,18 @@ export const DedicationSchema = z
       .string()
       .min(1)
       .max(DEDICATION_MAX)
+      .refine((s) => !/[<>\u0000-\u001f\u007f]/.test(s), "No markup"),
+  );
+
+/** The caption under the parent's photo: plain text like the dedication, at most PHOTO_CAPTION_MAX characters. */
+export const PhotoCaptionSchema = z
+  .string()
+  .transform((s) => s.replace(/\s+/g, " ").trim())
+  .pipe(
+    z
+      .string()
+      .min(1)
+      .max(PHOTO_CAPTION_MAX)
       .refine((s) => !/[<>\u0000-\u001f\u007f]/.test(s), "No markup"),
   );
 
@@ -82,5 +100,14 @@ export function arrangeBlocks(layout: BookLayout, kinds: readonly BlockKind[]): 
   const fixed = (list: readonly LayoutBlock[]) => list.filter((b) => !b.movable && kept.has(b.kind)).map((b) => b.kind);
   if (fixed(current).join() !== fixed(next).join()) return { problem: "fixed-moved" };
   if (blocksProblem(next)) return { problem: "shape" };
-  return { layout: { ...layout, blocks: next, dedication: next.some((b) => b.kind === "dedication") ? layout.dedication : null } };
+  // Leaving out the photo page drops the photo too (the API deletes its file).
+  const has = (kind: BlockKind) => next.some((b) => b.kind === kind);
+  return {
+    layout: {
+      ...layout,
+      blocks: next,
+      dedication: has("dedication") ? layout.dedication : null,
+      photo: has("photo") ? layout.photo : null,
+    },
+  };
 }

@@ -4,6 +4,7 @@ import {
   BOOK_THEMES,
   DedicationSchema,
   GRID,
+  PhotoCaptionSchema,
   PRINT_SLUG_MM,
   TemplateBlocksSchema,
   arrangeBlocks,
@@ -117,6 +118,47 @@ describe("padding", () => {
     const dedication = rendered.pages.find((p) => p.key === "dedication")!;
     expect(dedication.html).toContain("Для Алии &amp; её &lt;друзей&gt;");
     for (const page of rendered.pages.filter((p) => p.filler)) expect(page.html).toContain('data-filler="true"');
+  });
+});
+
+describe("photo page", () => {
+  const photo = { path: "books/b1/photo-abc.jpg", caption: "Алия & <мама>", aspect: 0.75 };
+
+  it("shows the page only once a photo is uploaded, framed, with the caption escaped", () => {
+    const arranged = arrangeBlocks(newLayout("little"), ["cover", "story", "photo", "end"]);
+    if (!("layout" in arranged)) throw new Error("refused");
+    expect(planBook(book(4), arranged.layout).some((p) => p.kind === "photo")).toBe(false);
+    const layout = { ...arranged.layout, photo };
+    const plan = planBook(book(4), layout);
+    expect(plan.find((p) => p.kind === "photo")?.key).toBe("photo");
+    expect(plan.length % 4).toBe(0);
+    const page = renderBook(book(4), layout, { asset: (path) => `file:///store/${path}` }).pages.find((p) => p.key === "photo")!;
+    expect(page.html).toContain('class="fb-photo-frame"');
+    expect(page.html).toContain('src="file:///store/books/b1/photo-abc.jpg"');
+    expect(page.html).toContain("Алия &amp; &lt;мама&gt;");
+    // A 3:4 photo keeps its shape in the frame.
+    const [, w, h] = /class="fb-photo"[^>]*width:([\d.]+)mm;height:([\d.]+)mm/.exec(page.html)!.map(Number);
+    expect(w / h).toBeCloseTo(0.75, 2);
+  });
+
+  it("drops the photo with the page, and allows one photo page only", () => {
+    const layout = { ...newLayout("fairy"), blocks: [...newLayout("fairy").blocks.slice(0, -1), { kind: "photo" as const, movable: true, optional: true }, newLayout("fairy").blocks.at(-1)!], photo };
+    const removed = arrangeBlocks(layout, kinds(layout).filter((k) => k !== "photo"));
+    expect("layout" in removed && removed.layout.photo).toBeNull();
+    const kept = arrangeBlocks(layout, ["cover", "photo", "dedication", "story", "talk", "drawing", "end"]);
+    expect("layout" in kept && kept.layout.photo).toEqual(photo);
+    const twice = arrangeBlocks(layout, ["cover", "photo", "story", "photo", "end"]);
+    expect("problem" in twice && twice.problem).toBe("too-many");
+  });
+
+  it("is offered to parents unless the template leaves it out", () => {
+    expect(newLayout("fairy").addable).toContain("photo");
+    const blocks = TemplateBlocksSchema.parse({ order: newLayout("fairy").blocks, addable: ["drawing"] });
+    const layout = newLayout("fairy", 6, undefined, blocks);
+    expect("problem" in arrangeBlocks(layout, [...kinds(layout).slice(0, -1), "photo", "end"])).toBe(true);
+    expect(PhotoCaptionSchema.safeParse("<b>x</b>").success).toBe(false);
+    expect(PhotoCaptionSchema.safeParse("а".repeat(81)).success).toBe(false);
+    expect(PhotoCaptionSchema.parse("  Алия\n в три года ")).toBe("Алия в три года");
   });
 });
 

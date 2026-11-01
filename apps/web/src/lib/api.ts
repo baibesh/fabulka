@@ -188,6 +188,14 @@ export async function updateLayout(id: string, patch: UpdateLayout): Promise<Boo
   return BookSchema.parse(await request(`/api/books/${id}/layout`, { method: "PATCH", body: JSON.stringify(patch) }));
 }
 
+/**
+ * The parent's photo of the child for the photo page (a data URL of the file as picked). Refused with
+ * 400 photo_refused and a `reason` in the body ("type", "size", "decode").
+ */
+export async function uploadPhoto(id: string, image: string): Promise<Book> {
+  return BookSchema.parse(await request(`/api/books/${id}/photo`, { method: "POST", body: JSON.stringify({ image }) }));
+}
+
 /** Themes a book may switch to: the curated ones and the AI ones staff published. */
 export async function getThemes(): Promise<BookTheme[]> {
   return BookThemeSchema.array().parse(await request("/api/themes"));

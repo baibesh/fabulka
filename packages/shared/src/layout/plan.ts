@@ -56,7 +56,7 @@ export function textRect(
   }
 }
 
-export type PageKind = "cover" | "dedication" | "story" | "talk" | "drawing" | "end";
+export type PageKind = "cover" | "dedication" | "story" | "talk" | "drawing" | "photo" | "end";
 
 /** One printed page, in order: index 0 is the cover; odd indexes are left pages. */
 export interface PlannedPage {
@@ -140,6 +140,10 @@ export function planBook(book: PlannableBook, layout: BookLayout): PlannedPage[]
         break;
       case "drawing":
         push({ key: `drawing-${++drawings}`, kind: "drawing" });
+        break;
+      case "photo":
+        // The page appears once the parent has uploaded a photo.
+        if (layout.photo) push({ key: "photo", kind: "photo" });
         break;
       case "end":
         pad();

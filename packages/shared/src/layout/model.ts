@@ -18,8 +18,11 @@ export type PageVariant = z.infer<typeof PageVariantSchema>;
 export const TWO_PAGE_VARIANTS: readonly PageVariant[] = ["facing", "spread"];
 export const isTwoPage = (variant: PageVariant) => TWO_PAGE_VARIANTS.includes(variant);
 
-/** Parts of a book. "story" stands for all the story pages, in the story's order. */
-export const BLOCK_KINDS = ["cover", "dedication", "story", "talk", "drawing", "end"] as const;
+/**
+ * Parts of a book. "story" stands for all the story pages, in the story's order; "photo" is a page
+ * with the parent's photo of the child (shown only once a photo is uploaded).
+ */
+export const BLOCK_KINDS = ["cover", "dedication", "story", "talk", "drawing", "photo", "end"] as const;
 export const BlockKindSchema = z.enum(BLOCK_KINDS);
 export type BlockKind = z.infer<typeof BlockKindSchema>;
 
@@ -105,6 +108,19 @@ export const BookThemeSchema = z.object({
 });
 export type BookTheme = z.infer<typeof BookThemeSchema>;
 
+/**
+ * The parent's photo of the child: a JPEG the API re-encoded (metadata, location included, stripped)
+ * next to the book's pictures, never sent to any model. `path` is its storage path.
+ */
+export const BookPhotoSchema = z.object({
+  path: z.string(),
+  /** Plain text under the photo (escaped by the renderer); null: none. */
+  caption: z.string().nullable().default(null),
+  /** Width / height of the stored JPEG. */
+  aspect: z.number().positive(),
+});
+export type BookPhoto = z.infer<typeof BookPhotoSchema>;
+
 /** A point in a picture, 0..1 from the top left: what the crop keeps in view. */
 export const FocusSchema = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) });
 export type Focus = z.infer<typeof FocusSchema>;
@@ -172,6 +188,8 @@ export const BookLayoutSchema = z.object({
   addable: z.array(BlockKindSchema).default(["dedication", "talk", "drawing"]),
   /** The parent's own dedication; null: the default «Специально для тебя, …!». Plain text, escaped. */
   dedication: z.string().nullable().default(null),
+  /** The parent's photo of the child for the photo page; null until one is uploaded. */
+  photo: BookPhotoSchema.nullable().default(null),
   /** The title has a letter the heading font lacks: the cover and headings use the body font. */
   headingFallback: z.boolean().default(false),
   /** By story page number. */

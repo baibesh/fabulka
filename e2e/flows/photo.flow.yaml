@@ -1,0 +1,178 @@
+# The photo page: the parent uploads a photo of the child before ordering; a file that is not a photo
+# is refused (by the site and by the API, whatever type it claims); the photo is stored re-encoded
+# next to the book, shows in a frame in the reader and in the PDF with its caption; taking the page
+# out deletes the file; the print file of an order carries the photo too (mock models).
+appId: ${WEB}
+tags: [book, layout, photo]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Фото ${Date.now()}"
+  email: "photo+${Date.now()}@e2e.test"
+  caption: "Алия в три года"
+  # A GIF, sent as if it were a JPEG.
+  gif: "data:image/jpeg;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
+  # A 16×16 red JPEG.
+  jpeg: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSgBBwcHCggKEwoKEygaFhooKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKP/AABEIABAAEAMBEQACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/AOcrxD9QCgAoAKAP/9k="
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+commands:
+  # A book of your own from the wizard.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/create?lang=ru"
+  - tapOn: { testId: voice-manual }
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "кошки"
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "Книга готова", timeout: 30000 }
+  - sql:
+      query: 'select id, "clientKey" as key from "Book" where child->>''name'' = $1'
+      params: ["${childName}"]
+      readOnly: true
+      extract: { bookId: "$[0].id", browserKey: "$[0].key" }
+      assert: { rows: 1 }
+
+  # The photo page is offered with the privacy note next to the upload.
+  - scrollUntilVisible: { testId: photo-page }
+  - assertVisible: { css: "[data-testid=photo-page][data-has-photo=false]" }
+  - assertVisible: { testId: photo-privacy, contains: "не отправляем его ни в какие нейросети" }
+
+  # Not a photo: refused by the site, nothing stored.
+  # An absolute path: tapstep hands a relative one to Chromium as is (TAPSTEP_NOTES 10).
+  - uploadFile: { css: "[data-testid=photo-input]", files: "${PWD}/e2e/fixtures/not-a-photo.gif" }
+  - waitForVisible: { css: "[data-testid=photo-error][data-reason=type]" }
+  - sql:
+      query: "select layout->'photo' is null or layout->>'photo' is null as none from \"Book\" where id = $1"
+      params: ["${bookId}"]
+      readOnly: true
+      assert: { rows: 1, first: { none: true } }
+  # …and by the API, which looks at the bytes, not the declared type.
+  - request:
+      method: POST
+      url: /books/${bookId}/photo
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { image: "${gif}" }
+      assert: { status: 400, json: { "$.code": photo_refused, "$.reason": type } }
+  # Someone else cannot put a photo into this book.
+  - request:
+      method: POST
+      url: /books/${bookId}/photo
+      headers: { X-Client-Key: "stranger-${childName}" }
+      json: { image: "${jpeg}" }
+      assert: { status: 404 }
+
+  # A real photo: the page is added before the end, the photo stored as a JPEG next to the book.
+  - uploadFile: { css: "[data-testid=photo-input]", files: "${PWD}/e2e/fixtures/child.jpg" }
+  - waitForVisible: { testId: photo-thumb, timeout: 30000 }
+  - assertNotVisible: { testId: photo-error }
+  - assertVisible: { css: "[data-testid=block-row][data-kind=photo]" }
+  - sql:
+      query: >-
+        select layout->'photo'->>'path' as path, (layout->'photo'->>'aspect')::float as aspect,
+        (select string_agg(b->>'kind', ',' order by o) from jsonb_array_elements(layout->'blocks') with ordinality as t(b, o)) as blocks,
+        layout->'qa'->>'status' as qa
+        from "Book" where id = $1
+      params: ["${bookId}"]
+      readOnly: true
+      extract: { photoPath: "$[0].path" }
+      assert: { rows: 1, first: { blocks: "cover,dedication,story,talk,drawing,photo,end", qa: ok } }
+  - assertTrue: { contains: ["${photoPath}", "books/${bookId}/photo-"] }
+  - request:
+      url: ${WEB}/files/${photoPath}
+      assert: { status: 200, headers: { content-type: image/jpeg } }
+
+  # A caption under the photo.
+  - tapOn: { testId: photo-caption }
+  - inputText: "${caption}"
+  - tapOn: { testId: photo-caption-save }
+  - waitForVisible: { testId: photo-caption-remove, timeout: 20000 }
+  - sql:
+      query: "select layout->'photo'->>'caption' as caption from \"Book\" where id = $1"
+      params: ["${bookId}"]
+      readOnly: true
+      extract: { saved: "$[0].caption" }
+  - assertTrue: { equals: ["${saved}", "${caption}"] }
+
+  # In the reader: moved right after the cover, the photo is on the first spread, framed, with its caption.
+  - request:
+      method: PATCH
+      url: /books/${bookId}/layout
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { blocks: [cover, photo, dedication, story, talk, drawing, end] }
+      assert: { status: 200 }
+  - openLink: "${WEB}/books/${bookId}?lang=ru"
+  - waitForVisible: { testId: book-reader, timeout: 20000 }
+  - tapOn: { testId: reader-next }
+  - waitForVisible: { css: "[data-page-key=photo] .fb-photo-frame img.fb-photo[src*='/files/books/${bookId}/photo-']" }
+  - assertVisible: { css: "[data-page-key=photo] .fb-photo-caption", contains: "${caption}" }
+  # And in the book's PDF: the photo is its only JPEG (the mock's pictures are SVG).
+  - sql:
+      query: 'select "pdfPath" as pdf from "Book" where id = $1'
+      params: ["${bookId}"]
+      readOnly: true
+      extract: { pdfPath: "$[0].pdf" }
+  - request:
+      url: ${WEB}/files/${pdfPath}
+      assert: { status: 200, headers: { content-type: application/pdf } }
+  - assertTrue: { contains: ["${response.body}", "/DCTDecode"] }
+
+  # Taking the page out deletes the photo.
+  - scrollUntilVisible: { css: "[data-testid=block-row][data-kind=photo]" }
+  - tapOn: { css: "[data-testid=block-row][data-kind=photo] [data-testid^=block-remove]" }
+  - waitForVisible: { css: "[data-testid=photo-page][data-has-photo=false]", timeout: 20000 }
+  - assertNotVisible: { css: "[data-testid=block-row][data-kind=photo]" }
+  - sql:
+      query: "select layout->>'photo' is null as none from \"Book\" where id = $1"
+      params: ["${bookId}"]
+      readOnly: true
+      assert: { rows: 1, first: { none: true } }
+  - request:
+      url: ${WEB}/files/${photoPath}
+      assert: { status: 404 }
+
+  # A photo again, then an order: the print file for the printer carries the photo.
+  - request:
+      method: POST
+      url: /books/${bookId}/photo
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { image: "${jpeg}", caption: "${caption}" }
+      extract: { again: "$.layout.photo.caption" }
+      assert: { status: 201 }
+  - assertTrue: { equals: ["${again}", "${caption}"] }
+  - request:
+      method: POST
+      url: /orders
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${email}", cityId: almaty, address: "ул. Абая, 1", cover: soft, quantity: 1 }
+      extract: { orderId: "$.id" }
+      assert: { status: 201 }
+  # Ordered: the photo can no longer change.
+  - request:
+      method: POST
+      url: /books/${bookId}/photo
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { image: "${jpeg}" }
+      assert: { status: 409 }
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      url: /admin/orders/${orderId}/print.pdf
+      timeout: 60000
+      assert: { status: 200, headers: { content-type: application/pdf } }
+  - assertTrue: { contains: ["${response.body}", "/DCTDecode"] }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

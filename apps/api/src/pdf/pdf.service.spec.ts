@@ -81,6 +81,38 @@ describe('PdfService (Chromium)', () => {
     expect(calls.at(-1)).toBe('render:ok');
   });
 
+  it("prints the photo page with the parent's photo in its frame", async () => {
+    await writeFile(
+      join(root, 'books/b/photo-1.jpg'),
+      await readFile(join(__dirname, '../photos/fixtures/child-gps.jpg')),
+    );
+    const base = newLayout('little', 3);
+    const layout = {
+      ...base,
+      blocks: [
+        ...base.blocks.slice(0, -1),
+        { kind: 'photo' as const, movable: true, optional: true },
+        base.blocks.at(-1)!,
+      ],
+      photo: {
+        path: 'books/b/photo-1.jpg',
+        caption: 'Айгерим, 3 жас',
+        aspect: 4 / 3,
+      },
+    };
+    const result = await pdf.render(
+      'b',
+      book(() => 'Қысқа.'),
+      layout,
+    );
+    expect(result.layout.qa).toMatchObject({ status: 'ok', issues: [] });
+    const html = await readFile(join(root, 'books/b/book.html'), 'utf8');
+    expect(html).toContain('data-key="photo"');
+    // The only JPEG in the book (the pictures are SVG) is embedded as one.
+    const file = await readFile(join(root, result.pdfPath));
+    expect(file.toString('latin1')).toContain('/DCTDecode');
+  });
+
   it('prints the print file with bleed and crop marks at the sheet size', async () => {
     const layout = withFormat(newLayout('fairy'), BOOK_FORMATS['a5-portrait']);
     const path = await pdf.renderPrint(
