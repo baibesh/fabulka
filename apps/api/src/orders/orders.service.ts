@@ -149,6 +149,8 @@ export class OrdersService {
         cityId: city.id,
         address: input.address,
         cover: input.cover,
+        // Frozen here: what this order prints, whatever happens to the book later.
+        layout: layoutOf(book.layout),
         quantity: input.quantity,
         locale: input.locale,
         booksKzt: price.books,

@@ -1,7 +1,12 @@
 import { Global, Injectable, Logger, Module } from '@nestjs/common';
 import {
+  GRID,
   blankPage,
   bookDocument,
+  chooseLayout,
+  countWords,
+  type PageSubject,
+  type PageTone,
   renderBook,
   type BookLayout,
   type LayoutQa,
@@ -9,7 +14,8 @@ import {
   type RenderableBook,
   type RenderedPage,
 } from '@fabulka/shared';
-import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Page } from 'playwright';
 import { JournalService } from '../journal/journal.service';
@@ -35,7 +41,24 @@ export interface PageCheck {
 export interface RenderResult {
   pdfPath: string;
   layout: BookLayout;
+  /** Each story page's tone, measured now or passed in: the caller keeps them for next time. */
+  tones: Record<number, PageTone | null>;
 }
+
+/** What is known of a story page's picture: SAM's mask (null: SAM failed) and its tone, if measured. */
+export interface PagePicture {
+  page: number;
+  subject: PageSubject | null;
+  tone: PageTone | null;
+}
+
+const MIME: Record<string, string> = {
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+};
 
 /**
  * Prints a book to PDF with headless Chromium (Playwright is a renderer here, not a test runner),
@@ -54,18 +77,37 @@ export class PdfService {
     private readonly journal: JournalService,
   ) {}
 
-  /** Writes book.html and book.pdf next to the book's images (`book` names them by file name). */
+  /**
+   * Writes book.html and book.pdf next to the book's images (`book` names them by file name). With
+   * `pictures`, each story page's layout is first chosen from its picture (chooseLayout).
+   */
   async render(
     bookId: string,
     book: RenderableBook,
     layout: BookLayout,
+    pictures: PagePicture[] = [],
   ): Promise<RenderResult> {
     const call = this.journal.start({ kind: 'render', model: 'chromium' });
     const hyphenate = hyphenatorFor(book.language);
     const browser = await chromium.launch();
     try {
       const page = await browser.newPage();
+      const folder = join(this.storage.root, 'books', bookId);
+      const tones = await measureTones(page, folder, book, pictures);
       let current: BookLayout = { ...layout, fits: {} };
+      if (pictures.length) {
+        current = chooseLayout(
+          current,
+          pictures.map((p) => ({
+            page: p.page,
+            subject: p.subject,
+            tone: tones[p.page],
+            words: countWords(
+              book.pages.find((b) => b.page === p.page)?.text ?? '',
+            ),
+          })),
+        );
+      }
       let check: PageCheck = { fits: {}, overflow: [], fallback: [] };
       for (let round = 0; round < ROUNDS; round++) {
         const rendered = renderBook(book, current, { hyphenate });
@@ -108,7 +150,7 @@ export class PdfService {
       } else {
         call.ok({ costUsd: 0 });
       }
-      return { pdfPath, layout: { ...current, fits: check.fits, qa } };
+      return { pdfPath, layout: { ...current, fits: check.fits, qa }, tones };
     } catch (error) {
       call.fail(error);
       throw error;
@@ -116,6 +158,59 @@ export class PdfService {
       await browser.close();
     }
   }
+}
+
+/**
+ * Lightness of each picture on a GRID×GRID grid, measured in the browser (it decodes every format
+ * the models return, the mock's SVG too). Pictures already measured are not measured again.
+ */
+async function measureTones(
+  page: Page,
+  folder: string,
+  book: RenderableBook,
+  pictures: PagePicture[],
+): Promise<Record<number, PageTone | null>> {
+  const tones: Record<number, PageTone | null> = {};
+  for (const picture of pictures) {
+    tones[picture.page] = picture.tone;
+    const file = book.pages.find((p) => p.page === picture.page)?.image;
+    if (picture.tone || !file) continue;
+    const data = await readFile(join(folder, file)).catch(() => null);
+    if (!data) continue;
+    const url = `data:${MIME[extname(file)] ?? 'image/jpeg'};base64,${data.toString('base64')}`;
+    tones[picture.page] = await page.evaluate(
+      async ({ url, grid }) => {
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const side = grid * 8;
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = side;
+        const context = canvas.getContext('2d')!;
+        context.drawImage(img, 0, 0, side, side);
+        const { data } = context.getImageData(0, 0, side, side);
+        const lum: number[] = [];
+        for (let gy = 0; gy < grid; gy++) {
+          for (let gx = 0; gx < grid; gx++) {
+            let sum = 0;
+            for (let y = gy * 8; y < gy * 8 + 8; y++) {
+              for (let x = gx * 8; x < gx * 8 + 8; x++) {
+                const i = (y * side + x) * 4;
+                sum +=
+                  0.2126 * data[i] +
+                  0.7152 * data[i + 1] +
+                  0.0722 * data[i + 2];
+              }
+            }
+            lum.push(Math.round(sum / 64));
+          }
+        }
+        return { aspect: img.naturalWidth / img.naturalHeight, lum };
+      },
+      { url, grid: GRID },
+    );
+  }
+  return tones;
 }
 
 export function verdict(check: PageCheck, now = new Date()): LayoutQa {

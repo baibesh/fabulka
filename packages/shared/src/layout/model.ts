@@ -113,7 +113,10 @@ export const PageLayoutSchema = z.object({
   choice: PageVariantSchema.nullable().default(null),
   /** Variants whose text did not fit even at the smallest size (render QA). */
   tooFull: z.array(PageVariantSchema).default([]),
+  /** The hero's centre in the picture (SAM), which the crop keeps in view. */
   focus: FocusSchema.default({ x: 0.5, y: 0.5 }),
+  /** The picture's width / height, for the crop. */
+  aspect: z.number().positive().default(1.5),
   /** Text color over the picture, by variant: dark ink or white. */
   ink: z.partialRecord(PageVariantSchema, z.enum(["dark", "light"])).default({}),
   /** Where the plate goes. */

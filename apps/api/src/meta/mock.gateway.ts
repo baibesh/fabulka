@@ -1,4 +1,11 @@
-import type { Language, ModelCallKind, Story } from '@fabulka/shared';
+import {
+  GRID,
+  encodeGrid,
+  type Language,
+  type ModelCallKind,
+  type PageSubject,
+  type Story,
+} from '@fabulka/shared';
 import { type CallJournal, NO_JOURNAL } from '../journal/journal.service';
 import type {
   GeneratedImage,
@@ -91,6 +98,18 @@ const MOCK_TEXT: Record<
       'Was würdest du tun?',
     ],
   },
+};
+
+/** The placeholder's disc (centre 384,330, radius 120 of 768) as a SAM mask. */
+export const MOCK_SUBJECT: PageSubject = {
+  box: { x: 264 / 768, y: 210 / 768, w: 240 / 768, h: 240 / 768 },
+  grid: encodeGrid(
+    Array.from({ length: GRID * GRID }, (_, i) => {
+      const x = ((i % GRID) + 0.5) / GRID;
+      const y = (Math.floor(i / GRID) + 0.5) / GRID;
+      return Math.hypot(x - 384 / 768, y - 330 / 768) <= 120 / 768;
+    }),
+  ),
 };
 
 /** What the mock "hears" in any recording, and the fields it pulls out of it. */
@@ -215,6 +234,12 @@ export class MockGateway implements ModelGateway {
       },
       costUsd: 0,
     };
+  }
+
+  /** The hero is the white disc every placeholder page draws: the same mask, every run. */
+  async findSubject(): Promise<{ subject: PageSubject; costUsd: number }> {
+    await this.pretend('page-mask', 1);
+    return { subject: MOCK_SUBJECT, costUsd: 0 };
   }
 
   async drawPage(scenePrompt: string): Promise<GeneratedImage> {

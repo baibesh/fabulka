@@ -1,0 +1,113 @@
+# Image-aware page layouts: SAM finds the hero on every page (mock masks), the chooser keeps text off
+# it, the parent picks another layout for a page among the ones that suit it, staff pin one in the
+# admin, and the order freezes the layout it prints (mock models).
+appId: ${WEB}
+tags: [book, layout]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Развороты ${Date.now()}"
+  email: "variants+${Date.now()}@e2e.test"
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+commands:
+  # A book of your own from the wizard (a 5-year-old: «Сказка», text over the picture first).
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/create?lang=ru"
+  - tapOn: { testId: voice-manual }
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "горы"
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "Книга готова", timeout: 30000 }
+
+  # SAM ran once per page; each page kept its hero mask and tone; the text sits below the hero.
+  - sql:
+      query: >-
+        select b.id, b."clientKey" as key,
+        (select count(*)::int from "ModelCall" m where m."bookId" = b.id and m.kind = 'page-mask' and m.status = 'ok') as masks,
+        (select count(*)::int from jsonb_array_elements(b.pages) p where p->'subject'->'box' is not null and p->'tone' is not null) as analysed,
+        b.layout->'pages'->'1'->'options'->>0 as best, b.layout->'pages'->'1'->'ink'->>'overlay-bottom' as ink
+        from "Book" b where b.child->>'name' = $1
+      params: ["${childName}"]
+      readOnly: true
+      extract: { bookId: "$[0].id", browserKey: "$[0].key" }
+      assert: { rows: 1, first: { masks: 4, analysed: 4, best: overlay-bottom, ink: dark } }
+
+  # The first story page faces the dedication: text over the bottom of its picture.
+  - tapOn: { testId: reader-next }
+  - waitForVisible: { css: "[data-page-key=story-1] [data-variant=overlay-bottom]" }
+  # The parent puts it on a plate instead; the reader shows the re-rendered page.
+  - assertVisible: { css: "[data-testid=variant-1-overlay-bottom][aria-pressed=true]" }
+  - tapOn: { testId: variant-1-plate }
+  - waitForVisible: { css: "[data-page-key=story-1] [data-variant=plate]", timeout: 20000 }
+  - assertVisible: { css: "[data-testid=variant-1-plate][aria-pressed=true]" }
+  - sql:
+      query: "select layout->'pages'->'1'->>'choice' as choice, layout->'qa'->>'status' as qa from \"Book\" where id = $1"
+      params: ["${bookId}"]
+      readOnly: true
+      assert: { rows: 1, first: { choice: plate, qa: ok } }
+  # A layout that does not suit the page is refused.
+  - request:
+      method: PATCH
+      url: /books/${bookId}/layout
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { choices: { "1": spread } }
+      assert: { status: 400 }
+
+  # Staff pin page 2 under its picture in the admin.
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - openLink: "${WEB}/admin/books/${bookId}"
+  - waitForVisible: { css: "[data-testid=render-qa][data-status=ok]" }
+  - selectOption: { testId: pin-2, option: "Текст под картинкой" }
+  - waitForVisible: { css: "[data-testid=pin-2]:not([disabled])" }
+  - request:
+      url: /books/${bookId}
+      retryUntil:
+        status: 200
+        json: { "$.layout.pages['2'].pin": split, "$.layout.qa.status": ok }
+      timeout: 20000
+
+  # The order freezes the layout; after that the parent can no longer change it.
+  - request:
+      method: POST
+      url: /orders
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${email}", cityId: almaty, address: "ул. Абая, 1", cover: soft, quantity: 1 }
+      assert: { status: 201 }
+  - sql:
+      query: >-
+        select o.layout->'theme'->>'id' as theme, o.layout->'pages'->'1'->>'choice' as choice,
+        o.layout->'pages'->'2'->>'pin' as pin from "Order" o where o."bookId" = $1
+      params: ["${bookId}"]
+      readOnly: true
+      assert: { rows: 1, first: { theme: fairy, choice: plate, pin: split } }
+  - request:
+      method: PATCH
+      url: /books/${bookId}/layout
+      headers: { X-Client-Key: "${browserKey}" }
+      json: { theme: adventure }
+      assert: { status: 409, json: { "$.code": layout_locked } }
+  - request:
+      url: /books/${bookId}
+      headers: { X-Client-Key: "${browserKey}" }
+      assert: { status: 200, json: { "$.editable": false } }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

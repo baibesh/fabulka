@@ -5,7 +5,7 @@ import { Download, ExternalLink, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useState } from "react";
-import { adminBook, bookCalls, deleteBook, setFeatured } from "@/lib/admin-api";
+import { adminBook, bookCalls, deleteBook, pinLayout, setFeatured } from "@/lib/admin-api";
 import { CallDetail } from "./journal/call-detail";
 import { CallStatus } from "./journal/call-status";
 import { BOOK_STATUS_TONE, Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
@@ -17,7 +17,8 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { BackLink } from "@/components/ui/page";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { BookReader } from "@/components/book/book-reader";
-import type { AdminBook, LayoutQa, SelectableTheme } from "@fabulka/shared";
+import { PAGE_VARIANTS, type AdminBook, type LayoutQa, type PageVariant, type SelectableTheme } from "@fabulka/shared";
+import { Select } from "@/components/ui/input";
 
 const QA_TONE: Record<LayoutQa["status"], "success" | "warning" | "danger" | "neutral"> = {
   ok: "success",
@@ -29,6 +30,11 @@ const QA_TONE: Record<LayoutQa["status"], "success" | "warning" | "danger" | "ne
 /** The book's theme and what render QA found: shrunk pages, and what blocks printing. */
 function BookLayoutCard({ book }: { book: AdminBook }) {
   const { t } = useAdminI18n();
+  const queryClient = useQueryClient();
+  const pin = useMutation({
+    mutationFn: (pins: Record<string, PageVariant | null>) => pinLayout(book.id, { pins }),
+    onSuccess: (updated) => queryClient.setQueryData(["admin", "book", book.id], updated),
+  });
   const { layout } = book;
   const shrunk = Object.entries(layout.fits).map(([page, fit]) => `${page} ${Math.round(fit * 100)}%`);
   return (
@@ -57,6 +63,34 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
           ))}
         </ul>
       )}
+      {/* Staff may pin any layout; a two-page one only takes effect where it can start on a left page. */}
+      <div className="flex flex-col gap-2 text-sm">
+        <p className="font-semibold">{t("admin.book.layout.pins")}</p>
+        {book.pages.map(({ page }) => {
+          const state = layout.pages[String(page)];
+          return (
+            <label key={page} className="flex items-center gap-2">
+              <span className="w-16 text-muted">{t("design.page", { page })}</span>
+              <Select
+                small
+                data-testid={`pin-${page}`}
+                value={state?.pin ?? ""}
+                disabled={pin.isPending}
+                onChange={(e) => pin.mutate({ [String(page)]: (e.target.value || null) as PageVariant | null })}
+              >
+                <option value="">{t("admin.book.layout.auto")}</option>
+                {PAGE_VARIANTS.map((variant) => (
+                  <option key={variant} value={variant}>
+                    {t(`design.variant.${variant}`)}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          );
+        })}
+        {pin.isPending && <span className="text-muted">{t("admin.book.layout.saving")}</span>}
+        {pin.isError && <ErrorText>{pin.error.message}</ErrorText>}
+      </div>
     </Card>
   );
 }

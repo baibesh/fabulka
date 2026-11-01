@@ -42,6 +42,7 @@ import {
   type ModelCallDetail,
   type ModelCallPage,
   type OrderStatus,
+  type PinLayout,
   type Prices,
   type UpdateMethodology,
   type UpdateTemplate,
@@ -76,6 +77,11 @@ export async function adminBook(id: string): Promise<AdminBook> {
 
 export async function setFeatured(id: string, featured: boolean): Promise<AdminBook> {
   return AdminBookSchema.parse(await request(`/api/admin/books/${id}`, json("PATCH", { featured })));
+}
+
+/** Staff pin page layouts (null unpins) or change the theme; the API re-renders the book. */
+export async function pinLayout(id: string, patch: PinLayout): Promise<AdminBook> {
+  return AdminBookSchema.parse(await request(`/api/admin/books/${id}/layout`, json("PATCH", patch)));
 }
 
 export const deleteBook = (id: string) => request(`/api/admin/books/${id}`, { method: "DELETE" });

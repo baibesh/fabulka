@@ -128,6 +128,8 @@ model Order {
   cityId        String?
   address       String
   cover         Cover
+  /// The book's layout when ordered (BookLayout in @fabulka/shared): what is printed.
+  layout        Json?
   quantity      Int
   booksKzt      Int
   deliveryKzt   Int

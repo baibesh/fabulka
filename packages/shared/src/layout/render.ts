@@ -3,6 +3,7 @@ import { BOOK_LABELS } from "../labels";
 import type { BookLayout, BookTheme, PageLayout, PageVariant } from "./model";
 import { BOOK_FONTS } from "./themes";
 import { type PlannedPage, type Rect, artRect, planBook, textRect } from "./plan";
+import { objectPosition } from "./choose";
 
 /**
  * The one book renderer. It turns a book and its layout into fixed-size HTML pages (millimetres,
@@ -65,7 +66,7 @@ export const HYPHEN_MIN_WORD = 6;
 
 const fontStack = (family: string) => `'${family}', ${BOOK_FONTS[family]?.generic ?? "serif"}`;
 const mm = (n: number) => `${Math.round(n * 100) / 100}mm`;
-const box = (r: Rect) => `left:${mm(r.x)};top:${mm(r.y)};width:${mm(r.w)};height:${mm(r.h)}`;
+const place = (r: Rect) => `left:${mm(r.x)};top:${mm(r.y)};width:${mm(r.w)};height:${mm(r.h)}`;
 
 /** The theme as CSS variables on each page, so a page can be shown on its own. */
 function themeStyle(layout: BookLayout, fit: number): string {
@@ -115,7 +116,7 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
         classes.push(`fb-cover-${layout.theme.cover}`);
         break;
       case "dedication":
-        inner = `<div class="fb-box fb-center" data-fit-box style="${box(paperRect(layout))}"><div class="fb-flow">
+        inner = `<div class="fb-box fb-center" data-fit-box style="${place(paperRect(layout))}"><div class="fb-flow">
   <div class="fb-ornament">${ornament(layout.theme.ornament)}</div>
   <p class="fb-dedication-text" data-qa-text>${title(labels.madeFor(book.childName))}</p></div></div>`;
         break;
@@ -127,7 +128,7 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
         break;
       }
       case "talk":
-        inner = `<div class="fb-box" data-fit-box style="${box(paperRect(layout))}"><div class="fb-flow">
+        inner = `<div class="fb-box" data-fit-box style="${place(paperRect(layout))}"><div class="fb-flow">
   <h2 class="fb-heading" data-qa-text>${escapeHtml(labels.talk)}</h2>
   <ol class="fb-questions">${book.talkQuestions.map((q) => `<li data-qa-text>${body(q)}</li>`).join("")}</ol></div></div>`;
         break;
@@ -135,7 +136,7 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
         inner = `<div class="fb-drawing-frame"></div><p class="fb-drawing-label" data-qa-text>${escapeHtml(labels.drawing)}</p>`;
         break;
       case "end":
-        inner = `<div class="fb-box fb-center" data-fit-box style="${box(paperRect(layout))}"><div class="fb-flow">
+        inner = `<div class="fb-box fb-center" data-fit-box style="${place(paperRect(layout))}"><div class="fb-flow">
   <div class="fb-ornament">${ornament(layout.theme.ornament)}</div>
   <h2 class="fb-end-title" data-qa-text>${escapeHtml(labels.end)}</h2>
   <p class="fb-made" data-qa-text>Fabulka · Powered by Meta Muse models</p></div></div>`;
@@ -161,9 +162,9 @@ function cover(book: RenderableBook, layout: BookLayout, title: (t: string) => s
   <p class="fb-for" data-qa-text>${escapeHtml(madeFor)}</p></div></div>`;
   if (layout.theme.cover === "scene") {
     const first = book.pages[0];
-    const focus = layout.pages[String(first?.page)]?.focus;
-    const art = first?.image ?? book.heroImage;
-    return `${image(art, "fb-art", focus)}${heading}`;
+    const state = layout.pages[String(first?.page)];
+    const { widthMm: w, heightMm: h } = layout.format;
+    return `${image(first?.image ?? book.heroImage, "fb-art", crop(state, w / h))}${heading}`;
   }
   return `<div class="fb-hero-frame">${image(book.heroImage, "fb-hero")}</div>${heading}`;
 }
@@ -178,17 +179,16 @@ function story(
   const variant = planned.variant as PageVariant;
   const ink = state?.ink?.[variant] ?? "dark";
   const text = (rect: Rect, cls = "") =>
-    `<div class="fb-box fb-text fb-ink-${ink} ${cls}" data-fit-box style="${box(rect)}"><div class="fb-flow"><p data-qa-text>${body(page.text)}</p></div></div>`;
-  const art = (cls = "fb-art", style = "") => image(page.image, cls, state?.focus, style);
+    `<div class="fb-box fb-text fb-ink-${ink} ${cls}" data-fit-box style="${place(rect)}"><div class="fb-flow"><p data-qa-text>${body(page.text)}</p></div></div>`;
+  const box = artRect(variant, layout.format);
+  const art = (cls = "fb-art", style = "") => image(page.image, cls, crop(state, box.w / box.h), style);
   const rect = textRect(variant, layout.format, state);
   switch (variant) {
     case "overlay-top":
     case "overlay-bottom":
       return art() + text(rect, variant === "overlay-top" ? "fb-top" : "fb-bottom");
-    case "split": {
-      const a = artRect("split", layout.format);
-      return art("fb-art", box(a)) + text(rect, "fb-on-paper");
-    }
+    case "split":
+      return art("fb-art", `${place(box)};`) + text(rect, "fb-on-paper");
     case "facing":
       if (planned.part === 0) return art();
       return `<div class="fb-ornament fb-facing-ornament">${ornament(layout.theme.ornament)}</div>${text(rect, "fb-on-paper fb-center")}`;
@@ -214,9 +214,14 @@ function ornament(shape: BookTheme["ornament"]): string {
   return `<svg viewBox="0 0 24 24" width="12mm" height="12mm" fill="currentColor" aria-hidden="true">${ORNAMENT_SVG[shape]}</svg>`;
 }
 
-function image(src: string | null | undefined, cls: string, focus?: { x: number; y: number }, style = ""): string {
-  const position = focus ? `object-position:${Math.round(focus.x * 1000) / 10}% ${Math.round(focus.y * 1000) / 10}%;` : "";
-  const css = `${position}${style}`;
+/** The object-position that keeps the hero in view when the picture is cropped to a box of this shape. */
+function crop(state: PageLayout | undefined, boxAspect: number): { x: number; y: number } | undefined {
+  return state ? objectPosition(state.focus, state.aspect, boxAspect) : undefined;
+}
+
+function image(src: string | null | undefined, cls: string, position?: { x: number; y: number }, style = ""): string {
+  const css0 = position ? `object-position:${Math.round(position.x * 1000) / 10}% ${Math.round(position.y * 1000) / 10}%;` : "";
+  const css = `${css0}${style}`;
   if (!src) return `<div class="${cls} fb-empty" style="${css}"></div>`;
   return `<img class="${cls}" src="${escapeHtml(src)}" alt="" style="${css}">`;
 }

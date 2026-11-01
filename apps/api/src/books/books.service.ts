@@ -25,6 +25,8 @@ import {
   type Book,
   type BookLayout,
   type PageLayout,
+  type PageSubject,
+  type PageTone,
   type PinLayout,
   type UpdateLayout,
   type ChildProfile,
@@ -55,6 +57,10 @@ export interface StoredPage {
   text: string;
   scenePrompt: string;
   imagePath: string | null;
+  /** Where SAM found the hero; null when SAM failed, missing for books made before. */
+  subject?: PageSubject | null;
+  /** How light the picture is where, measured when the book was first rendered. */
+  tone?: PageTone | null;
 }
 
 /** The row with the catalog book slug the DTO needs. */
@@ -346,12 +352,16 @@ export class BooksService implements OnModuleInit {
     const result = await this.renderPdf(row, layout);
     await this.prisma.book.update({
       where: { id },
-      data: { pdfPath: result.pdfPath, layout: json(result.layout) },
+      data: {
+        pdfPath: result.pdfPath,
+        layout: json(result.layout),
+        pages: json(result.pages),
+      },
     });
   }
 
   /** Lays the book out, prints it and runs render QA; the result's layout records what QA did. */
-  private renderPdf(row: BookRow, layout = layoutOf(row.layout)) {
+  private async renderPdf(row: BookRow, layout = layoutOf(row.layout)) {
     const book = storedBook(row);
     const labels = BOOK_LABELS[book.language];
     const checked = withHeadingCheck(layout, [
@@ -360,9 +370,21 @@ export class BooksService implements OnModuleInit {
       labels.talk,
       labels.end,
     ]);
-    return this.journal.run({ bookId: row.id }, () =>
-      this.pdf.render(row.id, book, checked),
+    const stored = row.pages as unknown as StoredPage[];
+    const pictures = stored.map((p) => ({
+      page: p.page,
+      subject: p.subject ?? null,
+      tone: p.tone ?? null,
+    }));
+    const result = await this.journal.run({ bookId: row.id }, () =>
+      this.pdf.render(row.id, book, checked, pictures),
     );
+    // The tones are measured once and kept with the pages.
+    const pages = stored.map((p) => ({
+      ...p,
+      tone: result.tones[p.page] ?? p.tone ?? null,
+    }));
+    return { ...result, pages };
   }
 
   /** A catalog book: its method, plot, art style and the parent's answers. */
@@ -414,10 +436,12 @@ export class BooksService implements OnModuleInit {
 
   private async generate(
     id: string,
-    { brief, style, toyUpload }: Job,
+    { brief, style, toyUpload, themeId }: Job,
     spent: Spend,
   ): Promise<void> {
     const { child } = brief;
+    // Pictures leave calm space where the theme prints text over them.
+    const textSpace = BOOK_THEMES[themeId]?.textSpace ?? undefined;
 
     // The toy first: SAM cuts it out of the photo, Muse Spark puts it into words for the story.
     let toyReference: Buffer | null = null;
@@ -542,12 +566,24 @@ export class BooksService implements OnModuleInit {
           toy: toyReference !== null && toyInScene(page.scenePrompt),
         },
         style,
+        textSpace,
       );
       spent.usd += image.costUsd;
       page.imagePath = await this.storage.save(
         `books/${id}/page-${page.page}.${image.ext}`,
         image.data,
       );
+      // SAM finds the hero once, for the page layout; a failure only costs the page its overlays.
+      try {
+        const found = await this.models.findSubject(image.data, image.ext);
+        spent.usd += found.costUsd;
+        page.subject = found.subject;
+      } catch (error) {
+        this.logger.warn(
+          `book ${id} page ${page.page}: no hero mask (${error instanceof Error ? error.message : String(error)})`,
+        );
+        page.subject = null;
+      }
       done++;
       await this.update(id, 'pages', {
         pages: json(pages),
@@ -561,10 +597,11 @@ export class BooksService implements OnModuleInit {
       costUsd: spent.usd,
       progress: progressFor('pdf'),
     });
-    const { pdfPath, layout } = await this.renderPdf(row);
+    const rendered = await this.renderPdf(row);
     await this.update(id, 'done', {
-      pdfPath,
-      layout: json(layout),
+      pdfPath: rendered.pdfPath,
+      layout: json(rendered.layout),
+      pages: json(rendered.pages),
       progress: 100,
     });
     this.logger.log(

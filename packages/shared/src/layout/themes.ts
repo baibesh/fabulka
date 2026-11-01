@@ -171,7 +171,7 @@ export function newLayout(themeId: string, age = 6, formatId = DEFAULT_FORMAT): 
 
 /** A story page nothing has been decided for yet. */
 export function blankPage(): PageLayout {
-  return { options: [], pin: null, choice: null, tooFull: [], focus: { x: 0.5, y: 0.5 }, ink: {}, plateBand: "bottom", spreadSide: "right" };
+  return { options: [], pin: null, choice: null, tooFull: [], focus: { x: 0.5, y: 0.5 }, aspect: 1.5, ink: {}, plateBand: "bottom", spreadSide: "right" };
 }
 
 /** The layout of a book made before themes: the classic look, as it rendered then. */

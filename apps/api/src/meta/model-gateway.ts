@@ -1,5 +1,15 @@
-import type { Language, Story, VoicePrefill } from '@fabulka/shared';
-import type { Companions, PrefillBrief, StoryBrief } from './prompts';
+import type {
+  Language,
+  PageSubject,
+  Story,
+  VoicePrefill,
+} from '@fabulka/shared';
+import type {
+  Companions,
+  PrefillBrief,
+  StoryBrief,
+  TextSpace,
+} from './prompts';
 
 export const MODEL_GATEWAY = Symbol('MODEL_GATEWAY');
 
@@ -62,7 +72,16 @@ export interface ModelGateway {
     anchorRef: string,
     companions: Companions,
     style?: string,
+    textSpace?: TextSpace,
   ): Promise<GeneratedImage>;
+  /**
+   * SAM finds the hero in a page illustration, once per page: a coarse mask the page layout keeps
+   * text off. Throws when SAM fails; a picture with nobody in it gives an empty mask.
+   */
+  findSubject(
+    image: Buffer,
+    ext: GeneratedImage['ext'],
+  ): Promise<{ subject: PageSubject; costUsd: number }>;
   /** Muse Voice Transcribe: the parent's recording (a 16 kHz mono WAV) as text. Nothing is kept. */
   transcribe(
     wav: Buffer,

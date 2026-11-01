@@ -179,10 +179,14 @@ export function toyPrompt(toyDescription: string, style = ART_STYLE): string {
   );
 }
 
+/** Where the book's theme prints text over the picture, so the picture leaves that part calm. */
+export type TextSpace = 'top' | 'bottom';
+
 export function pagePrompt(
   scenePrompt: string,
   companions: Companions,
   style = ART_STYLE,
+  textSpace?: TextSpace | null,
 ): string {
   const pet = companions.pet
     ? ' The pet is the same animal as in the pet character sheet shown earlier.'
@@ -190,7 +194,10 @@ export function pagePrompt(
   const toy = companions.toy
     ? ' The toy is the same toy as in the toy character sheet shown earlier.'
     : '';
-  return `${scenePrompt}. The hero is the same child as in the hero character sheet shown earlier.${pet}${toy} ${style}`;
+  const space = textSpace
+    ? ` Keep the ${textSpace} third of the picture calm and simple, such as sky, grass, water or a plain wall, with no faces, characters or important details there: text will be printed over it.`
+    : '';
+  return `${scenePrompt}. The hero is the same child as in the hero character sheet shown earlier.${pet}${toy}${space} ${style}`;
 }
 
 export const REVIEW_INSTRUCTIONS = `You review picture books for young children before they are

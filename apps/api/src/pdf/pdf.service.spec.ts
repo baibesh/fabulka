@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { NO_JOURNAL, type JournalService } from '../journal/journal.service';
 import type { StorageService } from '../storage/storage.service';
+import { MOCK_SUBJECT } from '../meta/mock.gateway';
 import { PdfService, demote, verdict } from './pdf.service';
 
 /** A pastel picture with a white blob in the middle, like the mock model draws. */
@@ -115,6 +116,50 @@ describe('PdfService (Chromium)', () => {
     expect(result.layout.qa.issues).toContainEqual(
       expect.objectContaining({ page: 'story-3', kind: 'fallback-font' }),
     );
+  });
+});
+
+describe('PdfService (Chromium), choosing layouts from the pictures', () => {
+  jest.setTimeout(60_000);
+  let root: string;
+  let pdf: PdfService;
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), 'fabulka-pdf-'));
+    await mkdir(join(root, 'books/c'), { recursive: true });
+    for (const n of [1, 2, 3])
+      await writeFile(join(root, `books/c/page-${n}.svg`), picture('#F9D9A8'));
+    await writeFile(join(root, 'books/c/hero.svg'), picture('#ffffff'));
+    const storage = {
+      root,
+      save: async (path: string, data: Buffer) => {
+        await writeFile(join(root, path), data);
+        return path;
+      },
+    } as unknown as StorageService;
+    pdf = new PdfService(storage, NO_JOURNAL as unknown as JournalService);
+  });
+
+  afterAll(() => rm(root, { recursive: true, force: true }));
+
+  it('measures each picture once and keeps text clear of the hero', async () => {
+    const short = book(() => 'Айгерим жұлдыздарды көрді.');
+    const result = await pdf.render('c', short, newLayout('fairy'), [
+      { page: 1, subject: MOCK_SUBJECT, tone: null },
+      { page: 2, subject: null, tone: null },
+      { page: 3, subject: MOCK_SUBJECT, tone: null },
+    ]);
+    // The pastel picture is light: dark text on its calm bottom third.
+    expect(result.tones[1]?.aspect).toBe(1);
+    expect(result.tones[1]!.lum[0]).toBeGreaterThan(180);
+    expect(result.layout.pages['1'].options[0]).toBe('overlay-bottom');
+    expect(result.layout.pages['1'].ink['overlay-bottom']).toBe('dark');
+    // Where SAM failed nobody knows where the hero is: the text goes on its own page (story 2
+    // starts on a left page), else on a plate.
+    expect(result.layout.pages['2'].options).toEqual(['facing', 'plate']);
+    const html = await readFile(join(root, 'books/c/book.html'), 'utf8');
+    expect(html).toContain('data-key="story-1" data-variant="overlay-bottom"');
+    expect(html).toContain('data-key="story-2" data-variant="facing"');
   });
 });
 

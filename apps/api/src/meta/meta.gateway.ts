@@ -2,8 +2,11 @@ import OpenAI from 'openai';
 import type { Response, Tool } from 'openai/resources/responses/responses';
 import { z } from 'zod';
 import {
+  GRID,
   LANGUAGE_MODEL_NAMES,
   StorySchema,
+  encodeGrid,
+  type PageSubject,
   type Language,
   type ModelCallKind,
   type Story,
@@ -19,7 +22,8 @@ import {
   type CallOutcome,
   NO_JOURNAL,
 } from '../journal/journal.service';
-import { cutout } from '../toy/cutout';
+import { cutout, type Segment } from '../toy/cutout';
+import { jpegSize } from '../toy/jpeg-size';
 import { sanitizePrefill } from '../voice/prefill';
 import {
   PREFILL_INSTRUCTIONS,
@@ -31,6 +35,7 @@ import {
   TOY_DESCRIPTION_PROMPT,
   type Companions,
   type StoryBrief,
+  type TextSpace,
   heroPrompt,
   toyPrompt,
   pagePrompt,
@@ -58,6 +63,8 @@ const LANGUAGE_BIAS: Record<Language, string[]> = {
 };
 /** What SAM is asked to find in the parent's photo. */
 const TOY_CONCEPT = 'toy';
+/** What SAM is asked to find in a page illustration: the hero is always a child (a visual noun). */
+const HERO_CONCEPT = 'child';
 const STORY_ATTEMPTS = 3;
 
 export interface MetaGatewayOptions {
@@ -179,7 +186,9 @@ export class MetaGateway implements ModelGateway {
       model: this.options.samModel,
       prompt: TOY_CONCEPT,
     });
-    const { records } = await call.request(this.segment(sam, photo));
+    const { records } = await call.request(
+      this.segment(sam, photo, TOY_CONCEPT),
+    );
     call.ok({ costUsd: SAM_PRICE, images: 1 });
     // Several matches: the biggest one is the toy the photo is of.
     const largest = [...recordsOfKind(records, 'mask')].sort(
@@ -197,10 +206,35 @@ export class MetaGateway implements ModelGateway {
     };
   }
 
+  async findSubject(
+    image: Buffer,
+  ): Promise<{ subject: PageSubject; costUsd: number }> {
+    const sam = await import('@meta-sam/parser');
+    const size = jpegSize(image);
+    if (!size) throw new Error('SAM gets JPEG page illustrations only');
+    const call = this.journal.start({
+      kind: 'page-mask',
+      model: this.options.samModel,
+      prompt: HERO_CONCEPT,
+    });
+    const { records } = await call.request(
+      this.segment(sam, image, HERO_CONCEPT),
+    );
+    call.ok({ costUsd: SAM_PRICE, images: 1 });
+    const masks = [...sam.recordsOfKind(records, 'mask')].map((record) => ({
+      box: record.bounds,
+      mask: sam.decodeMaskToRaster(record.mask),
+      maskWidth: record.mask.width,
+      maskHeight: record.mask.height,
+    }));
+    return { subject: subjectGrid(masks, size), costUsd: SAM_PRICE };
+  }
+
   /** Streams SAM's answer for the photo and returns the parsed masks. */
   private async segment(
     { parseImageStream }: typeof import('@meta-sam/parser'),
     photo: Buffer,
+    concept: string,
   ) {
     const events = await this.client.responses.create({
       model: this.options.samModel,
@@ -209,7 +243,7 @@ export class MetaGateway implements ModelGateway {
           type: 'message',
           role: 'user',
           content: [
-            { type: 'input_text', text: TOY_CONCEPT },
+            { type: 'input_text', text: concept },
             { type: 'input_image', image_url: dataUrl(photo), detail: 'auto' },
           ],
         },
@@ -299,10 +333,11 @@ export class MetaGateway implements ModelGateway {
     anchorRef: string,
     companions: Companions,
     style?: string,
+    textSpace?: TextSpace,
   ): Promise<GeneratedImage> {
     return this.draw(
       'page',
-      pagePrompt(scenePrompt, companions, style),
+      pagePrompt(scenePrompt, companions, style, textSpace),
       '1536x1024',
       anchorRef,
     );
@@ -503,6 +538,47 @@ const TranscribeResponseSchema = z.object({
 
 function dataUrl(jpeg: Buffer): string {
   return `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+}
+
+/** SAM's masks (each over its box, in image pixels) as one GRID×GRID mask of the whole picture. */
+export function subjectGrid(
+  masks: Segment[],
+  size: { width: number; height: number },
+): PageSubject {
+  if (!masks.length) return { box: null, grid: '' };
+  const cells: boolean[] = [];
+  for (let gy = 0; gy < GRID; gy++) {
+    for (let gx = 0; gx < GRID; gx++) {
+      const x = ((gx + 0.5) / GRID) * size.width;
+      const y = ((gy + 0.5) / GRID) * size.height;
+      cells.push(
+        masks.some(({ box, mask, maskWidth, maskHeight }) => {
+          if (x < box.left || x >= box.right || y < box.top || y >= box.bottom)
+            return false;
+          const mx = Math.floor(
+            ((x - box.left) * maskWidth) / (box.right - box.left),
+          );
+          const my = Math.floor(
+            ((y - box.top) * maskHeight) / (box.bottom - box.top),
+          );
+          return mask[my * maskWidth + mx] === 1;
+        }),
+      );
+    }
+  }
+  const left = Math.min(...masks.map((m) => m.box.left));
+  const top = Math.min(...masks.map((m) => m.box.top));
+  const right = Math.max(...masks.map((m) => m.box.right));
+  const bottom = Math.max(...masks.map((m) => m.box.bottom));
+  return {
+    box: {
+      x: left / size.width,
+      y: top / size.height,
+      w: (right - left) / size.width,
+      h: (bottom - top) / size.height,
+    },
+    grid: encodeGrid(cells),
+  };
 }
 
 function area(box: {

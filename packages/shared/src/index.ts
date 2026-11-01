@@ -616,6 +616,8 @@ export const MODEL_CALL_KINDS = [
   "page",
   "voice-transcribe",
   "voice-extract",
+  /** SAM finds the hero in a page illustration, for the page layout. */
+  "page-mask",
   /** Render QA in Chromium while making the PDF; an error when the book cannot be printed. */
   "render",
 ] as const;
