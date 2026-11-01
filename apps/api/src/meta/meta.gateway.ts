@@ -75,6 +75,26 @@ const TOY_CONCEPT = 'toy';
  */
 const SUBJECT_CONCEPTS = ['person', 'animal'];
 const STORY_ATTEMPTS = 3;
+/**
+ * A picture drawn "after" an earlier one (previous_response_id) is sometimes refused with 400
+ * "referenced response not found or expired" right after that response was made: Meta has not
+ * stored it yet. Asking again a moment later works, so such a picture gets this many tries.
+ */
+const REFERENCE_ATTEMPTS = 3;
+const REFERENCE_RETRY_MS = 2_000;
+
+/** Meta's 400 for a previous_response_id it cannot find (yet, or any more). */
+export function isMissingReference(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    status === 400 &&
+    /referenced response/i.test(message) &&
+    /not found|expired/i.test(message)
+  );
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export interface MetaGatewayOptions {
   apiKey: string;
@@ -92,6 +112,8 @@ export class MetaGateway implements ModelGateway {
   constructor(
     private readonly options: MetaGatewayOptions,
     private readonly journal: CallJournal = NO_JOURNAL,
+    /** The pause before asking again for a missing reference, times the attempt (tests use 0). */
+    private readonly referenceRetryMs = REFERENCE_RETRY_MS,
   ) {
     this.client = new OpenAI({
       apiKey: options.apiKey,
@@ -533,7 +555,38 @@ export class MetaGateway implements ModelGateway {
     };
   }
 
+  /** One picture; a refused reference to the earlier picture is asked again (REFERENCE_ATTEMPTS). */
   private async draw(
+    kind: ModelCallKind,
+    prompt: string,
+    size: '1024x1024' | '1536x1024',
+    previousResponseId?: string,
+    reference?: Buffer,
+    extra: { output_format?: 'png' } = {},
+  ): Promise<GeneratedImage> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.drawOnce(
+          kind,
+          prompt,
+          size,
+          previousResponseId,
+          reference,
+          extra,
+        );
+      } catch (error) {
+        if (
+          !previousResponseId ||
+          attempt >= REFERENCE_ATTEMPTS ||
+          !isMissingReference(error)
+        )
+          throw error;
+        await sleep(this.referenceRetryMs * attempt);
+      }
+    }
+  }
+
+  private async drawOnce(
     kind: ModelCallKind,
     prompt: string,
     size: '1024x1024' | '1536x1024',
