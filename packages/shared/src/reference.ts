@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LANGUAGES, LanguageSchema, localizedTextSchema, type Language } from "./language";
+import { LANGUAGES, LanguageSchema, localized, localizedTextSchema, type Language, type LocalizedText } from "./language";
 
 // ---- Reference data the owner edits in the admin («Справочники») ----------------------------
 //
@@ -36,13 +36,20 @@ export const PricesSchema = z.object({
 });
 export type Prices = z.infer<typeof PricesSchema>;
 
-const cityName = z.string().trim().min(2).max(60);
+/** A city's stable id: Latin letters, digits and hyphens ("ust-kamenogorsk"). */
+export const CityIdSchema = z
+  .string()
+  .max(60)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/);
 
-/** A city we deliver printed books to. The Russian name is what an order stores. */
+/**
+ * A city we deliver printed books to. Orders refer to it by `id`, which never changes once made;
+ * an order also keeps the Russian name as it was then.
+ */
 export const CitySchema = z.object({
-  ru: cityName,
-  kk: cityName,
-  en: cityName,
+  id: CityIdSchema,
+  /** By language code; Russian and English required, the rest fall back to them (see `localized`). */
+  name: localizedTextSchema(60),
   /** Our print partners deliver here for free; elsewhere the flat fee applies. */
   freeDelivery: z.boolean(),
 });
@@ -54,13 +61,72 @@ export const CitiesSchema = z
   .min(1)
   .max(100)
   .superRefine((cities, ctx) => {
-    const seen = new Set<string>();
+    const ids = new Set<string>();
+    const names = new Set<string>();
     cities.forEach((city, i) => {
-      const key = city.ru.trim().toLowerCase();
-      if (seen.has(key)) ctx.addIssue({ code: "custom", path: [i, "ru"], message: "Duplicate city" });
-      seen.add(key);
+      if (ids.has(city.id)) ctx.addIssue({ code: "custom", path: [i, "id"], message: "Duplicate city" });
+      ids.add(city.id);
+      const name = (city.name.ru ?? "").trim().toLowerCase();
+      if (name && names.has(name)) ctx.addIssue({ code: "custom", path: [i, "name", "ru"], message: "Duplicate city" });
+      names.add(name);
     });
   });
+
+/** Latin letters for Russian and Kazakh Cyrillic, for city ids. */
+const LATIN: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "yo", ж: "zh", з: "z", и: "i", й: "y", к: "k", л: "l",
+  м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh",
+  щ: "shch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya", ә: "a", ғ: "g", қ: "k", ң: "n", ө: "o", ұ: "u",
+  ү: "u", һ: "h", і: "i",
+};
+
+/**
+ * An id for a city from its name ("Усть-Каменогорск" → "ust-kamenogorsk"), not one of `taken`
+ * (a number is added then: "almaty-2").
+ */
+export function cityId(name: string, taken: readonly string[] = []): string {
+  const base =
+    [...name.trim().toLowerCase()]
+      .map((ch) => LATIN[ch] ?? ch)
+      .join("")
+      .normalize("NFKD")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 50)
+      .replace(/-+$/, "") || "city";
+  let id = base;
+  for (let n = 2; taken.includes(id); n++) id = `${base}-${n}`;
+  return id;
+}
+
+/** The city's name in `language` (falling back to Russian, then English). */
+export function cityName(city: City, language: Language): string {
+  return localized(city.name, language);
+}
+
+/**
+ * The stored cities in today's shape: before ids, a city was { ru, kk, en, freeDelivery } and an
+ * order stored the Russian name. Ids come from the Russian names, in order; a list already in
+ * today's shape comes back as it is. Null when there is nothing to change.
+ */
+export function upgradeCities(stored: unknown): City[] | null {
+  if (!Array.isArray(stored) || !stored.some((c) => c && typeof c === "object" && !("id" in c) && "ru" in c)) return null;
+  const taken: string[] = [];
+  return stored.map((c: { id?: string; ru?: string; kk?: string; en?: string; name?: LocalizedText; freeDelivery?: boolean }) => {
+    if (c.id && c.name) {
+      taken.push(c.id);
+      return c as City;
+    }
+    const id = cityId(c.ru ?? c.en ?? "", taken);
+    taken.push(id);
+    const name: LocalizedText = {};
+    for (const language of LANGUAGES) {
+      const text = c[language as "ru" | "kk" | "en"];
+      if (text) name[language] = text;
+    }
+    return { id, name, freeDelivery: Boolean(c.freeDelivery) };
+  });
+}
 
 /** ISO 3166-1 alpha-2 codes, plus XK (Kosovo), which country databases use. */
 export const ISO_COUNTRY_CODES: readonly string[] = (
@@ -306,16 +372,16 @@ export const DEFAULT_PRICES: Prices = {
 
 /** The cities the site launched with; the seed of reference.cities. */
 export const DEFAULT_CITIES: City[] = [
-  { ru: "Алматы", kk: "Алматы", en: "Almaty", freeDelivery: true },
-  { ru: "Астана", kk: "Астана", en: "Astana", freeDelivery: true },
-  { ru: "Шымкент", kk: "Шымкент", en: "Shymkent", freeDelivery: false },
-  { ru: "Караганда", kk: "Қарағанды", en: "Karaganda", freeDelivery: false },
-  { ru: "Актобе", kk: "Ақтөбе", en: "Aktobe", freeDelivery: false },
-  { ru: "Тараз", kk: "Тараз", en: "Taraz", freeDelivery: false },
-  { ru: "Павлодар", kk: "Павлодар", en: "Pavlodar", freeDelivery: false },
-  { ru: "Усть-Каменогорск", kk: "Өскемен", en: "Oskemen", freeDelivery: false },
-  { ru: "Атырау", kk: "Атырау", en: "Atyrau", freeDelivery: false },
-  { ru: "Костанай", kk: "Қостанай", en: "Kostanay", freeDelivery: false },
+  { id: "almaty", name: { ru: "Алматы", kk: "Алматы", en: "Almaty" }, freeDelivery: true },
+  { id: "astana", name: { ru: "Астана", kk: "Астана", en: "Astana" }, freeDelivery: true },
+  { id: "shymkent", name: { ru: "Шымкент", kk: "Шымкент", en: "Shymkent" }, freeDelivery: false },
+  { id: "karaganda", name: { ru: "Караганда", kk: "Қарағанды", en: "Karaganda" }, freeDelivery: false },
+  { id: "aktobe", name: { ru: "Актобе", kk: "Ақтөбе", en: "Aktobe" }, freeDelivery: false },
+  { id: "taraz", name: { ru: "Тараз", kk: "Тараз", en: "Taraz" }, freeDelivery: false },
+  { id: "pavlodar", name: { ru: "Павлодар", kk: "Павлодар", en: "Pavlodar" }, freeDelivery: false },
+  { id: "ust-kamenogorsk", name: { ru: "Усть-Каменогорск", kk: "Өскемен", en: "Oskemen" }, freeDelivery: false },
+  { id: "atyrau", name: { ru: "Атырау", kk: "Атырау", en: "Atyrau" }, freeDelivery: false },
+  { id: "kostanay", name: { ru: "Костанай", kk: "Қостанай", en: "Kostanay" }, freeDelivery: false },
 ];
 
 const ruEn: Language[] = ["ru", "en"];

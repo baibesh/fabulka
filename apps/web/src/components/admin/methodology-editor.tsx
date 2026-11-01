@@ -6,8 +6,13 @@ import {
   METHODOLOGY_AGE_MAX,
   METHODOLOGY_AGE_MIN,
   METHODOLOGY_IN_USE,
+  BASE_LANGUAGES,
+  LANGUAGES,
+  LANGUAGE_NAMES,
   UpdateMethodologySchema,
+  methodologyText,
   type AdminMethodology,
+  type Language,
   type MethodologyTexts,
 } from "@fabulka/shared";
 import { Eye, Save, Trash2 } from "lucide-react";
@@ -19,12 +24,8 @@ import { ApiError } from "@/lib/api";
 import { button, Card, ghostButton, input, PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
 
-const LANGS = [
-  { code: "ru", label: "Русский" },
-  { code: "kk", label: "Қазақша" },
-  { code: "en", label: "English" },
-] as const;
-type Lang = (typeof LANGS)[number]["code"];
+/** Languages a method must have to be published; the others are optional. */
+const isBase = (language: Language) => (BASE_LANGUAGES as readonly Language[]).includes(language);
 
 const label = "flex flex-col gap-1.5 text-sm font-semibold";
 const error = "text-sm font-normal text-red-600";
@@ -93,7 +94,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       ? toDraft(initial)
       : {
           slug: "",
-          texts: { ru: empty, kk: empty, en: empty },
+          texts: {},
           source: "",
           ageMin: 4,
           ageMax: 8,
@@ -104,13 +105,13 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
           sortOrder: null,
         },
   );
-  const [lang, setLang] = useState<Lang>("ru");
+  const [lang, setLang] = useState<Language>("ru");
   const [problems, setProblems] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState(false);
   const sortOrder = draft.sortOrder ?? (all.data?.at(-1)?.sortOrder ?? -10) + 10;
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const setText = (key: "name" | "summary", value: string) =>
-    setDraft((d) => ({ ...d, texts: { ...d.texts, [lang]: { ...d.texts[lang], [key]: value } } }));
+    setDraft((d) => ({ ...d, texts: { ...d.texts, [lang]: { ...(d.texts[lang] ?? empty), [key]: value } } }));
   const refresh = (saved: AdminMethodology) => {
     queryClient.setQueryData(["admin", "methodology", saved.slug], saved);
     void queryClient.invalidateQueries({ queryKey: ["admin", "methodologies"] });
@@ -162,8 +163,9 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
   const inUse = remove.error instanceof ApiError && remove.error.code === METHODOLOGY_IN_USE;
 
   const problem = (path: string) => problems[path] && <span className={error}>{problems[path]}</span>;
-  const langProblem = (code: Lang) => Object.keys(problems).some((path) => path.startsWith(`texts.${code}.`));
-  const unfilled = (code: Lang) => !draft.texts[code].name || !draft.texts[code].summary;
+  const langProblem = (code: Language) => Object.keys(problems).some((path) => path.startsWith(`texts.${code}.`));
+  // Marked only where publishing needs it: an optional language falls back to the base ones.
+  const unfilled = (code: Language) => isBase(code) && (!draft.texts[code]?.name || !draft.texts[code]?.summary);
   const savedNow = save.isSuccess && save.data !== null;
 
   return (
@@ -203,7 +205,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
           </div>
         }
       >
-        {initial ? initial.texts[locale].name || initial.texts.ru.name || initial.slug : t("admin.method.newTitle")}
+        {initial ? methodologyText(initial.texts, locale).name || initial.slug : t("admin.method.newTitle")}
       </PageTitle>
 
       {confirming && (
@@ -258,7 +260,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title={t("admin.method.texts")}>
           <div role="tablist" className="flex gap-1 rounded-xl bg-background p-1">
-            {LANGS.map(({ code, label: name }) => (
+            {LANGUAGES.map((code) => (
               <button
                 key={code}
                 type="button"
@@ -270,7 +272,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
                   lang === code ? "bg-card shadow-sm" : "text-muted hover:text-foreground"
                 }`}
               >
-                {name}
+                {LANGUAGE_NAMES[code]}
                 {(unfilled(code) || langProblem(code)) && (
                   <span title={t("admin.method.missing")} className={`size-1.5 rounded-full ${langProblem(code) ? "bg-red-600" : "bg-amber-500"}`} />
                 )}
@@ -283,7 +285,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
               key={`name-${lang}`}
               data-testid={`methodology-name-${lang}`}
               className={input}
-              value={draft.texts[lang].name}
+              value={draft.texts[lang]?.name ?? ""}
               onChange={(e) => setText("name", e.target.value)}
             />
             {problem(`texts.${lang}.name`)}
@@ -294,7 +296,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
               key={`summary-${lang}`}
               data-testid={`methodology-summary-${lang}`}
               className={`${input} min-h-24`}
-              value={draft.texts[lang].summary}
+              value={draft.texts[lang]?.summary ?? ""}
               onChange={(e) => setText("summary", e.target.value)}
             />
             {problem(`texts.${lang}.summary`)}

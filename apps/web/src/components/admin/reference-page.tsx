@@ -16,6 +16,7 @@ import {
   LANGUAGE_NAMES,
   OTHER_COUNTRY,
   PricesSchema,
+  cityId,
   localized,
   type AdminReference,
   type BlockedCountries,
@@ -697,11 +698,21 @@ function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: Country
 
 // ---- Cities ----------------------------------------------------------------------------------
 
-const NAMES = ["ru", "kk", "en"] as const;
-/** A city in the form, with a key that stays put while rows move. */
-type CityDraft = City & { key: number };
+/** A city in the form, with a key that stays put while rows move; a new one has no id until saved. */
+type CityDraft = { key: number; id: string; name: LocalizedText; freeDelivery: boolean };
 let nextKey = 0;
 const withKey = (city: City): CityDraft => ({ ...city, key: nextKey++ });
+
+/** The cities to save: a new city gets an id from its Russian (else English) name, unique in the list. */
+const fromCityDrafts = (rows: CityDraft[]) => {
+  const taken = rows.map((row) => row.id).filter(Boolean);
+  return rows.map(({ id, name, freeDelivery }) => {
+    if (id) return { id, name, freeDelivery };
+    const made = cityId(name.ru || name.en || "", taken);
+    taken.push(made);
+    return { id: made, name, freeDelivery };
+  });
+};
 
 function CitiesTab({ initial }: { initial: City[] }) {
   const { t } = useAdminI18n();
@@ -710,7 +721,7 @@ function CitiesTab({ initial }: { initial: City[] }) {
   const [problems, setProblems] = useState<Record<string, string>>({});
   const save = useMutation({
     mutationFn: async (next: CityDraft[]) => {
-      const parsed = CitiesSchema.safeParse(next.map(({ ru, kk, en, freeDelivery }) => ({ ru, kk, en, freeDelivery })));
+      const parsed = CitiesSchema.safeParse(fromCityDrafts(next));
       setProblems(parsed.success ? {} : issuesByPath(parsed.error.issues));
       return parsed.success ? saveCities(parsed.data) : null;
     },
@@ -720,7 +731,8 @@ function CitiesTab({ initial }: { initial: City[] }) {
       setRows(cities.map(withKey));
     },
   });
-  const update = (index: number, patch: Partial<City>) => setRows((list) => list.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  const update = (index: number, patch: (row: CityDraft) => Partial<CityDraft>) =>
+    setRows((list) => list.map((row, i) => (i === index ? { ...row, ...patch(row) } : row)));
   const move = (index: number, by: -1 | 1) =>
     setRows((list) => {
       const next = [...list];
@@ -748,33 +760,46 @@ function CitiesTab({ initial }: { initial: City[] }) {
         {problems[""] && <p className={errorText}>{t("admin.reference.error.citiesEmpty")}</p>}
         <ol className="flex flex-col gap-3">
           {rows.map((city, i) => (
-            <li key={city.key} data-testid="city-row" data-value={city.ru} className="flex flex-col gap-3 rounded-xl bg-background p-3 lg:flex-row lg:items-start">
+            <li key={city.key} data-testid="city-row" data-id={city.id} className="flex flex-col gap-3 rounded-xl bg-background p-3 lg:flex-row lg:items-start">
               <span className="hidden w-6 pt-2 text-right text-sm font-bold text-muted lg:block">{i + 1}</span>
-              <div className="grid flex-1 gap-3 sm:grid-cols-3">
-                {NAMES.map((lang) => {
-                  const problem = problems[`${i}.${lang}`];
-                  return (
-                    <label key={lang} className={label}>
-                      <span className="text-xs text-muted">{t(`admin.reference.city.${lang}`)}</span>
-                      <input
-                        data-testid={`city-${lang}`}
-                        value={city[lang]}
-                        aria-invalid={!!problem}
-                        onChange={(e) => update(i, { [lang]: e.target.value })}
-                        className={`${input} aria-[invalid=true]:border-red-600`}
-                      />
-                      {problem && (
-                        <span data-testid="reference-error" className={errorText}>
-                          {t(problem === "custom" ? "admin.reference.error.cityDuplicate" : "admin.reference.error.cityName")}
+              <div className="flex flex-1 flex-col gap-2">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {LANGUAGES.map((lang) => {
+                    const problem = problems[`${i}.name.${lang}`];
+                    const base = (BASE_LANGUAGES as readonly Language[]).includes(lang);
+                    return (
+                      <label key={lang} className={label}>
+                        <span className="text-xs text-muted">
+                          {LANGUAGE_NAMES[lang]}
+                          {!base && <span className="ml-1 font-normal">({t("admin.reference.faq.optional")})</span>}
                         </span>
-                      )}
-                    </label>
-                  );
-                })}
+                        <input
+                          data-testid={`city-${lang}`}
+                          value={city.name[lang] ?? ""}
+                          aria-invalid={!!problem}
+                          onChange={(e) => update(i, (row) => ({ name: { ...row.name, [lang]: e.target.value } }))}
+                          className={`${input} aria-[invalid=true]:border-red-600`}
+                        />
+                        {problem && (
+                          <span data-testid="reference-error" className={errorText}>
+                            {t(problem === "custom" && lang === "ru" && city.name.ru ? "admin.reference.error.cityDuplicate" : "admin.reference.error.cityName")}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+                {/* Orders refer to the city by this id: made from the name on the first save, then kept. */}
+                {city.id && <span data-testid="city-id" className="font-mono text-xs text-muted">{city.id}</span>}
+                {problems[`${i}.id`] && (
+                  <span data-testid="reference-error" className={errorText}>
+                    {t("admin.reference.error.cityDuplicate")}
+                  </span>
+                )}
               </div>
               <div className="flex items-center justify-between gap-2 lg:pt-6">
                 <label className="flex items-center gap-2 text-sm whitespace-nowrap">
-                  <input type="checkbox" data-testid="city-free" checked={city.freeDelivery} onChange={(e) => update(i, { freeDelivery: e.target.checked })} />
+                  <input type="checkbox" data-testid="city-free" checked={city.freeDelivery} onChange={(e) => update(i, () => ({ freeDelivery: e.target.checked }))} />
                   {t("admin.reference.city.free")}
                 </label>
                 <div className="flex gap-1">
@@ -800,7 +825,7 @@ function CitiesTab({ initial }: { initial: City[] }) {
         <button
           type="button"
           data-testid="city-add"
-          onClick={() => setRows((list) => [...list, withKey({ ru: "", kk: "", en: "", freeDelivery: false })])}
+          onClick={() => setRows((list) => [...list, { key: nextKey++, id: "", name: {}, freeDelivery: false }])}
           className={`${ghostButton} flex items-center gap-2 self-start`}
         >
           <Plus className="size-4" />

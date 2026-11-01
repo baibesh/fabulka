@@ -23,6 +23,7 @@ import {
   countryFromIp,
   countryInfo,
   orderPrice,
+  upgradeCities,
   type AdminReference,
   type BlockedCountries,
   type BookKind,
@@ -102,13 +103,15 @@ function canonical(value: unknown): unknown {
 
 /**
  * What start-up changes in a stored value, or null to leave it: an untouched older seed becomes
- * today's default; a country with print priced in anything but tenge (allowed before print was
- * tied to the currency) loses print rather than make the whole list unreadable.
+ * today's default; cities stored before ids get ids from their Russian names (upgradeCities); a
+ * country with print priced in anything but tenge (allowed before print was tied to the currency)
+ * loses print rather than make the whole list unreadable.
  */
 export function upgradeStored(field: keyof Snapshot, stored: unknown): unknown {
   if (SEEDED[field]?.some((seed) => sameJson(seed, stored))) {
     return DEFAULTS[field];
   }
+  if (field === 'cities') return upgradeCities(stored);
   if (field === 'countries' && Array.isArray(stored)) {
     const list = stored as Partial<CountryEntry>[];
     if (list.some((c) => c?.print && c.currency !== PRINT_CURRENCY)) {
@@ -271,10 +274,10 @@ export class ReferenceService implements OnModuleInit {
     );
   }
 
-  /** What a printed order costs, at the stored prices and free-delivery cities. */
-  async orderPrice(cover: Cover, quantity: number, city: string) {
+  /** What a printed order to the city with this id costs, at the stored prices and cities. */
+  async orderPrice(cover: Cover, quantity: number, cityId: string) {
     const { prices, cities } = await this.snapshot();
-    return orderPrice(cover, quantity, city, prices, cities);
+    return orderPrice(cover, quantity, cityId, prices, cities);
   }
 
   /**

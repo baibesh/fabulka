@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BASE_LANGUAGES, LanguageSchema, localized, type Language } from "./language";
 
 // ---- Story methods -----------------------------------------------------------------
 // Methods live in the database and are edited in the admin; DEFAULT_METHODOLOGIES below only
@@ -20,20 +21,25 @@ export type MethodologySlug = z.infer<typeof MethodologySlugSchema>;
 export const METHODOLOGY_AGE_MIN = 2;
 export const METHODOLOGY_AGE_MAX = 12;
 
-const METHODOLOGY_LANGUAGES = ["ru", "kk", "en"] as const;
-
 const MethodologyTextSchema = z.object({
   name: z.string().trim().max(80),
   summary: z.string().trim().max(300),
 });
+export type MethodologyText = z.infer<typeof MethodologyTextSchema>;
 
-/** A method's name and summary in each interface language. */
-export const MethodologyTextsSchema = z.object({
-  ru: MethodologyTextSchema,
-  kk: MethodologyTextSchema,
-  en: MethodologyTextSchema,
-});
+/**
+ * A method's name and summary by language (LANGUAGES): the base languages (BASE_LANGUAGES) are
+ * required to publish, the rest are optional and fall back to them (see methodologyText).
+ */
+export const MethodologyTextsSchema = z.partialRecord(LanguageSchema, MethodologyTextSchema);
 export type MethodologyTexts = z.infer<typeof MethodologyTextsSchema>;
+
+/** The method's name and summary in `language`, each falling back like any localized text. */
+export function methodologyText(texts: MethodologyTexts, language: Language): MethodologyText {
+  const field = (key: keyof MethodologyText) =>
+    localized(Object.fromEntries(Object.entries(texts).map(([lang, text]) => [lang, text?.[key] ?? ""])), language);
+  return { name: field("name"), summary: field("summary") };
+}
 
 /** A story method as the site shows it, in the requested language (GET /methodologies). */
 export const MethodologySchema = z.object({
@@ -78,24 +84,24 @@ const MethodologyFieldsSchema = z.object({
 type MethodologyFields = z.infer<typeof MethodologyFieldsSchema>;
 
 /**
- * Russian is always required: it is the admin's language and the fallback. A published method is
- * offered in every interface language, so it needs its name and summary in all of them; a draft may
- * wait for its translations.
+ * Russian is always required: it is the admin's language and the first fallback. A published method
+ * is offered in every interface language, so it needs its name and summary in the base languages
+ * (Russian and English), which every other language falls back to; a draft may wait for them.
  */
 function checkMethodology(m: MethodologyFields, ctx: z.RefinementCtx) {
   if (m.ageMin > m.ageMax) {
     ctx.addIssue({ code: "custom", path: ["ageMax"], message: "Возраст «до» меньше возраста «от»" });
   }
-  if (!m.texts.ru.name) ctx.addIssue({ code: "custom", path: ["texts", "ru", "name"], message: "Назовите методику по-русски" });
-  if (!m.texts.ru.summary) {
+  if (!m.texts.ru?.name) ctx.addIssue({ code: "custom", path: ["texts", "ru", "name"], message: "Назовите методику по-русски" });
+  if (!m.texts.ru?.summary) {
     ctx.addIssue({ code: "custom", path: ["texts", "ru", "summary"], message: "Опишите методику по-русски" });
   }
-  const missing = METHODOLOGY_LANGUAGES.filter((lang) => !m.texts[lang].name || !m.texts[lang].summary);
+  const missing = BASE_LANGUAGES.filter((lang) => !m.texts[lang]?.name || !m.texts[lang]?.summary);
   if (m.published && missing.length) {
     ctx.addIssue({
       code: "custom",
       path: ["published"],
-      message: `Чтобы опубликовать, заполните название и описание на всех языках: не хватает ${missing.join(", ")}`,
+      message: `Чтобы опубликовать, заполните название и описание на языках ${BASE_LANGUAGES.join(", ")}: не хватает ${missing.join(", ")}`,
     });
   }
 }

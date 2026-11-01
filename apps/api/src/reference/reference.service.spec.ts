@@ -134,6 +134,32 @@ describe('ReferenceService seeding', () => {
     expect(rows.get(REFERENCE_KEYS.faq)).toEqual(faq);
   });
 
+  it('gives cities stored before ids their ids, in order, and prices by them', async () => {
+    const old = [
+      { ru: 'Алматы', kk: 'Алматы', en: 'Almaty', freeDelivery: false },
+      { ru: 'Тараз', kk: 'Тараз', en: 'Taraz', freeDelivery: true },
+    ];
+    const { service, rows } = settingsStore({
+      [REFERENCE_KEYS.cities]: old,
+    });
+    await service.onModuleInit();
+
+    expect(rows.get(REFERENCE_KEYS.cities)).toEqual([
+      {
+        id: 'almaty',
+        name: { ru: 'Алматы', kk: 'Алматы', en: 'Almaty' },
+        freeDelivery: false,
+      },
+      {
+        id: 'taraz',
+        name: { ru: 'Тараз', kk: 'Тараз', en: 'Taraz' },
+        freeDelivery: true,
+      },
+    ]);
+    expect((await service.orderPrice('soft', 1, 'taraz')).delivery).toBe(0);
+    expect((await service.orderPrice('soft', 1, 'almaty')).delivery).toBe(1500);
+  });
+
   it('turns print off where an edited list priced it in dollars', async () => {
     const countries = [
       { code: 'KZ', languages: ['kk', 'ru'], currency: 'KZT', print: true },
@@ -210,14 +236,14 @@ describe('ReferenceService edits', () => {
   it('prices orders by the stored free-delivery cities', async () => {
     const { service } = settingsStore();
     await service.setCities(
-      DEFAULT_CITIES.map((c) => ({ ...c, freeDelivery: c.ru === 'Тараз' })),
+      DEFAULT_CITIES.map((c) => ({ ...c, freeDelivery: c.id === 'taraz' })),
     );
-    expect(await service.orderPrice('soft', 1, 'Тараз')).toEqual({
+    expect(await service.orderPrice('soft', 1, 'taraz')).toEqual({
       books: 9900,
       delivery: 0,
       total: 9900,
     });
-    expect((await service.orderPrice('soft', 1, 'Алматы')).delivery).toBe(1500);
+    expect((await service.orderPrice('soft', 1, 'almaty')).delivery).toBe(1500);
   });
 });
 

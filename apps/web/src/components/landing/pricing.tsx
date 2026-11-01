@@ -1,5 +1,6 @@
 "use client";
 
+import { cityName } from "@fabulka/shared";
 import { Check, Gift } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
@@ -50,7 +51,7 @@ export function Pricing() {
                 t("landing.pricing.print.delivery", {
                   cities: reference.cities
                     .filter((c) => c.freeDelivery)
-                    .map((c) => c[locale])
+                    .map((c) => cityName(c, locale))
                     .join(", "),
                   fee: formatKzt(reference.prices.deliveryKzt),
                 }),

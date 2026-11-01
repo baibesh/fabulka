@@ -29,6 +29,7 @@ export interface ModelGateway {
   reviewStory(
     story: Story,
     age: number,
+    language: Language,
   ): Promise<{ safe: boolean; reason: string; costUsd: number }>;
   /**
    * Finds the toy in the parent's photo with SAM and cuts it out on white. `cutout` is null when

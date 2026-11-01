@@ -1,4 +1,5 @@
 import {
+  LANGUAGE_MODEL_NAMES,
   ageBand,
   talkQuestionKinds,
   type ChildProfile,
@@ -11,12 +12,6 @@ import {
 export const ART_STYLE =
   'warm children picture-book illustration, soft watercolor and gouache textures, ' +
   'gentle rounded shapes, cozy pastel palette, no text, no letters';
-
-export const LANGUAGE_NAMES = {
-  ru: 'Russian',
-  kk: 'Kazakh',
-  en: 'English',
-} as const;
 
 export const STORY_INSTRUCTIONS = `You write personalized picture books for children.
 The child is the hero of the story. The story is kind, safe and written for a parent to read
@@ -76,7 +71,7 @@ export interface StoryBrief {
 export function storyPrompt(brief: StoryBrief): string {
   const { child, pageCount } = brief;
   return [
-    `Write a ${pageCount}-page book in ${LANGUAGE_NAMES[child.language]}.`,
+    `Write a ${pageCount}-page book in ${LANGUAGE_MODEL_NAMES[child.language]}.`,
     `Hero: ${child.name}, a ${child.age}-year-old ${child.gender}.`,
     `Interests: ${child.interests.join(', ')}.`,
     child.pet ? `Pet: ${child.pet}.` : 'No pet.',
@@ -186,13 +181,18 @@ export function pagePrompt(
 }
 
 export const REVIEW_INSTRUCTIONS = `You review picture books for young children before they are
-illustrated and printed. Read the story and decide whether it is safe and kind for a child of the
-given age: no violence, fear beyond mild tension, adult or sexual content, insults, hate,
-dangerous instructions, brand advertising or real people other than the child and family.
+illustrated and printed. Read the story, written in the language the user names, and decide
+whether it is safe and kind for a child of the given age: no violence, fear beyond mild tension,
+adult or sexual content, insults, hate, dangerous instructions, brand advertising or real people
+other than the child and family. Judge the meaning in that language, not word by word.
 Return only JSON: { "safe": boolean, "reason": string }. "reason" is one short English sentence.`;
 
-export function reviewPrompt(storyJson: string, age: number): string {
-  return `Child's age: ${age}.\nStory:\n${storyJson}`;
+export function reviewPrompt(
+  storyJson: string,
+  age: number,
+  language: Language,
+): string {
+  return `Child's age: ${age}.\nThe story is in ${LANGUAGE_MODEL_NAMES[language]}.\nStory:\n${storyJson}`;
 }
 
 export const PREFILL_INSTRUCTIONS = `A parent recorded a voice message describing their child for a
@@ -242,7 +242,7 @@ export function prefillPrompt(brief: PrefillBrief): string {
       : `- "${q.key}": ${q.label} Answer in a few words.`,
   );
   return [
-    `The parent speaks ${LANGUAGE_NAMES[brief.language]}.`,
+    `The parent speaks ${LANGUAGE_MODEL_NAMES[brief.language]}.`,
     brief.theme
       ? 'Fill in "theme" when the parent said what the book should be about (3 to 200 characters).'
       : 'Leave out "theme".',

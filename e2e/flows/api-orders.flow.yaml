@@ -25,27 +25,42 @@ commands:
       method: POST
       url: /orders
       headers: { X-Client-Key: "${stranger}" }
-      json: { bookId: "${bookId}", recipientName: Чужой, phone: "+77011234567", email: "${parentEmail}", city: Алматы, address: "ул. Абая, 1", cover: soft, quantity: 1 }
+      json: { bookId: "${bookId}", recipientName: Чужой, phone: "+77011234567", email: "${parentEmail}", cityId: almaty, address: "ул. Абая, 1", cover: soft, quantity: 1 }
       assert: { status: 404 }
   - request:
       method: POST
       url: /orders
       headers: { X-Client-Key: "${owner}" }
-      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${parentEmail}", city: Алматы, address: "ул. Абая, 1", cover: soft, quantity: 1, locale: kk }
+      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${parentEmail}", cityId: almaty, address: "ул. Абая, 1", cover: soft, quantity: 1, locale: kk }
       extract: { orderId: "$.id" }
-      assert: { status: 201 }
+      # Almaty has free delivery: the copy only, and the order keeps the city's id and Russian name.
+      assert: { status: 201, json: { "$.totalKzt": 9900, "$.deliveryKzt": 0, "$.cityId": almaty, "$.city": Алматы } }
+  # Shymkent pays the flat delivery fee.
+  - request:
+      method: POST
+      url: /orders
+      headers: { X-Client-Key: "${owner}" }
+      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "other-${parentEmail}", cityId: shymkent, address: "ул. Абая, 1", cover: soft, quantity: 1 }
+      assert: { status: 201, json: { "$.totalKzt": 11400, "$.deliveryKzt": 1500, "$.city": Шымкент } }
+  # Only to a city on the owner's list.
+  - request:
+      method: POST
+      url: /orders
+      headers: { X-Client-Key: "${owner}" }
+      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "other-${parentEmail}", cityId: tirana, address: "ул. Абая, 1", cover: soft, quantity: 1 }
+      assert: { status: 400, json: { "$.code": city_unknown } }
   # Poland and "another country" have no print: refused, whatever the city.
   - request:
       method: POST
       url: /orders
       headers: { X-Client-Key: "${owner}", X-Country: PL }
-      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${parentEmail}", city: Алматы, address: "ул. Абая, 1", cover: soft, quantity: 1 }
+      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${parentEmail}", cityId: almaty, address: "ул. Абая, 1", cover: soft, quantity: 1 }
       assert: { status: 400, json: { "$.code": print_unavailable } }
   - request:
       method: POST
       url: /orders
       headers: { X-Client-Key: "${owner}", X-Country: other }
-      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${parentEmail}", city: Алматы, address: "ул. Абая, 1", cover: soft, quantity: 1 }
+      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${parentEmail}", cityId: almaty, address: "ул. Абая, 1", cover: soft, quantity: 1 }
       assert: { status: 400, json: { "$.code": print_unavailable } }
   - request:
       url: /orders/${orderId}
@@ -59,7 +74,7 @@ commands:
       method: POST
       url: /orders
       headers: { X-Client-Key: "${owner}" }
-      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "not-an-email", city: Алматы, address: "ул. Абая, 1", cover: soft, quantity: 1 }
+      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "not-an-email", cityId: almaty, address: "ул. Абая, 1", cover: soft, quantity: 1 }
       assert: { status: 400 }
   - request:
       url: /test/mails

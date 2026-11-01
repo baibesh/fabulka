@@ -12,6 +12,12 @@ export type Language = z.infer<typeof LanguageSchema>;
 export const LANGUAGE_NAMES: Record<Language, string> = { ru: "Русский", kk: "Қазақша", en: "English" };
 
 /**
+ * Each language's English name, for model prompts: the prompts are English, and a model follows
+ * "write in Kazakh" more reliably than a native self-name such as «Қазақша».
+ */
+export const LANGUAGE_MODEL_NAMES: Record<Language, string> = { ru: "Russian", kk: "Kazakh", en: "English" };
+
+/**
  * Languages a localized text must always have: the fallbacks every other language falls back to,
  * in that order.
  */

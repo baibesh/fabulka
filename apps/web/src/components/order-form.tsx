@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CreateOrderSchema, type CreateOrderInput } from "@fabulka/shared";
+import { CreateOrderSchema, cityName, type CreateOrderInput } from "@fabulka/shared";
 import { Loader2, Printer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
@@ -28,7 +28,7 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
   const book = useQuery({ queryKey: ["book", id], queryFn: () => getBook(id) });
   const form = useForm<FormValues, unknown, CreateOrderInput>({
     resolver: zodResolver(CreateOrderSchema),
-    defaultValues: { bookId: id, recipientName: "", phone: "+7 ", email: "", city: "Алматы", address: "", cover: "soft", quantity: 1 },
+    defaultValues: { bookId: id, recipientName: "", phone: "+7 ", email: "", cityId: "almaty", address: "", cover: "soft", quantity: 1 },
   });
   const errors = form.formState.errors;
 
@@ -38,14 +38,14 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
     if (user?.email && !form.getValues("email")) form.setValue("email", user.email);
     if (user?.name && !form.getValues("recipientName")) form.setValue("recipientName", user.name);
   }, [user, form]);
-  const [cover, quantity, city] = useWatch({ control: form.control, name: ["cover", "quantity", "city"] });
+  const [cover, quantity, cityId] = useWatch({ control: form.control, name: ["cover", "quantity", "cityId"] });
   // Shown for the parent to check; the API prices the order again from the same reference data.
   const reference = useReference();
   const cities = useCities();
-  const price = useOrderPrice(cover, Number(quantity) || 1, city);
+  const price = useOrderPrice(cover, Number(quantity) || 1, cityId);
   // The owner may have taken the default city off the list: start from the first one listed then.
   useEffect(() => {
-    if (cities.length && !cities.some((c) => c.ru === form.getValues("city"))) form.setValue("city", cities[0].ru);
+    if (cities.length && !cities.some((c) => c.id === form.getValues("cityId"))) form.setValue("cityId", cities[0].id);
   }, [cities, form]);
 
   const order = useMutation({
@@ -110,10 +110,10 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
         </label>
         <label className={label}>
           {t("order.city")}
-          <select data-testid="city" className={field} {...form.register("city")} value={city}>
+          <select data-testid="city" className={field} {...form.register("cityId")} value={cityId}>
             {cities.map((city) => (
-              <option key={city.ru} value={city.ru}>
-                {city[locale]}
+              <option key={city.id} value={city.id}>
+                {cityName(city, locale)}
               </option>
             ))}
           </select>

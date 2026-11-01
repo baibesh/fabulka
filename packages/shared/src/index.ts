@@ -349,7 +349,8 @@ export const CreateOrderSchema = z.object({
     .pipe(z.string().regex(/^\+7\d{10}$/, "Номер в формате +7 XXX XXX XX XX")),
   /** The confirmation and status emails go here. */
   email: EmailSchema,
-  city: z.string().trim().min(2).max(60),
+  /** A delivery city's id (reference.cities); the order keeps its Russian name too. */
+  cityId: z.string().trim().min(1).max(60),
   address: z.string().trim().min(5).max(200),
   cover: CoverSchema,
   quantity: z.coerce.number().int().min(1).max(5),
@@ -360,14 +361,17 @@ export type CreateOrderInput = z.infer<typeof CreateOrderSchema>;
 
 /**
  * What a printed order costs at the owner's prices: the copies, plus the flat delivery fee unless
- * the city is one with free delivery.
+ * the city (by id) is one with free delivery.
  */
-export function orderPrice(cover: Cover, quantity: number, city: string, prices: Prices, cities: readonly City[]) {
+export function orderPrice(cover: Cover, quantity: number, cityId: string, prices: Prices, cities: readonly City[]) {
   const books = prices.covers[cover] * quantity;
-  const free = cities.some((c) => c.freeDelivery && c.ru === city.trim());
+  const free = cities.some((c) => c.freeDelivery && c.id === cityId);
   const delivery = free ? 0 : prices.deliveryKzt;
   return { books, delivery, total: books + delivery };
 }
+
+/** Body of a 400 from POST /orders: the city is not one we deliver to (reference.cities). */
+export const CITY_UNKNOWN = "city_unknown";
 
 /**
  * Body of a 400 from POST /orders: the visitor's country has no print (reference.countries), so
@@ -387,7 +391,10 @@ export const OrderSchema = z.object({
   status: OrderStatusSchema,
   recipientName: z.string(),
   email: z.string(),
+  /** The city's Russian name when ordered. */
   city: z.string(),
+  /** Its id in reference.cities; null for orders made before cities had ids. */
+  cityId: z.string().nullable(),
   address: z.string(),
   cover: CoverSchema,
   quantity: z.number().int(),

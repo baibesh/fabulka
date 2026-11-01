@@ -55,7 +55,7 @@ export function OrderView({ params }: { params: Promise<{ id: string }> }) {
 
       <section className="flex flex-col gap-1 rounded-2xl bg-card p-5">
         <span>
-          {order.recipientName}, {cityName(order.city, locale, cities)}, {order.address}
+          {order.recipientName}, {cityName(order, locale, cities)}, {order.address}
         </span>
         <span className="text-lg font-extrabold">{t("order.done.total", { total: formatKzt(order.totalKzt) })}</span>
       </section>

@@ -8,7 +8,9 @@ import { ConfigService } from '@nestjs/config';
 import type { Book as BookRow, Order as OrderRow } from '@prisma/client';
 import {
   LanguageSchema,
+  CITY_UNKNOWN,
   PRINT_UNAVAILABLE,
+  cityName,
   orderStatusAt,
   type AdminOrder,
   type Country,
@@ -65,11 +67,21 @@ export class OrdersService {
     if (book.status !== 'done') {
       throw new ConflictException('The book is still being made');
     }
+    // Only to a city on the owner's list; the order keeps its Russian name as it is today.
+    const city = (await this.reference.cities()).find(
+      (c) => c.id === input.cityId,
+    );
+    if (!city) {
+      throw new BadRequestException({
+        code: CITY_UNKNOWN,
+        message: `We do not deliver to ${input.cityId}`,
+      });
+    }
     // Priced here from the owner's prices; the body carries no amounts (the schema drops them).
     const price = await this.reference.orderPrice(
       input.cover,
       input.quantity,
-      input.city,
+      city.id,
     );
     const row = await this.prisma.order.create({
       data: {
@@ -77,7 +89,8 @@ export class OrdersService {
         recipientName: input.recipientName,
         phone: input.phone,
         email: input.email,
-        city: input.city,
+        city: cityName(city, 'ru'),
+        cityId: city.id,
         address: input.address,
         cover: input.cover,
         quantity: input.quantity,
@@ -198,6 +211,7 @@ export class OrdersService {
       recipientName: row.recipientName,
       email: row.email,
       city: row.city,
+      cityId: row.cityId,
       address: row.address,
       cover: row.cover,
       quantity: row.quantity,

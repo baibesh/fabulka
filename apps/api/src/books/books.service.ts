@@ -335,7 +335,11 @@ export class BooksService implements OnModuleInit {
     });
 
     // A second pass before any picture is drawn: the parent's text went into the prompt.
-    const review = await this.models.reviewStory(story, child.age);
+    const review = await this.models.reviewStory(
+      story,
+      child.age,
+      child.language,
+    );
     spent.usd += review.costUsd;
     if (!review.safe) {
       throw new Error(

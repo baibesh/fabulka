@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import type { Response, Tool } from 'openai/resources/responses/responses';
 import { z } from 'zod';
 import {
+  LANGUAGE_MODEL_NAMES,
   StorySchema,
   type Language,
   type ModelCallKind,
@@ -21,7 +22,6 @@ import {
 import { cutout } from '../toy/cutout';
 import { sanitizePrefill } from '../voice/prefill';
 import {
-  LANGUAGE_NAMES,
   PREFILL_INSTRUCTIONS,
   prefillPrompt,
   type PrefillBrief,
@@ -50,9 +50,9 @@ const TRANSCRIBE_PER_SECOND = 0.18 / 3600;
 const TRANSCRIBE_MODEL = 'muse-voice-transcribe-1.0';
 /** Languages the speech model is biased toward; Kazakh speakers often switch to Russian. */
 const LANGUAGE_BIAS: Record<Language, string[]> = {
-  ru: [LANGUAGE_NAMES.ru],
-  kk: [LANGUAGE_NAMES.kk, LANGUAGE_NAMES.ru],
-  en: [LANGUAGE_NAMES.en],
+  ru: [LANGUAGE_MODEL_NAMES.ru],
+  kk: [LANGUAGE_MODEL_NAMES.kk, LANGUAGE_MODEL_NAMES.ru],
+  en: [LANGUAGE_MODEL_NAMES.en],
 };
 /** What SAM is asked to find in the parent's photo. */
 const TOY_CONCEPT = 'toy';
@@ -129,8 +129,9 @@ export class MetaGateway implements ModelGateway {
   async reviewStory(
     story: Story,
     age: number,
+    language: Language,
   ): Promise<{ safe: boolean; reason: string; costUsd: number }> {
-    const input = reviewPrompt(JSON.stringify(story), age);
+    const input = reviewPrompt(JSON.stringify(story), age, language);
     const call = this.journal.start({
       kind: 'review',
       model: this.options.storyModel,

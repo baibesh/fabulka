@@ -1,5 +1,6 @@
 "use client";
 
+import { methodologyText } from "@fabulka/shared";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { Badge, button, PageTitle, table, useAdminI18n } from "./ui";
@@ -38,7 +39,7 @@ export function MethodologiesTable() {
               <tr key={m.slug} data-testid="methodology-row" data-slug={m.slug} className="hover:bg-background/60">
                 <td>
                   <Link href={`/admin/methodologies/${m.slug}`} className="font-semibold hover:text-accent">
-                    {m.texts[locale].name || m.texts.ru.name || m.slug}
+                    {methodologyText(m.texts, locale).name || m.slug}
                   </Link>
                   <div className="font-mono text-xs text-muted">{m.slug}</div>
                 </td>

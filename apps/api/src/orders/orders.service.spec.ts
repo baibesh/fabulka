@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import {
   CreateOrderSchema,
+  CITY_UNKNOWN,
   PRINT_UNAVAILABLE,
   DEFAULT_CITIES,
   DEFAULT_PRICES,
@@ -56,7 +57,7 @@ const body = {
   recipientName: 'Айгерим',
   phone: '+7 701 123 45 67',
   email: 'a@example.com',
-  city: 'Шымкент',
+  cityId: 'shymkent',
   address: 'ул. Абая, 1',
   cover: 'hard',
   quantity: 2,
@@ -97,7 +98,7 @@ describe('OrdersService.create', () => {
       [REFERENCE_KEYS.prices]: DEFAULT_PRICES,
       [REFERENCE_KEYS.cities]: DEFAULT_CITIES.map((c) => ({
         ...c,
-        freeDelivery: c.ru === 'Шымкент',
+        freeDelivery: c.id === 'shymkent',
       })),
     });
     const order = await service.create(CreateOrderSchema.parse(body), 'k');
@@ -107,6 +108,29 @@ describe('OrdersService.create', () => {
       deliveryKzt: 0,
       totalKzt: 29800,
     });
+  });
+
+  it('stores the city’s id and its Russian name', async () => {
+    const { service, create } = makeService({});
+    await service.create(
+      CreateOrderSchema.parse({ ...body, cityId: 'ust-kamenogorsk' }),
+      'k',
+    );
+    expect(create.mock.calls[0][0].data).toMatchObject({
+      city: 'Усть-Каменогорск',
+      cityId: 'ust-kamenogorsk',
+    });
+  });
+
+  it('refuses a city that is not on the list', async () => {
+    const { service, create } = makeService({});
+    const error = await service
+      .create(CreateOrderSchema.parse({ ...body, cityId: 'tirana' }), 'k')
+      .catch((e: unknown) => e);
+    expect((error as BadRequestException).getResponse()).toMatchObject({
+      code: CITY_UNKNOWN,
+    });
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('refuses an order from a country without print', async () => {

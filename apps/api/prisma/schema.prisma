@@ -118,7 +118,10 @@ model Order {
   email         String
   /// Language of those emails (ru, kk, en); the book's language when not set.
   locale        String?
+  /// The city's Russian name when ordered (kept even if the owner renames or removes the city).
   city          String
+  /// The city's id in reference.cities; null for orders made before cities had ids.
+  cityId        String?
   address       String
   cover         Cover
   quantity      Int

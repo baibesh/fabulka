@@ -1,4 +1,4 @@
-import type { City } from "@fabulka/shared";
+import { cityName as nameIn, type City } from "@fabulka/shared";
 import type { UiLocale } from "@/i18n/messages";
 import { useReference } from "./use-price";
 
@@ -9,7 +9,11 @@ export function useCities(): City[] {
   return useReference().data?.cities ?? NONE;
 }
 
-/** The city's name in `locale`. The Russian name is the value an order stores; the rest are labels. */
-export function cityName(value: string, locale: UiLocale, cities: readonly City[]): string {
-  return cities.find((c) => c.ru === value)?.[locale] ?? value;
+/**
+ * The name in `locale` of the city an order was sent to: by its id, else by the Russian name the
+ * order keeps (orders made before cities had ids), else that name as it is.
+ */
+export function cityName(order: { city: string; cityId?: string | null }, locale: UiLocale, cities: readonly City[]): string {
+  const city = cities.find((c) => (order.cityId ? c.id === order.cityId : nameIn(c, "ru") === order.city));
+  return city ? nameIn(city, locale) : order.city;
 }

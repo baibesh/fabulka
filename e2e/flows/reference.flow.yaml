@@ -65,7 +65,7 @@ commands:
   # A new delivery city with free delivery, in three languages.
   - tapOn: { testId: reference-tab-cities }
   - waitForVisible: { testId: reference-cities }
-  - assertVisible: { css: "[data-testid=city-row][data-value=Алматы]" }
+  - assertVisible: { css: "[data-testid=city-row][data-id=almaty]" }
   - tapOn: { testId: city-add }
   - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-ru]" }
   - inputText: "Туркестан"
@@ -80,7 +80,9 @@ commands:
       url: ${API}/reference
       assert:
         status: 200
-        json: { "$.cities[10].ru": Туркестан, "$.cities[10].kk": Түркістан, "$.cities[10].freeDelivery": true }
+        json: { "$.cities[10].id": turkestan, "$.cities[10].name.ru": Туркестан, "$.cities[10].name.kk": Түркістан, "$.cities[10].freeDelivery": true }
+  # The id is made from the Russian name on the first save and shown in the admin.
+  - waitForVisible: { css: "[data-testid=city-row][data-id=turkestan]" }
 
   # The book page shows the new price.
   - openLink: "${WEB}/catalog/first-day-kindergarten?lang=ru"
@@ -313,16 +315,16 @@ after:
       method: PUT
       url: ${API}/admin/reference/cities
       json:
-        - { ru: Алматы, kk: Алматы, en: Almaty, freeDelivery: true }
-        - { ru: Астана, kk: Астана, en: Astana, freeDelivery: true }
-        - { ru: Шымкент, kk: Шымкент, en: Shymkent, freeDelivery: false }
-        - { ru: Караганда, kk: Қарағанды, en: Karaganda, freeDelivery: false }
-        - { ru: Актобе, kk: Ақтөбе, en: Aktobe, freeDelivery: false }
-        - { ru: Тараз, kk: Тараз, en: Taraz, freeDelivery: false }
-        - { ru: Павлодар, kk: Павлодар, en: Pavlodar, freeDelivery: false }
-        - { ru: Усть-Каменогорск, kk: Өскемен, en: Oskemen, freeDelivery: false }
-        - { ru: Атырау, kk: Атырау, en: Atyrau, freeDelivery: false }
-        - { ru: Костанай, kk: Қостанай, en: Kostanay, freeDelivery: false }
+        - { id: almaty, name: { ru: Алматы, kk: Алматы, en: Almaty }, freeDelivery: true }
+        - { id: astana, name: { ru: Астана, kk: Астана, en: Astana }, freeDelivery: true }
+        - { id: shymkent, name: { ru: Шымкент, kk: Шымкент, en: Shymkent }, freeDelivery: false }
+        - { id: karaganda, name: { ru: Караганда, kk: Қарағанды, en: Karaganda }, freeDelivery: false }
+        - { id: aktobe, name: { ru: Актобе, kk: Ақтөбе, en: Aktobe }, freeDelivery: false }
+        - { id: taraz, name: { ru: Тараз, kk: Тараз, en: Taraz }, freeDelivery: false }
+        - { id: pavlodar, name: { ru: Павлодар, kk: Павлодар, en: Pavlodar }, freeDelivery: false }
+        - { id: ust-kamenogorsk, name: { ru: Усть-Каменогорск, kk: Өскемен, en: Oskemen }, freeDelivery: false }
+        - { id: atyrau, name: { ru: Атырау, kk: Атырау, en: Atyrau }, freeDelivery: false }
+        - { id: kostanay, name: { ru: Костанай, kk: Қостанай, en: Kostanay }, freeDelivery: false }
       assert: { status: 200 }
   - request:
       method: PUT

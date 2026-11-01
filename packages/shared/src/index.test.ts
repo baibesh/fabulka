@@ -9,6 +9,10 @@ import {
   fillFaq,
   localized,
   localizedTextSchema,
+  methodologyText,
+  cityId,
+  cityName,
+  upgradeCities,
   ChildProfileSchema,
   ClientErrorReportSchema,
   CreateBookSchema,
@@ -72,18 +76,47 @@ describe("progressFor", () => {
 });
 
 describe("orders", () => {
-  it("prices delivery by city", () => {
-    expect(orderPrice("hard", 2, "Алматы", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 29800, delivery: 0, total: 29800 });
-    expect(orderPrice("soft", 1, "Шымкент", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 9900, delivery: 1500, total: 11400 });
+  it("prices delivery by city id", () => {
+    expect(orderPrice("hard", 2, "almaty", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 29800, delivery: 0, total: 29800 });
+    expect(orderPrice("soft", 1, "shymkent", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 9900, delivery: 1500, total: 11400 });
+    // A name is not an id: no free delivery by the Russian name any more.
+    expect(orderPrice("soft", 1, "Алматы", DEFAULT_PRICES, DEFAULT_CITIES).delivery).toBe(1500);
   });
 
   it("prices by the owner's prices and free-delivery cities", () => {
     const prices = { ...DEFAULT_PRICES, covers: { soft: 5000, hard: 8000 }, deliveryKzt: 700 };
-    const cities = DEFAULT_CITIES.map((c) => ({ ...c, freeDelivery: c.ru === "Шымкент" }));
-    expect(orderPrice("soft", 2, "Шымкент", prices, cities)).toEqual({ books: 10000, delivery: 0, total: 10000 });
-    expect(orderPrice("hard", 1, "Алматы", prices, cities)).toEqual({ books: 8000, delivery: 700, total: 8700 });
+    const cities = DEFAULT_CITIES.map((c) => ({ ...c, freeDelivery: c.id === "shymkent" }));
+    expect(orderPrice("soft", 2, "shymkent", prices, cities)).toEqual({ books: 10000, delivery: 0, total: 10000 });
+    expect(orderPrice("hard", 1, "almaty", prices, cities)).toEqual({ books: 8000, delivery: 700, total: 8700 });
     // A city that is no longer listed pays the fee.
-    expect(orderPrice("soft", 1, "Тирана", prices, cities).delivery).toBe(700);
+    expect(orderPrice("soft", 1, "tirana", prices, cities).delivery).toBe(700);
+  });
+
+  it("makes city ids from Russian and Kazakh names", () => {
+    expect(cityId("Усть-Каменогорск")).toBe("ust-kamenogorsk");
+    expect(cityId(" Қостанай ")).toBe("kostanay");
+    expect(cityId("Алматы", ["almaty"])).toBe("almaty-2");
+    expect(cityId("Almaty", ["almaty", "almaty-2"])).toBe("almaty-3");
+    expect(cityId("!!!")).toBe("city");
+    expect(DEFAULT_CITIES.map((c) => c.id)).toEqual(DEFAULT_CITIES.map((c) => cityId(c.name.ru ?? "")));
+  });
+
+  it("upgrades the cities stored before ids, keeping their order", () => {
+    const old = [
+      { ru: "Алматы", kk: "Алматы", en: "Almaty", freeDelivery: true },
+      { ru: "Туркестан", kk: "Түркістан", en: "Turkistan", freeDelivery: false },
+      { ru: "Алматы ", kk: "", en: "Almaty 2", freeDelivery: false },
+    ];
+    expect(upgradeCities(old)).toEqual([
+      { id: "almaty", name: { ru: "Алматы", kk: "Алматы", en: "Almaty" }, freeDelivery: true },
+      { id: "turkestan", name: { ru: "Туркестан", kk: "Түркістан", en: "Turkistan" }, freeDelivery: false },
+      { id: "almaty-2", name: { ru: "Алматы ", en: "Almaty 2" }, freeDelivery: false },
+    ]);
+    expect(upgradeCities(DEFAULT_CITIES)).toBeNull();
+    expect(upgradeCities("broken")).toBeNull();
+    expect(CitiesSchema.safeParse(upgradeCities(old.slice(0, 2))).success).toBe(true);
+    expect(cityName(DEFAULT_CITIES[7], "kk")).toBe("Өскемен");
+    expect(cityName({ ...DEFAULT_CITIES[7], name: { ru: "Усть-Каменогорск", en: "Oskemen" } }, "kk")).toBe("Усть-Каменогорск");
   });
 
   it("normalizes Kazakh phone numbers", () => {
@@ -92,7 +125,7 @@ describe("orders", () => {
       recipientName: "Айгерим",
       phone: "+7 (701) 123-45-67",
       email: " parent@example.com ",
-      city: "Алматы",
+      cityId: "almaty",
       address: "ул. Абая, 1",
       cover: "soft",
       quantity: "1",
@@ -190,13 +223,22 @@ describe("methodologies", () => {
       expect(problems(draft)).toEqual(["texts.ru.name", "texts.ru.summary"]);
     });
 
-    it("publishes only with every language filled in, while a draft may wait", () => {
+    it("publishes with the base languages, Kazakh optional, while a draft may wait", () => {
       const untranslated = { ...input, texts: { ...input.texts, kk: texts(""), en: { name: "Calm", summary: "" } } };
       expect(problems({ ...untranslated, published: false })).toEqual([]);
       const result = UpdateMethodologySchema.safeParse(untranslated);
       expect(result.error?.issues.map((i) => [i.path.join("."), i.message])).toEqual([
-        ["published", expect.stringContaining("kk, en")],
+        ["published", expect.stringContaining("не хватает en")],
       ]);
+      expect(problems({ ...input, texts: { ru: input.texts.ru, en: input.texts.en } })).toEqual([]);
+      expect(problems({ ...input, texts: { ...input.texts, kk: texts("") } })).toEqual([]);
+    });
+
+    it("reads a text in the asked language, else Russian, else English", () => {
+      const all = { ru: texts("Спокойствие"), kk: { name: "", summary: "" }, en: texts("Calm") };
+      expect(methodologyText(all, "kk")).toEqual(texts("Спокойствие"));
+      expect(methodologyText(all, "en")).toEqual(texts("Calm"));
+      expect(methodologyText({ en: texts("Calm") }, "kk").name).toBe("Calm");
     });
   });
 
@@ -397,12 +439,15 @@ describe("reference data", () => {
     expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, deliveryKzt: 0 }).success).toBe(true);
   });
 
-  it("refuses an empty city list, short names and the same city twice", () => {
+  it("refuses an empty city list, a name without English, bad ids and the same city twice", () => {
     expect(CitiesSchema.safeParse([]).success).toBe(false);
-    expect(CitiesSchema.safeParse([{ ru: "А", kk: "А", en: "A", freeDelivery: false }]).success).toBe(false);
-    const twice = CitiesSchema.safeParse([...DEFAULT_CITIES, { ...DEFAULT_CITIES[0], ru: " алматы " }]);
-    expect(twice.success).toBe(false);
-    expect(twice.error?.issues[0].path).toEqual([DEFAULT_CITIES.length, "ru"]);
+    expect(CitiesSchema.safeParse(DEFAULT_CITIES).success).toBe(true);
+    expect(CitiesSchema.safeParse([{ id: "a", name: { ru: "А", kk: "А" }, freeDelivery: false }]).success).toBe(false);
+    expect(CitiesSchema.safeParse([{ id: "Almaty City", name: { ru: "А", en: "A" }, freeDelivery: false }]).success).toBe(false);
+    const sameId = CitiesSchema.safeParse([...DEFAULT_CITIES, { ...DEFAULT_CITIES[0], name: { ru: "Алма", en: "Alma" } }]);
+    expect(sameId.error?.issues[0].path).toEqual([DEFAULT_CITIES.length, "id"]);
+    const sameName = CitiesSchema.safeParse([...DEFAULT_CITIES, { ...DEFAULT_CITIES[0], id: "almaty-2", name: { ru: " алматы ", en: "A" } }]);
+    expect(sameName.error?.issues[0].path).toEqual([DEFAULT_CITIES.length, "name", "ru"]);
   });
 
   it("takes real ISO country codes only, upper-cased, once each", () => {

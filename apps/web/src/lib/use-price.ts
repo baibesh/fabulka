@@ -27,8 +27,8 @@ export function useCoverPrice(cover: Cover): string | null {
   return prices ? formatKzt(prices.covers[cover]) : null;
 }
 
-/** What a printed order costs at the owner's prices; null while loading. The API prices it again. */
-export function useOrderPrice(cover: Cover, quantity: number, city: string) {
+/** What a printed order to this city (by id) costs at the owner's prices; null while loading. The API prices it again. */
+export function useOrderPrice(cover: Cover, quantity: number, cityId: string) {
   const data = useReference().data;
-  return data ? orderPrice(cover, quantity, city, data.prices, data.cities) : null;
+  return data ? orderPrice(cover, quantity, cityId, data.prices, data.cities) : null;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { LANGUAGE_NAMES, OTHER_COUNTRY, bookPrice, faqFor, fillFaq, localized, type FaqPlaceholder } from "@fabulka/shared";
+import { LANGUAGE_NAMES, OTHER_COUNTRY, bookPrice, cityName, faqFor, fillFaq, localized, type FaqPlaceholder } from "@fabulka/shared";
 import { ChevronDown } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import { formatKzt, formatPrice } from "@/lib/format";
@@ -26,7 +26,7 @@ export function Faq() {
         delivery: formatKzt(reference.prices.deliveryKzt, locale),
         freeCities: reference.cities
           .filter((c) => c.freeDelivery)
-          .map((c) => c[locale])
+          .map((c) => cityName(c, locale))
           .join(", "),
         languages: info.languages.map((l) => LANGUAGE_NAMES[l]).join(", "),
         country: country === OTHER_COUNTRY ? t("country.other") : regionName(country, locale),

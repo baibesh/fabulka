@@ -8,6 +8,8 @@ import {
   heroPrompt,
   methodPrompt,
   pagePrompt,
+  prefillPrompt,
+  reviewPrompt,
   storyPrompt,
   toyPrompt,
 } from './prompts';
@@ -73,6 +75,22 @@ describe('prompts', () => {
     ]) {
       expect(prompt).toContain(part);
     }
+  });
+
+  it('names the language in English, never by its own name', () => {
+    const kazakh = storyPrompt(brief({ language: 'kk' }));
+    expect(kazakh).toContain('in Kazakh.');
+    expect(kazakh).not.toContain('Қазақша');
+    expect(
+      prefillPrompt({ transcript: 'x', language: 'kk', theme: false }),
+    ).toContain('The parent speaks Kazakh.');
+  });
+
+  it('tells the safety review the book’s language and the child’s age', () => {
+    const prompt = reviewPrompt('{"title":"Ертегі"}', 5, 'kk');
+    expect(prompt).toContain("Child's age: 5.");
+    expect(prompt).toContain('The story is in Kazakh.');
+    expect(prompt).toContain('{"title":"Ертегі"}');
   });
 
   it('puts the method beats, the age norms and the theme into the story prompt', () => {

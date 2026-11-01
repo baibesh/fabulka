@@ -49,12 +49,13 @@ commands:
   - assertVisible: { text: "Итого: 31 300 ₸" }
   - sql:
       query: >-
-        select o.cover::text as cover, o.quantity, o."totalKzt" as total, o.phone, o.email = $2 as email, o.locale
+        select o.cover::text as cover, o.quantity, o."totalKzt" as total, o.phone, o.email = $2 as email, o.locale,
+        o.city, o."cityId" as city_id
         from "Order" o join "Book" b on b.id = o."bookId" where b.child->>'name' = $1
       params: ["${childName}", "${email}"]
       readOnly: true
       assert:
         rows: 1
-        first: { cover: hard, quantity: 2, total: 31300, phone: "+77011234567", email: true, locale: ru }
+        first: { cover: hard, quantity: 2, total: 31300, phone: "+77011234567", email: true, locale: ru, city: Шымкент, city_id: shymkent }
 after:
   - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

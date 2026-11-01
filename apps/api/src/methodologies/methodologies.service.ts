@@ -15,6 +15,7 @@ import {
   METHODOLOGY_UNKNOWN,
   defaultMethodology,
   fitsAge,
+  methodologyText,
   type AdminMethodology,
   type CreateMethodology,
   type Language,
@@ -124,7 +125,7 @@ export class MethodologiesService implements OnModuleInit {
     if (!fitsAge(method, age)) {
       throw new BadRequestException({
         code: METHODOLOGY_AGE,
-        message: `«${texts(method).ru.name}» подходит для возраста ${method.ageMin}–${method.ageMax} лет`,
+        message: `«${methodologyText(texts(method), 'ru').name}» подходит для возраста ${method.ageMin}–${method.ageMax} лет`,
       });
     }
     return toData(method);
@@ -264,12 +265,13 @@ export function toData(row: MethodologyRow): MethodologyData {
   };
 }
 
+/** In `lang`, each text falling back to Russian, then English (methodologyText). */
 function toPublic(row: MethodologyRow, lang: Language): Methodology {
-  const all = texts(row);
+  const { name, summary } = methodologyText(texts(row), lang);
   return {
     slug: row.slug,
-    name: all[lang]?.name || all.ru.name,
-    summary: all[lang]?.summary || all.ru.summary,
+    name,
+    summary,
     source: row.source,
     ageMin: row.ageMin,
     ageMax: row.ageMax,

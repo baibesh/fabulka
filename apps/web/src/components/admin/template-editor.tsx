@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminTemplate, TemplateQuestion } from "@fabulka/shared";
+import { methodologyText, type AdminTemplate, type TemplateQuestion } from "@fabulka/shared";
 import { Plus, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { use, useState } from "react";
@@ -116,7 +116,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
               {methods.data?.map((m) => (
                 <option key={m.slug} value={m.slug}>
                   {t(m.published ? "admin.template.method.option" : "admin.template.method.draft", {
-                    name: m.texts[locale].name || m.texts.ru.name,
+                    name: methodologyText(m.texts, locale).name,
                     min: m.ageMin,
                     max: m.ageMax,
                   })}
