@@ -9,8 +9,11 @@ export const BLOCK_LIMITS: Record<BlockKind, number> = { cover: 1, dedication: 1
 export const DEDICATION_MAX = 160;
 /** The caption under the parent's photo, in characters. */
 export const PHOTO_CAPTION_MAX = 80;
-/** The photo file the parent may upload, in bytes (before the API re-encodes it). */
-export const PHOTO_MAX_BYTES = 8 * 1024 * 1024;
+/**
+ * The photo file the parent may upload, in bytes (before the API re-encodes it). Sent as a data URL,
+ * a third bigger, it must stay under nginx's 10 MB body limit; bigger JPEG/PNG are shrunk in the browser.
+ */
+export const PHOTO_MAX_BYTES = 7 * 1024 * 1024;
 /** File types the photo page takes; HEIC (iPhone photos) is converted to JPEG by the API. */
 export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/heic", "image/heif"] as const;
 

@@ -254,6 +254,32 @@ function photoProblem(file: File): PhotoRefusal | null {
   return null;
 }
 
+/** Above this a JPEG or PNG is made smaller in the browser first, so the upload stays small. */
+const SHRINK_ABOVE = 3 * 1024 * 1024;
+const SHRINK_SIDE = 2400;
+
+/**
+ * A big JPEG or PNG redrawn at most SHRINK_SIDE px on its longest side as a JPEG: a phone photo of
+ * 10 MB becomes 1–2 MB, which fits the upload limit (the API re-encodes it again anyway). HEIC and
+ * small files go as they are; if the browser can't draw the file, the original goes and the API decides.
+ */
+async function shrinkPhoto(file: File): Promise<File> {
+  if (file.size <= SHRINK_ABOVE || !["image/jpeg", "image/png"].includes(file.type)) return file;
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, SHRINK_SIDE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    return blob ? new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }) : file;
+  } catch {
+    return file;
+  }
+}
+
 const readDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -263,7 +289,7 @@ const readDataUrl = (file: File) =>
   });
 
 /**
- * The photo page: the parent picks a photo of the child (JPEG, PNG or HEIC up to 8 MB), which the API
+ * The photo page: the parent picks a photo of the child (JPEG, PNG or HEIC up to 7 MB; bigger JPEG/PNG are shrunk first), which the API
  * re-encodes without metadata and puts in a frame in the theme's colors, with an optional caption.
  * Uploading adds the page; taking the page out (the bin in the list) deletes the photo. The privacy
  * note says what happens to the photo.
@@ -283,8 +309,9 @@ function PhotoPage({ book, pending, onSave }: { book: Book; pending: boolean; on
   });
   const photo = book.layout.photo;
   const busy = pending || upload.isPending;
-  const pick = (file: File | undefined) => {
-    if (!file) return;
+  const pick = async (picked: File | undefined) => {
+    if (!picked) return;
+    const file = await shrinkPhoto(picked);
     const found = photoProblem(file);
     setProblem(found);
     if (!found) upload.mutate(file);
