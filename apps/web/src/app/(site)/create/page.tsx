@@ -1,24 +1,18 @@
-import Link from "next/link";
 import { BookForm } from "@/components/book-form";
 import { PriceTag } from "@/components/price-tag";
 import { T } from "@/components/t";
+import { BackLink, PageContainer, PageHeader } from "@/components/ui/page";
 
 export default function CreatePage() {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
-      <Link href="/catalog" className="text-sm font-semibold text-accent">
+    <PageContainer width="md" gap="lg">
+      <BackLink href="/catalog">
         <T k="common.back.catalog" />
-      </Link>
-      <header className="flex flex-col gap-3">
-        <h1 className="text-4xl font-extrabold leading-tight">
-          <T k="create.title" />
-        </h1>
-        <p className="text-lg text-muted">
-          <T k="create.lead" />
-        </p>
+      </BackLink>
+      <PageHeader title={<T k="create.title" />} lead={<T k="create.lead" />}>
         <PriceTag kind="custom" />
-      </header>
+      </PageHeader>
       <BookForm />
-    </main>
+    </PageContainer>
   );
 }

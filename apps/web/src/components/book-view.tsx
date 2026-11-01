@@ -18,6 +18,8 @@ import { ErrorText } from "./ui/notice";
 import { QueryState } from "./ui/query-state";
 import { Skeleton } from "./ui/skeleton";
 import { Button, buttonClass } from "./ui/button";
+import { Card } from "./ui/card";
+import { SectionHeader } from "./ui/section-header";
 
 const finished = (status: BookStatus | undefined) => status === "done" || status === "failed";
 
@@ -101,17 +103,14 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
       {book.toy && done && <ToyPipeline toy={book.toy} />}
 
       {done && book.talkQuestions.length > 0 && (
-        <section data-testid="talk-questions" className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-6">
-          <h2 className="flex items-center gap-2 text-xl font-bold">
-            <MessageCircleQuestion className="size-5 text-accent" />
-            {t("book.talk")}
-          </h2>
+        <Card data-testid="talk-questions" padding="lg" className="flex flex-col gap-3">
+          <SectionHeader size="md" icon={<MessageCircleQuestion className="size-5 text-accent" />} title={t("book.talk")} />
           <ol className="list-decimal space-y-2 pl-6">
             {book.talkQuestions.map((question) => (
               <li key={question}>{question}</li>
             ))}
           </ol>
-        </section>
+        </Card>
       )}
     </div>
   );
@@ -173,7 +172,7 @@ function ToyPipeline({ toy }: { toy: NonNullable<Book["toy"]> }) {
     { label: t("book.toy.sheet"), url: toy.sheetUrl, cover: false },
   ];
   return (
-    <section data-testid="toy-pipeline" className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
+    <Card data-testid="toy-pipeline" className="flex flex-col gap-3">
       <h2 className="font-bold">{toy.name ? t("book.toy.named", { name: toy.name }) : t("book.toy.title")}</h2>
       <ol className="grid grid-cols-3 gap-3">
         {steps.map((step, i) => (
@@ -195,7 +194,7 @@ function ToyPipeline({ toy }: { toy: NonNullable<Book["toy"]> }) {
           </li>
         ))}
       </ol>
-    </section>
+    </Card>
   );
 }
 

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { ErrorText, Notice } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
 import { Button, buttonClass } from "@/components/ui/button";
+import { BackLink } from "@/components/ui/page";
 
 /** The book's model calls in order, timed from the first: where generation spent its time and money. */
 function BookCalls({ id, generating }: { id: string; generating: boolean }) {
@@ -84,9 +85,7 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <>
-      <Link href="/admin/books" className="text-sm font-semibold text-accent">
-        {t("admin.book.back")}
-      </Link>
+      <BackLink href="/admin/books">{t("admin.book.back")}</BackLink>
       <PageTitle
         aside={
           <div className="flex flex-wrap gap-2">

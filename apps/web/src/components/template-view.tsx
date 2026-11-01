@@ -13,6 +13,8 @@ import { BookReader } from "./book-reader";
 import { primaryButton } from "./landing/section";
 import { PriceTag } from "./price-tag";
 import { QueryState } from "./ui/query-state";
+import { Card } from "./ui/card";
+import { SectionHeader } from "./ui/section-header";
 
 const FORM_ID = "book-form-section";
 
@@ -95,16 +97,14 @@ function SampleBook({ book, template }: { book: Book; template: Template }) {
 
   return (
     <section data-testid="sample-book" className="flex flex-col gap-4">
-      <header className="flex flex-col gap-2">
-        <h2 className="text-3xl font-extrabold leading-tight">{t("sample.title")}</h2>
-        <p className="text-muted">{t("sample.lead", { name: book.childName })}</p>
+      <SectionHeader size="xl" title={t("sample.title")} lead={t("sample.lead", { name: book.childName })}>
         <p className="text-sm text-muted">
           <mark className="rounded bg-accent/20 px-1 font-semibold text-foreground underline decoration-accent decoration-dotted underline-offset-4">
             {book.childName}
           </mark>{" "}
           — {t("sample.legend")}
         </p>
-      </header>
+      </SectionHeader>
       <BookReader book={book} highlights={highlights} />
     </section>
   );
@@ -123,8 +123,8 @@ function Changes({ template, method }: { template: Template; method?: string }) 
   ];
 
   return (
-    <section data-testid="template-changes" className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
-      <h2 className="text-2xl font-extrabold">{t("template.changes.title")}</h2>
+    <Card data-testid="template-changes" radius="lg" padding="fluid" shadow="sm" className="flex flex-col gap-4">
+      <SectionHeader title={t("template.changes.title")} />
       <ul className="grid gap-3 sm:grid-cols-2">
         {items.map(({ icon: Icon, text }) => (
           <li key={text} className="flex items-start gap-3">
@@ -139,6 +139,6 @@ function Changes({ template, method }: { template: Template; method?: string }) 
         <BookOpen className="mt-0.5 size-5 shrink-0" />
         {method ? t("template.changes.same", { method }) : t("template.changes.same.plain")}
       </p>
-    </section>
+    </Card>
   );
 }

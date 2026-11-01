@@ -3,7 +3,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { methodologyText, type AdminTemplate, type TemplateQuestion } from "@fabulka/shared";
 import { Plus, Save, Trash2 } from "lucide-react";
-import Link from "next/link";
 import { use, useState } from "react";
 import { adminTemplate, updateTemplate } from "@/lib/admin-api";
 import { Card, PageTitle, useAdminI18n } from "./ui";
@@ -14,6 +13,7 @@ import { Button, IconButton } from "@/components/ui/button";
 import { Checkbox, ChoiceLabel } from "@/components/ui/choice";
 import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
+import { BackLink } from "@/components/ui/page";
 
 export function TemplateEditor({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -65,9 +65,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
       }}
       className="flex flex-col gap-6"
     >
-      <Link href="/admin/catalog" className="text-sm font-semibold text-accent">
-        {t("admin.template.back")}
-      </Link>
+      <BackLink href="/admin/catalog">{t("admin.template.back")}</BackLink>
       <PageTitle
         aside={
           <div className="flex items-center gap-3">

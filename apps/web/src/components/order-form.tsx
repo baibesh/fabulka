@@ -21,6 +21,8 @@ import { Button } from "./ui/button";
 import { ChoiceCard, Radio } from "./ui/choice";
 import { Field } from "./ui/field";
 import { Input, Select } from "./ui/input";
+import { Card } from "./ui/card";
+import { PageHeader } from "./ui/page";
 
 type FormValues = z.input<typeof CreateOrderSchema>;
 
@@ -60,22 +62,19 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
   // Print is priced in tenge and offered only where the country has it (the API refuses the rest).
   if (!info.print) {
     return (
-      <section data-testid="order-unavailable" className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-6">
+      <Card data-testid="order-unavailable" radius="lg" padding="lg" className="flex flex-col gap-3">
         <h1 className="flex items-center gap-2 text-2xl font-extrabold">
           <Printer className="size-6 text-accent" />
           {t("order.unavailable.title")}
         </h1>
         <p className="text-muted">{t("order.unavailable.text")}</p>
-      </section>
+      </Card>
     );
   }
 
   return (
     <form data-testid="order-form" noValidate onSubmit={form.handleSubmit((values) => order.mutate({ ...values, locale }))} className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-3xl font-extrabold">{t("order.title")}</h1>
-        {book.data?.title && <p className="text-muted">«{book.data.title}»</p>}
-      </header>
+      <PageHeader size="md" title={t("order.title")} lead={book.data?.title && `«${book.data.title}»`} />
 
       <fieldset className="grid gap-3 sm:grid-cols-2">
         {(["soft", "hard"] as const).map((value) => (
@@ -88,7 +87,7 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
         ))}
       </fieldset>
 
-      <div className="grid gap-5 rounded-3xl border border-border bg-card p-6 sm:grid-cols-2">
+      <Card as="div" radius="lg" padding="lg" className="grid gap-5 sm:grid-cols-2">
         <Field label={t("order.recipient")} error={errors.recipientName && t("order.recipient.error")}>
           <Input data-testid="recipient-name" placeholder={t("order.recipient.placeholder")} {...form.register("recipientName")} />
         </Field>
@@ -119,9 +118,9 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
         <Field label={t("order.address")} error={errors.address && t("order.address.error")} className="sm:col-span-2">
           <Input data-testid="address" placeholder={t("order.address.placeholder")} {...form.register("address")} />
         </Field>
-      </div>
+      </Card>
 
-      <section data-testid="order-summary" className="flex flex-col gap-1 rounded-2xl bg-card p-5">
+      <Card data-testid="order-summary" border="none" className="flex flex-col gap-1">
         <div className="flex justify-between">
           <span>{t("order.books")}</span>
           <span>{price ? formatKzt(price.books) : <PriceSkeleton />}</span>
@@ -134,7 +133,7 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
           <span>{t("order.total")}</span>
           <span data-testid="order-total">{price ? formatKzt(price.total) : <PriceSkeleton className="w-20" />}</span>
         </div>
-      </section>
+      </Card>
 
       <Button type="submit" size="lg" data-testid="place-order" loading={order.isPending} disabled={!price} icon={<Printer className="size-5" />}>
         {t("order.submit")}

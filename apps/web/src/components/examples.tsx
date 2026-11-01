@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { listExamples } from "@/lib/api";
+import { SectionHeader } from "./ui/section-header";
 
 /** Finished books the admin picked, for visitors to flip through before making their own. */
 export function Examples() {
@@ -21,10 +22,7 @@ export function Examples() {
   if (!shown) return null;
   return (
     <section ref={section} id="examples" data-testid="examples" className="flex scroll-mt-20 flex-col gap-5">
-      <header className="flex flex-col gap-2">
-        <h2 className="text-3xl font-extrabold">{t("examples.title")}</h2>
-        <p className="text-muted">{t("examples.lead")}</p>
-      </header>
+      <SectionHeader size="xl" title={t("examples.title")} lead={t("examples.lead")} />
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {examples?.map((book) => (
           <li key={book.id}>

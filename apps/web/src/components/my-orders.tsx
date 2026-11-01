@@ -10,6 +10,8 @@ import { formatDay, formatKzt } from "@/lib/format";
 import { ErrorNotice } from "./error-notice";
 import { OrderAddress, OrderTimeline } from "./order-timeline";
 import { EmptyState } from "./ui/empty-state";
+import { Card } from "./ui/card";
+import { SectionHeader } from "./ui/section-header";
 
 /**
  * «Мои заказы»: printed orders with where each one is. Shown when there are orders, or when the
@@ -35,10 +37,7 @@ export function MyOrders() {
 
   return (
     <section id="orders" data-testid="my-orders" className="flex scroll-mt-24 flex-col gap-4">
-      <h2 className="flex items-center gap-2 text-2xl font-extrabold">
-        <Package className="size-6 text-accent" />
-        {t("my.orders.title")}
-      </h2>
+      <SectionHeader icon={<Package className="size-6 text-accent" />} title={t("my.orders.title")} />
       {!orders.data.length ? (
         <EmptyState variant="box" data-testid="my-orders-empty">
           {t("my.orders.empty")}
@@ -46,7 +45,7 @@ export function MyOrders() {
       ) : (
         <ul className="grid gap-4 lg:grid-cols-2">
           {orders.data.map((order) => (
-            <li key={order.id} data-testid="my-order" data-order-id={order.id} className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
+            <Card as="li" key={order.id} data-testid="my-order" data-order-id={order.id} className="flex flex-col gap-4">
               <div className="flex gap-4">
                 {order.bookImageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
@@ -74,7 +73,7 @@ export function MyOrders() {
                 {t("my.orders.open")}
                 <ChevronRight className="size-4" />
               </Link>
-            </li>
+            </Card>
           ))}
         </ul>
       )}

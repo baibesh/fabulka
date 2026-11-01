@@ -1,5 +1,8 @@
 import type { BookStatus, OrderStatus } from "@fabulka/shared";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
+import { Card as UiCard } from "@/components/ui/card";
+import { cx } from "@/components/ui/cx";
+import { PageHeader } from "@/components/ui/page";
 import type { BadgeTone } from "@/components/ui/badge";
 import { intlLocale } from "@/i18n/format";
 import { useI18n } from "@/i18n/i18n";
@@ -40,27 +43,14 @@ export function useAdminI18n() {
   };
 }
 
-export function Card({ title, action, children, className = "" }: { title?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
-  return (
-    <section className={`flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 ${className}`}>
-      {(title || action) && (
-        <div className="flex items-center justify-between gap-3">
-          {title && <h2 className="font-bold">{title}</h2>}
-          {action}
-        </div>
-      )}
-      {children}
-    </section>
-  );
+/** The admin's card: the shared Card with its contents stacked. */
+export function Card({ className, ...props }: ComponentProps<typeof UiCard>) {
+  return <UiCard className={cx("flex flex-col gap-4", className)} {...props} />;
 }
 
+/** The admin's page heading: the shared PageHeader at the admin's size. */
 export function PageTitle({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <h1 className="text-2xl font-extrabold">{children}</h1>
-      {aside}
-    </div>
-  );
+  return <PageHeader size="sm" title={children} aside={aside} />;
 }
 
 export const table = "w-full text-left text-sm [&_td]:px-3 [&_td]:py-2.5 [&_th]:px-3 [&_th]:py-2 [&_th]:font-semibold [&_th]:text-muted [&_tbody_tr]:border-t [&_tbody_tr]:border-border";

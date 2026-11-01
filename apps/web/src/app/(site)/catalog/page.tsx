@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Catalog } from "@/components/catalog";
 import { T } from "@/components/t";
+import { PageContainer, PageHeader } from "@/components/ui/page";
 
 export const metadata: Metadata = {
   title: "Каталог книг",
@@ -10,16 +11,9 @@ export const metadata: Metadata = {
 
 export default function CatalogPage() {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-12">
-      <header className="flex max-w-3xl flex-col gap-3">
-        <h1 className="text-4xl font-extrabold leading-tight">
-          <T k="catalog.title" />
-        </h1>
-        <p className="text-lg text-muted">
-          <T k="catalog.lead" />
-        </p>
-      </header>
+    <PageContainer gap="xl">
+      <PageHeader title={<T k="catalog.title" />} lead={<T k="catalog.lead" />} className="max-w-3xl" />
       <Catalog />
-    </main>
+    </PageContainer>
   );
 }
