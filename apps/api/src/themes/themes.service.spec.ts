@@ -92,7 +92,7 @@ describe('ThemesService.propose (Chromium)', () => {
     };
     expect(body.code).toBe(THEME_REFUSED);
     expect(body.message).toMatch(
-      /contrast: ink #c9cfc0 on paper #f6f8ef: 1\.\d+, needs 4\.5/,
+      /contrast: ink #c9cfc0 on paper #f6f8ef: 1\.\d+, needs 7/,
     );
     expect(body.checks.find((c) => c.check === 'contrast')?.ok).toBe(false);
     expect(created).toHaveLength(1);

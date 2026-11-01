@@ -36,8 +36,13 @@ export type ProposedTheme = z.infer<typeof ProposedThemeSchema>;
 export const ThemeBriefSchema = z.object({ brief: z.string().trim().min(3).max(300) });
 export type ThemeBrief = z.infer<typeof ThemeBriefSchema>;
 
-/** WCAG AA for body text; large titles and ornaments may go down to 3. */
-export const MIN_TEXT_CONTRAST = 4.5;
+/**
+ * WCAG AAA for body text on paper and on a plate (7:1): picture books are read aloud in all kinds of
+ * light, often by young eyes. Large titles may go down to 3.
+ */
+export const MIN_TEXT_CONTRAST = 7;
+/** Text over a picture, against what is under it (the chooser's check): WCAG AA, 4.5:1. */
+export const MIN_OVERLAY_CONTRAST = 4.5;
 export const MIN_LARGE_CONTRAST = 3;
 /** Ornaments (the accent color) are decoration, not text: they need only to stand out from the paper. */
 export const MIN_DECOR_CONTRAST = 2;
@@ -64,7 +69,7 @@ export function themeFromProposal(id: string, proposal: ProposedTheme): BookThem
     fonts: proposal.fonts,
     sizes: proposal.sizes,
     minFit: 0.8,
-    minContrast: MIN_TEXT_CONTRAST,
+    minContrast: MIN_OVERLAY_CONTRAST,
     palette: ThemePaletteSchema.parse(proposal.palette),
     variants: [...new Set(proposal.variants.filter((v) => v !== "plate"))].length ? [...new Set(proposal.variants.filter((v) => v !== "plate"))] : ["split"],
     textSpace: proposal.textSpace,

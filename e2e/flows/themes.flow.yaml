@@ -3,7 +3,7 @@
 # the owner looks at the previews per language and publishes it; staff pick it in the template editor
 # (which previews the sample book per language) and a parent switches a book to it. Taken back, it
 # leaves the template editor, the catalog book and the parents' picker, while the book keeps its look.
-# A pale theme is refused with the reason.
+# A pale theme is refused with the reason (body text needs 7:1, WCAG AAA).
 appId: ${WEB}
 tags: [admin, layout, themes]
 db: ${DATABASE_URL}
@@ -43,7 +43,7 @@ commands:
   - tapOn: { testId: theme-propose }
   - waitForVisible: { testId: theme-refused, timeout: 30000 }
   - assertVisible: { css: "[data-testid=theme-refused] [data-testid=theme-check][data-check=contrast][data-ok=false]" }
-  - assertVisible: { testId: theme-refused, containsDescendants: { contains: "needs 4.5" } }
+  - assertVisible: { testId: theme-refused, containsDescendants: { contains: "needs 7" } }
   - sql:
       query: 'select count(*)::int as n from "Theme" where brief = $1'
       params: ["${paleBrief}"]

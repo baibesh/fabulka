@@ -25,6 +25,7 @@ import { JournalService } from '../journal/journal.service';
 import { bookFontCss } from '../layout/fonts';
 import { hyphenatorFor } from '../layout/hyphenate';
 import { StorageService } from '../storage/storage.service';
+import { withPrintBoxes } from './print-boxes';
 
 /** Renders with each page's text made to fit; story pages that still overflow try another layout. */
 const ROUNDS = 3;
@@ -327,7 +328,8 @@ export class PdfService {
 
   /**
    * The print file of a frozen layout: every page with the format's bleed (pictures run on past the
-   * trim), on a sheet with crop marks and a label outside the bleed. Nothing is chosen or checked
+   * trim), on a sheet with crop marks and a label outside the bleed, with TrimBox and BleedBox set for
+   * the print shop's preflight. Nothing is chosen or checked
    * again — the layout, its page picks and its shrink are the ones the order froze. Written to
    * `outPath` (a storage path); returns it.
    */
@@ -370,7 +372,10 @@ export class PdfService {
         printBackground: true,
         preferCSSPageSize: true,
       });
-      return await this.storage.save(outPath, pdf);
+      return await this.storage.save(
+        outPath,
+        await withPrintBoxes(pdf, layout.format),
+      );
     } finally {
       await browser.close();
     }

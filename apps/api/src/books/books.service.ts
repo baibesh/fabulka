@@ -20,6 +20,7 @@ import {
   availableVariants,
   blankPage,
   bookFormatOf,
+  calmSpace,
   defaultThemeId,
   newLayout,
   planBook,
@@ -602,8 +603,8 @@ export class BooksService implements OnModuleInit {
     spent: Spend,
   ): Promise<void> {
     const { child } = brief;
-    // Pictures leave calm space where the theme prints text over them.
-    const textSpace = theme.textSpace ?? undefined;
+    // Pictures leave calm space for text only when the theme first prints text over them.
+    const textSpace = calmSpace(theme) ?? undefined;
 
     // The toy first: SAM cuts it out of the photo, Muse Spark puts it into words for the story.
     let toyReference: Buffer | null = null;

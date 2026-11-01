@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { BOOK_THEMES, ProposedThemeSchema, checkContrast, checkFonts, checkSizes, renderBook, newLayout, themeFromProposal, type RenderableBook } from "./index";
+import {
+  BOOK_THEMES,
+  MIN_OVERLAY_CONTRAST,
+  MIN_TEXT_CONTRAST,
+  contrast,
+  luminance,
+  ProposedThemeSchema,
+  checkContrast, checkFonts, checkSizes, renderBook, newLayout, themeFromProposal, type RenderableBook } from "./index";
 
 const proposal = {
   name: { ru: "Лес", kk: "Орман", en: "Forest", es: "Bosque", de: "Wald" },
@@ -33,7 +40,20 @@ describe("AI theme checks", () => {
     const pale = { ...theme, palette: { ...theme.palette, ink: "#c9cfc0" } };
     const check = checkContrast(pale);
     expect(check.ok).toBe(false);
-    expect(check.detail).toMatch(/ink #c9cfc0 on paper #f6f8ef: 1\.\d\d, needs 4\.5/);
+    expect(check.detail).toMatch(/ink #c9cfc0 on paper #f6f8ef: 1\.\d\d, needs 7/);
+  });
+
+  it("asks AAA (7:1) of body ink on paper and plate, AA of text over pictures", () => {
+    // #6b6b6b on the paper is about 5:1: enough for AA, not for a picture book's body text.
+    const grey = { ...theme, palette: { ...theme.palette, ink: "#6b6b6b" } };
+    expect(contrast(luminance(grey.palette.ink), luminance(grey.palette.paper))).toBeGreaterThan(4.5);
+    expect(checkContrast(grey).detail).toMatch(/ink #6b6b6b on paper #f6f8ef: \d\.\d\d, needs 7; ink #6b6b6b on plate/);
+    expect(MIN_TEXT_CONTRAST).toBe(7);
+    expect(theme.minContrast).toBe(MIN_OVERLAY_CONTRAST);
+    for (const t of [BOOK_THEMES.fairy, BOOK_THEMES.adventure, BOOK_THEMES.little]) {
+      expect(contrast(luminance(t.palette.ink), luminance(t.palette.paper))).toBeGreaterThanOrEqual(7);
+      expect(contrast(luminance(t.palette.ink), luminance(t.palette.plate))).toBeGreaterThanOrEqual(7);
+    }
   });
 
   it("refuses fonts off the list, missing weights and display fonts for body text", () => {

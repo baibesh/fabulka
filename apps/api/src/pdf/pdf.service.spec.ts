@@ -5,6 +5,7 @@ import {
   withFormat,
   type RenderableBook,
 } from '@fabulka/shared';
+import { PDFDocument } from 'pdf-lib';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -133,6 +134,21 @@ describe('PdfService (Chromium)', () => {
     expect(box).not.toBeNull();
     expect(Number(box![1])).toBeCloseTo(pt(size.widthMm), 0);
     expect(Number(box![2])).toBeCloseTo(pt(size.heightMm), 0);
+    // The trim and the bleed are marked for the print shop's preflight on every page.
+    const doc = await PDFDocument.load(file);
+    expect(doc.getPageCount()).toBeGreaterThan(4);
+    for (const page of doc.getPages()) {
+      const trim = page.getTrimBox();
+      const bleed = page.getBleedBox();
+      expect(trim.width).toBeCloseTo(pt(148), 1);
+      expect(trim.height).toBeCloseTo(pt(210), 1);
+      expect(trim.x).toBeCloseTo(pt(13), 1);
+      expect(bleed.width).toBeCloseTo(pt(154), 1);
+      expect(page.getMediaBox().height - (trim.y + trim.height)).toBeCloseTo(
+        pt(13),
+        1,
+      );
+    }
   });
 
   it('shrinks text a little too long for its box', async () => {

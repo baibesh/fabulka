@@ -201,6 +201,19 @@ export function wordsPerPage(theme: BookTheme, age: number, format?: BookFormat)
   return Math.min(ageBand(age).maxWordsPerPage, typeScale(theme, age, format).maxWords);
 }
 
+/** Variants that print the text over the picture, so the picture should leave calm space for it. */
+export const OVERLAY_VARIANTS = ["overlay-bottom", "overlay-top", "spread"] as const;
+
+/**
+ * Where page pictures are asked to leave calm space for text: only when the theme's first-choice
+ * layout prints text over the picture. A theme that puts text beside the picture first (split, facing)
+ * gets full pictures — asking anyway left an empty faded band in them; its overlays are still used on
+ * pages whose picture happens to be calm, and the plate covers the rest.
+ */
+export function calmSpace(theme: BookTheme): "top" | "bottom" | null {
+  return (OVERLAY_VARIANTS as readonly string[]).includes(theme.variants[0]) ? theme.textSpace : null;
+}
+
 /** The optional blocks a parent may add when the template says nothing. */
 export const DEFAULT_ADDABLE: LayoutBlock["kind"][] = ["dedication", "talk", "drawing", "photo"];
 

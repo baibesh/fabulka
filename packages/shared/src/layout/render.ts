@@ -126,7 +126,7 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
     let inner = "";
     switch (planned.kind) {
       case "cover":
-        inner = cover(book, layout, title, labels.madeFor(book.childName), bleedArt);
+        inner = cover(book, layout, title, labels.madeFor(book.childName), bleedArt, ornament);
         classes.push(`fb-cover-${layout.theme.cover}`);
         break;
       case "dedication":
@@ -144,7 +144,9 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
       case "talk":
         inner = `<div class="fb-box" data-fit-box style="${place(paperRect(layout))}"><div class="fb-flow">
   <h2 class="fb-heading" data-qa-text>${escapeHtml(labels.talk)}</h2>
-  <ol class="fb-questions">${book.talkQuestions.map((q) => `<li data-qa-text>${body(q)}</li>`).join("")}</ol></div></div>`;
+  <ol class="fb-questions">${book.talkQuestions
+    .map((q, i) => `<li><span class="fb-num" aria-hidden="true">${i + 1}.</span><span data-qa-text>${body(q)}</span></li>`)
+    .join("")}</ol></div></div>`;
         break;
       case "photo":
         inner = photoPage(layout, asset, ornament, title);
@@ -214,6 +216,7 @@ function cover(
   title: (t: string) => string,
   madeFor: string,
   bleedArt: (r: Rect) => string,
+  ornament: () => string,
 ): string {
   // On a scene cover the title goes where the theme's pictures leave calm space, not over a face.
   const atBottom = layout.theme.cover === "scene" && layout.theme.textSpace === "bottom";
@@ -221,10 +224,20 @@ function cover(
   <h1 data-qa-text>${title(book.title ?? "")}</h1>
   <p class="fb-for" data-qa-text>${escapeHtml(madeFor)}</p></div></div>`;
   if (layout.theme.cover === "scene") {
+    const { widthMm: w, heightMm: h, safeMm: s } = layout.format;
+    if (book.heroImage) {
+      // The hero's character sheet (drawn once for every book, on white) stands on the cover's own
+      // sky, its white multiplied away, opposite the title: the cover never repeats a story page.
+      const hero = atBottom ? { x: s, y: s, w: w - 2 * s, h: h * 0.62 - s } : { x: s, y: h * 0.36, w: w - 2 * s, h: h * 0.64 - s };
+      // The theme's ornament on either side of the hero, like a printed frontispiece.
+      const mid = hero.y + hero.h * 0.55;
+      const flank = (x: number) => `<div class="fb-ornament fb-cover-ornament" style="left:${mm(x)};top:${mm(mid)}">${ornament()}</div>`;
+      return `<div class="fb-cover-sky" style="${bleedArt({ x: 0, y: 0, w, h }) || "inset:0"}"></div>${flank(s + 4)}${flank(w - s - 26)}${image(book.heroImage, "fb-cover-hero", undefined, `${place(hero)};`)}${heading}`;
+    }
+    // A book without a character sheet (none so far) keeps its first picture.
     const first = book.pages[0];
     const state = layout.pages[String(first?.page)];
-    const { widthMm: w, heightMm: h } = layout.format;
-    return `${image(first?.image ?? book.heroImage, "fb-art", crop(state, w / h), bleedArt({ x: 0, y: 0, w, h }))}${heading}`;
+    return `${image(first?.image, "fb-art", crop(state, w / h), bleedArt({ x: 0, y: 0, w, h }))}${heading}`;
   }
   return `<div class="fb-hero-frame">${image(book.heroImage, "fb-hero")}</div>${heading}`;
 }
@@ -346,8 +359,13 @@ export const BOOK_CSS = `
 .fb-right .fb-folio { right: 9mm; }
 .fb-heading, .fb-cover-title h1, .fb-end-title, .fb-dedication-text { font-family: var(--heading); font-weight: var(--heading-weight); }
 .fb-heading { font-size: calc(var(--heading-size) * var(--fit)); line-height: 1.15; margin-bottom: 7mm; color: var(--ink); }
-.fb-questions { padding-left: 7mm; }
-.fb-questions li { margin-bottom: 4mm; line-height: 1.35; }
+.fb-questions { list-style: none; }
+.fb-questions li { display: flex; gap: 2.5mm; margin-bottom: 4mm; line-height: 1.35; }
+/* The numbers are drawn here, in the body font with lining figures, not as list markers: a marker
+   sat outside the text box (clipped) and took whatever font the list had, e.g. a heading font whose
+   "1" reads as "l". */
+.fb-num { flex: none; min-width: 1.4em; font-family: var(--body); font-weight: 700; color: var(--ink);
+  font-variant-numeric: lining-nums tabular-nums; }
 .fb-dedication-text { font-size: calc(var(--heading-size) * var(--fit)); line-height: 1.25; }
 .fb-end-title { font-size: calc(var(--title-size) * 1.15 * var(--fit)); line-height: 1.1; }
 .fb-made { margin-top: 6mm; font-size: 9pt; color: var(--muted); }
@@ -362,6 +380,9 @@ export const BOOK_CSS = `
 .fb-cover-framed .fb-cover-title h1 { color: var(--cover-ink); }
 .fb-cover-framed .fb-for { color: var(--cover-ink); opacity: .8; }
 .fb-cover-framed .fb-cover-title { top: calc(var(--safe) + 128mm); bottom: var(--safe); }
+.fb-cover-sky { position: absolute; background: radial-gradient(ellipse 75% 65% at 50% 50%, var(--paper) 0%, var(--cover) 72%); }
+.fb-cover-hero { position: absolute; object-fit: contain; mix-blend-mode: multiply; }
+.fb-cover-ornament { position: absolute; width: 22mm; margin: 0; opacity: .75; transform: translateY(-50%); }
 .fb-cover-scene .fb-cover-title { top: var(--safe); max-height: 46%; }
 .fb-cover-scene .fb-cover-title.fb-at-bottom { top: auto; bottom: var(--safe); }
 .fb-cover-scene .fb-cover-title .fb-flow { background: color-mix(in srgb, var(--plate) 88%, transparent); border-radius: 6mm;

@@ -4,6 +4,7 @@ import {
   BOOK_FORMATS,
   BOOK_THEMES,
   BookLayoutSchema,
+  calmSpace,
   formatTypeScale,
   withFormat,
   SELECTABLE_THEMES,
@@ -81,6 +82,14 @@ describe("themes", () => {
     const a4 = renderBook(book(), withFormat(newLayout("fairy", 6), BOOK_FORMATS["a4-landscape"]));
     expect(a5.pages[2].html).toContain("--body-size:14.5pt");
     expect(a4.pages[2].html).toContain("--body-size:17.5pt");
+  });
+
+  it("asks pictures for calm space only when the first-choice layout prints text over them", () => {
+    expect(calmSpace(BOOK_THEMES.fairy)).toBe("bottom");
+    expect(calmSpace(BOOK_THEMES.adventure)).toBe("top");
+    expect(calmSpace(BOOK_THEMES.little)).toBeNull();
+    expect(calmSpace(BOOK_THEMES.classic)).toBeNull();
+    expect(calmSpace({ ...BOOK_THEMES.little, variants: ["facing", "overlay-bottom"] })).toBeNull();
   });
 
   it("offers only themes that cover all of a template's languages", () => {
@@ -206,6 +215,24 @@ describe("renderBook", () => {
     const shrunk = renderBook(book(), { ...layout, fits: { "story-2": 0.85 } });
     expect(shrunk.pages.find((p) => p.key === "story-2")!.html).toContain("--fit:0.85");
     expect(shrunk.pages.find((p) => p.key === "story-1")!.html).toContain("--fit:1");
+  });
+
+  it("numbers the talk questions itself, in the body font, inside the text box", () => {
+    const talk = renderBook(book(), newLayout("little")).pages.find((p) => p.key === "talk")!.html;
+    expect(talk).toContain('<span class="fb-num" aria-hidden="true">1.</span><span data-qa-text>Кітапта не болды?</span>');
+    expect(talk).toContain('<span class="fb-num" aria-hidden="true">2.</span>');
+  });
+
+  it("puts the hero's character sheet on a scene cover, never a story page's picture", () => {
+    const cover = rendered.pages[0].html;
+    expect(cover).toContain('class="fb-cover-hero" src="hero.png"');
+    expect(cover).toContain('class="fb-cover-sky"');
+    expect(cover).not.toContain("page-1.png");
+    // Bleed: the sky runs into it, the hero stays where it was.
+    const bled = renderBook(book(), layout, { bleed: true }).pages[0].html;
+    expect(bled).toMatch(/class="fb-cover-sky" style="left:-3mm;top:-3mm;width:216mm;height:216mm/);
+    // The framed cover keeps the hero in its frame.
+    expect(renderBook(book(), newLayout("little")).pages[0].html).toContain('class="fb-hero" src="hero.png"');
   });
 
   it("makes a print document with the page size and the book language", () => {
