@@ -16,8 +16,8 @@ import {
   type MethodologyTexts,
 } from "@fabulka/shared";
 import { Eye, Save, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { use, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { adminMethodology, createMethodology, deleteMethodology, previewMethodology, updateMethodology } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
 import { Card, useAdminI18n } from "./ui";
@@ -79,8 +79,8 @@ const fields = (d: Draft, sortOrder: number) => ({
 });
 
 /** /admin/methodologies/[slug]: loads the method, then edits it. */
-export function MethodologyPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = use(params);
+export function MethodologyPage() {
+  const { slug } = useParams<{ slug: string }>();
   const method = useQuery({ queryKey: ["admin", "methodology", slug], queryFn: () => adminMethodology(slug) });
   if (!method.data) return <QueryState error={method.error} scope="admin" />;
   // Keyed so the form starts over from the saved method after each save.

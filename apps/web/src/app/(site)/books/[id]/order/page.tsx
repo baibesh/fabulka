@@ -14,7 +14,7 @@ export default function OrderPage({ params }: PageProps<"/books/[id]/order">) {
         }
       >
         <BackToBook params={params} />
-        <OrderForm params={params} />
+        <OrderForm />
       </Suspense>
     </PageContainer>
   );

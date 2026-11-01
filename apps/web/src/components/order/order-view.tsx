@@ -1,8 +1,9 @@
 "use client";
 
+import { useParams } from "next/navigation";
+
 import { useQuery } from "@/lib/query";
 import { ArrowLeft } from "lucide-react";
-import { use } from "react";
 import { getOrder } from "@/lib/api";
 import { useI18n } from "@/i18n/i18n";
 import { useFormat } from "@/hooks/use-format";
@@ -11,8 +12,8 @@ import { QueryState } from "../ui/query-state";
 import { Card } from "../ui/card";
 import { BackLink, PageHeader } from "../ui/page";
 
-export function OrderView({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export function OrderView() {
+  const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
   const { kzt } = useFormat();
   const { data: order, error } = useQuery({

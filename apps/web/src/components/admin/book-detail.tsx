@@ -3,8 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, ExternalLink, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { use, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { adminBook, bookCalls, deleteBook, pinLayout, setFeatured } from "@/lib/admin-api";
 import { CallDetail } from "./journal/call-detail";
 import { CallStatus } from "./journal/call-status";
@@ -142,8 +142,8 @@ function BookCalls({ id, generating }: { id: string; generating: boolean }) {
   );
 }
 
-export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export function BookDetail() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { t, date, bookStatus } = useAdminI18n();
   const book = useQuery({ queryKey: ["admin", "book", id], queryFn: () => adminBook(id) });

@@ -1,12 +1,13 @@
 "use client";
 
+import { useParams } from "next/navigation";
+
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@/lib/query";
 import { type Book, type BookStatus } from "@fabulka/shared";
 import { AlertTriangle, Check, Download, MessageCircleQuestion, Printer, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
-import { use } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { getBook, wantPrint } from "@/lib/api";
 import { useMethodologies } from "@/lib/use-methodologies";
@@ -24,8 +25,8 @@ import { SectionHeader } from "../ui/section-header";
 
 const finished = (status: BookStatus | undefined) => status === "done" || status === "failed";
 
-export function BookView({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export function BookView() {
+  const { id } = useParams<{ id: string }>();
   const { t, info } = useI18n();
   const { data: book, error } = useQuery({
     queryKey: ["book", id],

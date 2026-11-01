@@ -3,7 +3,7 @@ import { OrderView } from "@/components/order/order-view";
 import { T } from "@/i18n/t";
 import { PageContainer } from "@/components/ui/page";
 
-export default function OrderStatusPage({ params }: PageProps<"/orders/[id]">) {
+export default function OrderStatusPage() {
   return (
     <PageContainer width="sm">
       <Suspense
@@ -13,7 +13,7 @@ export default function OrderStatusPage({ params }: PageProps<"/orders/[id]">) {
           </p>
         }
       >
-        <OrderView params={params} />
+        <OrderView />
       </Suspense>
     </PageContainer>
   );

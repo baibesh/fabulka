@@ -3,7 +3,7 @@ import { BookView } from "@/components/book/book-view";
 import { T } from "@/i18n/t";
 import { PageContainer } from "@/components/ui/page";
 
-export default function BookPage({ params }: PageProps<"/books/[id]">) {
+export default function BookPage() {
   return (
     <PageContainer width="lg">
       <Suspense
@@ -13,7 +13,7 @@ export default function BookPage({ params }: PageProps<"/books/[id]">) {
           </p>
         }
       >
-        <BookView params={params} />
+        <BookView />
       </Suspense>
     </PageContainer>
   );

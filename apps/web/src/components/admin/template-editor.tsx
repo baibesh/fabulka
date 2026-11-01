@@ -1,5 +1,7 @@
 "use client";
 
+import { useParams } from "next/navigation";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BLOCK_LIMITS,
@@ -26,7 +28,7 @@ import {
 import { BookPage, BookStyles, PX_PER_MM, useRenderedBook, type PreviewableBook } from "@/components/book/book-pages";
 import { themeName } from "@/lib/themes";
 import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from "lucide-react";
-import { use, useState } from "react";
+import { useState } from "react";
 import { adminBook, adminTemplate, adminThemes, updateTemplate } from "@/lib/admin-api";
 import { Card, PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
@@ -38,8 +40,8 @@ import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { BackLink } from "@/components/ui/page";
 
-export function TemplateEditor({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = use(params);
+export function TemplateEditor() {
+  const { slug } = useParams<{ slug: string }>();
   const template = useQuery({ queryKey: ["admin", "template", slug], queryFn: () => adminTemplate(slug) });
   if (!template.data) return <QueryState error={template.error} scope="admin" />;
   // Keyed so the form starts over from the saved book after each save.

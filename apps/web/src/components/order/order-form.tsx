@@ -5,8 +5,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@/lib/query";
 import { CreateOrderSchema, cityName, formatName, type Book, type CreateOrderInput } from "@fabulka/shared";
 import { Printer } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { use, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { createOrder, getBook, updateLayout } from "@/lib/api";
@@ -28,8 +28,8 @@ import { PageHeader } from "../ui/page";
 
 type FormValues = z.input<typeof CreateOrderSchema>;
 
-export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export function OrderForm() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { t, locale, info } = useI18n();
   const { kzt: formatKzt } = useFormat();

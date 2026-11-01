@@ -3,7 +3,7 @@ import { TemplateView } from "@/components/catalog/template-view";
 import { T } from "@/i18n/t";
 import { BackLink, PageContainer } from "@/components/ui/page";
 
-export default function TemplatePage({ params }: PageProps<"/catalog/[slug]">) {
+export default function TemplatePage() {
   return (
     <PageContainer width="md">
       <BackLink href="/catalog">
@@ -16,7 +16,7 @@ export default function TemplatePage({ params }: PageProps<"/catalog/[slug]">) {
           </p>
         }
       >
-        <TemplateView params={params} />
+        <TemplateView />
       </Suspense>
     </PageContainer>
   );

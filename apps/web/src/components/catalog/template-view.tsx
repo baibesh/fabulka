@@ -1,9 +1,10 @@
 "use client";
 
+import { useParams } from "next/navigation";
+
 import { useQuery } from "@/lib/query";
 import type { Book, Template } from "@fabulka/shared";
 import { ArrowDown, Baby, BookOpen, Camera, Heart, MapPin, MessageCircleQuestion, PawPrint } from "lucide-react";
-import { use } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { getBook, getTemplate } from "@/lib/api";
 import type { Highlight } from "@/lib/personalization";
@@ -18,8 +19,10 @@ import { SectionHeader } from "../ui/section-header";
 
 const FORM_ID = "book-form-section";
 
-export function TemplateView({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = use(params);
+/** Reads the route parameter on the client: a params promise handed down from the server can stay
+ * pending when React renders this part on the client (it then waits on the prerendered shell). */
+export function TemplateView() {
+  const { slug } = useParams<{ slug: string }>();
   const { t, locale } = useI18n();
   const { data: template, error } = useQuery({ queryKey: ["template", slug, locale], queryFn: () => getTemplate(slug, locale) });
   const sampleId = template?.sampleBookId;
