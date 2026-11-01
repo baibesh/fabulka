@@ -9,10 +9,10 @@ import { useMe } from "@/lib/auth";
 import { useI18n } from "@/i18n/i18n";
 import { useBookPrice } from "@/lib/use-price";
 import { PriceSkeleton } from "./price-skeleton";
-import { ErrorText } from "./ui/notice";
-import { Button } from "./ui/button";
-import { Field } from "./ui/field";
-import { Input } from "./ui/input";
+import { ErrorText } from "../ui/notice";
+import { Button } from "../ui/button";
+import { Field } from "../ui/field";
+import { Input } from "../ui/input";
 
 /**
  * Shown when the free books are used up: the demo checkout for one more book of `kind` (a catalog

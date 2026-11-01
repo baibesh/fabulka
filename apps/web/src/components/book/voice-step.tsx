@@ -10,8 +10,8 @@ import { canRecord, startRecording, type Recorder } from "@/lib/recorder";
 import { encodeWav, recordingToWav, VOICE_SAMPLE_RATE } from "@/lib/wav";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
-import { Spinner } from "./ui/spinner";
-import { Button } from "./ui/button";
+import { Spinner } from "../ui/spinner";
+import { Button } from "../ui/button";
 
 /** The API takes at most a minute. */
 const MAX_SECONDS = 60;

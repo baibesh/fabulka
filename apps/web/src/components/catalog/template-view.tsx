@@ -8,13 +8,13 @@ import { useI18n } from "@/i18n/i18n";
 import { getBook, getTemplate } from "@/lib/api";
 import type { Highlight } from "@/lib/personalization";
 import { useMethodologies } from "@/lib/use-methodologies";
-import { BookForm } from "./book-form";
-import { BookReader } from "./book-reader";
-import { primaryButton } from "./landing/section";
-import { PriceTag } from "./price-tag";
-import { QueryState } from "./ui/query-state";
-import { Card } from "./ui/card";
-import { SectionHeader } from "./ui/section-header";
+import { BookForm } from "../book/book-form";
+import { BookReader } from "../book/book-reader";
+import { primaryButton } from "../landing/section";
+import { PriceTag } from "../book/price-tag";
+import { QueryState } from "../ui/query-state";
+import { Card } from "../ui/card";
+import { SectionHeader } from "../ui/section-header";
 
 const FORM_ID = "book-form-section";
 

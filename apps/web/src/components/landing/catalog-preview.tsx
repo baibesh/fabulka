@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Catalog } from "@/components/catalog";
+import { Catalog } from "@/components/catalog/catalog";
 import { useI18n } from "@/i18n/i18n";
 import { Section } from "./section";
 

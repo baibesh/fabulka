@@ -2,7 +2,7 @@
 
 import { ArrowRight, Wand2 } from "lucide-react";
 import Link from "next/link";
-import { LogoMark } from "@/components/logo";
+import { LogoMark } from "@/components/layout/logo";
 import { useI18n } from "@/i18n/i18n";
 
 /** The last call to start, in a warm band above the footer. */

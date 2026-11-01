@@ -8,9 +8,9 @@ import { useState } from "react";
 import { useClientValue } from "@/hooks/use-hydrated";
 import { useI18n } from "@/i18n/i18n";
 import { loginUrl, logout, useMe } from "@/lib/auth";
-import { Menu, MenuItem, menuItemClass } from "./ui/menu";
-import { Notice } from "./ui/notice";
-import { Spinner } from "./ui/spinner";
+import { Menu, MenuItem, menuItemClass } from "../ui/menu";
+import { Notice } from "../ui/notice";
+import { Spinner } from "../ui/spinner";
 
 /**
  * The header's sign-in: «Войти» for a visitor, the account menu once signed in, nothing while

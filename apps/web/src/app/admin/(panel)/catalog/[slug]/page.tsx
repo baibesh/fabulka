@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { TemplateEditor } from "@/components/admin/template-editor";
-import { T } from "@/components/t";
+import { T } from "@/i18n/t";
 
 export default function AdminTemplatePage({ params }: PageProps<"/admin/catalog/[slug]">) {
   return (

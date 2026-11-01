@@ -7,9 +7,9 @@ import { setCountry, setLocale, useI18n } from "@/i18n/i18n";
 import { LOCALE_NAMES, UI_LOCALES, type UiLocale } from "@/i18n/messages";
 import { LANGUAGE_FLAGS, languageCode, regionName } from "@/lib/regions";
 import { useCountryName } from "@/hooks/use-country-name";
-import { Flag } from "./flag";
-import { cx } from "./ui/cx";
-import { Dialog } from "./ui/dialog";
+import { Flag } from "../ui/flag";
+import { cx } from "../ui/cx";
+import { Dialog } from "../ui/dialog";
 
 const option =
   "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-semibold hover:bg-accent/10 aria-[current=true]:bg-accent/15 aria-[current=true]:text-accent";

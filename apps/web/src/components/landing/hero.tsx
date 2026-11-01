@@ -7,8 +7,8 @@ import Link from "next/link";
 import { useI18n } from "@/i18n/i18n";
 import { getStatus, listExamples, listTemplates } from "@/lib/api";
 import { useBookPrice } from "@/lib/use-price";
-import { PriceSkeleton } from "../price-skeleton";
-import { LogoMark } from "@/components/logo";
+import { PriceSkeleton } from "../book/price-skeleton";
+import { LogoMark } from "@/components/layout/logo";
 import { primaryButton, secondaryButton } from "./section";
 
 /** Where each cover of the collage lies: a loose, slightly fanned pile. */

@@ -1,5 +1,5 @@
-import { cx } from "./ui/cx";
-import { Skeleton } from "./ui/skeleton";
+import { cx } from "../ui/cx";
+import { Skeleton } from "../ui/skeleton";
 
 /** Where a price goes while the owner's prices load, so a stale price never flashes. */
 export function PriceSkeleton({ className = "w-14" }: { className?: string }) {

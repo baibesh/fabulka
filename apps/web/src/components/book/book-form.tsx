@@ -27,8 +27,8 @@ import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
 import { Paywall } from "./paywall";
 import { VoiceStep } from "./voice-step";
-import { ErrorText, Notice } from "./ui/notice";
-import { Button } from "./ui/button";
+import { ErrorText, Notice } from "../ui/notice";
+import { Button } from "../ui/button";
 
 /**
  * A book of your own, or, with `template`, a catalog book with its questions — filled in step by

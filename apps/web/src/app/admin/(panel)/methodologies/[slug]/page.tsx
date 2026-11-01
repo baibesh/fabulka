@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { MethodologyPage } from "@/components/admin/methodology-editor";
-import { T } from "@/components/t";
+import { T } from "@/i18n/t";
 
 export default function AdminMethodologyPage({ params }: PageProps<"/admin/methodologies/[slug]">) {
   return (

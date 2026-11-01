@@ -4,7 +4,7 @@ import type { BookKind } from "@fabulka/shared";
 import { useI18n } from "@/i18n/i18n";
 import { useBookPrice } from "@/lib/use-price";
 import { PriceSkeleton } from "./price-skeleton";
-import { Badge } from "./ui/badge";
+import { Badge } from "../ui/badge";
 
 /** What one more book of this kind costs, for the header of its page (and, with a `label`, the wizard's review). */
 export function PriceTag({ kind, label, testId = "book-price" }: { kind: BookKind; label?: string; testId?: string }) {

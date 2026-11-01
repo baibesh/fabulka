@@ -13,13 +13,13 @@ import { useMethodologies } from "@/lib/use-methodologies";
 import { useCoverPrice } from "@/lib/use-price";
 import { BookReader } from "./book-reader";
 import { PriceSkeleton } from "./price-skeleton";
-import { SavePrompt } from "./save-prompt";
-import { ErrorText } from "./ui/notice";
-import { QueryState } from "./ui/query-state";
-import { Skeleton } from "./ui/skeleton";
-import { Button, buttonClass } from "./ui/button";
-import { Card } from "./ui/card";
-import { SectionHeader } from "./ui/section-header";
+import { SavePrompt } from "../account/save-prompt";
+import { ErrorText } from "../ui/notice";
+import { QueryState } from "../ui/query-state";
+import { Skeleton } from "../ui/skeleton";
+import { Button, buttonClass } from "../ui/button";
+import { Card } from "../ui/card";
+import { SectionHeader } from "../ui/section-header";
 
 const finished = (status: BookStatus | undefined) => status === "done" || status === "failed";
 

@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { LOCALE_NAMES, type MessageKey } from "@/i18n/messages";
 import { splitInterests, type FormValues, type Step } from "./book-form-model";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 
 /** Everything the parent filled in, step by step, each with a way back to change it. */
 export function ReviewSummary({

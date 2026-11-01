@@ -1,11 +1,11 @@
 "use client";
 
 import { useQuery } from "@/lib/query";
-import { BookCard } from "./book-card";
+import { BookCard } from "../book/book-card";
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { listExamples } from "@/lib/api";
-import { SectionHeader } from "./ui/section-header";
+import { SectionHeader } from "../ui/section-header";
 
 /** Finished books the admin picked, for visitors to flip through before making their own. */
 export function Examples() {

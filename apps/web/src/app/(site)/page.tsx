@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { MotionConfig } from "motion/react";
-import { Examples } from "@/components/examples";
+import { Examples } from "@/components/catalog/examples";
 import { CatalogPreview } from "@/components/landing/catalog-preview";
 import { Faq } from "@/components/landing/faq";
 import { FinalCta } from "@/components/landing/final-cta";

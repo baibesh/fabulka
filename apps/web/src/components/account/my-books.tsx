@@ -7,10 +7,10 @@ import { intlLocale } from "@/i18n/format";
 import { useI18n } from "@/i18n/i18n";
 import { listMyBooks } from "@/lib/api";
 import { loginUrl, useMe } from "@/lib/auth";
-import { EmptyState } from "./ui/empty-state";
-import { QueryState } from "./ui/query-state";
-import { Skeleton } from "./ui/skeleton";
-import { buttonClass } from "./ui/button";
+import { EmptyState } from "../ui/empty-state";
+import { QueryState } from "../ui/query-state";
+import { Skeleton } from "../ui/skeleton";
+import { buttonClass } from "../ui/button";
 
 export function MyBooks() {
   const { t, locale } = useI18n();

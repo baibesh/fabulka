@@ -1,6 +1,6 @@
 "use client";
 
-import { ErrorNotice } from "@/components/error-notice";
+import { ErrorNotice } from "./error-notice";
 import { useI18n } from "@/i18n/i18n";
 import { cx } from "./cx";
 import { ErrorText } from "./notice";

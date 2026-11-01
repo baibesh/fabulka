@@ -7,9 +7,9 @@ import { getOrder } from "@/lib/api";
 import { useI18n } from "@/i18n/i18n";
 import { useFormat } from "@/hooks/use-format";
 import { OrderAddress, OrderTimeline } from "./order-timeline";
-import { QueryState } from "./ui/query-state";
-import { Card } from "./ui/card";
-import { BackLink, PageHeader } from "./ui/page";
+import { QueryState } from "../ui/query-state";
+import { Card } from "../ui/card";
+import { BackLink, PageHeader } from "../ui/page";
 
 export function OrderView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

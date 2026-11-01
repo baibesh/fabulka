@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { OrderView } from "@/components/order-view";
-import { T } from "@/components/t";
+import { OrderView } from "@/components/order/order-view";
+import { T } from "@/i18n/t";
 import { PageContainer } from "@/components/ui/page";
 
 export default function OrderStatusPage({ params }: PageProps<"/orders/[id]">) {

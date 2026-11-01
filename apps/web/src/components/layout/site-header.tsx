@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
-import { AuthMenu, AuthNotice } from "./auth-menu";
+import { AuthMenu, AuthNotice } from "../account/auth-menu";
 import { LanguagePicker } from "./locale-pickers";
 import { Logo } from "./logo";
 

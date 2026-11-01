@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { listMyBooks } from "@/lib/api";
 import { loginUrl, useMe } from "@/lib/auth";
-import { Button, buttonClass } from "./ui/button";
+import { Button, buttonClass } from "../ui/button";
 
 /** "dismissed", or the id of the book the offer was first shown on. */
 const PROMPT_KEY = "fabulka.savePrompt";

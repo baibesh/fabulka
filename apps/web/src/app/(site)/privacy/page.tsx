@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LegalPage } from "@/components/legal-page";
+import { LegalPage } from "@/components/layout/legal-page";
 import { PageContainer } from "@/components/ui/page";
 
 export const metadata: Metadata = { title: "Конфиденциальность" };

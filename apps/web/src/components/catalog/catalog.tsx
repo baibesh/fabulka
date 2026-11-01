@@ -7,10 +7,10 @@ import { useI18n } from "@/i18n/i18n";
 import { listTemplates } from "@/lib/api";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { useBookPrice } from "@/lib/use-price";
-import { PriceSkeleton } from "./price-skeleton";
-import { BookCard, bookCardClass } from "./book-card";
-import { ErrorNotice } from "./error-notice";
-import { Badge } from "./ui/badge";
+import { PriceSkeleton } from "../book/price-skeleton";
+import { BookCard, bookCardClass } from "../book/book-card";
+import { ErrorNotice } from "../ui/error-notice";
+import { Badge } from "../ui/badge";
 
 /** How many books the home page shows before sending visitors to the whole catalog. */
 const PREVIEW_BOOKS = 6;

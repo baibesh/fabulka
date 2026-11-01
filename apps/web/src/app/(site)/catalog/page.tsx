@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { Catalog } from "@/components/catalog";
-import { T } from "@/components/t";
+import { Catalog } from "@/components/catalog/catalog";
+import { T } from "@/i18n/t";
 import { PageContainer, PageHeader } from "@/components/ui/page";
 
 export const metadata: Metadata = {

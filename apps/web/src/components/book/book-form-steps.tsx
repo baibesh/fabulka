@@ -7,11 +7,11 @@ import { useI18n } from "@/i18n/i18n";
 import { LOCALE_NAMES } from "@/i18n/messages";
 import type { useMethodologies } from "@/lib/use-methodologies";
 import type { FormValues } from "./book-form-model";
-import { Button } from "./ui/button";
-import { ChoiceLabel, Radio } from "./ui/choice";
-import { Field } from "./ui/field";
-import { Input, Select } from "./ui/input";
-import { ErrorText, Notice } from "./ui/notice";
+import { Button } from "../ui/button";
+import { ChoiceLabel, Radio } from "../ui/choice";
+import { Field } from "../ui/field";
+import { Input, Select } from "../ui/input";
+import { ErrorText, Notice } from "../ui/notice";
 
 type Form = UseFormReturn<FormValues>;
 type Methods = NonNullable<ReturnType<typeof useMethodologies>["data"]>;

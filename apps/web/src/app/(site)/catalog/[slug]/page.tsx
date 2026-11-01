@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { TemplateView } from "@/components/template-view";
-import { T } from "@/components/t";
+import { TemplateView } from "@/components/catalog/template-view";
+import { T } from "@/i18n/t";
 import { BackLink, PageContainer } from "@/components/ui/page";
 
 export default function TemplatePage({ params }: PageProps<"/catalog/[slug]">) {

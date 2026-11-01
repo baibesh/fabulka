@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { AdminShell } from "@/components/admin/admin-shell";
-import { T } from "@/components/t";
+import { T } from "@/i18n/t";
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
   return (

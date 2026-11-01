@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Logo } from "@/components/logo";
-import { T } from "@/components/t";
+import { Logo } from "@/components/layout/logo";
+import { T } from "@/i18n/t";
 import { buttonClass } from "@/components/ui/button";
 
 export default function NotFound() {

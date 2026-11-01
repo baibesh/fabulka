@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { OrderForm } from "@/components/order-form";
-import { T } from "@/components/t";
+import { OrderForm } from "@/components/order/order-form";
+import { T } from "@/i18n/t";
 import { BackLink, PageContainer } from "@/components/ui/page";
 
 export default function OrderPage({ params }: PageProps<"/books/[id]/order">) {

@@ -3,7 +3,7 @@
 import { useQuery } from "@/lib/query";
 import { ArrowDown } from "lucide-react";
 import Link from "next/link";
-import { BookReader } from "@/components/book-reader";
+import { BookReader } from "@/components/book/book-reader";
 import { useI18n } from "@/i18n/i18n";
 import { getBook, listExamples } from "@/lib/api";
 import { Section } from "./section";

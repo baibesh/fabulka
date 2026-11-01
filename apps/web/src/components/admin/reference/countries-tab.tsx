@@ -15,7 +15,7 @@ import {
 } from "@fabulka/shared";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { Flag } from "@/components/flag";
+import { Flag } from "@/components/ui/flag";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Radio } from "@/components/ui/choice";
 import { cx } from "@/components/ui/cx";

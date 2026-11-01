@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
-import { cx } from "./ui/cx";
+import { cx } from "../ui/cx";
 
 /** The lifting card a book is shown in on the site; for a card without a cover, as for «своя история». */
 export const bookCardClass =

@@ -7,11 +7,11 @@ import { useEffect } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { listMyOrders } from "@/lib/api";
 import { useFormat } from "@/hooks/use-format";
-import { ErrorNotice } from "./error-notice";
+import { ErrorNotice } from "../ui/error-notice";
 import { OrderAddress, OrderTimeline } from "./order-timeline";
-import { EmptyState } from "./ui/empty-state";
-import { Card } from "./ui/card";
-import { SectionHeader } from "./ui/section-header";
+import { EmptyState } from "../ui/empty-state";
+import { Card } from "../ui/card";
+import { SectionHeader } from "../ui/section-header";
 
 /**
  * «Мои заказы»: printed orders with where each one is. Shown when there are orders, or when the

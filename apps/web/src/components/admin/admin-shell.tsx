@@ -9,7 +9,7 @@ import type { MessageKey } from "@/i18n/messages";
 import { adminLogout, adminMe } from "@/lib/admin-api";
 import { logout as signOut } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
-import { LanguagePicker } from "@/components/locale-pickers";
+import { LanguagePicker } from "@/components/layout/locale-pickers";
 import { useAdminI18n } from "./ui";
 
 const NAV: { href: string; label: MessageKey; icon: typeof BookOpen }[] = [

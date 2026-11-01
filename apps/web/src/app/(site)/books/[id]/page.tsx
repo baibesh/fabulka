@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { BookView } from "@/components/book-view";
-import { T } from "@/components/t";
+import { BookView } from "@/components/book/book-view";
+import { T } from "@/i18n/t";
 import { PageContainer } from "@/components/ui/page";
 
 export default function BookPage({ params }: PageProps<"/books/[id]">) {

@@ -8,7 +8,7 @@ import { useI18n } from "@/i18n/i18n";
 import { type Highlight, markPersonal } from "@/lib/personalization";
 import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { IconButton } from "./ui/button";
+import { IconButton } from "../ui/button";
 
 /** One page. Pages keep paper colors in dark mode: it is a printed book, not app chrome. */
 function Page({ hard, className = "", children }: { hard?: boolean; className?: string; children?: ReactNode }) {

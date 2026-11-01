@@ -15,14 +15,14 @@ import { useFormat } from "@/hooks/use-format";
 import { useMe } from "@/lib/auth";
 import { useCities } from "@/lib/cities";
 import { useOrderPrice, useReference } from "@/lib/use-price";
-import { PriceSkeleton } from "./price-skeleton";
-import { ErrorText } from "./ui/notice";
-import { Button } from "./ui/button";
-import { ChoiceCard, Radio } from "./ui/choice";
-import { Field } from "./ui/field";
-import { Input, Select } from "./ui/input";
-import { Card } from "./ui/card";
-import { PageHeader } from "./ui/page";
+import { PriceSkeleton } from "../book/price-skeleton";
+import { ErrorText } from "../ui/notice";
+import { Button } from "../ui/button";
+import { ChoiceCard, Radio } from "../ui/choice";
+import { Field } from "../ui/field";
+import { Input, Select } from "../ui/input";
+import { Card } from "../ui/card";
+import { PageHeader } from "../ui/page";
 
 type FormValues = z.input<typeof CreateOrderSchema>;
 

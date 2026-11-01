@@ -6,7 +6,7 @@ import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
 import { formatKzt } from "@/lib/format";
 import { useBookPrice, useReference } from "@/lib/use-price";
-import { PriceSkeleton } from "../price-skeleton";
+import { PriceSkeleton } from "../book/price-skeleton";
 import { Section } from "./section";
 
 interface Plan {
