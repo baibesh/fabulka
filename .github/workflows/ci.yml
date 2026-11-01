@@ -32,6 +32,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      # The PDF service tests render real pages in Chromium (layout QA).
+      - name: Install Chromium for PDF rendering
+        run: pnpm --filter @fabulka/api exec playwright install --with-deps chromium
       - run: pnpm test
       - name: Install tapstep
         run: curl -fsSL "$TAPSTEP_URL" | sudo tar -xz -C /usr/local/bin tapstep
