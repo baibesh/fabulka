@@ -26,9 +26,10 @@ import {
   type MethodologyTexts,
   type UpdateMethodology,
 } from '@fabulka/shared';
-import { ADDED_LANGUAGES } from '../common/added-languages';
+import { seedTextUpdates } from '../common/seed-texts';
 import { methodPrompt } from '../meta/prompts';
 import { PrismaService } from '../prisma/prisma.service';
+import { SEEDED_METHOD_TEXTS_V1 } from './seeded';
 
 /** How long methods are kept in memory; an edit in the admin drops them at once. */
 export const CACHE_MS = 60_000;
@@ -72,8 +73,9 @@ export class MethodologiesService implements OnModuleInit {
   }
 
   /**
-   * Gives the seed methods the texts of languages added after they were seeded (ADDED_LANGUAGES),
-   * where a method has none in that language; a text the admin wrote is never replaced.
+   * Gives the seed methods today's seed texts where a method has none in a language added after it
+   * was seeded, or still has an older seed text (SEEDED_METHOD_TEXTS_*); a text the admin wrote is
+   * never replaced.
    */
   private async addSeedTexts() {
     const seeds = new Map(DEFAULT_METHODOLOGIES.map((m) => [m.slug, m]));
@@ -85,17 +87,22 @@ export class MethodologiesService implements OnModuleInit {
       const seed = seeds.get(row.slug);
       if (!seed) continue;
       const texts = { ...(row.texts as MethodologyTexts | null) };
-      const missing = ADDED_LANGUAGES.filter(
-        (lang) =>
-          seed.texts[lang] && !texts[lang]?.name && !texts[lang]?.summary,
+      const langs = seedTextUpdates(
+        texts,
+        seed.texts,
+        [SEEDED_METHOD_TEXTS_V1[row.slug]],
+        (text) => {
+          const t = text as MethodologyTexts[Language] | undefined;
+          return !t?.name && !t?.summary;
+        },
       );
-      if (!missing.length) continue;
-      for (const lang of missing) texts[lang] = seed.texts[lang];
+      if (!langs.length) continue;
+      for (const lang of langs) texts[lang] = seed.texts[lang];
       await this.prisma.methodology.updateMany({
         where: { slug: row.slug },
         data: { texts },
       });
-      this.logger.log(`added ${missing.join(', ')} texts to ${row.slug}`);
+      this.logger.log(`updated ${langs.join(', ')} texts of ${row.slug}`);
     }
   }
 

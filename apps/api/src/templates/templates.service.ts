@@ -19,7 +19,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { SEED_TEMPLATES } from './catalog';
 import { SEED_TRANSLATIONS } from './catalog-i18n';
-import { ADDED_LANGUAGES } from '../common/added-languages';
+import { seedTextUpdates } from '../common/seed-texts';
+import { SEEDED_TRANSLATIONS_V1 } from './seeded';
 
 type Translations = Partial<Record<Language, TemplateTranslation>>;
 
@@ -65,8 +66,9 @@ export class TemplatesService implements OnModuleInit {
   }
 
   /**
-   * Gives the seed catalog books the translations of languages added after they were seeded
-   * (ADDED_LANGUAGES), where a book has none in that language; never replaces one that is there.
+   * Gives the seed catalog books today's seed translations where a book has none in a language
+   * added after it was seeded, or still has an older seed translation (SEEDED_TRANSLATIONS_*);
+   * never replaces one the admin wrote.
    */
   private async addSeedTranslations() {
     const rows = await this.prisma.bookTemplate.findMany({
@@ -76,17 +78,20 @@ export class TemplatesService implements OnModuleInit {
     for (const row of rows) {
       const seed: Translations = SEED_TRANSLATIONS[row.slug] ?? {};
       const translations = { ...(row.translations as Translations | null) };
-      const missing = ADDED_LANGUAGES.filter(
-        (lang) => seed[lang] && !translations[lang],
+      const langs = seedTextUpdates(
+        translations,
+        seed,
+        [SEEDED_TRANSLATIONS_V1[row.slug]],
+        (translation) => !translation,
       );
-      if (!missing.length) continue;
-      for (const lang of missing) translations[lang] = seed[lang];
+      if (!langs.length) continue;
+      for (const lang of langs) translations[lang] = seed[lang];
       await this.prisma.bookTemplate.update({
         where: { slug: row.slug },
         data: { translations },
       });
       this.logger.log(
-        `added ${missing.join(', ')} to catalog book ${row.slug}`,
+        `updated ${langs.join(', ')} of catalog book ${row.slug}`,
       );
     }
   }

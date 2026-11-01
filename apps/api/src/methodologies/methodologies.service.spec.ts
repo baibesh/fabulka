@@ -1,6 +1,7 @@
 import { DEFAULT_METHODOLOGIES, type CreateMethodology } from '@fabulka/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import { CACHE_MS, MethodologiesService } from './methodologies.service';
+import { SEEDED_METHOD_TEXTS_V1 } from './seeded';
 
 type Row = Record<string, unknown> & { slug: string };
 
@@ -170,6 +171,45 @@ describe('MethodologiesService', () => {
       expect(
         (await service.list('de')).find((m) => m.slug === 'social-story')?.name,
       ).toBe(seed.texts.de!.name);
+    });
+    it('updates seed texts stored before the proofreading, unless the admin edited them', async () => {
+      const { service, rows } = makeService();
+      const old = SEEDED_METHOD_TEXTS_V1;
+      const seed = (slug: string) =>
+        DEFAULT_METHODOLOGIES.find((m) => m.slug === slug)!;
+      const edited = { name: 'Өз атауы', summary: 'Әкімші жазған.' };
+      for (const [slug, texts, i] of [
+        [
+          'toddler-routine',
+          { ...seed('toddler-routine').texts, ...old['toddler-routine'] },
+          0,
+        ],
+        [
+          'sel-emotions',
+          { ...seed('sel-emotions').texts, ...old['sel-emotions'], kk: edited },
+          1,
+        ],
+      ] as const) {
+        rows.set(
+          slug,
+          withDates({
+            slug,
+            texts,
+            source: 'seed',
+            published: true,
+            sortOrder: i,
+          }),
+        );
+      }
+      await service.onModuleInit();
+
+      expect(rows.get('toddler-routine')?.texts).toEqual(
+        seed('toddler-routine').texts,
+      );
+      expect(rows.get('sel-emotions')?.texts).toEqual({
+        ...seed('sel-emotions').texts,
+        kk: edited,
+      });
     });
   });
 

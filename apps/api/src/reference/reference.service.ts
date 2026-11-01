@@ -40,6 +40,7 @@ import {
   type Reference,
 } from '@fabulka/shared';
 import type { ZodType } from 'zod';
+import { sameJson } from '../common/same-json';
 import { GEO_POLICY_URL, RESTRICTED_COUNTRIES } from '../geo/restricted';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -47,6 +48,8 @@ import {
   SEEDED_COUNTRIES_V2,
   SEEDED_FAQ_V1,
   SEEDED_FAQ_V2,
+  SEEDED_FAQ_V3,
+  SEEDED_FAQ_V4,
 } from './seeded';
 
 /** How long the reference data is kept in memory; an edit in the admin drops it at once. */
@@ -91,28 +94,8 @@ const FIELDS = Object.keys(REFERENCE_KEYS) as (keyof Snapshot)[];
  */
 const SEEDED: Partial<Record<keyof Snapshot, unknown[]>> = {
   countries: [SEEDED_COUNTRIES_V1, SEEDED_COUNTRIES_V2],
-  faq: [SEEDED_FAQ_V1, SEEDED_FAQ_V2],
+  faq: [SEEDED_FAQ_V1, SEEDED_FAQ_V2, SEEDED_FAQ_V3, SEEDED_FAQ_V4],
 };
-
-/** Whether two JSON values are equal, whatever the order of their object keys. */
-function sameJson(a: unknown, b: unknown): boolean {
-  return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
-}
-
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.keys(value)
-        .sort()
-        .map((key) => [
-          key,
-          canonical((value as Record<string, unknown>)[key]),
-        ]),
-    );
-  }
-  return value;
-}
 
 /**
  * What start-up changes in a stored value, or null to leave it: an untouched older seed becomes

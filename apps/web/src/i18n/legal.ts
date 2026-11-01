@@ -8,7 +8,7 @@ export interface LegalDoc {
 
 const privacyEs: LegalDoc = {
   title: "Política de privacidad",
-  updated: "Actualizado el 31 de octubre de 2026",
+  updated: "Actualizado el 1 de noviembre de 2026",
   sections: [
     {
       title: "Quiénes somos",
@@ -17,7 +17,7 @@ const privacyEs: LegalDoc = {
     {
       title: "Qué datos recopilamos",
       text: [
-        "Sobre el niño o la niña: nombre, edad, sexo, ciudad, intereses, mascota, respuestas a las preguntas del libro y, si la subes, una foto de un juguete. Nunca pedimos una foto del niño o la niña: el protagonista se dibuja a partir de una descripción en texto.",
+        "Sobre el niño o la niña: nombre, edad, sexo, ciudad, intereses, mascota, respuestas a las preguntas del libro, una foto de un juguete si la subes y una foto del niño o la niña si añades al libro una página con foto. El protagonista se dibuja a partir de una descripción en texto; para eso no hace falta ninguna foto del niño o la niña.",
         "Para la impresión: el nombre del destinatario, su número de teléfono y la dirección de entrega.",
         "Datos técnicos: una clave anónima del navegador (para contar los libros gratuitos), el idioma y el país que elegiste, y el país de tu dirección IP.",
       ],
@@ -29,7 +29,7 @@ const privacyEs: LegalDoc = {
     {
       title: "Quién los trata",
       text: [
-        "Las respuestas y la foto del juguete se envían a Meta Model API (Muse Spark, Muse Image y SAM 3.1) únicamente para crear el libro. No vendemos los datos ni los usamos con fines publicitarios.",
+        "Las respuestas y la foto del juguete se envían a Meta Model API (Muse Spark, Muse Image y SAM 3.1) únicamente para crear el libro. La foto del niño o la niña nunca se envía allí: solo se usa en la página con foto de ese libro y para imprimirlo. Al subirla, borramos del archivo todos los metadatos, incluido el lugar donde se tomó, y la eliminamos cuando quitas la página o el libro. No vendemos los datos ni los usamos con fines publicitarios.",
       ],
     },
     {
@@ -88,7 +88,7 @@ const termsEs: LegalDoc = {
 
 const privacyDe: LegalDoc = {
   title: "Datenschutzerklärung",
-  updated: "Aktualisiert am 31. Oktober 2026",
+  updated: "Aktualisiert am 1. November 2026",
   sections: [
     {
       title: "Wer wir sind",
@@ -97,7 +97,7 @@ const privacyDe: LegalDoc = {
     {
       title: "Welche Daten wir erheben",
       text: [
-        "Über das Kind: Name, Alter, Geschlecht, Stadt, Interessen, Haustier, Antworten auf die Fragen zum Buch und, falls du eines hochlädst, ein Foto eines Spielzeugs. Wir fragen niemals nach einem Foto des Kindes: Der Held wird nach einer Textbeschreibung gezeichnet.",
+        "Über das Kind: Name, Alter, Geschlecht, Stadt, Interessen, Haustier, Antworten auf die Fragen zum Buch, ein Foto eines Spielzeugs, falls du eines hochlädst, und ein Foto des Kindes, falls du dem Buch eine Fotoseite hinzufügst. Der Held wird nach einer Textbeschreibung gezeichnet, dafür ist kein Foto des Kindes nötig.",
         "Für den Druck: Name des Empfängers, Telefonnummer und Lieferadresse.",
         "Technische Daten: ein anonymer Browserschlüssel (zum Zählen der kostenlosen Bücher), die von dir gewählte Sprache und das gewählte Land sowie das Land deiner IP-Adresse.",
       ],
@@ -109,7 +109,7 @@ const privacyDe: LegalDoc = {
     {
       title: "Wer die Daten verarbeitet",
       text: [
-        "Die Antworten und das Foto des Spielzeugs werden ausschließlich zur Erstellung des Buches an die Meta Model API (Muse Spark, Muse Image und SAM 3.1) übermittelt. Wir verkaufen keine Daten und nutzen sie nicht für Werbung.",
+        "Die Antworten und das Foto des Spielzeugs werden ausschließlich zur Erstellung des Buches an die Meta Model API (Muse Spark, Muse Image und SAM 3.1) übermittelt. Das Foto des Kindes wird dorthin nicht übermittelt: Es wird nur auf der Fotoseite dieses Buches und für dessen Druck verwendet. Beim Hochladen entfernen wir alle Metadaten aus der Datei, auch den Aufnahmeort, und wir löschen das Foto, wenn du die Seite oder das Buch entfernst. Wir verkaufen keine Daten und nutzen sie nicht für Werbung.",
       ],
     },
     {
@@ -171,7 +171,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
   privacy: {
     ru: {
       title: "Политика конфиденциальности",
-      updated: "Обновлено 31 октября 2026",
+      updated: "Обновлено 1 ноября 2026",
       sections: [
         {
           title: "Кто мы",
@@ -182,7 +182,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         {
           title: "Какие данные мы получаем",
           text: [
-            "О ребёнке: имя, возраст, пол, город, увлечения, питомец, ответы на вопросы книги и, если вы её загрузили, фотография игрушки. Фотографию ребёнка мы не просим: героя рисует модель по текстовому описанию.",
+            "О ребёнке: имя, возраст, пол, город, увлечения, питомец, ответы на вопросы книги, фотография игрушки, если вы её загрузили, и фотография ребёнка, если вы добавили в книгу страницу с фото. Героя рисует модель по текстовому описанию — фотография ребёнка для этого не нужна.",
             "Для печати: имя получателя, телефон и адрес доставки.",
             "Технические данные: анонимный ключ браузера (по нему считаются бесплатные книги), выбранный язык и страна, а также страна по IP-адресу.",
           ],
@@ -196,7 +196,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         {
           title: "Кто обрабатывает данные",
           text: [
-            "Текст анкеты и фотография игрушки передаются в Meta Model API (модели Muse Spark, Muse Image и SAM 3.1) только для создания книги. Мы не продаём данные и не используем их для рекламы.",
+            "Текст анкеты и фотография игрушки передаются в Meta Model API (модели Muse Spark, Muse Image и SAM 3.1) только для создания книги. Фотографию ребёнка мы туда не передаём: она используется только на странице с фото этой книги и при её печати. При загрузке мы убираем из файла все метаданные, в том числе место съёмки, и удаляем фотографию, когда вы убираете эту страницу или удаляете книгу. Мы не продаём данные и не используем их для рекламы.",
           ],
         },
         {
@@ -223,7 +223,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
     },
     kk: {
       title: "Құпиялылық саясаты",
-      updated: "2026 жылғы 31 қазанда жаңартылды",
+      updated: "2026 жылғы 1 қарашада жаңартылды",
       sections: [
         {
           title: "Біз кімбіз",
@@ -232,7 +232,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         {
           title: "Қандай деректер аламыз",
           text: [
-            "Бала туралы: аты, жасы, жынысы, қаласы, қызығушылықтары, үй жануары, кітап сұрақтарына жауаптар және, егер жүктесеңіз, ойыншықтың фотосы. Баланың фотосын сұрамаймыз: кейіпкерді модель мәтіндік сипаттама бойынша салады.",
+            "Бала туралы: аты, жасы, жынысы, қаласы, қызығушылықтары, үй жануары, кітап сұрақтарына жауаптар, егер жүктесеңіз — ойыншықтың фотосы, ал кітапқа фотосы бар бет қоссаңыз — баланың фотосы. Кейіпкерді модель мәтіндік сипаттама бойынша салады, бұл үшін баланың фотосы керек емес.",
             "Басып шығару үшін: алушының аты, телефоны және жеткізу мекенжайы.",
             "Техникалық деректер: браузердің анонимді кілті (тегін кітаптар соған қарай есептеледі), таңдалған тіл мен ел, сондай-ақ IP мекенжайы бойынша ел.",
           ],
@@ -244,7 +244,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         {
           title: "Деректерді кім өңдейді",
           text: [
-            "Сауалнама мәтіні мен ойыншық фотосы тек кітап жасау үшін Meta Model API-ға (Muse Spark, Muse Image және SAM 3.1 модельдері) жіберіледі. Біз деректерді сатпаймыз және жарнамаға пайдаланбаймыз.",
+            "Сауалнама мәтіні мен ойыншық фотосы тек кітап жасау үшін Meta Model API-ға (Muse Spark, Muse Image және SAM 3.1 модельдері) жіберіледі. Баланың фотосын оған жібермейміз: ол тек осы кітаптың фото бетінде және кітапты басып шығаруда қолданылады. Жүктеген кезде файлдан барлық метадеректерді, соның ішінде түсірілген орнын өшіреміз, ал осы бетті не кітапты алып тастасаңыз, фотоны жоямыз. Біз деректерді сатпаймыз және жарнамаға пайдаланбаймыз.",
           ],
         },
         {
@@ -269,7 +269,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
     },
     en: {
       title: "Privacy policy",
-      updated: "Updated 31 October 2026",
+      updated: "Updated 1 November 2026",
       sections: [
         {
           title: "Who we are",
@@ -278,7 +278,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         {
           title: "What we collect",
           text: [
-            "About the child: name, age, gender, city, interests, pet, answers to the book's questions and, if you upload one, a photo of a toy. We never ask for a photo of the child: the hero is drawn from a text description.",
+            "About the child: name, age, gender, city, interests, pet, answers to the book's questions, a photo of a toy if you upload one, and a photo of the child if you add a photo page to the book. The hero is drawn from a text description; no photo of the child is needed for that.",
             "For printing: the recipient's name, phone number and delivery address.",
             "Technical data: an anonymous browser key (used to count free books), the language and country you chose, and the country of your IP address.",
           ],
@@ -290,7 +290,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         {
           title: "Who processes it",
           text: [
-            "The answers and the toy photo are sent to the Meta Model API (Muse Spark, Muse Image and SAM 3.1) only to make the book. We do not sell data or use it for advertising.",
+            "The answers and the toy photo are sent to the Meta Model API (Muse Spark, Muse Image and SAM 3.1) only to make the book. The child's photo is never sent there: it is used only on that book's photo page and to print the book. When you upload it, we strip all metadata from the file, including where it was taken, and we delete the photo when you remove the page or the book. We do not sell data or use it for advertising.",
           ],
         },
         {

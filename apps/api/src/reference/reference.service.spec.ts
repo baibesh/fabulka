@@ -12,12 +12,14 @@ import {
 } from '@fabulka/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import { RESTRICTED_COUNTRIES } from '../geo/restricted';
-import { CACHE_MS, ReferenceService } from './reference.service';
+import { CACHE_MS, ReferenceService, upgradeStored } from './reference.service';
 import {
   SEEDED_COUNTRIES_V1,
   SEEDED_COUNTRIES_V2,
   SEEDED_FAQ_V1,
   SEEDED_FAQ_V2,
+  SEEDED_FAQ_V3,
+  SEEDED_FAQ_V4,
 } from './seeded';
 
 /** The Setting table in memory behind the few Prisma calls the service makes. */
@@ -125,6 +127,33 @@ describe('ReferenceService seeding', () => {
     ]);
     const faq = await service.public();
     expect(faq.faq.every((item) => item.q.es && item.q.de)).toBe(true);
+  });
+
+  it('upgrades every FAQ seed stored before the photo page to today’s', async () => {
+    const seeds = [SEEDED_FAQ_V1, SEEDED_FAQ_V2, SEEDED_FAQ_V3, SEEDED_FAQ_V4];
+    for (const seed of seeds) {
+      expect(upgradeStored('faq', structuredClone(seed))).toEqual(DEFAULT_FAQ);
+    }
+    const { service, rows } = settingsStore({
+      [REFERENCE_KEYS.faq]: structuredClone(SEEDED_FAQ_V3),
+    });
+    await service.onModuleInit();
+    expect(rows.get(REFERENCE_KEYS.faq)).toEqual(DEFAULT_FAQ);
+    const data = (await service.public()).faq.find(
+      (item) => item.id === 'data',
+    );
+    expect(data?.a.ru).toContain('страницу с фото ребёнка');
+    expect(data?.a.ru).not.toContain('не просим');
+  });
+
+  it('leaves an edited FAQ of the proofread seeds alone', () => {
+    for (const seed of [SEEDED_FAQ_V3, SEEDED_FAQ_V4]) {
+      const faq = (structuredClone(seed) as { published: boolean }[]).map(
+        (item, i) => (i === 0 ? { ...item, published: false } : item),
+      );
+      expect(upgradeStored('faq', faq)).toBeNull();
+    }
+    expect(upgradeStored('faq', structuredClone(DEFAULT_FAQ))).toBeNull();
   });
 
   it('matches the old seed whatever the key order the database keeps', async () => {
