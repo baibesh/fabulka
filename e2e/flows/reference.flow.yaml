@@ -99,6 +99,18 @@ commands:
       params: ["${clientKey}"]
       readOnly: true
       assert: { rows: 1, first: { price: 2450 } }
+  # From a country priced in dollars (chosen on the site), the dollar price.
+  - request:
+      method: POST
+      url: ${API}/quota/purchase
+      headers: { X-Client-Key: "${clientKey}-pl", X-Country: PL }
+      json: { kind: template }
+      assert: { status: "2xx" }
+  - sql:
+      query: select "priceKzt" as kzt, "priceUsd" as usd from "Credit" where "clientKey" = $1
+      params: ["${clientKey}-pl"]
+      readOnly: true
+      assert: { rows: 1, first: { kzt: 0, usd: 4.9 } }
 
   # Countries: Portugal added with English first, offered on the site, then taken off again.
   - openLink: "${WEB}/admin/reference?lang=ru"
@@ -110,9 +122,15 @@ commands:
   - selectOption: { testId: country-add-select, optionValue: PT }
   - tapOn: { testId: country-add }
   - waitForVisible: { css: "[data-testid=country-row][data-code=PT]" }
+  # Print is priced in tenge: not offered with prices in dollars.
+  - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-print]" }
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-error, contains: "Печать оплачивается в тенге" }
+  - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-print]" }
   - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-default-en]" }
   - tapOn: { testId: reference-save }
   - waitForVisible: { testId: reference-saved }
+  - assertNotVisible: { testId: reference-error }
   - request:
       url: ${API}/reference
       assert:
@@ -168,6 +186,10 @@ commands:
   - waitForVisible: { testId: reference-tabs }
   - tapOn: { testId: reference-tab-faq }
   - waitForVisible: { testId: reference-faq }
+  # Print answers follow the country's print flag, not a list of countries.
+  - scrollUntilVisible: { css: "[data-testid=faq-row][data-id=print-abroad]", centerElement: true }
+  - assertVisible: { css: "[data-testid=faq-row][data-id=print-kz]", containsDescendants: { text: "Страны с печатью" } }
+  - assertVisible: { css: "[data-testid=faq-row][data-id=print-abroad]", containsDescendants: { text: "Страны без печати" } }
   - tapOn: { css: "[data-testid=faq-row][data-id=account] [data-testid=faq-toggle]" }
   - tapOn: { css: "[data-testid=faq-row][data-id=account] [data-testid=faq-a-ru]" }
   - eraseText
@@ -318,17 +340,17 @@ after:
         - { code: TM, languages: [ru, en], currency: USD, print: false }
         - { code: AZ, languages: [ru, en], currency: USD, print: false }
         - { code: AM, languages: [ru, en], currency: USD, print: false }
-        - { code: GE, languages: [ru, en], currency: USD, print: false }
-        - { code: MD, languages: [ru, en], currency: USD, print: false }
-        - { code: MN, languages: [ru, en], currency: USD, print: false }
-        - { code: TR, languages: [en, ru], currency: USD, print: false }
-        - { code: AE, languages: [en, ru], currency: USD, print: false }
-        - { code: IL, languages: [ru, en], currency: USD, print: false }
-        - { code: DE, languages: [en, ru], currency: USD, print: false }
-        - { code: PL, languages: [en, ru], currency: USD, print: false }
-        - { code: CZ, languages: [en, ru], currency: USD, print: false }
-        - { code: GB, languages: [en, ru], currency: USD, print: false }
-        - { code: US, languages: [en, ru], currency: USD, print: false }
-        - { code: CA, languages: [en, ru], currency: USD, print: false }
+        - { code: GE, languages: [en, ru], currency: USD, print: false }
+        - { code: MD, languages: [en, ru], currency: USD, print: false }
+        - { code: IL, languages: [en, ru], currency: USD, print: false }
+        - { code: MN, languages: [en], currency: USD, print: false }
+        - { code: TR, languages: [en], currency: USD, print: false }
+        - { code: AE, languages: [en], currency: USD, print: false }
+        - { code: DE, languages: [en], currency: USD, print: false }
+        - { code: PL, languages: [en], currency: USD, print: false }
+        - { code: CZ, languages: [en], currency: USD, print: false }
+        - { code: GB, languages: [en], currency: USD, print: false }
+        - { code: US, languages: [en], currency: USD, print: false }
+        - { code: CA, languages: [en], currency: USD, print: false }
       assert: { status: 200 }
-  - sql: { exec: "delete from \"Credit\" where \"clientKey\" = $1", params: ["${clientKey}"] }
+  - sql: { exec: "delete from \"Credit\" where \"clientKey\" in ($1, $1 || '-pl')", params: ["${clientKey}"] }

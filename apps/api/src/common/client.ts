@@ -7,6 +7,11 @@ export interface Client {
   key: string;
   demoCode: string | undefined;
   ip: string;
+  /**
+   * The country the visitor chose on the site (x-country: an ISO code or "other"), which sets the
+   * currency and print there; resolved by ReferenceService.visitorCountry, the IP's when absent.
+   */
+  country: string | undefined;
 }
 
 export const CurrentClient = createParamDecorator(
@@ -20,6 +25,7 @@ export const CurrentClient = createParamDecorator(
       key: header('x-client-key') ?? request.ip ?? 'unknown',
       demoCode: header('x-demo-code'),
       ip: clientIp(request),
+      country: header('x-country')?.slice(0, 10),
     };
   },
 );

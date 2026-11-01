@@ -380,10 +380,18 @@ function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; blocked: 
                       ))}
                     </select>
                   </label>
-                  <label className="flex items-center gap-2 text-sm whitespace-nowrap">
-                    <input type="checkbox" data-testid="country-print" checked={country.print} onChange={(e) => update(i, () => ({ print: e.target.checked }))} />
-                    {t("admin.reference.country.print")}
-                  </label>
+                  <span className="flex flex-col gap-1">
+                    <label className="flex items-center gap-2 text-sm whitespace-nowrap">
+                      <input type="checkbox" data-testid="country-print" checked={country.print} onChange={(e) => update(i, () => ({ print: e.target.checked }))} />
+                      {t("admin.reference.country.print")}
+                    </label>
+                    {/* Print is priced in tenge: offered only where the country pays in tenge. */}
+                    {problems[`${i}.print`] && (
+                      <span data-testid="reference-error" className={`${errorText} max-w-56`}>
+                        {t("admin.reference.error.printCurrency")}
+                      </span>
+                    )}
+                  </span>
                   <div className="flex gap-1">
                     <IconButton testId="country-up" label={t("admin.reference.country.up")} disabled={i === 0} onClick={() => reshape(() => move(i, -1))}>
                       <ArrowUp className="size-4" />
@@ -441,8 +449,10 @@ function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; blocked: 
 
 // ---- FAQ -------------------------------------------------------------------------------------
 
-type Audience = "all" | "only" | "except";
-const AUDIENCES: Audience[] = ["all", "only", "except"];
+/** Who sees an entry: everyone, a choice of countries, or the countries with or without print. */
+type Audience = "all" | "only" | "except" | "print" | "noPrint";
+const AUDIENCES: Audience[] = ["all", "only", "except", "print", "noPrint"];
+const byCountries = (audience: Audience) => audience === "only" || audience === "except";
 /** An FAQ entry in the form: who sees it as one choice, and a key that stays put while rows move. */
 type FaqDraft = { key: number; id: string; q: LocalizedText; a: LocalizedText; audience: Audience; countries: string[]; published: boolean };
 
@@ -451,7 +461,8 @@ const toFaqDraft = (item: FaqItem): FaqDraft => ({
   id: item.id,
   q: item.q,
   a: item.a,
-  audience: item.countries.length === 0 ? "all" : item.excludeCountries ? "except" : "only",
+  audience:
+    item.print === "with" ? "print" : item.print === "without" ? "noPrint" : item.countries.length === 0 ? "all" : item.excludeCountries ? "except" : "only",
   countries: item.countries,
   published: item.published,
 });
@@ -460,8 +471,9 @@ const fromFaqDraft = (d: FaqDraft) => ({
   id: d.id,
   q: d.q,
   a: d.a,
-  countries: d.audience === "all" ? [] : d.countries,
+  countries: byCountries(d.audience) ? d.countries : [],
   excludeCountries: d.audience === "except",
+  ...(d.audience === "print" ? { print: "with" as const } : d.audience === "noPrint" ? { print: "without" as const } : {}),
   published: d.published,
 });
 
@@ -523,7 +535,11 @@ function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: Country
   const summary = (row: FaqDraft) =>
     row.audience === "all"
       ? t("admin.reference.faq.everywhere")
-      : t(row.audience === "only" ? "admin.reference.faq.only" : "admin.reference.faq.except", { countries: row.countries.map(nameOf).join(", ") || "—" });
+      : row.audience === "print"
+        ? t("admin.reference.faq.withPrint")
+        : row.audience === "noPrint"
+          ? t("admin.reference.faq.withoutPrint")
+          : t(row.audience === "only" ? "admin.reference.faq.only" : "admin.reference.faq.except", { countries: row.countries.map(nameOf).join(", ") || "—" });
 
   return (
     <form
@@ -624,7 +640,7 @@ function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: Country
                           ))}
                         </select>
                       </label>
-                      {row.audience !== "all" && (
+                      {byCountries(row.audience) && (
                         <div className="flex flex-wrap gap-x-4 gap-y-2">
                           {choices.map((code) => (
                             <label key={code} className="flex items-center gap-1.5 text-sm">

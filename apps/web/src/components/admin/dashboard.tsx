@@ -127,7 +127,10 @@ export function Dashboard() {
             <div>
               <p className="text-sm text-muted">{t("admin.dashboard.sales.purchases")}</p>
               <p className="text-2xl font-extrabold tabular-nums">{number(s.sales.purchases)}</p>
-              <p className="text-xs text-muted">{kzt(s.sales.purchasesKzt)}</p>
+              <p className="text-xs text-muted">
+                {kzt(s.sales.purchasesKzt)}
+                {s.sales.purchasesUsd > 0 && ` · ${formatUsd(s.sales.purchasesUsd)}`}
+              </p>
             </div>
             <div>
               <p className="text-sm text-muted">{t("admin.dashboard.sales.orders")}</p>

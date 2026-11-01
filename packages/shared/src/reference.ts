@@ -105,6 +105,12 @@ export interface CountryInfo {
 
 export const OTHER_COUNTRY_INFO: CountryInfo = { languages: ["en", "ru"], currency: "USD", print: false };
 
+/**
+ * The currency print is priced in (reference.prices.covers and deliveryKzt are tenge): a country
+ * with print must charge in it, so an order's total is always in the currency the site shows.
+ */
+export const PRINT_CURRENCY: Currency = "KZT";
+
 /** A country in the owner's list: what the site speaks, charges and prints there. */
 export const CountryEntrySchema = z.object({
   code: CountryCodeSchema,
@@ -129,6 +135,9 @@ export const CountriesSchema = z
     countries.forEach((country, i) => {
       if (seen.has(country.code)) ctx.addIssue({ code: "custom", path: [i, "code"], message: "Duplicate country" });
       seen.add(country.code);
+      if (country.print && country.currency !== PRINT_CURRENCY) {
+        ctx.addIssue({ code: "custom", path: [i, "print"], message: `Print is priced in ${PRINT_CURRENCY}` });
+      }
     });
   });
 
@@ -214,6 +223,11 @@ export const FaqItemSchema = z
       .max(ISO_COUNTRY_CODES.length + 1)
       .refine((list) => new Set(list).size === list.length, "Duplicate country"),
     excludeCountries: z.boolean().default(false),
+    /**
+     * Only where print is ("with") or is not ("without") offered, by the country's print flag:
+     * opening print in a country switches its entries over. Left out: wherever the countries say.
+     */
+    print: z.enum(["with", "without"]).optional(),
     published: z.boolean(),
   })
   .refine((item) => !item.excludeCountries || item.countries.length > 0, {
@@ -234,10 +248,17 @@ export const FaqSchema = z
     });
   });
 
-/** The published entries a visitor from `country` (a listed code or "other") sees, in order. */
-export function faqFor(items: readonly FaqItem[], country: Country): FaqItem[] {
+/**
+ * The published entries a visitor from `country` (a listed code or "other") sees, in order; the
+ * print flag comes from `countries` (the site's list).
+ */
+export function faqFor(items: readonly FaqItem[], country: Country, countries: readonly CountryEntry[]): FaqItem[] {
+  const print = countryInfo(country, countries).print;
   return items.filter(
-    (item) => item.published && (item.countries.length === 0 || item.countries.includes(country) !== item.excludeCountries),
+    (item) =>
+      item.published &&
+      (item.countries.length === 0 || item.countries.includes(country) !== item.excludeCountries) &&
+      (item.print === undefined || (item.print === "with") === print),
   );
 }
 
@@ -299,12 +320,15 @@ export const DEFAULT_CITIES: City[] = [
 
 const ruEn: Language[] = ["ru", "en"];
 const enRu: Language[] = ["en", "ru"];
+const en: Language[] = ["en"];
 const abroad = (code: string, languages: Language[]): CountryEntry => ({ code, languages, currency: "USD", print: false });
 
 /**
- * The countries the site launched with; the seed of reference.countries. Kazakhstan first (tenge,
- * print), then the neighbours and the places a Russian-, Kazakh- or English-speaking family lives.
- * Nothing on Meta's list of restricted territories.
+ * The countries the site launches with; the seed of reference.countries. Kazakhstan first (tenge,
+ * print), then the neighbours where Russian is the common language (Russian first), the ones where
+ * fewer families read it (English first), and the rest in English only. Nothing on Meta's list of
+ * restricted territories. A stored list still equal to an older seed is upgraded to this one on
+ * start (apps/api ReferenceService).
  */
 export const DEFAULT_COUNTRIES: CountryEntry[] = [
   { code: "KZ", languages: ["kk", "ru", "en"], currency: "KZT", print: true },
@@ -314,28 +338,30 @@ export const DEFAULT_COUNTRIES: CountryEntry[] = [
   abroad("TM", ruEn),
   abroad("AZ", ruEn),
   abroad("AM", ruEn),
-  abroad("GE", ruEn),
-  abroad("MD", ruEn),
-  abroad("MN", ruEn),
-  abroad("TR", enRu),
-  abroad("AE", enRu),
-  abroad("IL", ruEn),
-  abroad("DE", enRu),
-  abroad("PL", enRu),
-  abroad("CZ", enRu),
-  abroad("GB", enRu),
-  abroad("US", enRu),
-  abroad("CA", enRu),
+  abroad("GE", enRu),
+  abroad("MD", enRu),
+  abroad("IL", enRu),
+  abroad("MN", en),
+  abroad("TR", en),
+  abroad("AE", en),
+  abroad("DE", en),
+  abroad("PL", en),
+  abroad("CZ", en),
+  abroad("GB", en),
+  abroad("US", en),
+  abroad("CA", en),
 ];
 
 const everywhere = { countries: [], excludeCountries: false, published: true };
 const onlyKz = { countries: ["KZ"], excludeCountries: false, published: true };
 const notKz = { countries: ["KZ"], excludeCountries: true, published: true };
+const withPrint = { countries: [], excludeCountries: false, print: "with" as const, published: true };
+const withoutPrint = { countries: [], excludeCountries: false, print: "without" as const, published: true };
 
 /**
- * The landing's questions the site launched with; the seed of reference.faq. Where the facts
- * differ by country (languages, prices, print) there is one entry for Kazakhstan and one for
- * everyone else.
+ * The landing's questions the site launches with; the seed of reference.faq. Where the facts
+ * differ by country there is one entry for each side: languages and prices for Kazakhstan and for
+ * everyone else, print for the countries with print and those without.
  */
 export const DEFAULT_FAQ: FaqItem[] = [
   {
@@ -400,17 +426,17 @@ export const DEFAULT_FAQ: FaqItem[] = [
   },
   {
     id: "print-kz",
-    ...onlyKz,
+    ...withPrint,
     q: { ru: "Как заказать печатную книгу?", kk: "Басылған кітапқа қалай тапсырыс беремін?", en: "How do I get a printed book?" },
     a: {
-      ru: "На странице готовой книги нажмите «Заказать печатную книгу». Мягкая обложка — {softCover}, твёрдая — {hardCover}. Бесплатная доставка: {freeCities}; в другие города Казахстана — {delivery}.",
-      kk: "Дайын кітаптың бетінде «Басылған кітапқа тапсырыс» батырмасын басыңыз. Жұмсақ мұқаба — {softCover}, қатты мұқаба — {hardCover}. Тегін жеткізу: {freeCities}; Қазақстанның басқа қалаларына — {delivery}.",
-      en: "On the finished book's page, press “Order a printed book”. A soft cover is {softCover}, a hard cover {hardCover}. Free delivery to {freeCities}; to other cities in Kazakhstan, {delivery}.",
+      ru: "На странице готовой книги нажмите «Заказать печатную книгу». Мягкая обложка — {softCover}, твёрдая — {hardCover}. Бесплатная доставка: {freeCities}; в другие города — {delivery}.",
+      kk: "Дайын кітаптың бетінде «Басылған кітапқа тапсырыс» батырмасын басыңыз. Жұмсақ мұқаба — {softCover}, қатты мұқаба — {hardCover}. Тегін жеткізу: {freeCities}; басқа қалаларға — {delivery}.",
+      en: "On the finished book's page, press “Order a printed book”. A soft cover is {softCover}, a hard cover {hardCover}. Free delivery to {freeCities}; to other cities, {delivery}.",
     },
   },
   {
     id: "print-abroad",
-    ...notKz,
+    ...withoutPrint,
     q: { ru: "Можно ли заказать печатную книгу?", kk: "Басылған кітапқа тапсырыс беруге бола ма?", en: "Can I get a printed book?" },
     a: {
       ru: "К сожалению, в вашей стране печатные книги пока недоступны, но мы планируем открыть печать и в других странах. А пока готовую книгу можно скачать в PDF и распечатать самим. Нажмите «Хочу печатную книгу» на странице книги — и мы сообщим, когда печать заработает у вас.",

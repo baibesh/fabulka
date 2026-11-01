@@ -43,7 +43,7 @@ describe('mail templates', () => {
 
   it.each(LANGUAGES)('renders the purchase receipt in %s', (locale) => {
     const mail = purchaseReceipt(
-      { kind: 'custom', priceKzt: 2900 },
+      { kind: 'custom', price: { amount: 2900, currency: 'KZT' } },
       locale,
       site,
     );
@@ -53,8 +53,22 @@ describe('mail templates', () => {
 
   it('says in Russian that nothing was charged', () => {
     expect(
-      purchaseReceipt({ kind: 'template', priceKzt: 1900 }, 'ru', site).text,
+      purchaseReceipt(
+        { kind: 'template', price: { amount: 1900, currency: 'KZT' } },
+        'ru',
+        site,
+      ).text,
     ).toContain('деньги не списывались');
+  });
+
+  it('shows a dollar purchase in dollars', () => {
+    const mail = purchaseReceipt(
+      { kind: 'template', price: { amount: 3.9, currency: 'USD' } },
+      'en',
+      site,
+    );
+    expect(mail.text).toContain('$3.90');
+    expect(mail.text).not.toContain('₸');
   });
 
   it('formats tenge and order numbers', () => {

@@ -24,7 +24,7 @@ const label = "flex flex-col gap-1.5 text-sm font-semibold";
 export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { t, locale } = useI18n();
+  const { t, locale, info } = useI18n();
   const book = useQuery({ queryKey: ["book", id], queryFn: () => getBook(id) });
   const form = useForm<FormValues, unknown, CreateOrderInput>({
     resolver: zodResolver(CreateOrderSchema),
@@ -52,6 +52,19 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
     mutationFn: createOrder,
     onSuccess: (created) => router.push(`/orders/${created.id}`),
   });
+
+  // Print is priced in tenge and offered only where the country has it (the API refuses the rest).
+  if (!info.print) {
+    return (
+      <section data-testid="order-unavailable" className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-6">
+        <h1 className="flex items-center gap-2 text-2xl font-extrabold">
+          <Printer className="size-6 text-accent" />
+          {t("order.unavailable.title")}
+        </h1>
+        <p className="text-muted">{t("order.unavailable.text")}</p>
+      </section>
+    );
+  }
 
   return (
     <form data-testid="order-form" noValidate onSubmit={form.handleSubmit((values) => order.mutate({ ...values, locale }))} className="flex flex-col gap-6">

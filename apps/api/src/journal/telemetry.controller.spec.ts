@@ -12,6 +12,7 @@ const client = (key: string): Client => ({
   key,
   demoCode: undefined,
   ip: '127.0.0.1',
+  country: undefined,
 });
 
 describe('TelemetryController', () => {

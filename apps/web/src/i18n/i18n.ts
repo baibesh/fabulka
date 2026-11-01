@@ -107,6 +107,9 @@ export function setCountry(country: Country) {
   if (read(LOCALE_KEY) !== locale) setLocale(locale);
 }
 
+/** The country saved on this browser (picked or detected), as saved; null before either. */
+export const savedCountry = () => read(COUNTRY_KEY);
+
 /** Whether the visitor has picked a country yet (otherwise it is detected once). */
 export const countryChosen = () => read(COUNTRY_KEY) !== null;
 

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -7,8 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import type { Book as BookRow, Order as OrderRow } from '@prisma/client';
 import {
   LanguageSchema,
+  PRINT_UNAVAILABLE,
   orderStatusAt,
   type AdminOrder,
+  type Country,
   type CreateOrderInput,
   type Language,
   type Order,
@@ -37,12 +40,22 @@ export class OrdersService {
     this.stageMs = Number(config.get('ORDER_STAGE_MS', 20_000));
   }
 
-  /** Only the browser that made the book, or the account it belongs to, can order it. */
+  /**
+   * Only the browser that made the book, or the account it belongs to, can order it, and only
+   * from a country with print (Kazakhstan when no country is known).
+   */
   async create(
     input: CreateOrderInput,
     clientKey: string,
     userId?: string | null,
+    country: Country = 'KZ',
   ): Promise<Order> {
+    if (!(await this.reference.infoFor(country)).print) {
+      throw new BadRequestException({
+        code: PRINT_UNAVAILABLE,
+        message: 'Printed books are not available in your country yet',
+      });
+    }
     const book = await this.prisma.book.findUnique({
       where: { id: input.bookId },
     });

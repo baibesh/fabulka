@@ -196,7 +196,7 @@ function ToyPipeline({ toy }: { toy: NonNullable<Book["toy"]> }) {
   );
 }
 
-/** Outside Kazakhstan there is no print partner yet: the button records demand instead. */
+/** Where the country has no print partner yet: a kind word that it is planned, and a request to count demand. */
 function WantPrint({ bookId }: { bookId: string }) {
   const { t } = useI18n();
   const want = useMutation({ mutationFn: () => wantPrint(bookId) });

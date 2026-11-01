@@ -11,6 +11,7 @@ import {
 import {
   CreateBookSchema,
   GENERATION_PAUSED,
+  OTHER_COUNTRY,
   type Book,
   type CreateBookInput,
   type ExampleBook,
@@ -20,6 +21,7 @@ import { CurrentUser, type SessionUser } from '../auth/current-user';
 import { CurrentClient, type Client } from '../common/client';
 import { ZodPipe } from '../common/zod.pipe';
 import { GeoService } from '../geo/geo.service';
+import { ReferenceService } from '../reference/reference.service';
 import { QuotaService } from '../quota/quota.service';
 import { SettingsService } from '../settings/settings.service';
 import { BooksService } from './books.service';
@@ -31,6 +33,7 @@ export class BooksController {
     private readonly quota: QuotaService,
     private readonly settings: SettingsService,
     private readonly geo: GeoService,
+    private readonly reference: ReferenceService,
   ) {}
 
   @Post()
@@ -74,13 +77,22 @@ export class BooksController {
     return this.books.listExamples();
   }
 
+  /**
+   * Someone in a country without print wants this book printed. Counted for the country they
+   * chose on the site when it is a listed one, else for their IP's.
+   */
   @Post(':id/print-interest')
   @HttpCode(204)
-  printInterest(
+  async printInterest(
     @Param('id') id: string,
     @CurrentClient() client: Client,
   ): Promise<void> {
-    return this.books.recordPrintInterest(id, this.geo.country(client.ip));
+    const ip = this.geo.country(client.ip);
+    const country = await this.reference.visitorCountry(client.country, ip);
+    return this.books.recordPrintInterest(
+      id,
+      country === OTHER_COUNTRY ? ip : country,
+    );
   }
 
   @Get(':id')

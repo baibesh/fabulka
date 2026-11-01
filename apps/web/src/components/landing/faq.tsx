@@ -16,7 +16,7 @@ import { Section } from "./section";
 export function Faq() {
   const { t, locale, country, countries, info } = useI18n();
   const reference = useReference().data;
-  const items = reference ? faqFor(reference.faq, country) : null;
+  const items = reference ? faqFor(reference.faq, country, countries) : null;
   const vars: Partial<Record<FaqPlaceholder, string>> = reference
     ? {
         templatePrice: formatPrice(bookPrice("template", country, reference.prices, countries)),

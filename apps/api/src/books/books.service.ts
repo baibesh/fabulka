@@ -187,7 +187,7 @@ export class BooksService implements OnModuleInit {
     return this.toDto(row);
   }
 
-  /** Someone outside Kazakhstan wants this book printed; once per book. */
+  /** Someone in a country without print wants this book printed; once per book. */
   async recordPrintInterest(id: string, country: string | null) {
     const book = await this.prisma.book.findUnique({ where: { id } });
     if (!book) throw new NotFoundException(`book ${id} not found`);

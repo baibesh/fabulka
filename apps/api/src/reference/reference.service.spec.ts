@@ -12,6 +12,7 @@ import {
 import type { PrismaService } from '../prisma/prisma.service';
 import { RESTRICTED_COUNTRIES } from '../geo/restricted';
 import { CACHE_MS, ReferenceService } from './reference.service';
+import { SEEDED_COUNTRIES_V1, SEEDED_FAQ_V1 } from './seeded';
 
 /** The Setting table in memory behind the few Prisma calls the service makes. */
 function settingsStore(initial: Record<string, unknown> = {}) {
@@ -83,6 +84,71 @@ describe('ReferenceService seeding', () => {
     expect(rows.get(REFERENCE_KEYS.extraBlocked)).toEqual(['NL']);
     expect(rows.get(REFERENCE_KEYS.cities)).toEqual(DEFAULT_CITIES);
     expect((await service.prices()).books.template.KZT).toBe(2500);
+  });
+
+  it('upgrades an untouched older seed of the countries and the FAQ to today’s', async () => {
+    const { service, rows } = settingsStore({
+      [REFERENCE_KEYS.countries]: structuredClone(SEEDED_COUNTRIES_V1),
+      [REFERENCE_KEYS.faq]: structuredClone(SEEDED_FAQ_V1),
+    });
+    await service.onModuleInit();
+
+    expect(rows.get(REFERENCE_KEYS.countries)).toEqual(DEFAULT_COUNTRIES);
+    expect(rows.get(REFERENCE_KEYS.faq)).toEqual(DEFAULT_FAQ);
+    const pl = (await service.countries()).find((c) => c.code === 'PL');
+    expect(pl?.languages).toEqual(['en']);
+  });
+
+  it('matches the old seed whatever the key order the database keeps', async () => {
+    // Postgres JSONB stores object keys in its own order.
+    const reordered = (SEEDED_COUNTRIES_V1 as Record<string, unknown>[]).map(
+      ({ print, currency, languages, code }) => ({
+        print,
+        currency,
+        languages,
+        code,
+      }),
+    );
+    const { service, rows } = settingsStore({
+      [REFERENCE_KEYS.countries]: reordered,
+    });
+    await service.onModuleInit();
+    expect(rows.get(REFERENCE_KEYS.countries)).toEqual(DEFAULT_COUNTRIES);
+  });
+
+  it('leaves the countries and the FAQ the owner edited alone', async () => {
+    const countries = structuredClone(SEEDED_COUNTRIES_V1) as {
+      code: string;
+    }[];
+    countries.splice(1, 1); // Uzbekistan taken off
+    const faq = (
+      structuredClone(SEEDED_FAQ_V1) as { published: boolean }[]
+    ).map((item, i) => (i === 0 ? { ...item, published: false } : item));
+    const { service, rows } = settingsStore({
+      [REFERENCE_KEYS.countries]: countries,
+      [REFERENCE_KEYS.faq]: faq,
+    });
+    await service.onModuleInit();
+
+    expect(rows.get(REFERENCE_KEYS.countries)).toEqual(countries);
+    expect(rows.get(REFERENCE_KEYS.faq)).toEqual(faq);
+  });
+
+  it('turns print off where an edited list priced it in dollars', async () => {
+    const countries = [
+      { code: 'KZ', languages: ['kk', 'ru'], currency: 'KZT', print: true },
+      { code: 'UZ', languages: ['ru'], currency: 'USD', print: true },
+    ];
+    const { service, rows } = settingsStore({
+      [REFERENCE_KEYS.countries]: countries,
+    });
+    await service.onModuleInit();
+
+    expect(rows.get(REFERENCE_KEYS.countries)).toEqual([
+      countries[0],
+      { ...countries[1], print: false },
+    ]);
+    expect((await service.infoFor('UZ')).print).toBe(false);
   });
 
   it('falls back to the default for a missing or broken value', async () => {
@@ -214,7 +280,7 @@ describe('ReferenceService countries', () => {
     const { service, rows } = settingsStore();
     const saved = await service.setCountries([
       { ...de, code: 'nl' },
-      { ...kz, currency: 'USD' },
+      { ...kz, currency: 'USD', print: false },
     ]);
     expect(saved.map((c) => c.code)).toEqual(['NL', 'KZ']);
     expect(rows.get(REFERENCE_KEYS.countries)).toEqual(saved);
@@ -258,6 +324,23 @@ describe('ReferenceService countries', () => {
     expect((await service.admin()).countries.map((c) => c.code)).toContain(
       'DE',
     );
+  });
+
+  it('refuses print priced in anything but tenge', async () => {
+    const { service, setting } = settingsStore();
+    await expect(
+      service.setCountries([{ ...kz, currency: 'USD' }]),
+    ).rejects.toThrow();
+    expect(setting.upsert).not.toHaveBeenCalled();
+  });
+
+  it('takes the country chosen on the site, else the IP’s', async () => {
+    const { service } = settingsStore();
+    expect(await service.visitorCountry('PL', 'KZ')).toBe('PL');
+    expect(await service.visitorCountry('other', 'KZ')).toBe('other');
+    expect(await service.visitorCountry('NL', 'KZ')).toBe('other');
+    expect(await service.visitorCountry(undefined, 'UZ')).toBe('UZ');
+    expect(await service.visitorCountry(undefined, null)).toBe('KZ');
   });
 
   it('refuses an empty list, duplicates and unknown codes', async () => {

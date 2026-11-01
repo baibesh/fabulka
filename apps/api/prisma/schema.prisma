@@ -93,7 +93,10 @@ model Credit {
   id        String   @id @default(cuid())
   clientKey String
   books     Int
+  /// What it cost in tenge; 0 when bought in dollars.
   priceKzt  Int
+  /// What it cost in dollars (a country priced in USD); 0 when bought in tenge.
+  priceUsd  Float    @default(0)
   createdAt DateTime @default(now())
 
   @@index([clientKey])

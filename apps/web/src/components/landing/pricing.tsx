@@ -37,24 +37,32 @@ export function Pricing() {
       price: customPrice,
       points: points("landing.pricing.custom.theme", "landing.pricing.custom.method", "landing.pricing.pdf"),
     },
-    {
-      testId: "price-print",
-      title: t("landing.pricing.print.title"),
-      price: reference ? t("landing.pricing.from", { price: formatKzt(reference.prices.covers.soft) }) : null,
-      points: reference
-        ? [
-            t("landing.pricing.print.covers", { soft: formatKzt(reference.prices.covers.soft), hard: formatKzt(reference.prices.covers.hard) }),
-            t("landing.pricing.print.delivery", {
-              cities: reference.cities
-                .filter((c) => c.freeDelivery)
-                .map((c) => c[locale])
-                .join(", "),
-              fee: formatKzt(reference.prices.deliveryKzt),
-            }),
-          ]
-        : [],
-      note: info.print ? undefined : t("book.print.unavailable"),
-    },
+    // Print is priced in tenge and offered only where the country has it; elsewhere no prices, a
+    // word that it is planned, and the PDF.
+    info.print
+      ? {
+          testId: "price-print",
+          title: t("landing.pricing.print.title"),
+          price: reference ? t("landing.pricing.from", { price: formatKzt(reference.prices.covers.soft) }) : null,
+          points: reference
+            ? [
+                t("landing.pricing.print.covers", { soft: formatKzt(reference.prices.covers.soft), hard: formatKzt(reference.prices.covers.hard) }),
+                t("landing.pricing.print.delivery", {
+                  cities: reference.cities
+                    .filter((c) => c.freeDelivery)
+                    .map((c) => c[locale])
+                    .join(", "),
+                  fee: formatKzt(reference.prices.deliveryKzt),
+                }),
+              ]
+            : [],
+        }
+      : {
+          testId: "price-print",
+          title: t("landing.pricing.print.title"),
+          price: t("landing.pricing.print.soon"),
+          points: points("landing.pricing.print.planned", "landing.pricing.print.pdf", "landing.pricing.print.request"),
+        },
   ];
 
   return (

@@ -15,10 +15,13 @@ import {
   DEFAULT_FAQ,
   DEFAULT_PRICES,
   FaqSchema,
+  PRINT_CURRENCY,
   PricesSchema,
   REFERENCE_KEYS,
   UpdateBlockedSchema,
   bookPrice,
+  countryFromIp,
+  countryInfo,
   orderPrice,
   type AdminReference,
   type BlockedCountries,
@@ -34,6 +37,7 @@ import {
 import type { ZodType } from 'zod';
 import { GEO_POLICY_URL, RESTRICTED_COUNTRIES } from '../geo/restricted';
 import { PrismaService } from '../prisma/prisma.service';
+import { SEEDED_COUNTRIES_V1, SEEDED_FAQ_V1 } from './seeded';
 
 /** How long the reference data is kept in memory; an edit in the admin drops it at once. */
 export const CACHE_MS = 60_000;
@@ -68,6 +72,55 @@ const SCHEMAS: { [K in keyof Snapshot]: ZodType<Snapshot[K]> } = {
 const FIELDS = Object.keys(REFERENCE_KEYS) as (keyof Snapshot)[];
 
 /**
+ * Seeds the API stored once, by field. A stored value still equal to one of them was never edited
+ * by the owner, so today's default replaces it on start; an edited one is left alone.
+ */
+const SEEDED: Partial<Record<keyof Snapshot, unknown[]>> = {
+  countries: [SEEDED_COUNTRIES_V1],
+  faq: [SEEDED_FAQ_V1],
+};
+
+/** Whether two JSON values are equal, whatever the order of their object keys. */
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+}
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [
+          key,
+          canonical((value as Record<string, unknown>)[key]),
+        ]),
+    );
+  }
+  return value;
+}
+
+/**
+ * What start-up changes in a stored value, or null to leave it: an untouched older seed becomes
+ * today's default; a country with print priced in anything but tenge (allowed before print was
+ * tied to the currency) loses print rather than make the whole list unreadable.
+ */
+export function upgradeStored(field: keyof Snapshot, stored: unknown): unknown {
+  if (SEEDED[field]?.some((seed) => sameJson(seed, stored))) {
+    return DEFAULTS[field];
+  }
+  if (field === 'countries' && Array.isArray(stored)) {
+    const list = stored as Partial<CountryEntry>[];
+    if (list.some((c) => c?.print && c.currency !== PRINT_CURRENCY)) {
+      return list.map((c) =>
+        c?.print && c.currency !== PRINT_CURRENCY ? { ...c, print: false } : c,
+      );
+    }
+  }
+  return null;
+}
+
+/**
  * Reference data the owner edits in the admin (prices, delivery cities, the countries the site
  * offers, the landing's FAQ, extra blocked countries),
  * kept in the Setting table. Every purchase, order and API request reads it, so it is cached in
@@ -80,7 +133,10 @@ export class ReferenceService implements OnModuleInit {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Stores today's defaults for the keys that are missing; never overwrites the owner's edits. */
+  /**
+   * Stores today's defaults for the keys that are missing, and upgrades stored values the owner
+   * never edited (see upgradeStored); never overwrites the owner's edits.
+   */
   async onModuleInit() {
     const { count } = await this.prisma.setting.createMany({
       data: FIELDS.map((field) => ({
@@ -90,7 +146,27 @@ export class ReferenceService implements OnModuleInit {
       skipDuplicates: true,
     });
     if (count) this.logger.log(`seeded ${count} reference settings`);
+    await this.upgrade();
     this.invalidate();
+  }
+
+  private async upgrade() {
+    const rows = await this.prisma.setting.findMany({
+      where: { key: { in: FIELDS.map((field) => REFERENCE_KEYS[field]) } },
+    });
+    for (const field of FIELDS) {
+      const key = REFERENCE_KEYS[field];
+      const row = rows.find((r) => r.key === key);
+      const next = row ? upgradeStored(field, row.value) : null;
+      if (next === null) continue;
+      const json = next as Prisma.InputJsonValue;
+      await this.prisma.setting.upsert({
+        where: { key },
+        create: { key, value: json },
+        update: { value: json },
+      });
+      this.logger.log(`upgraded ${key}`);
+    }
   }
 
   invalidate() {
@@ -166,6 +242,23 @@ export class ReferenceService implements OnModuleInit {
     const { prices, cities, extraBlocked, countries, faq } =
       await this.snapshot();
     return { prices, cities, countries, faq, blocked: blocked(extraBlocked) };
+  }
+
+  /**
+   * The visitor's country as the site has it: the one chosen on the site (the x-country header),
+   * else the one of their IP; a listed code or "other". No code at all (a local address) is
+   * Kazakhstan.
+   */
+  async visitorCountry(
+    chosen: string | undefined,
+    ipCountry: string | null,
+  ): Promise<Country> {
+    return countryFromIp(chosen ?? ipCountry, await this.countries());
+  }
+
+  /** What the site offers in the visitor's country (languages, currency, print). */
+  async infoFor(country: Country) {
+    return countryInfo(country, await this.countries());
   }
 
   /** What one more book of this kind costs, at the stored prices and the country's currency. */

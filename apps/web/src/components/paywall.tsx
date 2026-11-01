@@ -16,7 +16,7 @@ import { PriceSkeleton } from "./price-skeleton";
  */
 export function Paywall({ kind, onUnlocked }: { kind: BookKind; onUnlocked: () => void }) {
   const queryClient = useQueryClient();
-  const { t, locale } = useI18n();
+  const { t, locale, info } = useI18n();
   const price = useBookPrice(kind);
   const [code, setCode] = useState("");
   // The receipt's address: optional, the account's email until the parent types another.
@@ -37,7 +37,7 @@ export function Paywall({ kind, onUnlocked }: { kind: BookKind; onUnlocked: () =
     <section data-testid="paywall" className="flex flex-col gap-4 rounded-2xl border-2 border-accent bg-card p-5 sm:col-span-2">
       <div>
         <h2 className="text-lg font-extrabold">{t("paywall.title")}</h2>
-        <p className="text-muted">{price ? t(`paywall.text.${kind}`, { price }) : <PriceSkeleton className="w-64 max-w-full" />}</p>
+        <p className="text-muted">{price ? t(info.print ? `paywall.text.${kind}` : `paywall.text.${kind}.pdf`, { price }) : <PriceSkeleton className="w-64 max-w-full" />}</p>
       </div>
       <label className="flex flex-col gap-1.5 text-sm font-semibold">
         <span>

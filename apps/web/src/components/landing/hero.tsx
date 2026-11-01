@@ -38,7 +38,9 @@ const SPARKLES = [
 
 /** The headline, what Fabulka does, the way in, and a pile of catalog covers. */
 export function Hero() {
-  const { t } = useI18n();
+  const { t, country, info } = useI18n();
+  // Print and delivery are promised only where there is print; Kazakhstan's line names it.
+  const lead = info.print ? (country === "KZ" ? "landing.hero.lead" : "landing.hero.lead.print") : "landing.hero.lead.pdf";
   const { data: examples } = useQuery({ queryKey: ["examples"], queryFn: listExamples });
   const paused = useQuery({ queryKey: ["status"], queryFn: getStatus }).data?.paused === true;
   const price = useBookPrice("template");
@@ -60,7 +62,7 @@ export function Hero() {
             </a>
           )}
           <h1 className="text-4xl font-extrabold leading-tight sm:text-5xl">{t("landing.hero.title")}</h1>
-          <p className="text-lg text-muted sm:text-xl">{t("landing.hero.lead")}</p>
+          <p className="text-lg text-muted sm:text-xl">{t(lead)}</p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link href="/catalog" data-testid="hero-cta" className={primaryButton}>
               {t("landing.hero.cta")}

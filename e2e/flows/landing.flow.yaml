@@ -59,7 +59,7 @@ commands:
   # priced from the reference data.
   - assertNotVisible: { testId: faq-item-print-abroad }
   - tapOn: "Как заказать печатную книгу?"
-  - waitForVisible: { contains: "Бесплатная доставка: Алматы, Астана; в другие города Казахстана — 1 500 ₸" }
+  - waitForVisible: { contains: "Бесплатная доставка: Алматы, Астана; в другие города — 1 500 ₸" }
   - tapOn: "Сколько стоит книга?"
   - waitForVisible: { contains: "книга из каталога стоит 1 900 ₸, своя история — 2 900 ₸" }
 
@@ -114,8 +114,9 @@ commands:
   - tapOn: { testId: nav-home }
   - waitForVisible: { testId: hero-covers }
   - assertVisible: { contains: "Первые книги — бесплатно, дальше — от $3.90" }
-  - assertVisible: "Печать пока только в Казахстане, а PDF легко распечатать самим."
+  - assertVisible: "В вашей стране печати пока нет — мы планируем её открыть. А PDF легко распечатать самим."
   # Outside Kazakhstan the FAQ says print is not there yet, and prices are in dollars.
+  - assertNotVisible: { contains: "доставкой по Казахстану" }
   - assertNotVisible: { testId: faq-item-print-kz }
   - assertNotVisible: { testId: faq-item-kazakh }
   - tapOn: "Можно ли заказать печатную книгу?"
@@ -124,5 +125,45 @@ commands:
   - waitForVisible: { contains: "книга из каталога стоит $3.90, своя история — $5.90" }
   - tapOn: "На каких языках можно сделать книгу?"
   - waitForVisible: { contains: "Язык книги выбирается в форме: Русский, English" }
+
+  # Poland: English only, no tenge and no print prices anywhere; print is planned, the PDF is there.
+  - tapOn: { testId: ui-country }
+  - tapOn: { testId: ui-country-search }
+  - inputText: "Польш"
+  - waitForVisible: { testId: ui-country-option-PL }
+  - tapOn: { testId: ui-country-option-PL }
+  - waitForVisible: "A book where your child is the hero"
+  - assertVisible: { testId: ui-country, contains: "Poland" }
+  - tapOn: { testId: ui-language }
+  - waitForVisible: { testId: ui-language-option-en }
+  - assertNotVisible: { testId: ui-language-option-ru }
+  - assertNotVisible: { testId: ui-language-option-kk }
+  - pressKey: escape
+  - assertVisible: { contains: "Ready in a few minutes: read it on screen or download the PDF." }
+  - assertVisible: { contains: "Your first books are free, then from $3.90" }
+  # From the top of the page again (the country dialog was opened from the footer).
+  - openLink: "${WEB}/"
+  - waitForVisible: { testId: hero-covers }
+  - assertVisible: { testId: trust, containsDescendants: { text: "Books in English" } }
+  - assertVisible: { testId: trust, containsDescendants: { text: "A PDF in minutes, ready to print at home" } }
+  - tapOn: { testId: free-books }
+  - assertVisible: { text: "$3.90", childOf: { testId: price-template } }
+  - assertVisible: { text: "Soon", childOf: { testId: price-print } }
+  - assertVisible: { testId: price-print, containsDescendants: { text: "Printing isn't available in your country yet — we plan to bring it" } }
+  - assertNotVisible: { contains: "₸" }
+  - assertNotVisible: { testId: faq-item-print-kz }
+  - tapOn: "Can I get a printed book?"
+  - waitForVisible: { contains: "printed books aren't available in your country yet" }
+  # The book page keeps the PDF and turns print into a request; a Russian link opens in English.
+  - openLink: "${WEB}/books/${bookId}?lang=ru"
+  - waitForVisible: { testId: want-print }
+  - assertNotVisible: { testId: order-print }
+  - assertVisible: { contains: "Printed books aren't available in your country yet" }
+  - assertVisible: { testId: download-pdf }
+  - assertNotVisible: { contains: "₸" }
+  # The order form is not offered there either.
+  - openLink: "${WEB}/books/${bookId}/order"
+  - waitForVisible: { testId: order-unavailable }
+  - assertNotVisible: { testId: order-form }
 after:
   - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

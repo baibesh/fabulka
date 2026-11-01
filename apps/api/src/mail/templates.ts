@@ -1,4 +1,10 @@
-import type { BookKind, Cover, Language, OrderStatus } from '@fabulka/shared';
+import type {
+  BookKind,
+  Cover,
+  Currency,
+  Language,
+  OrderStatus,
+} from '@fabulka/shared';
 
 /** A rendered email: subject, HTML and the plain-text alternative. */
 export interface MailContent {
@@ -23,6 +29,17 @@ export interface OrderMailData {
 /** Order number as the parent sees it: the last characters of the id, upper-cased. */
 export function orderNumber(id: string): string {
   return id.slice(-8).toUpperCase();
+}
+
+/** "1 900 ₸" or "$3.90": a price in its own currency. */
+export function money({
+  amount,
+  currency,
+}: {
+  amount: number;
+  currency: Currency;
+}): string {
+  return currency === 'KZT' ? kzt(amount) : `$${amount.toFixed(2)}`;
 }
 
 /** 12 900 ₸ (plain spaces, so every mail client shows it the same). */
@@ -204,14 +221,14 @@ export function orderStatusChanged(
 
 /** Sent after the paywall's demo checkout for one more book. */
 export function purchaseReceipt(
-  purchase: { kind: BookKind; priceKzt: number },
+  purchase: { kind: BookKind; price: { amount: number; currency: Currency } },
   locale: Language,
   publicUrl: string,
 ): MailContent {
   const t = TEXT[locale];
   return layout(t.receiptSubject, [
     paragraph(t.receiptIntro(KIND[locale][purchase.kind])),
-    table(t.details, [[t.amount, kzt(purchase.priceKzt)]]),
+    table(t.details, [[t.amount, money(purchase.price)]]),
     note(t.receiptDemo),
     links([[t.create, `${publicUrl}/catalog?lang=${locale}`]]),
     paragraph(t.signature),

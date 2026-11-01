@@ -5,6 +5,8 @@ import {
   DAILY_CAP_REACHED,
   LIMIT_REACHED,
   type BookKind,
+  type Country,
+  type Currency,
   type Quota,
 } from '@fabulka/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -126,18 +128,24 @@ export class QuotaService {
 
   /**
    * Demo payment: records one more book for the visitor without charging anything, at the price
-   * of its kind the owner set in the admin (never one the client sends). A credit is good for
-   * either kind, like the free books.
+   * of its kind the owner set in the admin (never one the client sends), in the currency of the
+   * visitor's country. A credit is good for either kind, like the free books.
    */
   async buyBook(
     clientKey: string,
     kind: BookKind,
-  ): Promise<{ quota: Quota; priceKzt: number }> {
-    const priceKzt = (await this.reference.prices()).books[kind].KZT;
+    country: Country,
+  ): Promise<{ quota: Quota; price: { amount: number; currency: Currency } }> {
+    const price = await this.reference.bookPrice(kind, country);
     await this.prisma.credit.create({
-      data: { clientKey, books: 1, priceKzt },
+      data: {
+        clientKey,
+        books: 1,
+        priceKzt: price.currency === 'KZT' ? price.amount : 0,
+        priceUsd: price.currency === 'USD' ? price.amount : 0,
+      },
     });
-    return { quota: await this.quota(clientKey), priceKzt };
+    return { quota: await this.quota(clientKey), price };
   }
 }
 

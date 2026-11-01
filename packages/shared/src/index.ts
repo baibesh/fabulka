@@ -369,6 +369,12 @@ export function orderPrice(cover: Cover, quantity: number, city: string, prices:
   return { books, delivery, total: books + delivery };
 }
 
+/**
+ * Body of a 400 from POST /orders: the visitor's country has no print (reference.countries), so
+ * nothing can be ordered there; the site offers a print-interest request instead.
+ */
+export const PRINT_UNAVAILABLE = "print_unavailable";
+
 /** Delivery stages, in order. The demo walks through them on a timer. */
 export const ORDER_STATUSES = ["paid", "printing", "shipped", "delivered"] as const;
 export const OrderStatusSchema = z.enum(ORDER_STATUSES);
@@ -439,6 +445,8 @@ export const AdminStatsSchema = z.object({
     ordersKzt: z.number().int(),
     purchases: z.number().int(),
     purchasesKzt: z.number().int(),
+    /** Books bought in dollars (countries priced in USD), in dollars. */
+    purchasesUsd: z.number(),
   }),
   countries: z.array(z.object({ country: z.string(), books: z.number().int() })),
   /** Requests for a printed book from countries without a print partner. */

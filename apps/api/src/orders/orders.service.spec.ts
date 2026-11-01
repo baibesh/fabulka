@@ -1,6 +1,8 @@
+import { BadRequestException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import {
   CreateOrderSchema,
+  PRINT_UNAVAILABLE,
   DEFAULT_CITIES,
   DEFAULT_PRICES,
   REFERENCE_KEYS,
@@ -105,6 +107,21 @@ describe('OrdersService.create', () => {
       deliveryKzt: 0,
       totalKzt: 29800,
     });
+  });
+
+  it('refuses an order from a country without print', async () => {
+    const { service, create } = makeService({});
+    const error = await service
+      .create(CreateOrderSchema.parse(body), 'k', null, 'PL')
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect((error as BadRequestException).getResponse()).toMatchObject({
+      code: PRINT_UNAVAILABLE,
+    });
+    await expect(
+      service.create(CreateOrderSchema.parse(body), 'k', null, 'other'),
+    ).rejects.toThrow(BadRequestException);
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('uses the launch prices until the owner changes them', async () => {

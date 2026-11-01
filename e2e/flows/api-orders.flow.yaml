@@ -1,5 +1,6 @@
 # An order holds a name and an address: only the browser that made the book can order it or see it.
-# The parent gets a confirmation email (kept in memory by the API without RESEND_API_KEY).
+# The parent gets a confirmation email (kept in memory by the API without RESEND_API_KEY). Print is
+# ordered only from a country with print: the one chosen on the site (X-Country), else the IP's.
 device: none
 env:
   childName: "Owner ${Date.now()}"
@@ -33,6 +34,19 @@ commands:
       json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${parentEmail}", city: Алматы, address: "ул. Абая, 1", cover: soft, quantity: 1, locale: kk }
       extract: { orderId: "$.id" }
       assert: { status: 201 }
+  # Poland and "another country" have no print: refused, whatever the city.
+  - request:
+      method: POST
+      url: /orders
+      headers: { X-Client-Key: "${owner}", X-Country: PL }
+      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${parentEmail}", city: Алматы, address: "ул. Абая, 1", cover: soft, quantity: 1 }
+      assert: { status: 400, json: { "$.code": print_unavailable } }
+  - request:
+      method: POST
+      url: /orders
+      headers: { X-Client-Key: "${owner}", X-Country: other }
+      json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${parentEmail}", city: Алматы, address: "ул. Абая, 1", cover: soft, quantity: 1 }
+      assert: { status: 400, json: { "$.code": print_unavailable } }
   - request:
       url: /orders/${orderId}
       headers: { X-Client-Key: "${stranger}" }

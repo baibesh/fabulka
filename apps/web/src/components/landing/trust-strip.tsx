@@ -1,13 +1,17 @@
 "use client";
 
-import { LANGUAGES } from "@fabulka/shared";
-import { Brain, Languages, ShieldCheck, Truck } from "lucide-react";
+import { LANGUAGE_NAMES } from "@fabulka/shared";
+import { Brain, FileDown, Languages, ShieldCheck, Truck } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import { useMethodologies } from "@/lib/use-methodologies";
 
-/** Four short reasons to trust a book about your child, in a band under the hero. */
+/**
+ * Four short reasons to trust a book about your child, in a band under the hero. The languages and
+ * print are the visitor's country's.
+ */
 export function TrustStrip() {
-  const { t } = useI18n();
+  const { t, country, info } = useI18n();
+  const names = info.languages.map((l) => LANGUAGE_NAMES[l]).join(", ");
   // The number of published methods once it is known; until then (or if it cannot be read), no number.
   const { data: methods } = useMethodologies();
   const items = [
@@ -15,8 +19,13 @@ export function TrustStrip() {
       icon: Brain,
       text: methods?.length ? t("landing.trust.methods", { count: methods.length }) : t("landing.trust.methods.any"),
     },
-    { icon: Languages, text: t("landing.trust.languages", { count: LANGUAGES.length }) },
-    { icon: Truck, text: t("landing.trust.print") },
+    {
+      icon: Languages,
+      text: info.languages.length > 1 ? t("landing.trust.languages", { count: info.languages.length, names }) : t("landing.trust.language", { names }),
+    },
+    info.print
+      ? { icon: Truck, text: t(country === "KZ" ? "landing.trust.print" : "landing.trust.printed") }
+      : { icon: FileDown, text: t("landing.trust.pdf") },
     { icon: ShieldCheck, text: t("landing.trust.data") },
   ];
   return (

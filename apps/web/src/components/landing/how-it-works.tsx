@@ -1,23 +1,21 @@
 "use client";
 
-import { Clock3, Library, MessageCircleHeart, Printer } from "lucide-react";
+import { Clock3, FileDown, Library, MessageCircleHeart, Printer } from "lucide-react";
 import { motion } from "motion/react";
 import { useI18n } from "@/i18n/i18n";
 import { Section } from "./section";
 
-/** From picking a story to a printed book, in four steps. */
+/** From picking a story to a printed book (or the PDF where there is no print), in four steps. */
 export function HowItWorks() {
   const { t, info } = useI18n();
   const steps = [
     { icon: Library, title: t("landing.how.choose.title"), text: t("landing.how.choose.text") },
     { icon: MessageCircleHeart, title: t("landing.how.tell.title"), text: t("landing.how.tell.text") },
     { icon: Clock3, title: t("landing.how.ready.title"), text: t("landing.how.ready.text") },
-    {
-      icon: Printer,
-      title: t("landing.how.print.title"),
-      // Print is only in Kazakhstan; elsewhere the step says so instead of promising delivery.
-      text: t(info.print ? "landing.how.print.text" : "landing.how.print.elsewhere"),
-    },
+    // Where there is no print the last step is the PDF, with a word that print is planned.
+    info.print
+      ? { icon: Printer, title: t("landing.how.print.title"), text: t("landing.how.print.text") }
+      : { icon: FileDown, title: t("landing.how.pdf.title"), text: t("landing.how.print.elsewhere") },
   ];
   return (
     <Section testId="how-it-works" title={t("landing.how.title")}>

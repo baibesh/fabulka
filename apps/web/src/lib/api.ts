@@ -26,6 +26,7 @@ import {
   type TemplateSummary,
   type VoicePrefill,
 } from "@fabulka/shared";
+import { savedCountry } from "@/i18n/i18n";
 import { reportApiError, reportNetworkError } from "./telemetry";
 
 const CLIENT_KEY = "wishbook.clientKey";
@@ -103,12 +104,15 @@ async function send(path: string, init: RequestInit): Promise<unknown> {
 
 export async function request(path: string, init?: RequestInit): Promise<unknown> {
   const code = demoCode();
+  // The API prices purchases and allows print orders by the country chosen here (else the IP's).
+  const country = savedCountry();
   return send(path, {
     ...init,
     headers: {
       "content-type": "application/json",
       "x-client-key": clientKey(),
       ...(code ? { "x-demo-code": code } : {}),
+      ...(country ? { "x-country": country } : {}),
       ...init?.headers,
     },
   });
@@ -185,7 +189,7 @@ export async function whereAmI(): Promise<string | null> {
   return body.country;
 }
 
-/** Records that someone outside Kazakhstan wants this book printed. */
+/** Records that someone in a country without print wants this book printed. */
 export async function wantPrint(bookId: string) {
   await request(`/api/books/${bookId}/print-interest`, { method: "POST" });
 }

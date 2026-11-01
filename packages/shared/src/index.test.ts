@@ -246,6 +246,11 @@ describe("countries", () => {
     expect(languageFor("UZ", "kk", list)).toBe("ru");
     expect(languageFor("KG", "en", list)).toBe("en");
     expect(languageFor("DE", "kk", list)).toBe("en");
+    // Russian only where many families read it: never in Poland, English first in Georgia.
+    expect(languageFor("PL", "ru", list)).toBe("en");
+    expect(languageFor("GE", "kk", list)).toBe("en");
+    expect(languageFor("GE", "ru", list)).toBe("ru");
+    expect(languageFor("UZ", "en", list)).toBe("en");
     expect(languageFor("other", "kk", list)).toBe("en");
     expect(languageFor("other", "ru", list)).toBe("ru");
     expect(list.filter((c) => c.languages.includes("kk")).map((c) => c.code)).toEqual(["KZ"]);
@@ -261,6 +266,13 @@ describe("countries", () => {
     expect(CountriesSchema.safeParse([{ ...kz, languages: ["ru", "ru"] }]).success).toBe(false);
     expect(CountriesSchema.safeParse([{ ...kz, languages: ["de"] }]).success).toBe(false);
     expect(CountriesSchema.safeParse([{ ...kz, currency: "EUR" }]).success).toBe(false);
+  });
+
+  it("prints only where prices are in tenge, as print is priced in tenge", () => {
+    const kz = list[0];
+    const result = CountriesSchema.safeParse([{ ...kz, currency: "USD" }]);
+    expect(result.error?.issues.map((i) => i.path.join("."))).toEqual(["0.print"]);
+    expect(CountriesSchema.safeParse([{ ...kz, currency: "USD", print: false }]).success).toBe(true);
   });
 });
 
@@ -281,13 +293,22 @@ describe("localized texts", () => {
 });
 
 describe("FAQ", () => {
-  const ids = (country: string) => faqFor(DEFAULT_FAQ, country).map((item) => item.id);
+  const ids = (country: string, countries = DEFAULT_COUNTRIES) => faqFor(DEFAULT_FAQ, country, countries).map((item) => item.id);
 
   it("seeds valid entries, with print and prices told apart for Kazakhstan", () => {
     expect(FaqSchema.safeParse(DEFAULT_FAQ).success).toBe(true);
     expect(ids("KZ")).toEqual(["time", "kazakh", "price-kz", "data", "print-kz", "account", "dislike"]);
     expect(ids("UZ")).toEqual(["time", "languages", "price-abroad", "data", "print-abroad", "account", "dislike"]);
     expect(ids("other")).toEqual(ids("UZ"));
+  });
+
+  it("tells print apart by the country's print flag, so opening print flips the answer", () => {
+    const printInUz = DEFAULT_COUNTRIES.map((c) => (c.code === "UZ" ? { ...c, currency: "KZT" as const, print: true } : c));
+    expect(ids("UZ", printInUz)).toContain("print-kz");
+    expect(ids("UZ", printInUz)).not.toContain("print-abroad");
+    const noPrintInKz = DEFAULT_COUNTRIES.map((c) => (c.code === "KZ" ? { ...c, print: false } : c));
+    expect(ids("KZ", noPrintInKz)).toContain("print-abroad");
+    expect(ids("KZ", noPrintInKz)).not.toContain("print-kz");
   });
 
   it("shows only published entries, for the countries picked", () => {
@@ -297,8 +318,8 @@ describe("FAQ", () => {
       { ...base, id: "b", published: false },
       { ...base, id: "c", countries: ["UZ", "KG"] },
     ];
-    expect(faqFor(items, "other").map((i) => i.id)).toEqual(["a"]);
-    expect(faqFor(items, "KG").map((i) => i.id)).toEqual(["c"]);
+    expect(faqFor(items, "other", DEFAULT_COUNTRIES).map((i) => i.id)).toEqual(["a"]);
+    expect(faqFor(items, "KG", DEFAULT_COUNTRIES).map((i) => i.id)).toEqual(["c"]);
   });
 
   it("checks ids, countries and the leave-out list", () => {
@@ -307,6 +328,8 @@ describe("FAQ", () => {
     expect(FaqSchema.safeParse([{ ...base, countries: ["XX"] }]).success).toBe(false);
     expect(FaqSchema.safeParse([{ ...base, countries: [], excludeCountries: true }]).success).toBe(false);
     expect(FaqSchema.safeParse([{ ...base, id: "Bad Id" }]).success).toBe(false);
+    expect(FaqSchema.safeParse([{ ...base, print: "maybe" }]).success).toBe(false);
+    expect(FaqSchema.parse([{ ...base, print: "with" }])[0].print).toBe("with");
   });
 
   it("fills placeholders and leaves unknown ones", () => {

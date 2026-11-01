@@ -20,3 +20,7 @@ Things noticed while using tapstep on Fabulka. Version: 0.13.11.
    ran an endless `requestAnimationFrame` loop that rewrote page styles every frame; tapstep rightly
    never saw the page settle. Finding the cause took a while; naming the element (or selector)
    whose attributes kept changing would have pointed straight at it.
+7. **`childOf` failing on a nested element says only "not visible".** `childOf` is the direct parent
+   (as documented), so `{ text: "Books in English", childOf: { testId: trust } }` never matches an
+   item two levels down, while the screenshot clearly shows it. A hint such as "found inside
+   testId=trust, but not as a direct child — use containsDescendants" would have saved three runs.

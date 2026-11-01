@@ -72,7 +72,9 @@ export class AdminService {
         from "Book" where status = 'done'`,
       this.quota.caps(),
       this.prisma.order.aggregate({ _count: true, _sum: { totalKzt: true } }),
-      this.prisma.credit.aggregate({ _sum: { books: true, priceKzt: true } }),
+      this.prisma.credit.aggregate({
+        _sum: { books: true, priceKzt: true, priceUsd: true },
+      }),
       this.prisma.book.groupBy({
         by: ['country'],
         where: { country: { not: null } },
@@ -117,6 +119,7 @@ export class AdminService {
         ordersKzt: orders._sum.totalKzt ?? 0,
         purchases: purchases._sum.books ?? 0,
         purchasesKzt: purchases._sum.priceKzt ?? 0,
+        purchasesUsd: Math.round((purchases._sum.priceUsd ?? 0) * 100) / 100,
       },
       printInterest: printInterest.map((p) => ({
         country: p.country,
