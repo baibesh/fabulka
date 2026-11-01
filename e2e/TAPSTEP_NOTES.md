@@ -28,3 +28,10 @@ Things noticed while using tapstep on Fabulka. Version: 0.13.11.
    compares against the literal `${orderId}` (the failure reads "expected ${orderId}"), while the
    same variable works in `url`, `headers` and `params`. Workaround: `extract` the value and compare
    with `assertTrue: { equals: [...] }`.
+9. **A tap on an element more than 6 screens down reports success without clicking it.** On a long
+   admin list (27 tall rows) `tapOn: { css: "…[data-code=PT] [data-testid=country-remove]" }` passed,
+   but the page had stopped scrolling a row short of the button and nothing was clicked; only the
+   next `assertNotVisible` failed. `scrollUntilVisible` on the same element says "not visible after 6
+   screens", and its `timeout:` does not lift that cap. A real mouse (or `--viewport 1280x1000`, or a
+   few plain `scroll` steps first) clicks it fine. A tap that cannot reach its element should fail
+   with the same message, and `timeout:` should replace the screen limit as documented.

@@ -178,6 +178,12 @@ commands:
   - waitForVisible: { testId: reference-tabs }
   - tapOn: { testId: reference-tab-countries }
   - waitForVisible: { css: "[data-testid=country-row][data-code=PT]" }
+  # Portugal is the last of 27 tall rows, more than tapstep's 6 screens of search away (see
+  # TAPSTEP_NOTES 9): scrolled most of the way first.
+  - scroll
+  - scroll
+  - scroll
+  - scroll
   - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-remove]" }
   - assertNotVisible: { css: "[data-testid=country-row][data-code=PT]" }
   - tapOn: { testId: reference-save }
