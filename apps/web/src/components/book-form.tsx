@@ -12,7 +12,7 @@ import {
   type Template,
   type VoicePrefill,
 } from "@fabulka/shared";
-import { ArrowLeft, ArrowRight, BookOpen, CirclePause, Loader2, Mic, Pencil, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CirclePause, Mic, Pencil, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -27,6 +27,7 @@ import { LOCALE_NAMES, type MessageKey } from "@/i18n/messages";
 import { Paywall } from "./paywall";
 import { VoiceStep } from "./voice-step";
 import { ErrorText, Notice } from "./ui/notice";
+import { Button } from "./ui/button";
 
 const FormSchema = z.object({
   name: z.string().trim().min(1).max(40),
@@ -405,10 +406,9 @@ export function BookForm({ template }: { template?: Template }) {
               </p>
               <input data-testid="toy-name" className={field} placeholder={t("form.toy.name")} {...form.register("toyName")} />
               {toyPhoto && (
-                <button type="button" onClick={() => setToyPhoto(null)} className="flex items-center gap-1 self-start text-sm text-muted hover:text-foreground">
-                  <X className="size-4" />
+                <Button variant="ghost" size="inline" icon={<X className="size-4" />} onClick={() => setToyPhoto(null)} className="self-start text-sm">
                   {t("form.toy.remove")}
-                </button>
+                </Button>
               )}
             </div>
           </fieldset>
@@ -456,15 +456,9 @@ export function BookForm({ template }: { template?: Template }) {
             <ReviewRow name={t("wizard.review.pet")} value={values.pet || t("wizard.review.none")} />
           </ReviewGroup>
           <PriceTag kind={template ? "template" : "custom"} label={t("wizard.review.price")} testId="review-price" />
-          <button
-            type="submit"
-            data-testid="create-book"
-            disabled={create.isPending || paused}
-            className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-4 text-lg font-bold text-accent-foreground disabled:opacity-60"
-          >
-            {create.isPending ? <Loader2 className="size-5 animate-spin" /> : <BookOpen className="size-5" />}
+          <Button type="submit" size="lg" data-testid="create-book" loading={create.isPending} disabled={paused} icon={<BookOpen className="size-5" />}>
             {t("form.submit")}
-          </button>
+          </Button>
           {quota.data && (
             <p data-testid="quota" className="text-center text-sm text-muted">
               {quota.data.demo
@@ -479,27 +473,16 @@ export function BookForm({ template }: { template?: Template }) {
       {step !== "voice" && (
         <div className="flex items-center justify-between gap-3">
           {index > 0 ? (
-            <button
-              type="button"
-              data-testid="wizard-back"
-              onClick={() => goTo(steps[index - 1])}
-              className="flex items-center gap-2 rounded-xl px-4 py-3 font-semibold text-muted hover:text-foreground"
-            >
-              <ArrowLeft className="size-4" />
+            <Button variant="ghost" data-testid="wizard-back" icon={<ArrowLeft className="size-4" />} onClick={() => goTo(steps[index - 1])}>
               {t("wizard.back")}
-            </button>
+            </Button>
           ) : (
             <span />
           )}
           {step !== "review" && (
-            <button
-              type="submit"
-              data-testid="wizard-next"
-              className="flex items-center gap-2 rounded-xl bg-accent px-6 py-3 font-bold text-accent-foreground"
-            >
+            <Button type="submit" data-testid="wizard-next" iconEnd={<ArrowRight className="size-4" />}>
               {t("wizard.next")}
-              <ArrowRight className="size-4" />
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -531,15 +514,9 @@ function ReviewGroup({
     <section className="flex flex-col gap-2 rounded-2xl border border-border p-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-bold">{title}</h3>
-        <button
-          type="button"
-          data-testid={`wizard-edit-${step}`}
-          onClick={() => onEdit(step)}
-          className="flex items-center gap-1 text-sm font-semibold text-accent"
-        >
-          <Pencil className="size-3.5" />
+        <Button variant="link" size="inline" data-testid={`wizard-edit-${step}`} icon={<Pencil className="size-3.5" />} onClick={() => onEdit(step)} className="text-sm">
           {edit}
-        </button>
+        </Button>
       </div>
       <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[minmax(8rem,auto)_1fr]">{children}</dl>
     </section>

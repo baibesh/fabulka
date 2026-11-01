@@ -76,7 +76,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <span className="hidden md:inline">{t("admin.logout")}</span>
         </button>
       </aside>
-      <main className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-8">{children}</main>
+      <main data-density="compact" className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-8">{children}</main>
     </div>
   );
 }

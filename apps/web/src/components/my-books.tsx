@@ -10,6 +10,7 @@ import { loginUrl, useMe } from "@/lib/auth";
 import { EmptyState } from "./ui/empty-state";
 import { QueryState } from "./ui/query-state";
 import { Skeleton } from "./ui/skeleton";
+import { buttonClass } from "./ui/button";
 
 export function MyBooks() {
   const { t, locale } = useI18n();
@@ -23,7 +24,7 @@ export function MyBooks() {
         icon={<BookOpen className="size-10 text-accent" />}
         title={t("my.empty.title")}
         action={
-          <Link href="/catalog" className="rounded-xl bg-accent px-5 py-3 font-bold text-accent-foreground">
+          <Link href="/catalog" className={buttonClass()}>
             {t("my.empty.cta")}
           </Link>
         }

@@ -6,10 +6,11 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { use, useState } from "react";
 import { adminTemplate, updateTemplate } from "@/lib/admin-api";
-import { button, Card, ghostButton, input, PageTitle, useAdminI18n } from "./ui";
+import { Card, input, PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
 import { ErrorText } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
+import { Button, IconButton } from "@/components/ui/button";
 
 const label = "flex flex-col gap-1.5 text-sm font-semibold";
 
@@ -70,10 +71,9 @@ function Editor({ initial }: { initial: AdminTemplate }) {
         aside={
           <div className="flex items-center gap-3">
             {save.isSuccess && <span data-testid="template-saved" className="text-sm text-success">{t("admin.saved")}</span>}
-            <button type="submit" data-testid="template-save" disabled={save.isPending} className={`${button} flex items-center gap-2`}>
-              <Save className="size-4" />
+            <Button type="submit" data-testid="template-save" loading={save.isPending} icon={<Save className="size-4" />}>
               {t("admin.save")}
-            </button>
+            </Button>
           </div>
         }
       >
@@ -142,16 +142,16 @@ function Editor({ initial }: { initial: AdminTemplate }) {
       <Card
         title={t("admin.template.questions")}
         action={
-          <button
-            type="button"
-            className={`${ghostButton} flex items-center gap-1 py-1 text-sm`}
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Plus className="size-4" />}
             onClick={() =>
               set("questions", [...draft.questions, { key: `q${draft.questions.length + 1}`, label: "", kind: "text", required: false }])
             }
           >
-            <Plus className="size-4" />
             {t("admin.template.question.add")}
-          </button>
+          </Button>
         }
       >
         {draft.questions.map((q, i) => (
@@ -162,9 +162,9 @@ function Editor({ initial }: { initial: AdminTemplate }) {
               <option value="text">{t("admin.template.question.text")}</option>
               <option value="choice">{t("admin.template.question.choice")}</option>
             </select>
-            <button type="button" aria-label={t("admin.template.question.remove")} className="text-muted hover:text-danger" onClick={() => set("questions", draft.questions.filter((_, j) => j !== i))}>
+            <IconButton variant="ghost" label={t("admin.template.question.remove")} onClick={() => set("questions", draft.questions.filter((_, j) => j !== i))}>
               <Trash2 className="size-4" />
-            </button>
+            </IconButton>
             {q.kind === "choice" ? (
               <input
                 className={`${input} md:col-span-3`}

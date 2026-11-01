@@ -14,11 +14,12 @@ import { ChevronDown, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { journalCall, journalCalls, journalErrors, journalStats } from "@/lib/admin-api";
-import { Card, formatSpendUsd, ghostButton, input, PageTitle, table, useAdminI18n } from "./ui";
+import { Card, formatSpendUsd, input, PageTitle, table, useAdminI18n } from "./ui";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorText, Notice } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
+import { Button } from "@/components/ui/button";
 
 export function CallStatus({ status }: { status: ModelCallStatus }) {
   const { t } = useAdminI18n();
@@ -283,9 +284,9 @@ function Calls({ period }: { period: JournalPeriod }) {
         </table>
       </div>
       {calls.hasNextPage && (
-        <button type="button" data-testid="journal-more" disabled={calls.isFetchingNextPage} onClick={() => void calls.fetchNextPage()} className={`${ghostButton} self-center`}>
+        <Button variant="secondary" data-testid="journal-more" disabled={calls.isFetchingNextPage} onClick={() => void calls.fetchNextPage()} className="self-center">
           {calls.isFetchingNextPage ? t("admin.loading") : t("admin.journal.more")}
-        </button>
+        </Button>
       )}
       {open && <CallDetail id={open} onClose={() => setOpen(null)} />}
     </Card>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { T } from "@/components/t";
+import { buttonClass } from "@/components/ui/button";
 
 export default function NotFound() {
   return (
@@ -10,7 +11,7 @@ export default function NotFound() {
       <p className="text-lg text-muted">
         <T k="notFound.text" />
       </p>
-      <Link href="/catalog" className="rounded-xl bg-accent px-5 py-3 font-bold text-accent-foreground">
+      <Link href="/catalog" className={buttonClass()}>
         <T k="notFound.cta" />
       </Link>
     </main>

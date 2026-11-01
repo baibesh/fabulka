@@ -8,6 +8,7 @@ import { useI18n } from "@/i18n/i18n";
 import { type Highlight, markPersonal } from "@/lib/personalization";
 import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { IconButton } from "./ui/button";
 
 /** One page. Pages keep paper colors in dark mode: it is a printed book, not app chrome. */
 function Page({ hard, className = "", children }: { hard?: boolean; className?: string; children?: ReactNode }) {
@@ -244,8 +245,6 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
     else void frameRef.current?.requestFullscreen();
   };
 
-  const control =
-    "flex size-11 items-center justify-center rounded-full border border-border bg-card text-foreground transition hover:border-accent disabled:opacity-40";
   const half = "absolute top-0 h-full w-1/2";
 
   return (
@@ -323,25 +322,18 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
       </div>
 
       <div className="flex items-center gap-3">
-        <button type="button" aria-label={t("reader.prev")} className={control} onClick={() => go(-1)} disabled={view === 0}>
+        <IconButton shape="round" size="md" label={t("reader.prev")} onClick={() => go(-1)} disabled={view === 0}>
           <ChevronLeft className="size-5" />
-        </button>
+        </IconButton>
         <span data-testid="reader-position" className="min-w-24 text-center text-sm text-muted">
           {view + 1} / {views}
         </span>
-        <button
-          type="button"
-          aria-label={t("reader.next")}
-          data-testid="reader-next"
-          className={control}
-          onClick={() => go(1)}
-          disabled={view >= views - 1}
-        >
+        <IconButton shape="round" size="md" label={t("reader.next")} data-testid="reader-next" onClick={() => go(1)} disabled={view >= views - 1}>
           <ChevronRight className="size-5" />
-        </button>
-        <button type="button" aria-label={t("reader.fullscreen")} className={control} onClick={toggleFullscreen}>
+        </IconButton>
+        <IconButton shape="round" size="md" label={t("reader.fullscreen")} onClick={toggleFullscreen}>
           {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-        </button>
+        </IconButton>
       </div>
     </motion.section>
   );

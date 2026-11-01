@@ -1,13 +1,14 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { KeyRound, Loader2, Lock } from "lucide-react";
+import { KeyRound, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { adminLogin, adminLoginOptions } from "@/lib/admin-api";
 import { LanguageSwitch } from "./language-switch";
-import { button, input, useAdminI18n } from "./ui";
+import { input, useAdminI18n } from "./ui";
 import { Spinner } from "@/components/ui/spinner";
+import { Button, buttonClass } from "@/components/ui/button";
 
 /**
  * The way in: Keycloak (realm role `admin`, 2FA there) and, only when ADMIN_PASSWORD_LOGIN is on, the
@@ -20,7 +21,7 @@ export function LoginForm() {
   const password = options.data?.password ?? options.isError;
 
   return (
-    <div data-testid="admin-login" className="flex w-full max-w-sm flex-col gap-4 rounded-3xl border border-border bg-card p-8">
+    <div data-testid="admin-login" data-density="compact" className="flex w-full max-w-sm flex-col gap-4 rounded-3xl border border-border bg-card p-8">
       <div className="flex items-center gap-2 text-xl font-extrabold">
         <Lock className="size-5 text-accent" />
         {t("admin.login.title")}
@@ -30,7 +31,7 @@ export function LoginForm() {
         <a
           href="/api/auth/login?return=/admin"
           data-testid="admin-login-keycloak"
-          className={`${button} flex items-center justify-center gap-2 py-3`}
+          className={buttonClass({ size: "lg" })}
         >
           <KeyRound className="size-4" />
           {t("admin.login.keycloak")}
@@ -78,10 +79,9 @@ function PasswordForm() {
           {login.error.message}
         </p>
       )}
-      <button type="submit" data-testid="admin-submit" disabled={login.isPending} className={`${button} flex items-center justify-center gap-2 py-3`}>
-        {login.isPending && <Loader2 className="size-4 animate-spin" />}
+      <Button type="submit" size="lg" data-testid="admin-submit" loading={login.isPending}>
         {t("admin.login.submit")}
-      </button>
+      </Button>
     </form>
   );
 }

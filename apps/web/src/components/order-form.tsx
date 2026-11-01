@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@/lib/query";
 import { CreateOrderSchema, cityName, type CreateOrderInput } from "@fabulka/shared";
-import { Loader2, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -17,6 +17,7 @@ import { useCities } from "@/lib/cities";
 import { useOrderPrice, useReference } from "@/lib/use-price";
 import { PriceSkeleton } from "./price-skeleton";
 import { ErrorText } from "./ui/notice";
+import { Button } from "./ui/button";
 
 type FormValues = z.input<typeof CreateOrderSchema>;
 
@@ -153,15 +154,9 @@ export function OrderForm({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </section>
 
-      <button
-        type="submit"
-        data-testid="place-order"
-        disabled={order.isPending || !price}
-        className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-4 text-lg font-bold text-accent-foreground disabled:opacity-60"
-      >
-        {order.isPending ? <Loader2 className="size-5 animate-spin" /> : <Printer className="size-5" />}
+      <Button type="submit" size="lg" data-testid="place-order" loading={order.isPending} disabled={!price} icon={<Printer className="size-5" />}>
         {t("order.submit")}
-      </button>
+      </Button>
       <p className="text-center text-xs text-muted">{t("order.demo")}</p>
       {order.isError && <ErrorText>{t("order.error", { message: order.error.message })}</ErrorText>}
     </form>

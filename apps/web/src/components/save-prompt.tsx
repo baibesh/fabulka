@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { listMyBooks } from "@/lib/api";
 import { loginUrl, useMe } from "@/lib/auth";
+import { Button, buttonClass } from "./ui/button";
 
 /** "dismissed", or the id of the book the offer was first shown on. */
 const PROMPT_KEY = "fabulka.savePrompt";
@@ -60,22 +61,23 @@ export function SavePrompt({ bookId }: { bookId: string }) {
         <a
           href={loginUrl(`/books/${bookId}`, locale)}
           data-testid="save-prompt-login"
-          className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 font-bold text-accent-foreground"
+          className={buttonClass({ size: "sm" })}
         >
           <LogIn className="size-4" />
           {t("auth.save.login")}
         </a>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           data-testid="save-prompt-dismiss"
           onClick={() => {
             writePrompt("dismissed");
             setSeen("dismissed");
           }}
-          className="rounded-xl border border-border px-4 py-2 font-semibold text-muted hover:text-foreground"
+          className="text-muted"
         >
           {t("auth.save.dismiss")}
-        </button>
+        </Button>
       </div>
     </section>
   );

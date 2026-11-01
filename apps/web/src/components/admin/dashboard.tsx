@@ -7,6 +7,7 @@ import { adminStats, setPaused } from "@/lib/admin-api";
 import { intlLocale } from "@/i18n/format";
 import { Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
 import { QueryState } from "@/components/ui/query-state";
+import { Button } from "@/components/ui/button";
 
 function Stat({ label, value, hint, testId }: { label: string; value: string; hint?: string; testId?: string }) {
   return (
@@ -90,18 +91,15 @@ export function Dashboard() {
             {s.paused ? t("admin.dashboard.paused.text") : t("admin.dashboard.running.text")}
           </p>
         </div>
-        <button
-          type="button"
+        <Button
+          variant={s.paused ? "success" : "danger"}
           data-testid="pause-toggle"
-          disabled={pause.isPending}
+          loading={pause.isPending}
+          icon={s.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
           onClick={() => pause.mutate(!s.paused)}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 font-bold disabled:opacity-50 ${
-            s.paused ? "bg-success text-white" : "bg-danger text-white"
-          }`}
         >
-          {s.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
           {s.paused ? t("admin.dashboard.resume") : t("admin.dashboard.pause")}
-        </button>
+        </Button>
       </section>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

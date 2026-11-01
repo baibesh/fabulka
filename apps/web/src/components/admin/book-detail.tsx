@@ -7,11 +7,12 @@ import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 import { adminBook, bookCalls, deleteBook, setFeatured } from "@/lib/admin-api";
 import { CallDetail, CallStatus } from "./journal";
-import { BOOK_STATUS_TONE, Card, formatSpendUsd, ghostButton, PageTitle, useAdminI18n } from "./ui";
+import { BOOK_STATUS_TONE, Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
 import { useMethodologyName } from "./use-methodologies";
 import { Badge } from "@/components/ui/badge";
 import { ErrorText, Notice } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
+import { Button, buttonClass } from "@/components/ui/button";
 
 /** The book's model calls in order, timed from the first: where generation spent its time and money. */
 function BookCalls({ id, generating }: { id: string; generating: boolean }) {
@@ -89,42 +90,41 @@ export function BookDetail({ params }: { params: Promise<{ id: string }> }) {
       <PageTitle
         aside={
           <div className="flex flex-wrap gap-2">
-            <Link href={`/books/${b.id}`} target="_blank" className={`${ghostButton} flex items-center gap-2`}>
+            <Link href={`/books/${b.id}`} target="_blank" className={buttonClass({ variant: "secondary" })}>
               <ExternalLink className="size-4" />
               {t("admin.book.open")}
             </Link>
             {/* Only a finished book goes on the home page; one already there can always come off. */}
             {(b.status === "done" || b.featured) && (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 data-testid="feature-toggle"
                 data-featured={b.featured}
-                disabled={feature.isPending}
+                aria-pressed={b.featured}
+                loading={feature.isPending}
+                icon={<Star className={`size-4 ${b.featured ? "fill-current" : ""}`} />}
                 onClick={() => feature.mutate(!b.featured)}
-                className={`${ghostButton} flex items-center gap-2 ${b.featured ? "border-accent text-accent" : ""}`}
               >
-                <Star className={`size-4 ${b.featured ? "fill-current" : ""}`} />
                 {b.featured ? t("admin.book.unfeature") : t("admin.book.feature")}
-              </button>
+              </Button>
             )}
             {b.pdfUrl && (
-              <a href={b.pdfUrl} download className={`${ghostButton} flex items-center gap-2`}>
+              <a href={b.pdfUrl} download className={buttonClass({ variant: "secondary" })}>
                 <Download className="size-4" />
                 {t("admin.book.pdf")}
               </a>
             )}
-            <button
-              type="button"
+            <Button
+              variant="danger-outline"
               data-testid="delete-book"
-              disabled={remove.isPending}
+              loading={remove.isPending}
+              icon={<Trash2 className="size-4" />}
               onClick={() => {
                 if (window.confirm(t("admin.book.deleteConfirm"))) remove.mutate();
               }}
-              className={`${ghostButton} flex items-center gap-2 text-danger`}
             >
-              <Trash2 className="size-4" />
               {t("admin.delete")}
-            </button>
+            </Button>
           </div>
         }
       >

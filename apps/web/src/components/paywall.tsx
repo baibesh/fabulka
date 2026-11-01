@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { EmailSchema, type BookKind } from "@fabulka/shared";
-import { KeyRound, Loader2, ShoppingBag } from "lucide-react";
+import { KeyRound, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import { buyBook, setDemoCode } from "@/lib/api";
 import { useMe } from "@/lib/auth";
@@ -10,6 +10,7 @@ import { useI18n } from "@/i18n/i18n";
 import { useBookPrice } from "@/lib/use-price";
 import { PriceSkeleton } from "./price-skeleton";
 import { ErrorText } from "./ui/notice";
+import { Button } from "./ui/button";
 
 /**
  * Shown when the free books are used up: the demo checkout for one more book of `kind` (a catalog
@@ -56,16 +57,15 @@ export function Paywall({ kind, onUnlocked }: { kind: BookKind; onUnlocked: () =
         />
         {!emailValid && <span className="font-normal text-danger">{t("order.email.error")}</span>}
       </label>
-      <button
-        type="button"
+      <Button
         data-testid="buy-book"
-        disabled={buy.isPending || !emailValid || !price}
+        loading={buy.isPending}
+        disabled={!emailValid || !price}
+        icon={<ShoppingBag className="size-5" />}
         onClick={() => buy.mutate()}
-        className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 font-bold text-accent-foreground disabled:opacity-60"
       >
-        {buy.isPending ? <Loader2 className="size-5 animate-spin" /> : <ShoppingBag className="size-5" />}
         {price ? t("paywall.buy", { price }) : <PriceSkeleton className="w-40" />}
-      </button>
+      </Button>
       {buy.isError && <ErrorText className="text-sm">{buy.error.message}</ErrorText>}
       <p className="text-xs text-muted">{t("paywall.demo")}</p>
       <form
@@ -84,9 +84,9 @@ export function Paywall({ kind, onUnlocked }: { kind: BookKind; onUnlocked: () =
           placeholder={t("paywall.code")}
           className="w-full rounded-xl border border-border bg-background px-4 py-2"
         />
-        <button type="submit" data-testid="apply-demo-code" className="flex items-center gap-1 rounded-xl border border-border px-4 font-semibold">
-          <KeyRound className="size-4" /> {t("paywall.apply")}
-        </button>
+        <Button type="submit" variant="secondary" data-testid="apply-demo-code" icon={<KeyRound className="size-4" />}>
+          {t("paywall.apply")}
+        </Button>
       </form>
     </section>
   );

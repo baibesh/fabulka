@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
+import { buttonClass } from "../ui/button";
 
 /**
  * A landing section: an anchor, a heading with an optional lead, and a gentle fade into view. Only
@@ -39,7 +40,5 @@ export function Section({
   );
 }
 
-export const primaryButton =
-  "flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3.5 text-lg font-bold text-accent-foreground shadow-sm transition hover:brightness-105";
-export const secondaryButton =
-  "flex items-center justify-center gap-2 rounded-xl border-2 border-accent px-6 py-3 text-lg font-bold text-accent transition hover:bg-accent/10";
+export const primaryButton = buttonClass({ variant: "primary", size: "lg", className: "shadow-sm" });
+export const secondaryButton = buttonClass({ variant: "outline", size: "lg" });

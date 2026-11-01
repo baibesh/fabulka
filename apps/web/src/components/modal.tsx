@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { IconButton } from "./ui/button";
 
 /**
  * A modal dialog on the native <dialog>: it traps focus, closes on Esc and on a click outside, and
@@ -66,16 +67,15 @@ export function Modal({
                 </p>
               )}
             </div>
-            <button
-              type="button"
+            <IconButton
+              variant="ghost"
               data-testid={testId ? `${testId}-close` : undefined}
-              aria-label={closeLabel}
-              title={closeLabel}
+              label={closeLabel}
               onClick={onClose}
-              className="-mt-1 -mr-1 rounded-lg p-2 text-muted hover:bg-border/50 hover:text-foreground"
+              className="-mt-1 -mr-1"
             >
               <X className="size-5" />
-            </button>
+            </IconButton>
           </div>
           {children}
         </div>

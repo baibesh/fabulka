@@ -17,6 +17,7 @@ import { SavePrompt } from "./save-prompt";
 import { ErrorText } from "./ui/notice";
 import { QueryState } from "./ui/query-state";
 import { Skeleton } from "./ui/skeleton";
+import { Button, buttonClass } from "./ui/button";
 
 const finished = (status: BookStatus | undefined) => status === "done" || status === "failed";
 
@@ -75,7 +76,7 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
             data-testid="download-pdf"
             href={book.pdfUrl}
             download={`${book.title ?? "book"}.pdf`}
-            className="flex items-center gap-2 rounded-xl bg-accent px-6 py-3 font-bold text-accent-foreground"
+            className={buttonClass()}
           >
             <Download className="size-5" />
             {t("book.download")}
@@ -84,7 +85,7 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
             <Link
               data-testid="order-print"
               href={`/books/${book.id}/order`}
-              className="flex items-center gap-2 rounded-xl border-2 border-accent px-6 py-3 font-bold text-accent"
+              className={buttonClass({ variant: "outline" })}
             >
               <Printer className="size-5" />
               {printPrice ? t("book.order", { price: printPrice }) : <PriceSkeleton className="w-48" />}
@@ -211,16 +212,9 @@ function WantPrint({ bookId }: { bookId: string }) {
           {t("book.print.thanks")}
         </span>
       ) : (
-        <button
-          type="button"
-          data-testid="want-print"
-          disabled={want.isPending}
-          onClick={() => want.mutate()}
-          className="flex items-center gap-2 rounded-xl border-2 border-accent px-5 py-2 font-bold text-accent disabled:opacity-50"
-        >
-          <Printer className="size-4" />
+        <Button variant="outline" data-testid="want-print" loading={want.isPending} icon={<Printer className="size-4" />} onClick={() => want.mutate()}>
           {t("book.print.want")}
-        </button>
+        </Button>
       )}
     </div>
   );

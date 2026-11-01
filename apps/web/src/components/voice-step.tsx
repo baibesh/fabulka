@@ -11,6 +11,7 @@ import { encodeWav, recordingToWav, VOICE_SAMPLE_RATE } from "@/lib/wav";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
 import { Spinner } from "./ui/spinner";
+import { Button } from "./ui/button";
 
 /** The API takes at most a minute. */
 const MAX_SECONDS = 60;
@@ -142,19 +143,20 @@ export function VoiceStep({
       {locale === "kk" && <p className="text-sm text-muted">{t("voice.kkHint")}</p>}
 
       <div className="flex flex-wrap items-center justify-center gap-4">
-        <button type="button" data-testid="voice-manual" onClick={onSkip} className="font-semibold text-accent">
+        <Button variant="link" size="inline" data-testid="voice-manual" onClick={onSkip}>
           {t("voice.manual")} →
-        </button>
+        </Button>
         {testHook && (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             data-testid="voice-sample"
             disabled={state.kind === "sending" || state.kind === "recording"}
             onClick={() => void send(encodeWav(new Float32Array(2 * VOICE_SAMPLE_RATE), VOICE_SAMPLE_RATE))}
-            className="rounded-xl border border-border px-4 py-2 text-sm text-muted"
+            className="text-muted"
           >
             {t("voice.sample")}
-          </button>
+          </Button>
         )}
       </div>
     </div>

@@ -3,10 +3,11 @@
 import { methodologyText } from "@fabulka/shared";
 import { Plus } from "lucide-react";
 import Link from "next/link";
-import { button, PageTitle, table, useAdminI18n } from "./ui";
+import { PageTitle, table, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
 import { Badge } from "@/components/ui/badge";
 import { ErrorText } from "@/components/ui/notice";
+import { buttonClass } from "@/components/ui/button";
 
 export function MethodologiesTable() {
   const { t, locale } = useAdminI18n();
@@ -16,7 +17,7 @@ export function MethodologiesTable() {
     <>
       <PageTitle
         aside={
-          <Link href="/admin/methodologies/new" data-testid="methodology-new" className={`${button} flex items-center gap-2`}>
+          <Link href="/admin/methodologies/new" data-testid="methodology-new" className={buttonClass()}>
             <Plus className="size-4" />
             {t("admin.methods.create")}
           </Link>

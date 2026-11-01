@@ -28,7 +28,7 @@ import {
   type Prices,
 } from "@fabulka/shared";
 import { ArrowDown, ArrowUp, ExternalLink, Plus, Save, Trash2, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { intlLocale } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
 import { adminReference, saveBlocked, saveCities, saveCountries, saveFaq, savePrices } from "@/lib/admin-api";
@@ -36,9 +36,10 @@ import { ApiError } from "@/lib/api";
 import { useCountryName } from "@/hooks/use-country-name";
 import { languageCode } from "@/lib/regions";
 import { Flag } from "../flag";
-import { button, Card, ghostButton, input, PageTitle, useAdminI18n } from "./ui";
+import { Card, input, PageTitle, useAdminI18n } from "./ui";
 import { ErrorText } from "@/components/ui/notice";
 import { Badge } from "@/components/ui/badge";
+import { Button, IconButton } from "@/components/ui/button";
 
 const TABS = ["prices", "countries", "faq", "cities", "blocked"] as const;
 type Tab = (typeof TABS)[number];
@@ -103,10 +104,9 @@ function SaveBar({ testId = "reference-save", pending, saved, error, problems }:
   const { t } = useAdminI18n();
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <button type="submit" data-testid={testId} disabled={pending} className={`${button} flex items-center gap-2`}>
-        <Save className="size-4" />
+      <Button type="submit" data-testid={testId} loading={pending} icon={<Save className="size-4" />}>
         {t("admin.save")}
-      </button>
+      </Button>
       {saved && (
         <span data-testid="reference-saved" className="text-sm text-success">
           {t("admin.saved")}
@@ -404,17 +404,16 @@ function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; blocked: 
                     )}
                   </span>
                   <div className="flex gap-1">
-                    <IconButton testId="country-up" label={t("admin.reference.country.up")} disabled={i === 0} onClick={() => reshape(() => move(i, -1))}>
+                    <IconButton data-testid="country-up" label={t("admin.reference.country.up")} disabled={i === 0} onClick={() => reshape(() => move(i, -1))}>
                       <ArrowUp className="size-4" />
                     </IconButton>
-                    <IconButton testId="country-down" label={t("admin.reference.country.down")} disabled={i === rows.length - 1} onClick={() => reshape(() => move(i, 1))}>
+                    <IconButton data-testid="country-down" label={t("admin.reference.country.down")} disabled={i === rows.length - 1} onClick={() => reshape(() => move(i, 1))}>
                       <ArrowDown className="size-4" />
                     </IconButton>
-                    <IconButton
-                      testId="country-remove"
+                    <IconButton data-testid="country-remove"
                       label={t("admin.reference.country.remove", { country: name })}
                       onClick={() => reshape(() => setRows((list) => list.filter((_, j) => j !== i)))}
-                      className="text-danger"
+                      variant="danger"
                     >
                       <Trash2 className="size-4" />
                     </IconButton>
@@ -447,10 +446,9 @@ function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; blocked: 
               </option>
             ))}
           </select>
-          <button type="button" data-testid="country-add" disabled={!pick} onClick={add} className={`${ghostButton} flex shrink-0 items-center gap-2 self-start disabled:opacity-40`}>
-            <Plus className="size-4" />
+          <Button variant="secondary" data-testid="country-add" disabled={!pick} onClick={add} icon={<Plus className="size-4" />} className="self-start">
             {t("admin.reference.country.add")}
-          </button>
+          </Button>
         </div>
       </Card>
       <SaveBar pending={save.isPending} saved={save.isSuccess && save.data !== null} error={saveError} problems={Object.keys(problems).length > 0} />
@@ -673,17 +671,16 @@ function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: Country
                         {t("admin.reference.faq.published")}
                       </label>
                       <div className="flex gap-1">
-                        <IconButton testId="faq-up" label={t("admin.reference.country.up")} disabled={i === 0} onClick={() => reshape(() => move(i, -1))}>
+                        <IconButton data-testid="faq-up" label={t("admin.reference.country.up")} disabled={i === 0} onClick={() => reshape(() => move(i, -1))}>
                           <ArrowUp className="size-4" />
                         </IconButton>
-                        <IconButton testId="faq-down" label={t("admin.reference.country.down")} disabled={i === rows.length - 1} onClick={() => reshape(() => move(i, 1))}>
+                        <IconButton data-testid="faq-down" label={t("admin.reference.country.down")} disabled={i === rows.length - 1} onClick={() => reshape(() => move(i, 1))}>
                           <ArrowDown className="size-4" />
                         </IconButton>
-                        <IconButton
-                          testId="faq-remove"
+                        <IconButton data-testid="faq-remove"
                           label={t("admin.reference.faq.remove")}
                           onClick={() => reshape(() => setRows((list) => list.filter((_, j) => j !== i)))}
-                          className="text-danger"
+                          variant="danger"
                         >
                           <Trash2 className="size-4" />
                         </IconButton>
@@ -695,10 +692,9 @@ function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: Country
             );
           })}
         </ol>
-        <button type="button" data-testid="faq-add" onClick={add} className={`${ghostButton} flex items-center gap-2 self-start`}>
-          <Plus className="size-4" />
+        <Button variant="secondary" data-testid="faq-add" onClick={add} icon={<Plus className="size-4" />} className="self-start">
           {t("admin.reference.faq.add")}
-        </button>
+        </Button>
       </Card>
       <SaveBar pending={save.isPending} saved={save.isSuccess && save.data !== null} error={save.error} problems={Object.keys(problems).length > 0} />
     </form>
@@ -812,17 +808,16 @@ function CitiesTab({ initial }: { initial: City[] }) {
                   {t("admin.reference.city.free")}
                 </label>
                 <div className="flex gap-1">
-                  <IconButton testId="city-up" label={t("admin.reference.city.up")} disabled={i === 0} onClick={() => reshape(() => move(i, -1))}>
+                  <IconButton data-testid="city-up" label={t("admin.reference.city.up")} disabled={i === 0} onClick={() => reshape(() => move(i, -1))}>
                     <ArrowUp className="size-4" />
                   </IconButton>
-                  <IconButton testId="city-down" label={t("admin.reference.city.down")} disabled={i === rows.length - 1} onClick={() => reshape(() => move(i, 1))}>
+                  <IconButton data-testid="city-down" label={t("admin.reference.city.down")} disabled={i === rows.length - 1} onClick={() => reshape(() => move(i, 1))}>
                     <ArrowDown className="size-4" />
                   </IconButton>
-                  <IconButton
-                    testId="city-remove"
+                  <IconButton data-testid="city-remove"
                     label={t("admin.reference.city.remove")}
                     onClick={() => reshape(() => setRows((list) => list.filter((_, j) => j !== i)))}
-                    className="text-danger"
+                    variant="danger"
                   >
                     <Trash2 className="size-4" />
                   </IconButton>
@@ -831,34 +826,18 @@ function CitiesTab({ initial }: { initial: City[] }) {
             </li>
           ))}
         </ol>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           data-testid="city-add"
+          icon={<Plus className="size-4" />}
           onClick={() => setRows((list) => [...list, { key: nextKey++, id: "", name: {}, freeDelivery: false }])}
-          className={`${ghostButton} flex items-center gap-2 self-start`}
+          className="self-start"
         >
-          <Plus className="size-4" />
           {t("admin.reference.city.add")}
-        </button>
+        </Button>
       </Card>
       <SaveBar pending={save.isPending} saved={save.isSuccess && save.data !== null} error={save.error} problems={Object.keys(problems).length > 0} />
     </form>
-  );
-}
-
-function IconButton({ testId, label, disabled, onClick, className = "", children }: { testId: string; label: string; disabled?: boolean; onClick: () => void; className?: string; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={`rounded-lg border border-border p-2 hover:border-accent disabled:opacity-30 ${className}`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -965,10 +944,9 @@ function BlockedTab({ initial }: { initial: BlockedCountries }) {
                   }}
                   className={`${input} max-w-xs font-mono uppercase placeholder:font-sans placeholder:normal-case aria-[invalid=true]:border-danger`}
                 />
-                <button type="button" data-testid="blocked-add" onClick={add} className={`${ghostButton} flex shrink-0 items-center gap-2`}>
-                  <Plus className="size-4" />
+                <Button variant="secondary" data-testid="blocked-add" onClick={add} icon={<Plus className="size-4" />}>
                   {t("admin.reference.extra.add")}
-                </button>
+                </Button>
               </div>
               {addError && (
                 <span data-testid="reference-error" className={errorText}>

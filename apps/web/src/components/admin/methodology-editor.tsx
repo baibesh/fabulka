@@ -21,10 +21,11 @@ import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 import { adminMethodology, createMethodology, deleteMethodology, previewMethodology, updateMethodology } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
-import { button, Card, ghostButton, input, PageTitle, useAdminI18n } from "./ui";
+import { Card, input, PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
 import { ErrorText, Notice } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
+import { Button } from "@/components/ui/button";
 
 /** Languages a method must have to be published; the others are optional. */
 const isBase = (language: Language) => (BASE_LANGUAGES as readonly Language[]).includes(language);
@@ -185,23 +186,21 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
           <div className="flex flex-wrap items-center gap-3">
             {savedNow && <span data-testid="methodology-saved" className="text-sm text-success">{t("admin.saved")}</span>}
             {initial && !confirming && (
-              <button
-                type="button"
+              <Button
+                variant="danger-outline"
                 data-testid="methodology-delete"
+                icon={<Trash2 className="size-4" />}
                 onClick={() => {
                   remove.reset();
                   setConfirming(true);
                 }}
-                className={`${ghostButton} flex items-center gap-2 text-danger`}
               >
-                <Trash2 className="size-4" />
                 {t("admin.delete")}
-              </button>
+              </Button>
             )}
-            <button type="submit" data-testid="methodology-save" disabled={save.isPending} className={`${button} flex items-center gap-2`}>
-              <Save className="size-4" />
+            <Button type="submit" data-testid="methodology-save" loading={save.isPending} icon={<Save className="size-4" />}>
               {t("admin.save")}
-            </button>
+            </Button>
           </div>
         }
       >
@@ -211,26 +210,20 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       {confirming && (
         <div role="alertdialog" className="flex flex-wrap items-center gap-3 rounded-xl border border-danger/40 bg-danger/10 p-4 text-sm">
           <span className="font-semibold">{t("admin.method.remove.confirm")}</span>
-          <button
-            type="button"
-            data-testid="methodology-delete-confirm"
-            disabled={remove.isPending}
-            onClick={() => remove.mutate()}
-            className="rounded-xl bg-danger px-4 py-2 font-bold text-white disabled:opacity-50"
-          >
+          <Button variant="danger" data-testid="methodology-delete-confirm" loading={remove.isPending} onClick={() => remove.mutate()}>
             {t("admin.method.remove.yes")}
-          </button>
-          <button type="button" onClick={() => setConfirming(false)} className={ghostButton}>
+          </Button>
+          <Button variant="secondary" onClick={() => setConfirming(false)}>
             {t("admin.method.remove.no")}
-          </button>
+          </Button>
         </div>
       )}
       {remove.isError && (
         <Notice data-testid="methodology-delete-error" role="alert" tone="warning" className="items-start">
           <p>{remove.error.message}</p>
           {inUse && draft.published && (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               data-testid="methodology-unpublish"
               disabled={save.isPending}
               onClick={() => {
@@ -238,10 +231,10 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
                 setDraft(next);
                 save.mutate(next);
               }}
-              className={`${ghostButton} self-start`}
+              className="mt-2 self-start"
             >
               {t("admin.method.unpublish")}
-            </button>
+            </Button>
           )}
         </Notice>
       )}
@@ -382,16 +375,9 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       <Card
         title={t("admin.method.prompt")}
         action={
-          <button
-            type="button"
-            data-testid="methodology-preview"
-            disabled={preview.isPending}
-            onClick={() => preview.mutate()}
-            className={`${ghostButton} flex items-center gap-2 py-1 text-sm`}
-          >
-            <Eye className="size-4" />
+          <Button variant="secondary" size="sm" data-testid="methodology-preview" loading={preview.isPending} icon={<Eye className="size-4" />} onClick={() => preview.mutate()}>
             {t("admin.method.preview")}
-          </button>
+          </Button>
         }
       >
         <div className="grid gap-4 lg:grid-cols-3">
