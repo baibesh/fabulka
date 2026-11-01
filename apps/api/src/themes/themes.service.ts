@@ -177,9 +177,16 @@ export class ThemesService {
           const ornament = await this.models.drawOrnament(
             proposed.ornamentPrompt,
           );
+          // A drawn one comes on white with a wide margin: keyed out and trimmed to the motif.
+          const cleaned =
+            ornament.ext === 'svg'
+              ? null
+              : await this.pdf.cleanOrnament(ornament.data, ornament.ext);
+          if (ornament.ext !== 'svg' && !cleaned)
+            throw new Error('the ornament came back blank');
           theme.ornamentImage = await this.storage.save(
-            `${folder}/ornament.${ornament.ext}`,
-            ornament.data,
+            `${folder}/ornament.${cleaned ? 'png' : ornament.ext}`,
+            cleaned ?? ornament.data,
           );
         } catch (error) {
           this.logger.warn(

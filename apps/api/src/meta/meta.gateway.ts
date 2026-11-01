@@ -68,8 +68,12 @@ const LANGUAGE_BIAS: Record<Language, string[]> = {
 };
 /** What SAM is asked to find in the parent's photo. */
 const TOY_CONCEPT = 'toy';
-/** What SAM is asked to find in a page illustration: the hero is always a child (a visual noun). */
-const HERO_CONCEPT = 'child';
+/**
+ * What SAM is asked to find in a page illustration, one short noun phrase per request. "child" missed
+ * the grandfather, the eagle and the dog the text must not cover either; "character" missed animals
+ * and "person or animal" finds nothing, so people and animals are asked for separately.
+ */
+const SUBJECT_CONCEPTS = ['person', 'animal'];
 const STORY_ATTEMPTS = 3;
 
 export interface MetaGatewayOptions {
@@ -217,22 +221,30 @@ export class MetaGateway implements ModelGateway {
     const sam = await import('@meta-sam/parser');
     const size = jpegSize(image);
     if (!size) throw new Error('SAM gets JPEG page illustrations only');
-    const call = this.journal.start({
-      kind: 'page-mask',
-      model: this.options.samModel,
-      prompt: HERO_CONCEPT,
-    });
-    const { records } = await call.request(
-      this.segment(sam, image, HERO_CONCEPT),
+    const found = await Promise.all(
+      SUBJECT_CONCEPTS.map(async (concept) => {
+        const call = this.journal.start({
+          kind: 'page-mask',
+          model: this.options.samModel,
+          prompt: concept,
+        });
+        const { records } = await call.request(
+          this.segment(sam, image, concept),
+        );
+        call.ok({ costUsd: SAM_PRICE, images: 1 });
+        return [...sam.recordsOfKind(records, 'mask')];
+      }),
     );
-    call.ok({ costUsd: SAM_PRICE, images: 1 });
-    const masks = [...sam.recordsOfKind(records, 'mask')].map((record) => ({
+    const masks = found.flat().map((record) => ({
       box: record.bounds,
       mask: sam.decodeMaskToRaster(record.mask),
       maskWidth: record.mask.width,
       maskHeight: record.mask.height,
     }));
-    return { subject: subjectGrid(masks, size), costUsd: SAM_PRICE };
+    return {
+      subject: subjectGrid(masks, size),
+      costUsd: SAM_PRICE * SUBJECT_CONCEPTS.length,
+    };
   }
 
   /** Streams SAM's answer for the photo and returns the parsed masks. */
@@ -258,7 +270,14 @@ export class MetaGateway implements ModelGateway {
     });
     const parsed = parseImageStream(events as never);
     for await (const snapshot of parsed) void snapshot;
-    return parsed.finalResult;
+    const result = await parsed.finalResult;
+    // A stream cut short leaves masks missing: no mask is better than a wrong one.
+    if (result.outcome.status !== 'completed') {
+      throw new Error(
+        `SAM stopped early: ${JSON.stringify(result.outcome).slice(0, 200)}`,
+      );
+    }
+    return result;
   }
 
   async describeToy(
@@ -331,6 +350,8 @@ export class MetaGateway implements ModelGateway {
           instructions,
           input,
           text: { format: { type: 'json_object' } },
+          // Left to itself Spark reasoned ~15k tokens (80 s, $0.07) over a small JSON the code checks anyway.
+          reasoning: { effort: 'low' },
         }),
       );
       costUsd += tokenCost(response);
@@ -357,7 +378,10 @@ export class MetaGateway implements ModelGateway {
     );
   }
 
-  /** A PNG with a transparent background, if Muse Image honours it (else white, multiplied away in print). */
+  /**
+   * A PNG on white: Muse Image accepts `background: transparent` but ignores it (its API reference
+   * says so), so the white is keyed out afterwards (PdfService.cleanOrnament).
+   */
   drawOrnament(prompt: string): Promise<GeneratedImage> {
     return this.draw(
       'ornament',
@@ -365,7 +389,7 @@ export class MetaGateway implements ModelGateway {
       '1024x1024',
       undefined,
       undefined,
-      { output_format: 'png', background: 'transparent' },
+      { output_format: 'png' },
     );
   }
 
@@ -515,7 +539,7 @@ export class MetaGateway implements ModelGateway {
     size: '1024x1024' | '1536x1024',
     previousResponseId?: string,
     reference?: Buffer,
-    extra: { output_format?: 'png'; background?: 'transparent' } = {},
+    extra: { output_format?: 'png' } = {},
   ): Promise<GeneratedImage> {
     // Web and image search add latency and nothing for invented characters.
     const tool = {

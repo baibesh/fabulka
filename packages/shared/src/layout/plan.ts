@@ -15,6 +15,12 @@ export const PLATE = 0.36;
 /** Share of the page height the picture takes in "split". */
 export const SPLIT_ART = 0.62;
 
+/**
+ * The widest a text box gets (mm). Across a whole A4 landscape page a line ran to ~150 letters, far
+ * too long to read aloud from; this keeps lines to about the square book's ~80.
+ */
+export const MAX_MEASURE = 190;
+
 /** Where a variant puts the picture: on its page, or across both pages for a spread (2 × width). */
 export function artRect(variant: PageVariant, format: BookFormat): Rect {
   const { widthMm: w, heightMm: h } = format;
@@ -33,7 +39,8 @@ export function textRect(
   state?: Pick<PageLayout, "plateBand">,
 ): Rect {
   const { widthMm: w, heightMm: h, safeMm: s } = format;
-  const full = { x: s, w: w - 2 * s };
+  const measure = Math.min(w - 2 * s, MAX_MEASURE);
+  const full = { x: (w - measure) / 2, w: measure };
   switch (variant) {
     case "overlay-top":
       return { ...full, y: s, h: h * BAND - s };
@@ -43,7 +50,7 @@ export function textRect(
     case "split":
       return { ...full, y: h * SPLIT_ART + 4, h: h * (1 - SPLIT_ART) - 4 - s };
     case "facing":
-      return { x: s + 8, w: w - 2 * s - 16, y: s + 18, h: h - 2 * s - 36 };
+      return { x: (w - Math.min(measure, w - 2 * s - 16)) / 2, w: Math.min(measure, w - 2 * s - 16), y: s + 18, h: h - 2 * s - 36 };
     case "plate":
       return state?.plateBand === "top" ? { ...full, y: s, h: h * PLATE - s } : { ...full, y: h * (1 - PLATE), h: h * PLATE - s };
   }

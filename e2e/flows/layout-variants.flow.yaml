@@ -31,7 +31,7 @@ commands:
   - tapOn: { testId: create-book }
   - waitForVisible: { text: "Книга готова", timeout: 30000 }
 
-  # SAM ran once per page; each page kept its hero mask and tone; the text sits below the hero.
+  # SAM ran twice per page (people, animals); each page kept its hero mask and tone; the text sits below the hero.
   - sql:
       query: >-
         select b.id, b."clientKey" as key,
@@ -42,7 +42,7 @@ commands:
       params: ["${childName}"]
       readOnly: true
       extract: { bookId: "$[0].id", browserKey: "$[0].key" }
-      assert: { rows: 1, first: { masks: 4, analysed: 4, best: overlay-bottom, ink: dark } }
+      assert: { rows: 1, first: { masks: 8, analysed: 4, best: overlay-bottom, ink: dark } }
 
   # The first story page faces the dedication: text over the bottom of its picture.
   - tapOn: { testId: reader-next }

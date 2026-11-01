@@ -3,7 +3,7 @@ import { BOOK_LABELS } from "../labels";
 import type { BookLayout, BookTheme, PageLayout, PageVariant } from "./model";
 import { BOOK_FONTS } from "./themes";
 import { type PlannedPage, type Rect, artRect, planBook, textRect } from "./plan";
-import { objectPosition } from "./choose";
+import { contrast, luminance, objectPosition } from "./choose";
 
 /**
  * The one book renderer. It turns a book and its layout into fixed-size HTML pages (millimetres,
@@ -90,6 +90,8 @@ function themeStyle(layout: BookLayout, fit: number, bleed: number): string {
     `--accent:${p.accent}`,
     `--muted:${p.muted}`,
     `--cover:${p.cover}`,
+    // The framed cover's title stands on the cover color: ink on a light one, paper on a dark one.
+    `--cover-ink:${contrast(luminance(p.ink), luminance(p.cover)) >= contrast(luminance(p.paper), luminance(p.cover)) ? p.ink : p.paper}`,
     `--plate:${p.plate}`,
     `--body:${fontStack(theme.fonts.body.family)}`,
     `--body-weight:${theme.fonts.body.weight}`,
@@ -192,7 +194,9 @@ function cover(
   madeFor: string,
   bleedArt: (r: Rect) => string,
 ): string {
-  const heading = `<div class="fb-cover-title" data-fit-box><div class="fb-flow">
+  // On a scene cover the title goes where the theme's pictures leave calm space, not over a face.
+  const atBottom = layout.theme.cover === "scene" && layout.theme.textSpace === "bottom";
+  const heading = `<div class="fb-cover-title${atBottom ? " fb-at-bottom" : ""}" data-fit-box><div class="fb-flow">
   <h1 data-qa-text>${title(book.title ?? "")}</h1>
   <p class="fb-for" data-qa-text>${escapeHtml(madeFor)}</p></div></div>`;
   if (layout.theme.cover === "scene") {
@@ -334,8 +338,11 @@ export const BOOK_CSS = `
 .fb-cover-framed .fb-hero-frame { position: absolute; left: 50%; top: calc(var(--safe) + 4mm); width: 118mm; height: 118mm;
   transform: translateX(-50%); border-radius: 8mm; background: #fff; overflow: hidden; box-shadow: 0 1mm 4mm rgba(0,0,0,.12); }
 .fb-cover-framed .fb-hero { width: 100%; height: 100%; object-fit: contain; }
+.fb-cover-framed .fb-cover-title h1 { color: var(--cover-ink); }
+.fb-cover-framed .fb-for { color: var(--cover-ink); opacity: .8; }
 .fb-cover-framed .fb-cover-title { top: calc(var(--safe) + 128mm); bottom: var(--safe); }
 .fb-cover-scene .fb-cover-title { top: var(--safe); max-height: 46%; }
+.fb-cover-scene .fb-cover-title.fb-at-bottom { top: auto; bottom: var(--safe); }
 .fb-cover-scene .fb-cover-title .fb-flow { background: color-mix(in srgb, var(--plate) 88%, transparent); border-radius: 6mm;
   padding: 5mm 6mm; box-shadow: 0 .8mm 3mm rgba(0,0,0,.15); }
 .fb-drawing-frame { position: absolute; inset: calc(var(--safe) + 4mm); bottom: calc(var(--safe) + 16mm);

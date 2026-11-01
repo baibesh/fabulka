@@ -125,7 +125,10 @@ describe('prompts', () => {
     const none = { pet: false, toy: false };
     expect(
       pagePrompt('the hero in a park', none, undefined, 'bottom'),
-    ).toContain('Keep the bottom third of the picture calm');
+    ).toContain('The bottom third is empty');
+    expect(pagePrompt('the hero in a park', none, undefined, 'top')).toMatch(
+      /^Composition: all characters .* lower two thirds/,
+    );
     expect(pagePrompt('the hero in a park', none)).not.toContain('calm');
   });
 

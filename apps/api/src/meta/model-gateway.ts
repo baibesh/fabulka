@@ -75,8 +75,9 @@ export interface ModelGateway {
     textSpace?: TextSpace,
   ): Promise<GeneratedImage>;
   /**
-   * SAM finds the hero in a page illustration, once per page: a coarse mask the page layout keeps
-   * text off. Throws when SAM fails; a picture with nobody in it gives an empty mask.
+   * SAM finds the characters (people and animals) in a page illustration, once per page: a coarse
+   * mask the page layout keeps text off. Throws when SAM fails; a picture with nobody in it gives an
+   * empty mask.
    */
   findSubject(
     image: Buffer,

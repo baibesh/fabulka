@@ -209,6 +209,79 @@ export class PdfService {
   }
 
   /**
+   * An AI theme's ornament made fit to print small: Muse Image ignores the transparent background and
+   * draws a small motif in the middle of a big white square. The white becomes transparent (softly,
+   * so a glow keeps its edge) and the empty margin is cut off. Null when the picture is all white.
+   */
+  async cleanOrnament(image: Buffer, ext: string): Promise<Buffer | null> {
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      const url = `data:${MIME[`.${ext}`] ?? 'image/png'};base64,${image.toString('base64')}`;
+      const png = await page.evaluate(async (url) => {
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const { naturalWidth: w, naturalHeight: h } = img;
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const context = canvas.getContext('2d')!;
+        context.drawImage(img, 0, 0);
+        const pixels = context.getImageData(0, 0, w, h);
+        const d = pixels.data;
+        let [left, top, right, bottom] = [w, h, -1, -1];
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const i = (y * w + x) * 4;
+            // Distance from white: 0 for paper white, 255 for a full color or black.
+            const ink = 255 - Math.min(d[i], d[i + 1], d[i + 2]);
+            const alpha = Math.min(
+              d[i + 3],
+              Math.min(255, Math.max(0, (ink - 6) * 4)),
+            );
+            d[i + 3] = alpha;
+            if (alpha > 24) {
+              left = Math.min(left, x);
+              right = Math.max(right, x);
+              top = Math.min(top, y);
+              bottom = Math.max(bottom, y);
+            }
+          }
+        }
+        if (right < 0) return null;
+        context.putImageData(pixels, 0, 0);
+        const pad = Math.round(Math.max(right - left, bottom - top) * 0.04);
+        const [x0, y0] = [Math.max(0, left - pad), Math.max(0, top - pad)];
+        const [x1, y1] = [
+          Math.min(w, right + pad + 1),
+          Math.min(h, bottom + pad + 1),
+        ];
+        const out = document.createElement('canvas');
+        out.width = x1 - x0;
+        out.height = y1 - y0;
+        out
+          .getContext('2d')!
+          .drawImage(
+            canvas,
+            x0,
+            y0,
+            out.width,
+            out.height,
+            0,
+            0,
+            out.width,
+            out.height,
+          );
+        return out.toDataURL('image/png').split(',')[1];
+      }, url);
+      return png ? Buffer.from(png, 'base64') : null;
+    } finally {
+      await browser.close();
+    }
+  }
+
+  /**
    * A theme tried on sample books (one per language) in `folder`: each goes through render QA, and
    * every page is saved as a PNG preview for staff. Returns, by sample, its QA verdict and previews.
    */
@@ -327,29 +400,42 @@ async function measureTones(
         const img = new Image();
         img.src = url;
         await img.decode();
-        const side = grid * 8;
+        // 16×16 samples a cell: their mean is the cell's lightness, their spread its texture.
+        const n = 16;
+        const side = grid * n;
         const canvas = document.createElement('canvas');
         canvas.width = canvas.height = side;
         const context = canvas.getContext('2d')!;
+        context.imageSmoothingQuality = 'high';
         context.drawImage(img, 0, 0, side, side);
         const { data } = context.getImageData(0, 0, side, side);
         const lum: number[] = [];
+        const detail: number[] = [];
         for (let gy = 0; gy < grid; gy++) {
           for (let gx = 0; gx < grid; gx++) {
             let sum = 0;
-            for (let y = gy * 8; y < gy * 8 + 8; y++) {
-              for (let x = gx * 8; x < gx * 8 + 8; x++) {
+            let squares = 0;
+            for (let y = gy * n; y < gy * n + n; y++) {
+              for (let x = gx * n; x < gx * n + n; x++) {
                 const i = (y * side + x) * 4;
-                sum +=
+                const l =
                   0.2126 * data[i] +
                   0.7152 * data[i + 1] +
                   0.0722 * data[i + 2];
+                sum += l;
+                squares += l * l;
               }
             }
-            lum.push(Math.round(sum / 64));
+            const mean = sum / (n * n);
+            lum.push(Math.round(mean));
+            detail.push(
+              Math.round(
+                Math.sqrt(Math.max(0, squares / (n * n) - mean * mean)),
+              ),
+            );
           }
         }
-        return { aspect: img.naturalWidth / img.naturalHeight, lum };
+        return { aspect: img.naturalWidth / img.naturalHeight, lum, detail };
       },
       { url, grid: GRID },
     );

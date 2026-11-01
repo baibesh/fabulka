@@ -145,6 +145,22 @@ describe('PdfService (Chromium)', () => {
       expect.objectContaining({ page: 'story-3', kind: 'fallback-font' }),
     );
   });
+
+  it("keys out an ornament's white background and trims it to the motif", async () => {
+    // Like Muse Image draws it: a small motif in the middle of a big white square.
+    const drawn = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="#fff"/><circle cx="200" cy="200" r="50" fill="#e0a020"/></svg>`,
+    );
+    const png = await pdf.cleanOrnament(drawn, 'svg');
+    expect(png).not.toBeNull();
+    // PNG header: width and height big-endian at bytes 16 and 20; the 100 px disc plus a little.
+    expect(png!.readUInt32BE(16)).toBeLessThan(120);
+    expect(png!.readUInt32BE(20)).toBeLessThan(120);
+    const blank = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="#fff"/></svg>`,
+    );
+    expect(await pdf.cleanOrnament(blank, 'svg')).toBeNull();
+  });
 });
 
 describe('PdfService (Chromium), choosing layouts from the pictures', () => {

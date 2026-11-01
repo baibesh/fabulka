@@ -104,6 +104,23 @@ describe("chooser", () => {
     expect(judgePage(layout, page({ tone: busy })).verdicts["overlay-bottom"]?.reason).toBe("busy");
   });
 
+  it("never runs a spread's fold through the hero", () => {
+    const adventure = newLayout("adventure", 8);
+    // The hero in the middle of a 3:2 picture spread over two square pages: right on the fold.
+    expect(judgePage(adventure, page()).verdicts.spread?.reason).toBe("gutter");
+    // The hero on the left page, the right page's bottom calm: the spread suits.
+    const left = page({ subject: subject(0.08, 0.2, 0.3, 0.6), words: 20 });
+    expect(judgePage(adventure, left).verdicts.spread?.ok).toBe(true);
+  });
+
+  it("turns down fine texture that the cell means average away, like a city under the text", () => {
+    // Every cell has the same mean lightness, but a lot of detail inside it (Muse Image's roofs).
+    const city = { ...tone(200), detail: Array.from({ length: GRID * GRID }, () => 40) };
+    expect(judgePage(layout, page({ tone: city })).verdicts["overlay-bottom"]?.reason).toBe("busy");
+    const snow = { ...tone(225), detail: Array.from({ length: GRID * GRID }, () => 8) };
+    expect(judgePage(layout, page({ tone: snow })).options[0]).toBe("overlay-bottom");
+  });
+
   it("turns down a layout the text is far too long for", () => {
     const judged = judgePage(layout, page({ words: 400 }));
     expect(judged.verdicts["overlay-bottom"]?.reason).toBe("words");

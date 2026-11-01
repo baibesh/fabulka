@@ -194,10 +194,18 @@ export function pagePrompt(
   const toy = companions.toy
     ? ' The toy is the same toy as in the toy character sheet shown earlier.'
     : '';
+  // Said first and again at the end: appended once after a long scene, Muse Image mostly ignored it.
+  const rest = textSpace === 'top' ? 'lower' : 'upper';
   const space = textSpace
-    ? ` Keep the ${textSpace} third of the picture calm and simple, such as sky, grass, water or a plain wall, with no faces, characters or important details there: text will be printed over it.`
+    ? `Composition: all characters and the action stay in the ${rest} two thirds of the picture. ` +
+      `The ${textSpace} third is empty, softly lit background only (open sky, plain grass or snow, ` +
+      'still water, a plain wall or floor), with no buildings, crowds, objects, faces or fine busy ' +
+      'texture, because the story text is printed over it. '
     : '';
-  return `${scenePrompt}. The hero is the same child as in the hero character sheet shown earlier.${pet}${toy}${space} ${style}`;
+  const reminder = textSpace
+    ? ` Leave the ${textSpace} third empty and calm.`
+    : '';
+  return `${space}${scenePrompt}. The hero is the same child as in the hero character sheet shown earlier.${pet}${toy}${reminder} ${style}`;
 }
 
 export const REVIEW_INSTRUCTIONS = `You review picture books for young children before they are
@@ -317,5 +325,5 @@ export function themePrompt(brief: string): string {
 
 /** The ornament as an isolated motif the book prints small next to the dedication and the end. */
 export function ornamentPrompt(motif: string): string {
-  return `${motif}. A single small decorative ornament for a children's picture book, centered, isolated on a fully transparent background (if transparency is impossible: pure white #ffffff background), no text, no letters, no frame, no shadow, flat soft colors.`;
+  return `${motif}. A single decorative ornament for a children's picture book, centered and filling most of the square, isolated on a pure white #ffffff background, no text, no letters, no frame, no shadow, no glow, flat soft colors.`;
 }

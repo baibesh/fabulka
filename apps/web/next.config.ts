@@ -4,6 +4,11 @@ const API_URL = process.env.API_URL ?? "http://localhost:4000";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  experimental: {
+    // Proposing an AI theme waits on Muse Spark, Muse Image and five sample renders (~1–2 min);
+    // the proxy's default 30 s cut it off with a 500 while the API kept working.
+    proxyTimeout: 300_000,
+  },
   partialPrefetching: true,
   turbopack: {
     rules: {

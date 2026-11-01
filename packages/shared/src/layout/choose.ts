@@ -21,8 +21,12 @@ export const PageSubjectSchema = z.object({
 });
 export type PageSubject = z.infer<typeof PageSubjectSchema>;
 
-/** How light the picture is, cell by cell (sRGB luma 0..255 on a GRID×GRID grid), and its shape. */
-export const PageToneSchema = z.object({ aspect: z.number().positive(), lum: z.array(z.number()) });
+/**
+ * How light the picture is, cell by cell (sRGB luma 0..255 on a GRID×GRID grid), and its shape.
+ * `detail` is the spread of luma inside each cell: fine texture (a city, foliage) that cell means
+ * average away. Tones measured before it existed have none.
+ */
+export const PageToneSchema = z.object({ aspect: z.number().positive(), lum: z.array(z.number()), detail: z.array(z.number()).optional() });
 export type PageTone = z.infer<typeof PageToneSchema>;
 
 /** What the chooser knows of a story page. `subject` null: SAM failed, so the hero's place is unknown. */
@@ -37,6 +41,14 @@ export interface PageAnalysis {
 const MAX_OVERLAP = 0.06;
 /** Above this spread of lightness (luma 0..255) the background is too busy to read text on. */
 const MAX_BUSY = 46;
+/**
+ * The same with the texture inside cells counted in (the hypotenuse of both spreads). Set on twelve
+ * real Muse Image pages: text read well on sky, snow and plain ground (up to ~30) and badly on a
+ * city or tree branches (36 and up, as an average over a box that is half calm water, half roofs).
+ */
+const MAX_ROUGH = 33;
+/** Half the width of the strip along a spread's fold (mm) where the hero must not be: the binding hides it. */
+const GUTTER_MM = 8;
 /** How far beyond the estimate render QA's shrink may still make text fit. */
 const SHRINK_ROOM = 1.4;
 const PT_MM = 25.4 / 72;
@@ -131,7 +143,7 @@ export interface Verdict {
   ok: boolean;
   ink: "dark" | "light";
   /** Why it was turned down, for the admin and the tests. */
-  reason?: "overlap" | "contrast" | "busy" | "words" | "unknown" | "crop";
+  reason?: "overlap" | "contrast" | "busy" | "words" | "unknown" | "crop" | "gutter";
   contrast?: number;
 }
 
@@ -143,14 +155,17 @@ export function judgeOverlay(region: Rect, page: PageAnalysis, theme: BookTheme)
   const covered = under.filter(([x, y]) => gridCell(subject, x, y)).length / under.length;
   const lums = under.map(([x, y]) => page.tone!.lum[y * GRID + x] ?? 128);
   const mean = lums.reduce((s, v) => s + v, 0) / lums.length;
-  const busy = Math.sqrt(lums.reduce((s, v) => s + (v - mean) ** 2, 0) / lums.length);
+  const spread = Math.sqrt(lums.reduce((s, v) => s + (v - mean) ** 2, 0) / lums.length);
+  const detail = page.tone.detail;
+  const texture = detail ? under.reduce((s, [x, y]) => s + (detail[y * GRID + x] ?? 0), 0) / under.length : 0;
+  const busy = detail ? Math.hypot(spread, texture) > MAX_ROUGH : spread > MAX_BUSY;
   const background = luminance(mean);
   const dark = contrast(luminance(theme.palette.ink), background);
   const light = contrast(1, background);
   const ink = dark >= light ? "dark" : "light";
   const best = Math.max(dark, light);
   if (covered > MAX_OVERLAP) return { ok: false, ink, reason: "overlap", contrast: best };
-  if (busy > MAX_BUSY) return { ok: false, ink, reason: "busy", contrast: best };
+  if (busy) return { ok: false, ink, reason: "busy", contrast: best };
   if (best < theme.minContrast) return { ok: false, ink, reason: "contrast", contrast: best };
   return { ok: true, ink, contrast: best };
 }
@@ -178,6 +193,9 @@ export function judgePage(layout: BookLayout, page: PageAnalysis): Partial<PageL
     }
     if (variant === "split" || variant === "facing") {
       verdict = { ok: true, ink: "dark" };
+    } else if (variant === "spread" && inGutter(page, art, aspect, focus, format.widthMm)) {
+      // A face or a body across the fold disappears into the binding.
+      verdict = { ok: false, ink: "dark", reason: "gutter" };
     } else if (variant === "spread") {
       const sides = (["right", "left"] as const).map((side) => {
         const rect = textRect("spread", format);
@@ -235,6 +253,15 @@ export function cropNote(layout: BookLayout, page: PageAnalysis): string | null 
   const list = dropped.map((d) => `${d.variant} ${Math.round(d.share * 100)}%`).join(", ");
   const all = dropped.length === layout.theme.variants.filter((v) => v !== "plate").length;
   return `${layout.format.id} crops the picture too much for ${list}${all ? "; plate used" : ""}`;
+}
+
+/** Whether the hero's mask reaches into the strip along the fold of a spread (art box `art`). */
+function inGutter(page: PageAnalysis, art: Rect, aspect: number, focus: Focus, foldMm: number): boolean {
+  if (!page.subject) return false;
+  const strip = underBox({ x: foldMm - GUTTER_MM, y: art.y, w: GUTTER_MM * 2, h: art.h }, art, aspect, focus);
+  const under = cells(strip);
+  const covered = under.filter(([x, y]) => gridCell(page.subject!, x, y)).length / under.length;
+  return covered > MAX_OVERLAP;
 }
 
 /** Words in a text, for the capacity check. */

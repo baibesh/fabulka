@@ -311,9 +311,15 @@ export class MockGateway implements ModelGateway {
     };
   }
 
-  /** The hero is the white disc every placeholder page draws: the same mask, every run. */
+  /**
+   * The hero is the white disc every placeholder page draws: the same mask, every run. Two journal
+   * entries, like the real SAM calls (people, then animals).
+   */
   async findSubject(): Promise<{ subject: PageSubject; costUsd: number }> {
-    await this.pretend('page-mask', 1);
+    await Promise.all([
+      this.pretend('page-mask', 1),
+      this.pretend('page-mask', 1),
+    ]);
     return { subject: MOCK_SUBJECT, costUsd: 0 };
   }
 
