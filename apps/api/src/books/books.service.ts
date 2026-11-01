@@ -200,10 +200,15 @@ export class BooksService implements OnModuleInit {
             theme: input.theme,
           },
         };
-    // The theme's type size decides how many words fit on a page; the story is written to fit.
+    // The theme's type size at the book's format decides how many words fit on a page; the story is
+    // written to fit.
     const format = bookFormatOf(await this.reference.defaultFormat());
     const layout = newLayout(job.theme, child.age, format, job.blocks);
-    job.brief.wordsPerPage = wordsPerPage(layout.theme, child.age);
+    job.brief.wordsPerPage = wordsPerPage(
+      layout.theme,
+      child.age,
+      layout.format,
+    );
     if (input.toy) {
       await this.storage.read(toyUploadPath(input.toy.upload)).catch(() => {
         throw new BadRequestException(

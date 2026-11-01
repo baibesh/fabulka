@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGE_LIMITS,
+  BOOK_FORMATS,
   BOOK_THEMES,
   BookLayoutSchema,
+  formatTypeScale,
+  withFormat,
   SELECTABLE_THEMES,
   availableVariants,
   bookDocument,
@@ -40,6 +44,43 @@ describe("themes", () => {
     expect(wordsPerPage(BOOK_THEMES.fairy, 3)).toBe(25);
     expect(wordsPerPage(BOOK_THEMES.fairy, 6)).toBe(50);
     expect(wordsPerPage(BOOK_THEMES.adventure, 9)).toBe(85);
+  });
+
+  it("scales type with the format: smaller on A5, bigger on A4, the square as drawn, within the age limits", () => {
+    const fairy = BOOK_THEMES.fairy;
+    expect(formatTypeScale(fairy, "middle", BOOK_FORMATS["square-210"])).toEqual(fairy.sizes.middle);
+    const a5 = formatTypeScale(fairy, "middle", BOOK_FORMATS["a5-portrait"]);
+    const a4 = formatTypeScale(fairy, "middle", BOOK_FORMATS["a4-landscape"]);
+    expect(a5.bodyPt).toBe(14.5);
+    expect(a4.bodyPt).toBe(17.5);
+    expect(a5.titlePt).toBeLessThan(fairy.sizes.middle.titlePt);
+    expect(a4.headingPt).toBeGreaterThan(fairy.sizes.middle.headingPt);
+    for (const theme of [BOOK_THEMES.fairy, BOOK_THEMES.adventure, BOOK_THEMES.little]) {
+      for (const group of ["young", "middle", "older"] as const) {
+        for (const format of Object.values(BOOK_FORMATS)) {
+          const size = formatTypeScale(theme, group, format);
+          expect(size.bodyPt).toBeGreaterThanOrEqual(AGE_LIMITS[group].bodyPt[0]);
+          expect(size.bodyPt).toBeLessThanOrEqual(AGE_LIMITS[group].bodyPt[1]);
+          expect(size.headingPt).toBeGreaterThanOrEqual(size.bodyPt);
+          expect(size.titlePt).toBeGreaterThanOrEqual(size.headingPt);
+        }
+      }
+    }
+  });
+
+  it("budgets words per page by the format: fewer on A5, and on A4 the capped line at bigger type", () => {
+    const fairy = BOOK_THEMES.fairy;
+    expect(wordsPerPage(fairy, 6, BOOK_FORMATS["square-210"])).toBe(50);
+    expect(wordsPerPage(fairy, 6, BOOK_FORMATS["a5-portrait"])).toBeLessThan(50);
+    expect(wordsPerPage(fairy, 6, BOOK_FORMATS["a4-landscape"])).toBeLessThan(50);
+    expect(wordsPerPage(fairy, 6, BOOK_FORMATS["a5-portrait"])).toBeGreaterThan(30);
+  });
+
+  it("renders the format's type size on every page", () => {
+    const a5 = renderBook(book(), withFormat(newLayout("fairy", 6), BOOK_FORMATS["a5-portrait"]));
+    const a4 = renderBook(book(), withFormat(newLayout("fairy", 6), BOOK_FORMATS["a4-landscape"]));
+    expect(a5.pages[2].html).toContain("--body-size:14.5pt");
+    expect(a4.pages[2].html).toContain("--body-size:17.5pt");
   });
 
   it("offers only themes that cover all of a template's languages", () => {

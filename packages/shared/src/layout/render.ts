@@ -1,7 +1,7 @@
 import type { Language } from "../language";
 import { BOOK_LABELS } from "../labels";
 import type { BookLayout, BookTheme, PageLayout, PageVariant } from "./model";
-import { BOOK_FONTS } from "./themes";
+import { BOOK_FONTS, formatTypeScale } from "./themes";
 import { type PlannedPage, type Rect, artRect, planBook, textRect } from "./plan";
 import { contrast, luminance, objectPosition } from "./choose";
 
@@ -78,7 +78,7 @@ const place = (r: Rect) => `left:${mm(r.x)};top:${mm(r.y)};width:${mm(r.w)};heig
 /** The theme as CSS variables on each page, so a page can be shown on its own. */
 function themeStyle(layout: BookLayout, fit: number, bleed: number): string {
   const { theme, format } = layout;
-  const size = theme.sizes[layout.ageGroup];
+  const size = formatTypeScale(theme, layout.ageGroup, format);
   const heading = layout.headingFallback ? { family: theme.fonts.body.family, weight: 700 } : theme.fonts.heading;
   const p = theme.palette;
   return [

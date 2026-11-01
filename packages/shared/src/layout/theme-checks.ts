@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { LANGUAGES, LanguageSchema, type Language } from "../language";
 import { contrast, luminance } from "./choose";
-import { AGE_GROUPS, type AgeGroup, type BookTheme, ORNAMENTS, PageVariantSchema, ThemePaletteSchema, TypeScaleSchema } from "./model";
+import { AGE_GROUPS, AGE_LIMITS, type BookTheme, ORNAMENTS, PageVariantSchema, ThemePaletteSchema, TypeScaleSchema } from "./model";
 import { BOOK_FONTS } from "./themes";
 
 /**
@@ -36,12 +36,6 @@ export type ProposedTheme = z.infer<typeof ProposedThemeSchema>;
 export const ThemeBriefSchema = z.object({ brief: z.string().trim().min(3).max(300) });
 export type ThemeBrief = z.infer<typeof ThemeBriefSchema>;
 
-/** Type sizes a theme may use per age band (points), and words a page may hold. */
-export const AGE_LIMITS: Record<AgeGroup, { bodyPt: [number, number]; maxWords: number }> = {
-  young: { bodyPt: [16, 26], maxWords: 40 },
-  middle: { bodyPt: [13, 22], maxWords: 70 },
-  older: { bodyPt: [11, 18], maxWords: 110 },
-};
 /** WCAG AA for body text; large titles and ornaments may go down to 3. */
 export const MIN_TEXT_CONTRAST = 4.5;
 export const MIN_LARGE_CONTRAST = 3;

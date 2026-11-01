@@ -63,6 +63,13 @@ export type TypeScale = z.infer<typeof TypeScaleSchema>;
 export const AGE_GROUPS = ["young", "middle", "older"] as const;
 export type AgeGroup = (typeof AGE_GROUPS)[number];
 
+/** Type sizes a theme may use per age band (points), and words a page may hold. */
+export const AGE_LIMITS: Record<AgeGroup, { bodyPt: [number, number]; maxWords: number }> = {
+  young: { bodyPt: [16, 26], maxWords: 40 },
+  middle: { bodyPt: [13, 22], maxWords: 70 },
+  older: { bodyPt: [11, 18], maxWords: 110 },
+};
+
 export const ORNAMENTS = ["leaf", "star", "flower", "sparkle"] as const;
 
 export const ThemePaletteSchema = z.object({

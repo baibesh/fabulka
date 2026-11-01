@@ -212,7 +212,7 @@ describe('BooksService', () => {
   describe('a book of your own', () => {
     /** Creates the book and returns what the story was written by; the story itself is skipped. */
     async function briefFor(
-      input: { methodology?: string; age?: number },
+      input: { methodology?: string; age?: number; format?: string },
       methods = methodRows(),
     ) {
       const models = new MockGateway(0);
@@ -239,6 +239,8 @@ describe('BooksService', () => {
         { book: { create, update: jest.fn(), updateMany: jest.fn() } },
         models,
         methods,
+        {},
+        { format: input.format },
       );
       const book = await service.create(
         {
@@ -264,6 +266,13 @@ describe('BooksService', () => {
       expect(middle.data.layout.theme.id).toBe('fairy');
       expect(middle.brief.wordsPerPage).toBe(50);
       expect(middle.data.layout.qa.status).toBe('pending');
+    });
+
+    it('writes fewer words a page when the default format is the smaller A5', async () => {
+      const a5 = await briefFor({ age: 6, format: 'a5-portrait' });
+      expect(a5.data.layout.format.id).toBe('a5-portrait');
+      expect(a5.brief.wordsPerPage).toBeLessThan(50);
+      expect(a5.brief.wordsPerPage).toBeGreaterThan(30);
     });
 
     it('follows the method the parent picked, with its beats from the database', async () => {

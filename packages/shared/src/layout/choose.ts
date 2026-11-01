@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { BookLayout, BookTheme, Focus, PageLayout, PageVariant } from "./model";
 import { type Rect, artRect, textRect } from "./plan";
-import { blankPage } from "./themes";
+import { blankPage, formatTypeScale } from "./themes";
 
 /**
  * Image-aware page layouts. SAM finds the hero once per illustration (a coarse mask), Chromium
@@ -130,9 +130,9 @@ export function contrast(a: number, b: number): number {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
-/** Words a text box holds at the theme's size for this age, roughly (render QA has the last word). */
-export function capacity(rect: Rect, theme: BookTheme, layout: Pick<BookLayout, "ageGroup">): number {
-  const size = theme.sizes[layout.ageGroup];
+/** Words a text box holds at the theme's size for this age and format, roughly (render QA has the last word). */
+export function capacity(rect: Rect, theme: BookTheme, layout: Pick<BookLayout, "ageGroup"> & Partial<Pick<BookLayout, "format">>): number {
+  const size = formatTypeScale(theme, layout.ageGroup, layout.format);
   const em = size.bodyPt * PT_MM;
   const lines = Math.floor(rect.h / (em * size.lineHeight));
   const chars = rect.w / (em * 0.5);

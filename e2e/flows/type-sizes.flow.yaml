@@ -1,0 +1,68 @@
+# Type size follows the format: the same book («Сказка», a 5-year-old: 16 pt on the square page) is
+# set at 14.5 pt on A5 and 17.5 pt on A4 landscape, in the reader and in the PDF the API checks; the
+# text still fits without render QA shrinking it (mock models).
+appId: ${WEB}
+tags: [book, layout]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Кегль ${Date.now()}"
+  owner: "e2e-type-${Date.now()}"
+http:
+  baseUrl: ${API}
+  headers:
+    X-Client-Key: "${owner}"
+    X-Demo-Code: E2E-DEMO
+commands:
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${childName}", age: 5, gender: girl, interests: [кошки], city: Алматы }
+      extract: { bookId: "$.id" }
+      assert: { status: 201 }
+  - request:
+      url: /books/${bookId}
+      retryUntil:
+        json: { "$.status": done }
+      timeout: 30000
+
+  # A5 portrait: smaller type than the square book's 16 pt.
+  - request:
+      method: PATCH
+      url: /books/${bookId}/layout
+      json: { format: a5-portrait }
+      timeout: 30000
+      assert: { status: 200, json: { "$.layout.format.id": a5-portrait, "$.layout.qa.status": ok } }
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/books/${bookId}?lang=ru"
+  - waitForVisible: { css: "[data-testid=book-reader][data-format=a5-portrait]", timeout: 20000 }
+  - tapOn: { testId: reader-next }
+  - waitForVisible: { css: "[data-page-key=story-1] .fb-page[style*='--body-size:14.5pt']" }
+
+  # A4 landscape: bigger type.
+  - request:
+      method: PATCH
+      url: /books/${bookId}/layout
+      json: { format: a4-landscape }
+      timeout: 30000
+      assert: { status: 200, json: { "$.layout.format.id": a4-landscape, "$.layout.qa.status": ok } }
+  - openLink: "${WEB}/books/${bookId}?lang=ru"
+  - waitForVisible: { css: "[data-testid=book-reader][data-format=a4-landscape]", timeout: 20000 }
+  - tapOn: { testId: reader-next }
+  - waitForVisible: { css: "[data-page-key=story-1] .fb-page[style*='--body-size:17.5pt']" }
+  # The PDF the API printed was set the same way (its checked page is kept next to it).
+  - sql:
+      query: "select replace(\"pdfPath\", 'book.pdf', 'book.html') as html from \"Book\" where id = $1"
+      params: ["${bookId}"]
+      readOnly: true
+      extract: { htmlPath: "$[0].html" }
+  - request:
+      url: ${WEB}/files/${htmlPath}
+      assert: { status: 200 }
+  - assertTrue: { contains: ["${response.body}", "--body-size:17.5pt"] }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

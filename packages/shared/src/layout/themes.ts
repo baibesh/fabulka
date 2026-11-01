@@ -1,6 +1,7 @@
 import { LANGUAGES, type Language } from "../language";
 import { ageBand } from "../methodologies";
-import type { AgeGroup, BookFormat, BookLayout, BookTheme, LayoutBlock, PageLayout, TypeScale } from "./model";
+import { AGE_LIMITS, type AgeGroup, type BookFormat, type BookLayout, type BookTheme, type LayoutBlock, type PageLayout, type TypeScale } from "./model";
+import { MAX_MEASURE } from "./plan";
 import type { TemplateBlocks } from "./blocks";
 
 /**
@@ -159,13 +160,45 @@ export function ageGroup(age: number): AgeGroup {
   return band.ageMax <= 4 ? "young" : band.ageMax <= 7 ? "middle" : "older";
 }
 
-export function typeScale(theme: BookTheme, age: number): TypeScale {
-  return theme.sizes[ageGroup(age)];
+/** The square book's safe area side (210 − 2 × 12 mm): the sizes in a theme are drawn for it. */
+const BASE_SAFE_MM = 210 - 2 * 12;
+const halfPoint = (pt: number) => Math.round(pt * 2) / 2;
+
+/**
+ * A theme's type sizes for one age band at a format. A theme's sizes are for the square book; on
+ * another format type grows or shrinks with the safe area — by its fourth root, so an A5 page gets
+ * smaller type and fewer words (rather than relying on render QA's shrink) and an A4 page bigger type
+ * (rather than looking tiny) — kept within the age band's limits. The words a page may hold follow
+ * the room for text: the safe area with the line length capped (MAX_MEASURE), at the new size.
+ */
+export function formatTypeScale(theme: BookTheme, group: AgeGroup, format: BookFormat = BOOK_FORMATS[DEFAULT_FORMAT]): TypeScale {
+  const base = theme.sizes[group];
+  const safeW = format.widthMm - 2 * format.safeMm;
+  const safeH = format.heightMm - 2 * format.safeMm;
+  const factor = Math.pow((safeW * safeH) / (BASE_SAFE_MM * BASE_SAFE_MM), 0.25);
+  if (Math.abs(factor - 1) < 0.005) return base;
+  const limit = AGE_LIMITS[group];
+  // A theme outside the limits (the legacy look) keeps its own size as the bound it may not cross.
+  const [lo, hi] = [Math.min(limit.bodyPt[0], base.bodyPt), Math.max(limit.bodyPt[1], base.bodyPt)];
+  const bodyPt = halfPoint(Math.min(hi, Math.max(lo, base.bodyPt * factor)));
+  const titlePt = halfPoint(Math.min(48, Math.max(bodyPt * 1.3, base.titlePt * factor)));
+  const headingPt = halfPoint(Math.min(titlePt, Math.max(bodyPt, base.headingPt * factor)));
+  const room = (Math.min(safeW, MAX_MEASURE) * safeH) / (BASE_SAFE_MM * BASE_SAFE_MM);
+  const k = bodyPt / base.bodyPt;
+  const maxWords = Math.max(10, Math.floor((base.maxWords * room) / (k * k)));
+  return { ...base, bodyPt, titlePt, headingPt, maxWords };
 }
 
-/** Words a story page may have: the age norm, or less when the theme's type leaves less room. */
-export function wordsPerPage(theme: BookTheme, age: number): number {
-  return Math.min(ageBand(age).maxWordsPerPage, typeScale(theme, age).maxWords);
+export function typeScale(theme: BookTheme, age: number, format?: BookFormat): TypeScale {
+  return formatTypeScale(theme, ageGroup(age), format);
+}
+
+/**
+ * Words a story page may have: the age norm, or less when the theme's type at this format leaves less
+ * room (the square book when no format is given). Goes into the story prompt.
+ */
+export function wordsPerPage(theme: BookTheme, age: number, format?: BookFormat): number {
+  return Math.min(ageBand(age).maxWordsPerPage, typeScale(theme, age, format).maxWords);
 }
 
 /** The optional blocks a parent may add when the template says nothing. */
