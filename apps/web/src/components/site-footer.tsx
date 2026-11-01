@@ -1,12 +1,12 @@
 "use client";
 
-import { COUNTRIES } from "@fabulka/shared";
 import Link from "next/link";
-import { setCountry, useI18n, type Country } from "@/i18n/i18n";
+import { useI18n } from "@/i18n/i18n";
+import { CountryPicker } from "./locale-pickers";
 import { Logo } from "./logo";
 
 export function SiteFooter() {
-  const { t, country } = useI18n();
+  const { t } = useI18n();
   return (
     <footer className="mt-auto border-t border-border">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
@@ -24,19 +24,8 @@ export function SiteFooter() {
           <a href="mailto:hello@fabulka.com" className="hover:text-foreground">
             hello@fabulka.com
           </a>
-          {/* On phones the header has no room for the country switch. */}
-          <select
-            aria-label={t("nav.country")}
-            className="rounded-lg border border-border bg-transparent px-2 py-1 sm:hidden"
-            value={country}
-            onChange={(e) => setCountry(e.target.value as Country)}
-          >
-            {COUNTRIES.map((c) => (
-              <option key={c} value={c}>
-                {t(`country.${c}`)}
-              </option>
-            ))}
-          </select>
+          {/* Prices, languages and print follow the country; on every screen size. */}
+          <CountryPicker />
         </nav>
       </div>
     </footer>

@@ -6,10 +6,15 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  COUNTRY_BLOCKED,
   COUNTRY_POLICY_BLOCKED,
   CitiesSchema,
+  CountriesSchema,
   DEFAULT_CITIES,
+  DEFAULT_COUNTRIES,
+  DEFAULT_FAQ,
   DEFAULT_PRICES,
+  FaqSchema,
   PricesSchema,
   REFERENCE_KEYS,
   UpdateBlockedSchema,
@@ -20,7 +25,9 @@ import {
   type BookKind,
   type City,
   type Country,
+  type CountryEntry,
   type Cover,
+  type FaqItem,
   type Prices,
   type Reference,
 } from '@fabulka/shared';
@@ -36,24 +43,33 @@ interface Snapshot {
   cities: City[];
   /** Countries the owner blocks on top of Meta's list. */
   extraBlocked: string[];
+  /** Countries the site offers, in its order; everyone else is "other". */
+  countries: CountryEntry[];
+  /** The landing's questions, drafts included. */
+  faq: FaqItem[];
 }
 
 const DEFAULTS: Snapshot = {
   prices: DEFAULT_PRICES,
   cities: DEFAULT_CITIES,
   extraBlocked: [],
+  countries: DEFAULT_COUNTRIES,
+  faq: DEFAULT_FAQ,
 };
 
 const SCHEMAS: { [K in keyof Snapshot]: ZodType<Snapshot[K]> } = {
   prices: PricesSchema,
   cities: CitiesSchema,
   extraBlocked: UpdateBlockedSchema.shape.extra,
+  countries: CountriesSchema,
+  faq: FaqSchema,
 };
 
 const FIELDS = Object.keys(REFERENCE_KEYS) as (keyof Snapshot)[];
 
 /**
- * Reference data the owner edits in the admin (prices, delivery cities, extra blocked countries),
+ * Reference data the owner edits in the admin (prices, delivery cities, the countries the site
+ * offers, the landing's FAQ, extra blocked countries),
  * kept in the Setting table. Every purchase, order and API request reads it, so it is cached in
  * memory (one process serves the API) and dropped on each edit.
  */
@@ -110,6 +126,8 @@ export class ReferenceService implements OnModuleInit {
       prices: pick('prices'),
       cities: pick('cities'),
       extraBlocked: pick('extraBlocked'),
+      countries: pick('countries'),
+      faq: pick('faq'),
     };
   }
 
@@ -121,20 +139,43 @@ export class ReferenceService implements OnModuleInit {
     return (await this.snapshot()).cities;
   }
 
-  /** GET /reference: prices and cities for the site. */
+  /**
+   * The countries the site offers. A blocked one (Meta's list, or the owner's added after it was
+   * listed) is left out: its visitors are turned away anyway.
+   */
+  async countries(): Promise<CountryEntry[]> {
+    const { countries, extraBlocked } = await this.snapshot();
+    return countries.filter(
+      (c) =>
+        !(c.code in RESTRICTED_COUNTRIES) && !extraBlocked.includes(c.code),
+    );
+  }
+
+  /** GET /reference: prices, cities, the offered countries and the published FAQ for the site. */
   async public(): Promise<Reference> {
-    const { prices, cities } = await this.snapshot();
-    return { prices, cities };
+    const { prices, cities, faq } = await this.snapshot();
+    return {
+      prices,
+      cities,
+      countries: await this.countries(),
+      faq: faq.filter((item) => item.published),
+    };
   }
 
   async admin(): Promise<AdminReference> {
-    const { prices, cities, extraBlocked } = await this.snapshot();
-    return { prices, cities, blocked: blocked(extraBlocked) };
+    const { prices, cities, extraBlocked, countries, faq } =
+      await this.snapshot();
+    return { prices, cities, countries, faq, blocked: blocked(extraBlocked) };
   }
 
-  /** What one more book of this kind costs, at the stored prices. */
+  /** What one more book of this kind costs, at the stored prices and the country's currency. */
   async bookPrice(kind: BookKind, country: Country = 'KZ') {
-    return bookPrice(kind, country, await this.prices());
+    return bookPrice(
+      kind,
+      country,
+      await this.prices(),
+      await this.countries(),
+    );
   }
 
   /** What a printed order costs, at the stored prices and free-delivery cities. */
@@ -158,6 +199,38 @@ export class ReferenceService implements OnModuleInit {
 
   async setCities(cities: City[]): Promise<City[]> {
     return (await this.save('cities', CitiesSchema.parse(cities))).cities;
+  }
+
+  /** The landing's questions, in order, drafts included. */
+  async setFaq(faq: FaqItem[]): Promise<FaqItem[]> {
+    return (await this.save('faq', FaqSchema.parse(faq))).faq;
+  }
+
+  /**
+   * The countries the site offers. A blocked code is refused, saying which list blocks it: Meta's
+   * (country_policy_blocked, never offered) or the owner's (country_blocked, unblock it first).
+   */
+  async setCountries(countries: CountryEntry[]): Promise<CountryEntry[]> {
+    const list = CountriesSchema.parse(countries);
+    const codes = list.map((c) => c.code);
+    const meta = codes.filter((code) => code in RESTRICTED_COUNTRIES);
+    if (meta.length) {
+      throw new BadRequestException({
+        code: COUNTRY_POLICY_BLOCKED,
+        countries: meta,
+        message: `${meta.join(', ')}: blocked by Meta's policy, cannot be offered`,
+      });
+    }
+    const { extraBlocked } = await this.snapshot();
+    const extra = codes.filter((code) => extraBlocked.includes(code));
+    if (extra.length) {
+      throw new BadRequestException({
+        code: COUNTRY_BLOCKED,
+        countries: extra,
+        message: `${extra.join(', ')}: blocked in the admin, unblock it first`,
+      });
+    }
+    return (await this.save('countries', list)).countries;
   }
 
   /**

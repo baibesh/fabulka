@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Nunito } from "next/font/google";
 import { Providers } from "./providers";
+import "flag-icons/css/flag-icons.min.css";
 import "./globals.css";
 
 // cyrillic-ext carries the Kazakh letters (ә ғ қ ң ө ұ ү һ і).

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { COUNTRY_INFO, type Book, type BookStatus } from "@fabulka/shared";
+import { type Book, type BookStatus } from "@fabulka/shared";
 import { AlertTriangle, Check, Download, MessageCircleQuestion, Printer, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
@@ -19,7 +19,7 @@ const finished = (status: BookStatus | undefined) => status === "done" || status
 
 export function BookView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { t, country } = useI18n();
+  const { t, info } = useI18n();
   const printPrice = useCoverPrice("soft");
   const { data: book, error } = useQuery({
     queryKey: ["book", id],
@@ -78,7 +78,7 @@ export function BookView({ params }: { params: Promise<{ id: string }> }) {
             <Download className="size-5" />
             {t("book.download")}
           </a>
-          {COUNTRY_INFO[country].print ? (
+          {info.print ? (
             <Link
               data-testid="order-print"
               href={`/books/${book.id}/order`}

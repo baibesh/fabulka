@@ -1,13 +1,11 @@
 import { z } from "zod";
 import { MethodologySlugSchema } from "./methodologies";
-import type { City, Prices } from "./reference";
+import { LanguageSchema, type Language } from "./language";
+import { countryInfo, type City, type Country, type CountryEntry, type Currency, type Prices } from "./reference";
 
+export * from "./language";
 export * from "./methodologies";
 export * from "./reference";
-
-export const LANGUAGES = ["ru", "kk", "en"] as const;
-export const LanguageSchema = z.enum(LANGUAGES);
-export type Language = z.infer<typeof LanguageSchema>;
 
 /** Fixed words of a book, by its language. Phrased so the name never has to be declined. */
 export const BOOK_LABELS: Record<Language, { madeFor: (name: string) => string; end: string; talk: string }> = {
@@ -282,49 +280,6 @@ export const VOICE_RATE_LIMITED = "voice_rate_limited";
 /** Body of a 502 from POST /voice: the speech or language model could not be reached. */
 export const VOICE_FAILED = "voice_failed";
 
-// ---- Countries -----------------------------------------------------------------
-
-/**
- * Countries the site prices and speaks for; "other" is everywhere else we may serve. Russia and
- * Belarus are never listed: Meta's rules keep the service out of them (see the API's geo guard).
- */
-export const COUNTRIES = ["KZ", "UZ", "KG", "other"] as const;
-export const CountrySchema = z.enum(COUNTRIES);
-export type Country = z.infer<typeof CountrySchema>;
-
-export type Currency = "KZT" | "USD";
-
-export interface CountryInfo {
-  /** Interface and book languages offered there; the first is the default. */
-  languages: readonly Language[];
-  currency: Currency;
-  /** A print partner delivers there. */
-  print: boolean;
-}
-
-export const COUNTRY_INFO: Record<Country, CountryInfo> = {
-  KZ: { languages: ["kk", "ru", "en"], currency: "KZT", print: true },
-  UZ: { languages: ["ru", "en"], currency: "USD", print: false },
-  KG: { languages: ["ru", "en"], currency: "USD", print: false },
-  other: { languages: ["en", "ru"], currency: "USD", print: false },
-};
-
-/**
- * Our country for the ISO code of the visitor's IP: a listed one, else "other". An address with no
- * country (a local one, say) is taken for Kazakhstan, the home market.
- */
-export function countryFromIp(iso: string | null): Country {
-  if (!iso) return "KZ";
-  const code = iso.trim().toUpperCase();
-  return (COUNTRIES as readonly string[]).includes(code) ? (code as Country) : "other";
-}
-
-/** `language` when the country offers it, else the country's default language. */
-export function languageFor(country: Country, language: Language): Language {
-  const { languages } = COUNTRY_INFO[country];
-  return languages.includes(language) ? language : languages[0];
-}
-
 // ---- Free limit and purchased books ------------------------------------------
 
 /** A catalog book (an adaptation of a ready plot) or a story of your own, written from scratch. */
@@ -334,11 +289,16 @@ export type BookKind = z.infer<typeof BookKindSchema>;
 
 /**
  * What one more generated (digital) book of this kind costs a visitor from `country`, at the
- * owner's prices (reference.prices). Dollars are charged outside Kazakhstan, where only the PDF is
- * sold.
+ * owner's prices (reference.prices) in the currency the owner set for that country
+ * (reference.countries; "other" pays in dollars).
  */
-export function bookPrice(kind: BookKind, country: Country, prices: Prices): { amount: number; currency: Currency } {
-  const currency = COUNTRY_INFO[country].currency;
+export function bookPrice(
+  kind: BookKind,
+  country: Country,
+  prices: Prices,
+  countries: readonly CountryEntry[],
+): { amount: number; currency: Currency } {
+  const { currency } = countryInfo(country, countries);
   return { amount: prices.books[kind][currency], currency };
 }
 

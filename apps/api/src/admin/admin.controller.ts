@@ -15,7 +15,9 @@ import {
 import {
   AdminLoginSchema,
   CitiesSchema,
+  CountriesSchema,
   CreateMethodologySchema,
+  FaqSchema,
   JournalCallsQuerySchema,
   JournalPeriodQuerySchema,
   MethodologyPreviewSchema,
@@ -29,7 +31,9 @@ import {
   type AdminLogin,
   type AdminLoginOptions,
   type City,
+  type CountryEntry,
   type CreateMethodology,
+  type FaqItem,
   type JournalCallsQuery,
   type MethodologyPreview,
   type Prices,
@@ -258,6 +262,21 @@ export class AdminController {
   @Put('reference/cities')
   setCities(@Body(new ZodPipe(CitiesSchema)) body: City[]) {
     return this.reference.setCities(body);
+  }
+
+  /**
+   * The countries the site offers. 400 country_policy_blocked for a code on Meta's list,
+   * country_blocked for one the owner blocked.
+   */
+  @Put('reference/countries')
+  setCountries(@Body(new ZodPipe(CountriesSchema)) body: CountryEntry[]) {
+    return this.reference.setCountries(body);
+  }
+
+  /** The landing's questions, in order; drafts (published: false) stay off the site. */
+  @Put('reference/faq')
+  setFaq(@Body(new ZodPipe(FaqSchema)) body: FaqItem[]) {
+    return this.reference.setFaq(body);
   }
 
   /** 400 country_policy_blocked for a code on Meta's list: that list cannot be edited here. */

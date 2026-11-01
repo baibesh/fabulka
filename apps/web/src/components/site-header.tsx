@@ -1,12 +1,12 @@
 "use client";
 
-import { BookHeart, Globe, Library, MapPin, Wand2 } from "lucide-react";
+import { BookHeart, Library, Wand2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { COUNTRIES, COUNTRY_INFO } from "@fabulka/shared";
-import { setCountry, setLocale, useI18n, type Country } from "@/i18n/i18n";
-import { LOCALE_NAMES, type MessageKey, type UiLocale } from "@/i18n/messages";
+import { useI18n } from "@/i18n/i18n";
+import type { MessageKey } from "@/i18n/messages";
 import { AuthMenu, AuthNotice } from "./auth-menu";
+import { LanguagePicker } from "./locale-pickers";
 import { Logo } from "./logo";
 
 const NAV: { href: string; label: MessageKey; icon: typeof Library; testId: string }[] = [
@@ -15,12 +15,9 @@ const NAV: { href: string; label: MessageKey; icon: typeof Library; testId: stri
   { href: "/my", label: "nav.my", icon: BookHeart, testId: "nav-my" },
 ];
 
-const select =
-  "cursor-pointer appearance-none rounded-lg bg-transparent py-1 pr-1 pl-5 text-sm font-semibold text-muted outline-none hover:text-foreground sm:pl-6";
-
 export function SiteHeader() {
   const pathname = usePathname();
-  const { t, locale, country } = useI18n();
+  const { t } = useI18n();
   return (
     <>
       <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur">
@@ -47,39 +44,8 @@ export function SiteHeader() {
               );
             })}
           </nav>
-          <label className="relative flex items-center" title={t("nav.language")}>
-            <Globe className="pointer-events-none absolute left-0.5 size-4 text-muted sm:left-1" />
-            <select
-              data-testid="ui-language"
-              aria-label={t("nav.language")}
-              className={select}
-              value={locale}
-              onChange={(e) => setLocale(e.target.value as UiLocale)}
-            >
-              {/* Only the languages offered in the chosen country. */}
-              {COUNTRY_INFO[country].languages.map((l) => (
-                <option key={l} value={l}>
-                  {l === "kk" ? "ҚАЗ" : l.toUpperCase()} · {LOCALE_NAMES[l]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="relative hidden items-center sm:flex" title={t("nav.country")}>
-            <MapPin className="pointer-events-none absolute left-1 size-4 text-muted" />
-            <select
-              data-testid="ui-country"
-              aria-label={t("nav.country")}
-              className={select}
-              value={country}
-              onChange={(e) => setCountry(e.target.value as Country)}
-            >
-              {COUNTRIES.map((c) => (
-                <option key={c} value={c}>
-                  {t(`country.${c}`)}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* Only the languages offered in the chosen country; the country itself is in the footer. */}
+          <LanguagePicker />
           <AuthMenu pathname={pathname} />
         </div>
       </header>

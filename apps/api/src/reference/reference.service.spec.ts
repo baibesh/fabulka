@@ -1,7 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  COUNTRY_BLOCKED,
   COUNTRY_POLICY_BLOCKED,
   DEFAULT_CITIES,
+  DEFAULT_COUNTRIES,
+  DEFAULT_FAQ,
   DEFAULT_PRICES,
   REFERENCE_KEYS,
   type Prices,
@@ -53,9 +56,12 @@ const dearer: Prices = {
 };
 
 describe('ReferenceService seeding', () => {
-  it('stores today’s prices, cities and an empty extra block list when absent', async () => {
+  it('stores today’s prices, cities, countries and an empty extra block list when absent', async () => {
     const { service, rows } = settingsStore();
     await service.onModuleInit();
+
+    expect(rows.get(REFERENCE_KEYS.countries)).toEqual(DEFAULT_COUNTRIES);
+    expect(rows.get(REFERENCE_KEYS.faq)).toEqual(DEFAULT_FAQ);
 
     expect(rows.get(REFERENCE_KEYS.prices)).toEqual(DEFAULT_PRICES);
     expect(rows.get(REFERENCE_KEYS.cities)).toEqual(DEFAULT_CITIES);
@@ -197,5 +203,92 @@ describe('ReferenceService blocked countries', () => {
     const { service } = settingsStore();
     await expect(service.setExtraBlocked(['XX'])).rejects.toThrow();
     await expect(service.setExtraBlocked(['NL', 'NL'])).rejects.toThrow();
+  });
+});
+
+describe('ReferenceService countries', () => {
+  const kz = DEFAULT_COUNTRIES[0];
+  const de = DEFAULT_COUNTRIES.find((c) => c.code === 'DE')!;
+
+  it('stores the owner’s list in order and prices by each country’s currency', async () => {
+    const { service, rows } = settingsStore();
+    const saved = await service.setCountries([
+      { ...de, code: 'nl' },
+      { ...kz, currency: 'USD' },
+    ]);
+    expect(saved.map((c) => c.code)).toEqual(['NL', 'KZ']);
+    expect(rows.get(REFERENCE_KEYS.countries)).toEqual(saved);
+    expect((await service.public()).countries).toEqual(saved);
+    expect(await service.bookPrice('template', 'KZ')).toEqual({
+      amount: 3.9,
+      currency: 'USD',
+    });
+    // Uzbekistan is no longer listed: it is "other", in dollars.
+    expect((await service.bookPrice('template', 'UZ')).currency).toBe('USD');
+  });
+
+  it('refuses a Meta-listed code, saying so', async () => {
+    const { service, setting } = settingsStore();
+    const error = await service
+      .setCountries([kz, { ...de, code: 'ru' }])
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect((error as BadRequestException).getResponse()).toMatchObject({
+      code: COUNTRY_POLICY_BLOCKED,
+      countries: ['RU'],
+    });
+    expect(setting.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuses a country the owner blocked, and hides one blocked later', async () => {
+    const { service } = settingsStore();
+    await service.setExtraBlocked(['NL']);
+    const error = await service
+      .setCountries([kz, { ...de, code: 'NL' }])
+      .catch((e: unknown) => e);
+    expect((error as BadRequestException).getResponse()).toMatchObject({
+      code: COUNTRY_BLOCKED,
+      countries: ['NL'],
+    });
+
+    await service.setExtraBlocked(['DE']);
+    expect((await service.public()).countries.map((c) => c.code)).not.toContain(
+      'DE',
+    );
+    expect((await service.admin()).countries.map((c) => c.code)).toContain(
+      'DE',
+    );
+  });
+
+  it('refuses an empty list, duplicates and unknown codes', async () => {
+    const { service } = settingsStore();
+    await expect(service.setCountries([])).rejects.toThrow();
+    await expect(service.setCountries([kz, kz])).rejects.toThrow();
+    await expect(
+      service.setCountries([{ ...kz, code: 'XX' }]),
+    ).rejects.toThrow();
+  });
+});
+
+describe('ReferenceService FAQ', () => {
+  it('stores the list and gives the site only the published entries', async () => {
+    const { service, rows } = settingsStore();
+    const [first, second] = DEFAULT_FAQ;
+    const saved = await service.setFaq([
+      { ...second, published: false },
+      { ...first, q: { ru: ' Вопрос ', en: 'Question' } },
+    ]);
+    expect(rows.get(REFERENCE_KEYS.faq)).toEqual(saved);
+    expect(saved[1].q).toEqual({ ru: 'Вопрос', en: 'Question' });
+    expect((await service.public()).faq.map((i) => i.id)).toEqual([first.id]);
+    expect((await service.admin()).faq).toHaveLength(2);
+  });
+
+  it('refuses an entry without the base languages', async () => {
+    const { service, setting } = settingsStore();
+    await expect(
+      service.setFaq([{ ...DEFAULT_FAQ[0], a: { kk: 'Жауап' } }]),
+    ).rejects.toThrow();
+    expect(setting.upsert).not.toHaveBeenCalled();
   });
 });

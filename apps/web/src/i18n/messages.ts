@@ -1,7 +1,10 @@
+import { LANGUAGE_NAMES } from "@fabulka/shared";
+
 export const UI_LOCALES = ["ru", "kk", "en"] as const;
 export type UiLocale = (typeof UI_LOCALES)[number];
 
-export const LOCALE_NAMES: Record<UiLocale, string> = { ru: "Русский", kk: "Қазақша", en: "English" };
+/** Each language's own name; the list lives with the languages in @fabulka/shared. */
+export const LOCALE_NAMES: Record<UiLocale, string> = LANGUAGE_NAMES;
 
 const ru = {
   "nav.catalog": "Каталог",
@@ -10,6 +13,12 @@ const ru = {
   "nav.home": "Fabulka — на главную",
   "nav.language": "Язык",
   "nav.country": "Страна",
+  "nav.language.choose": "Язык сайта",
+  "nav.language.hint": "Языки, доступные для страны «{country}». Страну можно сменить внизу страницы.",
+  "nav.country.choose": "Выберите страну",
+  "nav.country.hint": "От страны зависят цены, языки сайта и книг и доставка печатных книг.",
+  "nav.country.search": "Найти страну",
+  "nav.country.empty": "Такой страны нет в списке — выберите «Другая страна».",
 
   "auth.login": "Войти",
   "auth.account": "Аккаунт",
@@ -94,24 +103,6 @@ const ru = {
   "landing.pricing.print.delivery": "Бесплатная доставка: {cities}; в другие города — {fee}",
 
   "landing.faq.title": "Вопросы и ответы",
-  "landing.faq.time.q": "Сколько ждать книгу?",
-  "landing.faq.time.a":
-    "Обычно около трёх минут: сначала пишется сказка, потом рисуются герой и страницы. Прогресс видно на странице книги, а готовую можно сразу листать и скачать в PDF.",
-  "landing.faq.kazakh.q": "Можно ли сделать книгу на казахском?",
-  "landing.faq.kazakh.a":
-    "Да. Язык книги выбирается в форме: қазақша, русский или English. Сказка пишется сразу на этом языке, а не переводится.",
-  "landing.faq.data.q": "Что происходит с данными ребёнка?",
-  "landing.faq.data.a":
-    "Данные хранятся на серверах в Казахстане. Мы не просим фотографий детей: героя рисуют по описанию, а фото нужно только для игрушки, если захотите. Всё удалим по запросу на hello@fabulka.com.",
-  "landing.faq.print.q": "Как заказать печатную книгу?",
-  "landing.faq.print.a":
-    "На странице готовой книги нажмите «Заказать печатную книгу». Печать пока доступна только в Казахстане: в Алматы и Астану доставим бесплатно, в другие города — за небольшую плату.",
-  "landing.faq.account.q": "Нужно ли регистрироваться?",
-  "landing.faq.account.a":
-    "Нет. Книги сохраняются в вашем браузере, в разделе «Мои книги». Достаточно открыть каталог и выбрать историю.",
-  "landing.faq.dislike.q": "А если книга не понравится?",
-  "landing.faq.dislike.a":
-    "Сделайте новую: поменяйте ответы, тему или методику. Если что-то пошло не так, напишите нам на hello@fabulka.com — разберёмся.",
 
   "landing.final.title": "Подарите ребёнку книгу о нём самом",
   "landing.final.text": "Выберите историю — через несколько минут она будет готова.",
@@ -305,9 +296,6 @@ const ru = {
   "region.title": "Сервис недоступен в вашей стране",
   "region.text": "Книги создаются моделями Meta, а их правила не разрешают предлагать сервис в некоторых странах.",
 
-  "country.KZ": "Казахстан",
-  "country.UZ": "Узбекистан",
-  "country.KG": "Кыргызстан",
   "country.other": "Другая страна",
 
   "notFound.text": "Такой страницы нет. Может, она ещё не написана?",
@@ -571,8 +559,10 @@ const ru = {
   "admin.journal.lastSeen": "последний раз {date}",
   "admin.journal.noErrors": "Ошибок у пользователей за этот период не было",
   "admin.reference.title": "Справочники",
-  "admin.reference.lead": "Цены, города доставки и заблокированные страны. Изменения сразу видны на сайте и действуют для новых покупок и заказов.",
+  "admin.reference.lead": "Цены, страны, вопросы на главной, города доставки и заблокированные страны. Изменения сразу видны на сайте и действуют для новых покупок и заказов.",
   "admin.reference.tab.prices": "Цены",
+  "admin.reference.tab.countries": "Страны",
+  "admin.reference.tab.faq": "Вопросы (FAQ)",
   "admin.reference.tab.cities": "Города",
   "admin.reference.tab.blocked": "Блокировка стран",
   "admin.reference.books": "Электронные книги",
@@ -614,6 +604,42 @@ const ru = {
   "admin.reference.error.country": "Нужен двухбуквенный код страны ISO 3166, например NL",
   "admin.reference.error.countryMeta": "Эта страна уже заблокирована по правилам Meta",
   "admin.reference.error.countryDuplicate": "Эта страна уже в списке",
+  "admin.reference.countries.hint": "Страны в списке на сайте, в этом порядке. От страны зависят языки сайта и книг (первый — язык по умолчанию), валюта цены и печать.",
+  "admin.reference.country.languages": "Языки",
+  "admin.reference.country.default": "по умолчанию",
+  "admin.reference.country.makeDefault": "Сделать «{language}» языком по умолчанию",
+  "admin.reference.country.currency": "Валюта",
+  "admin.reference.country.print": "Печать и доставка",
+  "admin.reference.country.up": "Выше",
+  "admin.reference.country.down": "Ниже",
+  "admin.reference.country.remove": "Убрать {country}",
+  "admin.reference.country.pick": "Выберите страну",
+  "admin.reference.country.add": "Добавить страну",
+  "admin.reference.country.blocked": "Заблокирована — на сайте не показывается",
+  "admin.reference.other.title": "Другая страна",
+  "admin.reference.other.text": "Все страны не из списка: английский и русский, цены в долларах, без печати. Всегда в конце списка на сайте.",
+  "admin.reference.error.countriesEmpty": "Нужна хотя бы одна страна",
+  "admin.reference.error.languages": "Нужен хотя бы один язык",
+  "admin.reference.error.countryBlocked": "Эта страна заблокирована на вкладке «Блокировка стран» — сначала разблокируйте её",
+  "admin.reference.faq.hint": "Вопросы и ответы на главной странице, в этом порядке. Русский и английский обязательны; если перевода на язык нет, показывается русский, затем английский. Цены и города лучше писать подстановками — они заполнятся по справочникам для страны посетителя: {placeholders}.",
+  "admin.reference.faq.question": "Вопрос",
+  "admin.reference.faq.answer": "Ответ",
+  "admin.reference.faq.optional": "необязательно",
+  "admin.reference.faq.audience": "Где показывать",
+  "admin.reference.faq.audience.all": "Во всех странах",
+  "admin.reference.faq.audience.only": "Только в выбранных странах",
+  "admin.reference.faq.audience.except": "Везде, кроме выбранных стран",
+  "admin.reference.faq.everywhere": "Все страны",
+  "admin.reference.faq.only": "Только: {countries}",
+  "admin.reference.faq.except": "Кроме: {countries}",
+  "admin.reference.faq.published": "Опубликован",
+  "admin.reference.faq.draft": "Черновик",
+  "admin.reference.faq.untitled": "Новый вопрос",
+  "admin.reference.faq.add": "Добавить вопрос",
+  "admin.reference.faq.remove": "Удалить вопрос",
+  "admin.reference.error.faqQuestion": "Нужен вопрос, до 200 символов",
+  "admin.reference.error.faqAnswer": "Нужен ответ, до 1500 символов",
+  "admin.reference.error.faqCountries": "Выберите хотя бы одну страну",
 } as const;
 
 export type MessageKey = keyof typeof ru;
@@ -626,6 +652,12 @@ const kk: Messages = {
   "nav.home": "Fabulka — басты бетке",
   "nav.language": "Тіл",
   "nav.country": "Ел",
+  "nav.language.choose": "Сайт тілі",
+  "nav.language.hint": "«{country}» үшін қолжетімді тілдер. Елді беттің төменгі жағында өзгертуге болады.",
+  "nav.country.choose": "Елді таңдаңыз",
+  "nav.country.hint": "Бағалар, сайт пен кітап тілдері және баспа кітапты жеткізу елге байланысты.",
+  "nav.country.search": "Елді іздеу",
+  "nav.country.empty": "Мұндай ел тізімде жоқ — «Басқа ел» дегенді таңдаңыз.",
 
   "auth.login": "Кіру",
   "auth.account": "Аккаунт",
@@ -711,24 +743,6 @@ const kk: Messages = {
   "landing.pricing.print.delivery": "Тегін жеткізу: {cities}; басқа қалаларға — {fee}",
 
   "landing.faq.title": "Сұрақтар мен жауаптар",
-  "landing.faq.time.q": "Кітапты қанша күту керек?",
-  "landing.faq.time.a":
-    "Әдетте үш минуттай: алдымен ертегі жазылады, содан кейін кейіпкер мен беттер салынады. Барысы кітап бетінде көрінеді, дайын кітапты бірден парақтап, PDF түрінде жүктеуге болады.",
-  "landing.faq.kazakh.q": "Кітапты қазақ тілінде жасауға бола ма?",
-  "landing.faq.kazakh.a":
-    "Иә. Кітап тілі формада таңдалады: қазақша, русский немесе English. Ертегі аударылмайды, бірден сол тілде жазылады.",
-  "landing.faq.data.q": "Баланың деректері не болады?",
-  "landing.faq.data.a":
-    "Деректер Қазақстандағы серверлерде сақталады. Біз балалардың фотосын сұрамаймыз: кейіпкер сипаттама бойынша салынады, ал фото тек ойыншық үшін, қаласаңыз ғана керек. Сұрауыңыз бойынша бәрін өшіреміз: hello@fabulka.com.",
-  "landing.faq.print.q": "Басылған кітапқа қалай тапсырыс беремін?",
-  "landing.faq.print.a":
-    "Дайын кітаптың бетінде «Басылған кітапқа тапсырыс» батырмасын басыңыз. Әзірге басып шығару тек Қазақстанда: Алматы мен Астанаға тегін, басқа қалаларға аз ақыға жеткіземіз.",
-  "landing.faq.account.q": "Тіркелу керек пе?",
-  "landing.faq.account.a":
-    "Жоқ. Кітаптар браузеріңізде, «Менің кітаптарым» бөлімінде сақталады. Каталогты ашып, ертегі таңдасаңыз жеткілікті.",
-  "landing.faq.dislike.q": "Кітап ұнамаса ше?",
-  "landing.faq.dislike.a":
-    "Жаңасын жасаңыз: жауаптарды, тақырыпты не әдістемені өзгертіңіз. Бірдеңе дұрыс болмаса, hello@fabulka.com поштасына жазыңыз — көмектесеміз.",
 
   "landing.final.title": "Балаңызға өзі туралы кітап сыйлаңыз",
   "landing.final.text": "Ертегіні таңдаңыз — бірнеше минуттан кейін ол дайын болады.",
@@ -922,9 +936,6 @@ const kk: Messages = {
   "region.title": "Сервис сіздің елде қолжетімсіз",
   "region.text": "Кітаптарды Meta модельдері жасайды, ал олардың ережелері кейбір елдерде сервисті ұсынуға рұқсат бермейді.",
 
-  "country.KZ": "Қазақстан",
-  "country.UZ": "Өзбекстан",
-  "country.KG": "Қырғызстан",
   "country.other": "Басқа ел",
 
   "notFound.text": "Мұндай бет жоқ. Мүмкін, ол әлі жазылмаған шығар?",
@@ -1188,8 +1199,10 @@ const kk: Messages = {
   "admin.journal.lastSeen": "соңғы рет {date}",
   "admin.journal.noErrors": "Бұл кезеңде пайдаланушыларда қате болмады",
   "admin.reference.title": "Анықтамалықтар",
-  "admin.reference.lead": "Бағалар, жеткізу қалалары және бұғатталған елдер. Өзгерістер сайтта бірден көрінеді және жаңа сатып алулар мен тапсырыстарға қолданылады.",
+  "admin.reference.lead": "Бағалар, елдер, басты беттегі сұрақтар, жеткізу қалалары және бұғатталған елдер. Өзгерістер сайтта бірден көрінеді және жаңа сатып алулар мен тапсырыстарға қолданылады.",
   "admin.reference.tab.prices": "Бағалар",
+  "admin.reference.tab.countries": "Елдер",
+  "admin.reference.tab.faq": "Сұрақтар (FAQ)",
   "admin.reference.tab.cities": "Қалалар",
   "admin.reference.tab.blocked": "Елдерді бұғаттау",
   "admin.reference.books": "Электрондық кітаптар",
@@ -1231,6 +1244,42 @@ const kk: Messages = {
   "admin.reference.error.country": "ISO 3166 бойынша екі әріпті ел коды керек, мысалы NL",
   "admin.reference.error.countryMeta": "Бұл ел Meta ережелері бойынша бұғатталған",
   "admin.reference.error.countryDuplicate": "Бұл ел тізімде бар",
+  "admin.reference.countries.hint": "Сайттағы тізімдегі елдер, осы ретпен. Сайт пен кітап тілдері (біріншісі — әдепкі тіл), баға валютасы және баспа елге байланысты.",
+  "admin.reference.country.languages": "Тілдер",
+  "admin.reference.country.default": "әдепкі",
+  "admin.reference.country.makeDefault": "«{language}» тілін әдепкі ету",
+  "admin.reference.country.currency": "Валюта",
+  "admin.reference.country.print": "Баспа және жеткізу",
+  "admin.reference.country.up": "Жоғары",
+  "admin.reference.country.down": "Төмен",
+  "admin.reference.country.remove": "{country} алып тастау",
+  "admin.reference.country.pick": "Елді таңдаңыз",
+  "admin.reference.country.add": "Ел қосу",
+  "admin.reference.country.blocked": "Бұғатталған — сайтта көрсетілмейді",
+  "admin.reference.other.title": "Басқа ел",
+  "admin.reference.other.text": "Тізімде жоқ барлық елдер: ағылшын және орыс тілдері, бағалар долларда, баспасыз. Сайттағы тізімнің әрқашан соңында.",
+  "admin.reference.error.countriesEmpty": "Кемінде бір ел қажет",
+  "admin.reference.error.languages": "Кемінде бір тіл қажет",
+  "admin.reference.error.countryBlocked": "Бұл ел «Елдерді бұғаттау» бетінде бұғатталған — алдымен бұғаттан шығарыңыз",
+  "admin.reference.faq.hint": "Басты беттегі сұрақтар мен жауаптар, осы ретпен. Орыс және ағылшын тілдері міндетті; тілге аударма болмаса, орысша, содан кейін ағылшынша көрсетіледі. Бағалар мен қалаларды алмастырғыштармен жазған дұрыс — олар келушінің елі бойынша анықтамалықтардан толтырылады: {placeholders}.",
+  "admin.reference.faq.question": "Сұрақ",
+  "admin.reference.faq.answer": "Жауап",
+  "admin.reference.faq.optional": "міндетті емес",
+  "admin.reference.faq.audience": "Қай жерде көрсету",
+  "admin.reference.faq.audience.all": "Барлық елдерде",
+  "admin.reference.faq.audience.only": "Тек таңдалған елдерде",
+  "admin.reference.faq.audience.except": "Таңдалған елдерден басқа барлық жерде",
+  "admin.reference.faq.everywhere": "Барлық елдер",
+  "admin.reference.faq.only": "Тек: {countries}",
+  "admin.reference.faq.except": "Мыналардан басқа: {countries}",
+  "admin.reference.faq.published": "Жарияланған",
+  "admin.reference.faq.draft": "Жоба",
+  "admin.reference.faq.untitled": "Жаңа сұрақ",
+  "admin.reference.faq.add": "Сұрақ қосу",
+  "admin.reference.faq.remove": "Сұрақты жою",
+  "admin.reference.error.faqQuestion": "Сұрақ қажет, 200 таңбаға дейін",
+  "admin.reference.error.faqAnswer": "Жауап қажет, 1500 таңбаға дейін",
+  "admin.reference.error.faqCountries": "Кемінде бір елді таңдаңыз",
 };
 
 const en: Messages = {
@@ -1240,6 +1289,12 @@ const en: Messages = {
   "nav.home": "Fabulka home",
   "nav.language": "Language",
   "nav.country": "Country",
+  "nav.language.choose": "Site language",
+  "nav.language.hint": "Languages offered for {country}. You can change the country at the bottom of the page.",
+  "nav.country.choose": "Choose your country",
+  "nav.country.hint": "Prices, the languages of the site and books, and printed book delivery depend on the country.",
+  "nav.country.search": "Search countries",
+  "nav.country.empty": "This country is not on the list — choose “Another country”.",
 
   "auth.login": "Sign in",
   "auth.account": "Account",
@@ -1326,24 +1381,6 @@ const en: Messages = {
   "landing.pricing.print.delivery": "Free delivery: {cities}; {fee} to other cities",
 
   "landing.faq.title": "Questions and answers",
-  "landing.faq.time.q": "How long does it take?",
-  "landing.faq.time.a":
-    "Usually about three minutes: first the story is written, then the hero and the pages are drawn. You can watch the progress on the book's page, then read the finished book or download the PDF right away.",
-  "landing.faq.kazakh.q": "Can I make a book in Kazakh?",
-  "landing.faq.kazakh.a":
-    "Yes. You choose the book's language in the form: қазақша, русский or English. The story is written in that language, not translated.",
-  "landing.faq.data.q": "What happens to my child's data?",
-  "landing.faq.data.a":
-    "It is stored on servers in Kazakhstan. We never ask for photos of children: the hero is drawn from a description, and a photo is only needed for the toy, if you want one. We delete everything on request at hello@fabulka.com.",
-  "landing.faq.print.q": "How do I get a printed book?",
-  "landing.faq.print.a":
-    "On the finished book's page, press “Order a printed book”. Printing is available in Kazakhstan only for now: free delivery to Almaty and Astana, a small fee to other cities.",
-  "landing.faq.account.q": "Do I need to sign up?",
-  "landing.faq.account.a":
-    "No. Your books are kept in your browser under “My books”. Just open the catalog and choose a story.",
-  "landing.faq.dislike.q": "What if I don't like the book?",
-  "landing.faq.dislike.a":
-    "Make another one: change the answers, the topic or the method. If something went wrong, write to hello@fabulka.com and we'll sort it out.",
 
   "landing.final.title": "Give your child a book about themselves",
   "landing.final.text": "Choose a story, and in a few minutes it's ready.",
@@ -1537,9 +1574,6 @@ const en: Messages = {
   "region.title": "Fabulka is not available in your country",
   "region.text": "Books are made with Meta's models, and their rules do not allow offering the service in some countries.",
 
-  "country.KZ": "Kazakhstan",
-  "country.UZ": "Uzbekistan",
-  "country.KG": "Kyrgyzstan",
   "country.other": "Another country",
 
   "notFound.text": "This page doesn't exist. Maybe it hasn't been written yet?",
@@ -1803,8 +1837,10 @@ const en: Messages = {
   "admin.journal.lastSeen": "last seen {date}",
   "admin.journal.noErrors": "No visitor errors in this period",
   "admin.reference.title": "Reference data",
-  "admin.reference.lead": "Prices, delivery cities and blocked countries. Changes show on the site at once and apply to new purchases and orders.",
+  "admin.reference.lead": "Prices, countries, home page questions, delivery cities and blocked countries. Changes show on the site at once and apply to new purchases and orders.",
   "admin.reference.tab.prices": "Prices",
+  "admin.reference.tab.countries": "Countries",
+  "admin.reference.tab.faq": "FAQ",
   "admin.reference.tab.cities": "Cities",
   "admin.reference.tab.blocked": "Blocked countries",
   "admin.reference.books": "Digital books",
@@ -1846,6 +1882,42 @@ const en: Messages = {
   "admin.reference.error.country": "Use a two-letter ISO 3166 country code, e.g. NL",
   "admin.reference.error.countryMeta": "Meta’s policy blocks this country already",
   "admin.reference.error.countryDuplicate": "This country is listed already",
+  "admin.reference.countries.hint": "Countries listed on the site, in this order. The country sets the languages of the site and books (the first is the default), the price currency and print.",
+  "admin.reference.country.languages": "Languages",
+  "admin.reference.country.default": "default",
+  "admin.reference.country.makeDefault": "Make {language} the default language",
+  "admin.reference.country.currency": "Currency",
+  "admin.reference.country.print": "Print and delivery",
+  "admin.reference.country.up": "Up",
+  "admin.reference.country.down": "Down",
+  "admin.reference.country.remove": "Remove {country}",
+  "admin.reference.country.pick": "Choose a country",
+  "admin.reference.country.add": "Add country",
+  "admin.reference.country.blocked": "Blocked — not shown on the site",
+  "admin.reference.other.title": "Another country",
+  "admin.reference.other.text": "Every country not on the list: English and Russian, prices in dollars, no print. Always last in the site's list.",
+  "admin.reference.error.countriesEmpty": "At least one country is needed",
+  "admin.reference.error.languages": "At least one language is needed",
+  "admin.reference.error.countryBlocked": "This country is blocked on the “Blocked countries” tab — unblock it first",
+  "admin.reference.faq.hint": "Questions and answers on the home page, in this order. Russian and English are required; a language without a translation shows the Russian text, then the English one. Write prices and cities as placeholders — they are filled from the reference data for the visitor's country: {placeholders}.",
+  "admin.reference.faq.question": "Question",
+  "admin.reference.faq.answer": "Answer",
+  "admin.reference.faq.optional": "optional",
+  "admin.reference.faq.audience": "Where to show",
+  "admin.reference.faq.audience.all": "In every country",
+  "admin.reference.faq.audience.only": "Only in the chosen countries",
+  "admin.reference.faq.audience.except": "Everywhere except the chosen countries",
+  "admin.reference.faq.everywhere": "All countries",
+  "admin.reference.faq.only": "Only: {countries}",
+  "admin.reference.faq.except": "Except: {countries}",
+  "admin.reference.faq.published": "Published",
+  "admin.reference.faq.draft": "Draft",
+  "admin.reference.faq.untitled": "New question",
+  "admin.reference.faq.add": "Add question",
+  "admin.reference.faq.remove": "Delete question",
+  "admin.reference.error.faqQuestion": "A question is needed, up to 200 characters",
+  "admin.reference.error.faqAnswer": "An answer is needed, up to 1500 characters",
+  "admin.reference.error.faqCountries": "Choose at least one country",
 };
 
 export const MESSAGES: Record<UiLocale, Messages> = { ru, kk, en };

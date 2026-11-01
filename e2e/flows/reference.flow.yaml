@@ -1,5 +1,7 @@
 # Reference data in the admin («Справочники»): the owner changes the catalog book price without
-# touching code, and the book page and the checkout use it; adds a delivery city; blocks one more
+# touching code, and the book page and the checkout use it; adds a delivery city; adds a country to
+# the site's list and takes it off again (a Meta-blocked one is refused); edits the home page FAQ
+# and adds a question for Uzbekistan only; blocks one more
 # country on top of Meta's list, which stays read-only and can never be unblocked. Everything is
 # put back afterwards, so the flows that check «1 900 ₸» keep passing.
 appId: ${WEB}
@@ -98,6 +100,114 @@ commands:
       readOnly: true
       assert: { rows: 1, first: { price: 2450 } }
 
+  # Countries: Portugal added with English first, offered on the site, then taken off again.
+  - openLink: "${WEB}/admin/reference?lang=ru"
+  - waitForVisible: { testId: reference-tabs }
+  - tapOn: { testId: reference-tab-countries }
+  - waitForVisible: { testId: reference-countries }
+  - assertVisible: { css: "[data-testid=country-row][data-code=KZ]" }
+  - assertVisible: { testId: country-other }
+  - selectOption: { testId: country-add-select, optionValue: PT }
+  - tapOn: { testId: country-add }
+  - waitForVisible: { css: "[data-testid=country-row][data-code=PT]" }
+  - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-default-en]" }
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-saved }
+  - request:
+      url: ${API}/reference
+      assert:
+        status: 200
+        json: { "$.countries[0].code": KZ, "$.countries[19].code": PT, "$.countries[19].languages[0]": en, "$.countries[19].currency": USD }
+  - openLink: "${WEB}/catalog?lang=ru"
+  - waitForVisible: { testId: template-first-day-kindergarten }
+  - tapOn: { testId: ui-country }
+  - tapOn: { testId: ui-country-search }
+  - inputText: "Португ"
+  - waitForVisible: { testId: ui-country-option-PT }
+  - tapOn: { testId: ui-country-option-PT }
+  - waitForVisible: { testId: ui-country, contains: "Португалия" }
+  # English is Portugal's default, so the Russian interface stays only because Portugal offers it.
+  - tapOn: { testId: ui-language }
+  - waitForVisible: { testId: ui-language-option-ru }
+  - assertNotVisible: { testId: ui-language-option-kk }
+  - pressKey: escape
+  # A Meta-blocked country can never be offered, not even through the API.
+  - request:
+      method: POST
+      url: ${API}/admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: PUT
+      url: ${API}/admin/reference/countries
+      json:
+        - { code: KZ, languages: [kk, ru, en], currency: KZT, print: true }
+        - { code: RU, languages: [ru], currency: USD, print: false }
+      assert: { status: 400, json: { "$.code": country_policy_blocked, "$.countries[0]": RU } }
+  # Taken off in the admin: the site no longer offers it, and a visitor who chose it is "other".
+  - openLink: "${WEB}/admin/reference?lang=ru"
+  - waitForVisible: { testId: reference-tabs }
+  - tapOn: { testId: reference-tab-countries }
+  - waitForVisible: { css: "[data-testid=country-row][data-code=PT]" }
+  - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-remove]" }
+  - assertNotVisible: { css: "[data-testid=country-row][data-code=PT]" }
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-saved }
+  - openLink: "${WEB}/catalog?lang=ru"
+  - waitForVisible: { testId: template-first-day-kindergarten }
+  - waitForVisible: { testId: ui-country, contains: "Другая страна" }
+  - tapOn: { testId: ui-country }
+  - tapOn: { testId: ui-country-search }
+  - inputText: "Португ"
+  - waitForVisible: { contains: "Такой страны нет в списке" }
+  - assertNotVisible: { testId: ui-country-option-PT }
+  - pressKey: escape
+
+  # FAQ: an answer edited and a question for Uzbekistan only, both on the home page.
+  - openLink: "${WEB}/admin/reference?lang=ru"
+  - waitForVisible: { testId: reference-tabs }
+  - tapOn: { testId: reference-tab-faq }
+  - waitForVisible: { testId: reference-faq }
+  - tapOn: { css: "[data-testid=faq-row][data-id=account] [data-testid=faq-toggle]" }
+  - tapOn: { css: "[data-testid=faq-row][data-id=account] [data-testid=faq-a-ru]" }
+  - eraseText
+  - inputText: "Нет, регистрация не нужна: книги ждут вас в разделе «Мои книги»."
+  - tapOn: { testId: faq-add }
+  - tapOn: { css: "[data-testid=faq-row]:last-child [data-testid=faq-q-ru]" }
+  - inputText: "Есть ли подарочная упаковка?"
+  - tapOn: { css: "[data-testid=faq-row]:last-child [data-testid=faq-a-ru]" }
+  - inputText: "Пока нет, но мы над этим думаем."
+  # English is required too: pointed out, nothing saved.
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-error, contains: "Нужен вопрос" }
+  - tapOn: { css: "[data-testid=faq-row]:last-child [data-testid=faq-q-en]" }
+  - inputText: "Is there gift wrapping?"
+  - tapOn: { css: "[data-testid=faq-row]:last-child [data-testid=faq-a-en]" }
+  - inputText: "Not yet, but we are thinking about it."
+  - selectOption: { css: "[data-testid=faq-row]:last-child [data-testid=faq-audience]", optionValue: only }
+  - tapOn: { css: "[data-testid=faq-row]:last-child [data-testid=faq-country-UZ]" }
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-saved }
+  - assertNotVisible: { testId: reference-error }
+  - openLink: "${WEB}/?lang=ru"
+  - waitForVisible: { testId: hero-covers }
+  - tapOn: "Нужно ли регистрироваться?"
+  - waitForVisible: { contains: "Нет, регистрация не нужна: книги ждут вас" }
+  - assertNotVisible: "Есть ли подарочная упаковка?"
+  # In Uzbekistan the new question shows, in English too since it has an English text.
+  - tapOn: { testId: nav-catalog }
+  - waitForVisible: { testId: template-first-day-kindergarten }
+  - tapOn: { testId: ui-country }
+  - tapOn: { testId: ui-country-option-UZ }
+  - waitForVisible: { testId: ui-country, contains: "Узбекистан" }
+  - tapOn: { testId: nav-home }
+  - waitForVisible: { testId: hero-covers }
+  - tapOn: "Есть ли подарочная упаковка?"
+  - waitForVisible: "Пока нет, но мы над этим думаем."
+  - tapOn: { testId: ui-language }
+  - tapOn: { testId: ui-language-option-en }
+  - waitForVisible: "Is there gift wrapping?"
+
   # Blocked countries: Meta's list is read-only, with nothing to remove.
   - openLink: "${WEB}/admin/reference?lang=ru"
   - waitForVisible: { testId: reference-tabs }
@@ -161,7 +271,10 @@ commands:
   - waitForVisible: { contains: "Дополнительных стран нет", childOf: { testId: blocked-extra } }
   - assertVisible: { css: "[data-testid=blocked-meta-row][data-code=RU]" }
 after:
-  # Today's prices, cities and no extra countries again, through the API so its cache is dropped.
+  # The seeded FAQ again: without its row the API serves the defaults once a save below drops its cache.
+  - sql: { exec: "delete from \"Setting\" where key = 'reference.faq'" }
+  # Today's prices, cities, countries and no extra countries again, through the API so its cache is
+  # dropped.
   - request:
       method: POST
       url: ${API}/admin/login
@@ -193,5 +306,29 @@ after:
       method: PUT
       url: ${API}/admin/reference/blocked
       json: { extra: [] }
+      assert: { status: 200 }
+  - request:
+      method: PUT
+      url: ${API}/admin/reference/countries
+      json:
+        - { code: KZ, languages: [kk, ru, en], currency: KZT, print: true }
+        - { code: UZ, languages: [ru, en], currency: USD, print: false }
+        - { code: KG, languages: [ru, en], currency: USD, print: false }
+        - { code: TJ, languages: [ru, en], currency: USD, print: false }
+        - { code: TM, languages: [ru, en], currency: USD, print: false }
+        - { code: AZ, languages: [ru, en], currency: USD, print: false }
+        - { code: AM, languages: [ru, en], currency: USD, print: false }
+        - { code: GE, languages: [ru, en], currency: USD, print: false }
+        - { code: MD, languages: [ru, en], currency: USD, print: false }
+        - { code: MN, languages: [ru, en], currency: USD, print: false }
+        - { code: TR, languages: [en, ru], currency: USD, print: false }
+        - { code: AE, languages: [en, ru], currency: USD, print: false }
+        - { code: IL, languages: [ru, en], currency: USD, print: false }
+        - { code: DE, languages: [en, ru], currency: USD, print: false }
+        - { code: PL, languages: [en, ru], currency: USD, print: false }
+        - { code: CZ, languages: [en, ru], currency: USD, print: false }
+        - { code: GB, languages: [en, ru], currency: USD, print: false }
+        - { code: US, languages: [en, ru], currency: USD, print: false }
+        - { code: CA, languages: [en, ru], currency: USD, print: false }
       assert: { status: 200 }
   - sql: { exec: "delete from \"Credit\" where \"clientKey\" = $1", params: ["${clientKey}"] }

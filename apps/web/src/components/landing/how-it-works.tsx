@@ -1,6 +1,5 @@
 "use client";
 
-import { COUNTRY_INFO } from "@fabulka/shared";
 import { Clock3, Library, MessageCircleHeart, Printer } from "lucide-react";
 import { motion } from "motion/react";
 import { useI18n } from "@/i18n/i18n";
@@ -8,7 +7,7 @@ import { Section } from "./section";
 
 /** From picking a story to a printed book, in four steps. */
 export function HowItWorks() {
-  const { t, country } = useI18n();
+  const { t, info } = useI18n();
   const steps = [
     { icon: Library, title: t("landing.how.choose.title"), text: t("landing.how.choose.text") },
     { icon: MessageCircleHeart, title: t("landing.how.tell.title"), text: t("landing.how.tell.text") },
@@ -17,7 +16,7 @@ export function HowItWorks() {
       icon: Printer,
       title: t("landing.how.print.title"),
       // Print is only in Kazakhstan; elsewhere the step says so instead of promising delivery.
-      text: t(COUNTRY_INFO[country].print ? "landing.how.print.text" : "landing.how.print.elsewhere"),
+      text: t(info.print ? "landing.how.print.text" : "landing.how.print.elsewhere"),
     },
   ];
   return (

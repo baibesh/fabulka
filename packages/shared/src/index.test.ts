@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  COUNTRIES,
-  COUNTRY_INFO,
+  CountriesSchema,
+  DEFAULT_COUNTRIES,
+  DEFAULT_FAQ,
+  FaqSchema,
+  countryInfo,
+  faqFor,
+  fillFaq,
+  localized,
+  localizedTextSchema,
   ChildProfileSchema,
   ClientErrorReportSchema,
   CreateBookSchema,
@@ -205,42 +212,120 @@ describe("methodologies", () => {
 });
 
 describe("countries", () => {
+  const list = DEFAULT_COUNTRIES;
+
   it("maps the visitor's IP country onto ours", () => {
-    expect(countryFromIp("KZ")).toBe("KZ");
-    expect(countryFromIp("uz")).toBe("UZ");
-    expect(countryFromIp("KG")).toBe("KG");
-    expect(countryFromIp("DE")).toBe("other");
-    expect(countryFromIp("other")).toBe("other");
-    expect(countryFromIp(null)).toBe("KZ");
+    expect(countryFromIp("KZ", list)).toBe("KZ");
+    expect(countryFromIp("uz", list)).toBe("UZ");
+    expect(countryFromIp("KG", list)).toBe("KG");
+    expect(countryFromIp("DE", list)).toBe("DE");
+    expect(countryFromIp("NL", list)).toBe("other");
+    expect(countryFromIp("other", list)).toBe("other");
+    expect(countryFromIp(null, list)).toBe("KZ");
+  });
+
+  it("follows the owner's list: an unlisted country is other, no country the first listed", () => {
+    const owners = [{ code: "UZ", languages: ["ru" as const], currency: "USD" as const, print: false }];
+    expect(countryFromIp("KZ", owners)).toBe("other");
+    expect(countryFromIp(null, owners)).toBe("UZ");
+    expect(countryFromIp(null, [])).toBe("other");
+    expect(countryInfo("KZ", owners)).toEqual({ languages: ["en", "ru"], currency: "USD", print: false });
   });
 
   it("never lists Russia or Belarus, and prints only in Kazakhstan", () => {
-    expect(COUNTRIES).not.toContain("RU");
-    expect(COUNTRIES).not.toContain("BY");
-    expect(COUNTRIES.filter((c) => COUNTRY_INFO[c].print)).toEqual(["KZ"]);
+    const codes = list.map((c) => c.code);
+    expect(codes).not.toContain("RU");
+    expect(codes).not.toContain("BY");
+    expect(list.filter((c) => c.print).map((c) => c.code)).toEqual(["KZ"]);
+    expect(countryInfo("other", list).print).toBe(false);
+    expect(CountriesSchema.safeParse(list).success).toBe(true);
   });
 
   it("offers Kazakh only in Kazakhstan and falls back to the country's first language", () => {
-    expect(languageFor("KZ", "kk")).toBe("kk");
-    expect(languageFor("UZ", "kk")).toBe("ru");
-    expect(languageFor("KG", "en")).toBe("en");
-    expect(languageFor("other", "kk")).toBe("en");
-    expect(languageFor("other", "ru")).toBe("ru");
+    expect(languageFor("KZ", "kk", list)).toBe("kk");
+    expect(languageFor("UZ", "kk", list)).toBe("ru");
+    expect(languageFor("KG", "en", list)).toBe("en");
+    expect(languageFor("DE", "kk", list)).toBe("en");
+    expect(languageFor("other", "kk", list)).toBe("en");
+    expect(languageFor("other", "ru", list)).toBe("ru");
+    expect(list.filter((c) => c.languages.includes("kk")).map((c) => c.code)).toEqual(["KZ"]);
+  });
+
+  it("checks the owner's list", () => {
+    const kz = list[0];
+    expect(CountriesSchema.parse([{ ...kz, code: " kz " }])[0].code).toBe("KZ");
+    expect(CountriesSchema.safeParse([]).success).toBe(false);
+    expect(CountriesSchema.safeParse([kz, kz]).success).toBe(false);
+    expect(CountriesSchema.safeParse([{ ...kz, code: "XX" }]).success).toBe(false);
+    expect(CountriesSchema.safeParse([{ ...kz, languages: [] }]).success).toBe(false);
+    expect(CountriesSchema.safeParse([{ ...kz, languages: ["ru", "ru"] }]).success).toBe(false);
+    expect(CountriesSchema.safeParse([{ ...kz, languages: ["de"] }]).success).toBe(false);
+    expect(CountriesSchema.safeParse([{ ...kz, currency: "EUR" }]).success).toBe(false);
+  });
+});
+
+describe("localized texts", () => {
+  it("falls back from the asked language to Russian, then English", () => {
+    expect(localized({ ru: "Привет", kk: "Сәлем", en: "Hi" }, "kk")).toBe("Сәлем");
+    expect(localized({ ru: "Привет", en: "Hi" }, "kk")).toBe("Привет");
+    expect(localized({ en: "Hi" }, "kk")).toBe("Hi");
+  });
+
+  it("requires the base languages and drops empty optional ones", () => {
+    const schema = localizedTextSchema(20);
+    expect(schema.parse({ ru: " а ", en: "b", kk: "  " })).toEqual({ ru: "а", en: "b" });
+    expect(schema.safeParse({ ru: "а", kk: "ә" }).success).toBe(false);
+    expect(schema.safeParse({ ru: "а", en: "b", de: "c" }).success).toBe(false);
+    expect(schema.safeParse({ ru: "а".repeat(21), en: "b" }).success).toBe(false);
+  });
+});
+
+describe("FAQ", () => {
+  const ids = (country: string) => faqFor(DEFAULT_FAQ, country).map((item) => item.id);
+
+  it("seeds valid entries, with print and prices told apart for Kazakhstan", () => {
+    expect(FaqSchema.safeParse(DEFAULT_FAQ).success).toBe(true);
+    expect(ids("KZ")).toEqual(["time", "kazakh", "price-kz", "data", "print-kz", "account", "dislike"]);
+    expect(ids("UZ")).toEqual(["time", "languages", "price-abroad", "data", "print-abroad", "account", "dislike"]);
+    expect(ids("other")).toEqual(ids("UZ"));
+  });
+
+  it("shows only published entries, for the countries picked", () => {
+    const base = DEFAULT_FAQ[0];
+    const items = [
+      { ...base, id: "a", countries: ["other"] },
+      { ...base, id: "b", published: false },
+      { ...base, id: "c", countries: ["UZ", "KG"] },
+    ];
+    expect(faqFor(items, "other").map((i) => i.id)).toEqual(["a"]);
+    expect(faqFor(items, "KG").map((i) => i.id)).toEqual(["c"]);
+  });
+
+  it("checks ids, countries and the leave-out list", () => {
+    const base = DEFAULT_FAQ[0];
+    expect(FaqSchema.safeParse([base, base]).success).toBe(false);
+    expect(FaqSchema.safeParse([{ ...base, countries: ["XX"] }]).success).toBe(false);
+    expect(FaqSchema.safeParse([{ ...base, countries: [], excludeCountries: true }]).success).toBe(false);
+    expect(FaqSchema.safeParse([{ ...base, id: "Bad Id" }]).success).toBe(false);
+  });
+
+  it("fills placeholders and leaves unknown ones", () => {
+    expect(fillFaq("от {templatePrice}, {nope}", { templatePrice: "$3.90" })).toBe("от $3.90, {nope}");
   });
 });
 
 describe("book prices", () => {
   it("charges less for a catalog book than for a story of your own", () => {
-    expect(bookPrice("template", "KZ", DEFAULT_PRICES)).toEqual({ amount: 1900, currency: "KZT" });
-    expect(bookPrice("custom", "KZ", DEFAULT_PRICES)).toEqual({ amount: 2900, currency: "KZT" });
-    expect(bookPrice("template", "UZ", DEFAULT_PRICES)).toEqual({ amount: 3.9, currency: "USD" });
-    expect(bookPrice("custom", "other", DEFAULT_PRICES)).toEqual({ amount: 5.9, currency: "USD" });
+    expect(bookPrice("template", "KZ", DEFAULT_PRICES, DEFAULT_COUNTRIES)).toEqual({ amount: 1900, currency: "KZT" });
+    expect(bookPrice("custom", "KZ", DEFAULT_PRICES, DEFAULT_COUNTRIES)).toEqual({ amount: 2900, currency: "KZT" });
+    expect(bookPrice("template", "UZ", DEFAULT_PRICES, DEFAULT_COUNTRIES)).toEqual({ amount: 3.9, currency: "USD" });
+    expect(bookPrice("custom", "other", DEFAULT_PRICES, DEFAULT_COUNTRIES)).toEqual({ amount: 5.9, currency: "USD" });
   });
 
   it("uses the prices it is given", () => {
     const prices = { ...DEFAULT_PRICES, books: { ...DEFAULT_PRICES.books, template: { KZT: 2500, USD: 4.5 } } };
-    expect(bookPrice("template", "KZ", prices)).toEqual({ amount: 2500, currency: "KZT" });
-    expect(bookPrice("template", "KG", prices)).toEqual({ amount: 4.5, currency: "USD" });
+    expect(bookPrice("template", "KZ", prices, DEFAULT_COUNTRIES)).toEqual({ amount: 2500, currency: "KZT" });
+    expect(bookPrice("template", "KG", prices, DEFAULT_COUNTRIES)).toEqual({ amount: 4.5, currency: "USD" });
   });
 
   it("takes only a known kind of book to buy", () => {

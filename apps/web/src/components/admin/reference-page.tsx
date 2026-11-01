@@ -2,31 +2,48 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  COUNTRY_BLOCKED,
   COUNTRY_POLICY_BLOCKED,
+  CURRENCIES,
   CitiesSchema,
+  CountriesSchema,
   CountryCodeSchema,
+  BASE_LANGUAGES,
+  FAQ_PLACEHOLDERS,
+  FaqSchema,
+  ISO_COUNTRY_CODES,
+  LANGUAGES,
+  LANGUAGE_NAMES,
+  OTHER_COUNTRY,
   PricesSchema,
+  localized,
   type AdminReference,
   type BlockedCountries,
   type City,
+  type CountryEntry,
+  type FaqItem,
+  type Language,
+  type LocalizedText,
   type Prices,
 } from "@fabulka/shared";
 import { ArrowDown, ArrowUp, ExternalLink, Plus, Save, Trash2, X } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { intlLocale } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
-import { adminReference, saveBlocked, saveCities, savePrices } from "@/lib/admin-api";
+import { adminReference, saveBlocked, saveCities, saveCountries, saveFaq, savePrices } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
+import { regionName } from "@/lib/regions";
+import { Flag } from "../flag";
 import { button, Card, ghostButton, input, PageTitle, useAdminI18n } from "./ui";
 
-const TABS = ["prices", "cities", "blocked"] as const;
+const TABS = ["prices", "countries", "faq", "cities", "blocked"] as const;
 type Tab = (typeof TABS)[number];
 
 const label = "flex flex-col gap-1.5 text-sm font-semibold";
 const errorText = "text-sm font-normal text-red-600";
 const QUERY = ["admin", "reference"];
 
-/** /admin/reference: prices, delivery cities and blocked countries, edited without touching code. */
+/** /admin/reference: prices, countries, the landing's FAQ, delivery cities and blocked countries, edited without touching code. */
 export function ReferencePage() {
   const { t } = useAdminI18n();
   const [tab, setTab] = useState<Tab>("prices");
@@ -49,6 +66,10 @@ export function ReferencePage() {
         !reference.isError && <p className="text-muted">{t("admin.loading")}</p>
       ) : tab === "prices" ? (
         <PricesTab initial={reference.data.prices} />
+      ) : tab === "countries" ? (
+        <CountriesTab initial={reference.data.countries} blocked={reference.data.blocked} />
+      ) : tab === "faq" ? (
+        <FaqTab initial={reference.data.faq} countries={reference.data.countries} />
       ) : tab === "cities" ? (
         <CitiesTab initial={reference.data.cities} />
       ) : (
@@ -58,7 +79,7 @@ export function ReferencePage() {
   );
 }
 
-/** Puts a saved part into the admin's copy and makes the site load the new prices and cities. */
+/** Puts a saved part into the admin's copy and makes the site load the new prices, countries and cities. */
 function useSaved() {
   const queryClient = useQueryClient();
   return (patch: Partial<AdminReference>) => {
@@ -216,6 +237,448 @@ function PricesTab({ initial }: { initial: Prices }) {
   );
 }
 
+// ---- Countries -------------------------------------------------------------------------------
+
+/** A country in the form, with a key that stays put while rows move. */
+type CountryDraft = CountryEntry & { key: number };
+const withCountryKey = (country: CountryEntry): CountryDraft => ({ ...country, key: nextKey++ });
+
+function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; blocked: BlockedCountries }) {
+  const { t, locale } = useAdminI18n();
+  const countryName = useCountryName();
+  const saved = useSaved();
+  const [rows, setRows] = useState(() => initial.map(withCountryKey));
+  const [pick, setPick] = useState("");
+  const [problems, setProblems] = useState<Record<string, string>>({});
+  const meta = new Set(blocked.meta.map((c) => c.code));
+  const extra = new Set(blocked.extra);
+  // Only countries that may be offered: never one on Meta's list or the owner's.
+  const available = ISO_COUNTRY_CODES.filter((code) => !meta.has(code) && !extra.has(code) && !rows.some((row) => row.code === code))
+    .map((code) => ({ code, name: countryName(code) }))
+    .sort((a, b) => a.name.localeCompare(b.name, intlLocale(locale)));
+  const save = useMutation({
+    mutationFn: async (next: CountryDraft[]) => {
+      const parsed = CountriesSchema.safeParse(next.map(({ code, languages, currency, print }) => ({ code, languages, currency, print })));
+      setProblems(parsed.success ? {} : issuesByPath(parsed.error.issues));
+      return parsed.success ? saveCountries(parsed.data) : null;
+    },
+    onSuccess: (countries) => {
+      if (!countries) return;
+      saved({ countries });
+      setRows(countries.map(withCountryKey));
+    },
+  });
+  const refused = save.error instanceof ApiError ? save.error.code : null;
+  const saveError =
+    refused === COUNTRY_POLICY_BLOCKED
+      ? new Error(t("admin.reference.error.countryMeta"))
+      : refused === COUNTRY_BLOCKED
+        ? new Error(t("admin.reference.error.countryBlocked"))
+        : save.error;
+
+  const update = (index: number, patch: (row: CountryDraft) => Partial<CountryEntry>) =>
+    setRows((list) => list.map((row, i) => (i === index ? { ...row, ...patch(row) } : row)));
+  const toggleLanguage = (index: number, language: Language) =>
+    update(index, (row) => ({
+      languages: row.languages.includes(language) ? row.languages.filter((l) => l !== language) : [...row.languages, language],
+    }));
+  const makeDefault = (index: number, language: Language) =>
+    update(index, (row) => ({ languages: [language, ...row.languages.filter((l) => l !== language)] }));
+  const move = (index: number, by: -1 | 1) =>
+    setRows((list) => {
+      const next = [...list];
+      [next[index], next[index + by]] = [next[index + by], next[index]];
+      return next;
+    });
+  // Problems point at row indexes: moving or removing rows makes them stale, so they are cleared.
+  const reshape = (change: () => void) => {
+    change();
+    setProblems({});
+  };
+  const add = () => {
+    if (!pick) return;
+    setRows((list) => [...list, withCountryKey({ code: pick, languages: ["ru", "en"], currency: "USD", print: false })]);
+    setPick("");
+  };
+
+  return (
+    <form
+      data-testid="reference-countries"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate(rows);
+      }}
+      className="flex flex-col gap-4"
+    >
+      <Card>
+        <p className="text-sm text-muted">{t("admin.reference.countries.hint")}</p>
+        {problems[""] && <p className={errorText}>{t("admin.reference.error.countriesEmpty")}</p>}
+        <ol className="flex flex-col gap-3">
+          {rows.map((country, i) => {
+            const name = countryName(country.code);
+            const isBlocked = meta.has(country.code) || extra.has(country.code);
+            return (
+              <li key={country.key} data-testid="country-row" data-code={country.code} className="flex flex-col gap-3 rounded-xl bg-background p-3 lg:flex-row lg:items-center">
+                <span className="hidden w-6 text-right text-sm font-bold text-muted lg:block">{i + 1}</span>
+                <div className="flex min-w-48 items-center gap-2 font-semibold">
+                  <Flag code={country.code} className="text-lg" />
+                  <span>{name}</span>
+                  <span className="font-mono text-xs font-bold text-muted">{country.code}</span>
+                </div>
+                <fieldset className="flex flex-1 flex-col gap-1">
+                  <legend className="sr-only">{t("admin.reference.country.languages")}</legend>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {LANGUAGES.map((language) => {
+                      const on = country.languages.includes(language);
+                      const isDefault = country.languages[0] === language;
+                      return (
+                        <span key={language} className="flex items-center gap-1.5 text-sm">
+                          <label className="flex items-center gap-1.5">
+                            <input type="checkbox" data-testid={`country-lang-${language}`} checked={on} onChange={() => toggleLanguage(i, language)} />
+                            {LANGUAGE_NAMES[language]}
+                          </label>
+                          <input
+                            type="radio"
+                            name={`country-default-${country.key}`}
+                            data-testid={`country-default-${language}`}
+                            aria-label={t("admin.reference.country.makeDefault", { language: LANGUAGE_NAMES[language] })}
+                            title={t("admin.reference.country.makeDefault", { language: LANGUAGE_NAMES[language] })}
+                            checked={isDefault}
+                            disabled={!on}
+                            onChange={() => makeDefault(i, language)}
+                          />
+                          {isDefault && <span className="text-xs text-muted">{t("admin.reference.country.default")}</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {problems[`${i}.languages`] && (
+                    <span data-testid="reference-error" className={errorText}>
+                      {t("admin.reference.error.languages")}
+                    </span>
+                  )}
+                  {isBlocked && (
+                    <span data-testid="country-blocked" className="text-xs font-semibold text-red-600">
+                      {t("admin.reference.country.blocked")}
+                    </span>
+                  )}
+                </fieldset>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="text-muted">{t("admin.reference.country.currency")}</span>
+                    <select
+                      data-testid="country-currency"
+                      value={country.currency}
+                      onChange={(e) => update(i, () => ({ currency: e.target.value as CountryEntry["currency"] }))}
+                      className="rounded-lg border border-border bg-card px-2 py-1"
+                    >
+                      {CURRENCIES.map((currency) => (
+                        <option key={currency} value={currency}>
+                          {currency}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm whitespace-nowrap">
+                    <input type="checkbox" data-testid="country-print" checked={country.print} onChange={(e) => update(i, () => ({ print: e.target.checked }))} />
+                    {t("admin.reference.country.print")}
+                  </label>
+                  <div className="flex gap-1">
+                    <IconButton testId="country-up" label={t("admin.reference.country.up")} disabled={i === 0} onClick={() => reshape(() => move(i, -1))}>
+                      <ArrowUp className="size-4" />
+                    </IconButton>
+                    <IconButton testId="country-down" label={t("admin.reference.country.down")} disabled={i === rows.length - 1} onClick={() => reshape(() => move(i, 1))}>
+                      <ArrowDown className="size-4" />
+                    </IconButton>
+                    <IconButton
+                      testId="country-remove"
+                      label={t("admin.reference.country.remove", { country: name })}
+                      onClick={() => reshape(() => setRows((list) => list.filter((_, j) => j !== i)))}
+                      className="text-red-600"
+                    >
+                      <Trash2 className="size-4" />
+                    </IconButton>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+          <li data-testid="country-other" className="flex flex-col gap-1 rounded-xl border border-dashed border-border p-3 lg:flex-row lg:items-center lg:gap-3">
+            <span className="hidden w-6 lg:block" />
+            <div className="flex min-w-48 items-center gap-2 font-semibold">
+              <Flag code="other" className="text-lg" />
+              {t("admin.reference.other.title")}
+            </div>
+            <p className="text-sm text-muted">{t("admin.reference.other.text")}</p>
+          </li>
+        </ol>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <select
+            data-testid="country-add-select"
+            aria-label={t("admin.reference.country.pick")}
+            value={pick}
+            onChange={(e) => setPick(e.target.value)}
+            className={`${input} max-w-sm`}
+          >
+            <option value="">{t("admin.reference.country.pick")}</option>
+            {available.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.name} ({country.code})
+              </option>
+            ))}
+          </select>
+          <button type="button" data-testid="country-add" disabled={!pick} onClick={add} className={`${ghostButton} flex shrink-0 items-center gap-2 self-start disabled:opacity-40`}>
+            <Plus className="size-4" />
+            {t("admin.reference.country.add")}
+          </button>
+        </div>
+      </Card>
+      <SaveBar pending={save.isPending} saved={save.isSuccess && save.data !== null} error={saveError} problems={Object.keys(problems).length > 0} />
+    </form>
+  );
+}
+
+// ---- FAQ -------------------------------------------------------------------------------------
+
+type Audience = "all" | "only" | "except";
+const AUDIENCES: Audience[] = ["all", "only", "except"];
+/** An FAQ entry in the form: who sees it as one choice, and a key that stays put while rows move. */
+type FaqDraft = { key: number; id: string; q: LocalizedText; a: LocalizedText; audience: Audience; countries: string[]; published: boolean };
+
+const toFaqDraft = (item: FaqItem): FaqDraft => ({
+  key: nextKey++,
+  id: item.id,
+  q: item.q,
+  a: item.a,
+  audience: item.countries.length === 0 ? "all" : item.excludeCountries ? "except" : "only",
+  countries: item.countries,
+  published: item.published,
+});
+
+const fromFaqDraft = (d: FaqDraft) => ({
+  id: d.id,
+  q: d.q,
+  a: d.a,
+  countries: d.audience === "all" ? [] : d.countries,
+  excludeCountries: d.audience === "except",
+  published: d.published,
+});
+
+function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: CountryEntry[] }) {
+  const { t, locale } = useAdminI18n();
+  const countryName = useCountryName();
+  const saved = useSaved();
+  const [rows, setRows] = useState(() => initial.map(toFaqDraft));
+  const [open, setOpen] = useState<Set<number>>(() => new Set());
+  const [problems, setProblems] = useState<Record<string, string>>({});
+  const nameOf = (code: string) => (code === OTHER_COUNTRY ? t("admin.reference.other.title") : countryName(code));
+
+  const save = useMutation({
+    mutationFn: async (next: FaqDraft[]) => {
+      const parsed = FaqSchema.safeParse(next.map(fromFaqDraft));
+      const found = parsed.success ? {} : issuesByPath(parsed.error.issues);
+      // "Only in" with nothing picked would read as everywhere: asked for instead.
+      next.forEach((row, i) => {
+        if (row.audience === "only" && row.countries.length === 0) found[`${i}.countries`] = "custom";
+      });
+      setProblems(found);
+      if (Object.keys(found).length) {
+        // Entries with a problem open, so it can be seen.
+        const bad = new Set(Object.keys(found).map((path) => Number(path.split(".")[0])));
+        setOpen((keys) => new Set([...keys, ...next.filter((_, i) => bad.has(i)).map((row) => row.key)]));
+        return null;
+      }
+      return parsed.success ? saveFaq(parsed.data) : null;
+    },
+    onSuccess: (faq) => {
+      if (!faq) return;
+      saved({ faq });
+      setRows(faq.map(toFaqDraft));
+      setOpen(new Set());
+    },
+  });
+
+  const update = (index: number, patch: (row: FaqDraft) => Partial<FaqDraft>) =>
+    setRows((list) => list.map((row, i) => (i === index ? { ...row, ...patch(row) } : row)));
+  const setText = (index: number, field: "q" | "a", language: Language, text: string) =>
+    update(index, (row) => ({ [field]: { ...row[field], [language]: text } }));
+  const toggleCountry = (index: number, code: string) =>
+    update(index, (row) => ({ countries: row.countries.includes(code) ? row.countries.filter((c) => c !== code) : [...row.countries, code] }));
+  const move = (index: number, by: -1 | 1) =>
+    setRows((list) => {
+      const next = [...list];
+      [next[index], next[index + by]] = [next[index + by], next[index]];
+      return next;
+    });
+  const reshape = (change: () => void) => {
+    change();
+    setProblems({});
+  };
+  const add = () => {
+    const row: FaqDraft = { key: nextKey++, id: `faq-${Date.now().toString(36)}`, q: {}, a: {}, audience: "all", countries: [], published: true };
+    setRows((list) => [...list, row]);
+    setOpen((keys) => new Set([...keys, row.key]));
+  };
+  const summary = (row: FaqDraft) =>
+    row.audience === "all"
+      ? t("admin.reference.faq.everywhere")
+      : t(row.audience === "only" ? "admin.reference.faq.only" : "admin.reference.faq.except", { countries: row.countries.map(nameOf).join(", ") || "—" });
+
+  return (
+    <form
+      data-testid="reference-faq"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate(rows);
+      }}
+      className="flex flex-col gap-4"
+    >
+      <Card>
+        <p className="text-sm text-muted">
+          {t("admin.reference.faq.hint", { placeholders: FAQ_PLACEHOLDERS.map((name) => `{${name}}`).join(", ") })}
+        </p>
+        <ol className="flex flex-col gap-3">
+          {rows.map((row, i) => {
+            // Every listed country and "other", plus any picked earlier and since taken off the list.
+            const choices = [...countries.map((c) => c.code), OTHER_COUNTRY, ...row.countries.filter((c) => c !== OTHER_COUNTRY && !countries.some((x) => x.code === c))];
+            return (
+              <li key={row.key} data-testid="faq-row" data-id={row.id} className="rounded-xl bg-background">
+                <details
+                  open={open.has(row.key)}
+                  onToggle={(e) => {
+                    const isOpen = e.currentTarget.open;
+                    setOpen((keys) => {
+                      const next = new Set(keys);
+                      if (isOpen) next.add(row.key);
+                      else next.delete(row.key);
+                      return next;
+                    });
+                  }}
+                >
+                  <summary data-testid="faq-toggle" className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 p-3 [&::-webkit-details-marker]:hidden">
+                    <span className="w-6 text-right text-sm font-bold text-muted">{i + 1}</span>
+                    <span className="flex-1 font-semibold">{localized(row.q, locale) || t("admin.reference.faq.untitled")}</span>
+                    <span className="text-xs text-muted">{summary(row)}</span>
+                    {!row.published && <span className="rounded-full bg-border px-2 py-0.5 text-xs font-bold text-muted">{t("admin.reference.faq.draft")}</span>}
+                  </summary>
+                  <div className="flex flex-col gap-4 border-t border-border p-3">
+                    {LANGUAGES.map((language) => {
+                      const base = (BASE_LANGUAGES as readonly Language[]).includes(language);
+                      const qProblem = problems[`${i}.q.${language}`];
+                      const aProblem = problems[`${i}.a.${language}`];
+                      return (
+                        <fieldset key={language} className="flex flex-col gap-2">
+                          <legend className="mb-1 text-sm font-bold">
+                            {LANGUAGE_NAMES[language]}
+                            {!base && <span className="ml-2 text-xs font-normal text-muted">{t("admin.reference.faq.optional")}</span>}
+                          </legend>
+                          <label className={label}>
+                            <span className="text-xs text-muted">{t("admin.reference.faq.question")}</span>
+                            <input
+                              data-testid={`faq-q-${language}`}
+                              value={row.q[language] ?? ""}
+                              aria-invalid={!!qProblem}
+                              onChange={(e) => setText(i, "q", language, e.target.value)}
+                              className={`${input} aria-[invalid=true]:border-red-600`}
+                            />
+                            {qProblem && (
+                              <span data-testid="reference-error" className={errorText}>
+                                {t("admin.reference.error.faqQuestion")}
+                              </span>
+                            )}
+                          </label>
+                          <label className={label}>
+                            <span className="text-xs text-muted">{t("admin.reference.faq.answer")}</span>
+                            <textarea
+                              data-testid={`faq-a-${language}`}
+                              value={row.a[language] ?? ""}
+                              rows={3}
+                              aria-invalid={!!aProblem}
+                              onChange={(e) => setText(i, "a", language, e.target.value)}
+                              className={`${input} font-normal aria-[invalid=true]:border-red-600`}
+                            />
+                            {aProblem && (
+                              <span data-testid="reference-error" className={errorText}>
+                                {t("admin.reference.error.faqAnswer")}
+                              </span>
+                            )}
+                          </label>
+                        </fieldset>
+                      );
+                    })}
+                    <div className="flex flex-col gap-2">
+                      <label className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                        {t("admin.reference.faq.audience")}
+                        <select
+                          data-testid="faq-audience"
+                          value={row.audience}
+                          onChange={(e) => update(i, () => ({ audience: e.target.value as Audience }))}
+                          className="rounded-lg border border-border bg-card px-2 py-1 font-normal"
+                        >
+                          {AUDIENCES.map((audience) => (
+                            <option key={audience} value={audience}>
+                              {t(`admin.reference.faq.audience.${audience}`)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {row.audience !== "all" && (
+                        <div className="flex flex-wrap gap-x-4 gap-y-2">
+                          {choices.map((code) => (
+                            <label key={code} className="flex items-center gap-1.5 text-sm">
+                              <input type="checkbox" data-testid={`faq-country-${code}`} checked={row.countries.includes(code)} onChange={() => toggleCountry(i, code)} />
+                              <Flag code={code} />
+                              {nameOf(code)}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      {problems[`${i}.countries`] && (
+                        <span data-testid="reference-error" className={errorText}>
+                          {t("admin.reference.error.faqCountries")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" data-testid="faq-published" checked={row.published} onChange={(e) => update(i, () => ({ published: e.target.checked }))} />
+                        {t("admin.reference.faq.published")}
+                      </label>
+                      <div className="flex gap-1">
+                        <IconButton testId="faq-up" label={t("admin.reference.country.up")} disabled={i === 0} onClick={() => reshape(() => move(i, -1))}>
+                          <ArrowUp className="size-4" />
+                        </IconButton>
+                        <IconButton testId="faq-down" label={t("admin.reference.country.down")} disabled={i === rows.length - 1} onClick={() => reshape(() => move(i, 1))}>
+                          <ArrowDown className="size-4" />
+                        </IconButton>
+                        <IconButton
+                          testId="faq-remove"
+                          label={t("admin.reference.faq.remove")}
+                          onClick={() => reshape(() => setRows((list) => list.filter((_, j) => j !== i)))}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="size-4" />
+                        </IconButton>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              </li>
+            );
+          })}
+        </ol>
+        <button type="button" data-testid="faq-add" onClick={add} className={`${ghostButton} flex items-center gap-2 self-start`}>
+          <Plus className="size-4" />
+          {t("admin.reference.faq.add")}
+        </button>
+      </Card>
+      <SaveBar pending={save.isPending} saved={save.isSuccess && save.data !== null} error={save.error} problems={Object.keys(problems).length > 0} />
+    </form>
+  );
+}
+
 // ---- Cities ----------------------------------------------------------------------------------
 
 const NAMES = ["ru", "kk", "en"] as const;
@@ -354,17 +817,7 @@ function IconButton({ testId, label, disabled, onClick, className = "", children
 /** Country names in the admin's language, falling back to `fallback` (the API's English name). */
 function useCountryName() {
   const { locale } = useAdminI18n();
-  const names = useMemo(() => {
-    try {
-      return new Intl.DisplayNames([intlLocale(locale), "en"], { type: "region" });
-    } catch {
-      return null;
-    }
-  }, [locale]);
-  return (code: string, fallback?: string) => {
-    const name = names?.of(code);
-    return name && name !== code ? name : (fallback ?? code);
-  };
+  return (code: string, fallback?: string) => regionName(code, locale, fallback);
 }
 
 function BlockedTab({ initial }: { initial: BlockedCountries }) {

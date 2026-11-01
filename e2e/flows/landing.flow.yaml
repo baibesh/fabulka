@@ -55,6 +55,13 @@ commands:
   - assertVisible: { text: "от 9 900 ₸", childOf: { testId: price-print } }
   - tapOn: "Нужно ли регистрироваться?"
   - waitForVisible: { contains: "Книги сохраняются в вашем браузере" }
+  # The FAQ is the owner's, for the visitor's country: in Kazakhstan print comes with delivery,
+  # priced from the reference data.
+  - assertNotVisible: { testId: faq-item-print-abroad }
+  - tapOn: "Как заказать печатную книгу?"
+  - waitForVisible: { contains: "Бесплатная доставка: Алматы, Астана; в другие города Казахстана — 1 500 ₸" }
+  - tapOn: "Сколько стоит книга?"
+  - waitForVisible: { contains: "книга из каталога стоит 1 900 ₸, своя история — 2 900 ₸" }
 
   # The catalog has a page of its own.
   - tapOn: { testId: nav-catalog }
@@ -65,17 +72,40 @@ commands:
   - assertVisible: { testId: custom-price, text: "2 900 ₸" }
 
   # In Uzbekistan there is no Kazakh and prices are in dollars: a Kazakh interface gives way to Russian.
-  # In Kazakhstan the language switch starts with Kazakh.
-  - selectOption: { testId: ui-language, optionIndex: 0 }
+  # In Kazakhstan the language dialog offers Kazakh, Russian and English.
+  - tapOn: { testId: ui-language }
+  - waitForVisible: { testId: ui-language-option-kk }
+  - assertVisible: { testId: ui-language-option-ru }
+  - assertVisible: { testId: ui-language-option-en }
+  - tapOn: { testId: ui-language-option-kk }
   - waitForVisible: "Кітаптар каталогы"
-  - selectOption: { testId: ui-country, option: "Өзбекстан" }
+  # The country is chosen in the footer, from a dialog with a search.
+  - assertVisible: { testId: ui-country, contains: "Қазақстан" }
+  - tapOn: { testId: ui-country }
+  - waitForVisible: { testId: ui-country-search }
+  - assertVisible: { testId: ui-country-option-DE }
+  - tapOn: { testId: ui-country-search }
+  - inputText: "Өзбек"
+  - assertNotVisible: { testId: ui-country-option-DE }
+  - assertVisible: { testId: ui-country-option-other }
+  # Found by its name in another language too.
+  - eraseText
+  - inputText: "uzbek"
+  - waitForVisible: { testId: ui-country-option-UZ }
+  - assertNotVisible: { testId: ui-country-option-KZ }
+  - tapOn: { testId: ui-country-option-UZ }
   - waitForVisible: "Каталог книг"
+  - assertVisible: { testId: ui-country, contains: "Узбекистан" }
   - assertVisible: { testId: custom-price, text: "$5.90" }
   - assertVisible: { testId: template-price, text: "$3.90", index: 0 }
-  # The switch now offers Russian and English only, and a Kazakh link opens in Russian.
-  - selectOption: { testId: ui-language, optionIndex: 1 }
+  # The language dialog now offers Russian and English only, and a Kazakh link opens in Russian.
+  - tapOn: { testId: ui-language }
+  - waitForVisible: { testId: ui-language-option-en }
+  - assertNotVisible: { testId: ui-language-option-kk }
+  - tapOn: { testId: ui-language-option-en }
   - waitForVisible: "Book catalog"
-  - selectOption: { testId: ui-language, optionIndex: 0 }
+  - tapOn: { testId: ui-language }
+  - tapOn: { testId: ui-language-option-ru }
   - waitForVisible: "Каталог книг"
   - openLink: "${WEB}/catalog?lang=kk"
   - waitForVisible: { testId: template-first-day-kindergarten }
@@ -85,5 +115,14 @@ commands:
   - waitForVisible: { testId: hero-covers }
   - assertVisible: { contains: "Первые книги — бесплатно, дальше — от $3.90" }
   - assertVisible: "Печать пока только в Казахстане, а PDF легко распечатать самим."
+  # Outside Kazakhstan the FAQ says print is not there yet, and prices are in dollars.
+  - assertNotVisible: { testId: faq-item-print-kz }
+  - assertNotVisible: { testId: faq-item-kazakh }
+  - tapOn: "Можно ли заказать печатную книгу?"
+  - waitForVisible: { contains: "К сожалению, в вашей стране печатные книги пока недоступны" }
+  - tapOn: "Сколько стоит книга?"
+  - waitForVisible: { contains: "книга из каталога стоит $3.90, своя история — $5.90" }
+  - tapOn: "На каких языках можно сделать книгу?"
+  - waitForVisible: { contains: "Язык книги выбирается в форме: Русский, English" }
 after:
   - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

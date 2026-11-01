@@ -1,26 +1,52 @@
 "use client";
 
+import { LANGUAGE_NAMES, OTHER_COUNTRY, bookPrice, faqFor, fillFaq, localized, type FaqPlaceholder } from "@fabulka/shared";
 import { ChevronDown } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
+import { formatKzt, formatPrice } from "@/lib/format";
+import { regionName } from "@/lib/regions";
+import { useReference } from "@/lib/use-price";
 import { Section } from "./section";
 
-const QUESTIONS = ["time", "kazakh", "data", "print", "account", "dislike"] as const;
-
-/** What parents ask before making a book, as native disclosure widgets. */
+/**
+ * What parents ask before making a book, as native disclosure widgets. The questions are the
+ * owner's (reference.faq): the ones for the visitor's country, in the interface language, with
+ * prices and cities filled in from the reference data. They change with the country.
+ */
 export function Faq() {
-  const { t } = useI18n();
+  const { t, locale, country, countries, info } = useI18n();
+  const reference = useReference().data;
+  const items = reference ? faqFor(reference.faq, country) : null;
+  const vars: Partial<Record<FaqPlaceholder, string>> = reference
+    ? {
+        templatePrice: formatPrice(bookPrice("template", country, reference.prices, countries)),
+        customPrice: formatPrice(bookPrice("custom", country, reference.prices, countries)),
+        softCover: formatKzt(reference.prices.covers.soft, locale),
+        hardCover: formatKzt(reference.prices.covers.hard, locale),
+        delivery: formatKzt(reference.prices.deliveryKzt, locale),
+        freeCities: reference.cities
+          .filter((c) => c.freeDelivery)
+          .map((c) => c[locale])
+          .join(", "),
+        languages: info.languages.map((l) => LANGUAGE_NAMES[l]).join(", "),
+        country: country === OTHER_COUNTRY ? t("country.other") : regionName(country, locale),
+      }
+    : {};
+
   return (
     <Section id="faq" testId="faq" title={t("landing.faq.title")}>
       <div className="flex flex-col gap-3">
-        {QUESTIONS.map((q) => (
-          <details key={q} className="group rounded-2xl border border-border bg-card px-5 py-4 open:shadow-sm">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-bold [&::-webkit-details-marker]:hidden">
-              {t(`landing.faq.${q}.q`)}
-              <ChevronDown className="size-5 shrink-0 text-accent transition group-open:rotate-180" />
-            </summary>
-            <p className="pt-3 text-muted">{t(`landing.faq.${q}.a`)}</p>
-          </details>
-        ))}
+        {items === null
+          ? [0, 1, 2, 3].map((i) => <div key={i} aria-hidden className="h-14 animate-pulse rounded-2xl border border-border bg-card" />)
+          : items.map((item) => (
+              <details key={item.id} data-testid={`faq-item-${item.id}`} className="group rounded-2xl border border-border bg-card px-5 py-4 open:shadow-sm">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-bold [&::-webkit-details-marker]:hidden">
+                  {fillFaq(localized(item.q, locale), vars)}
+                  <ChevronDown className="size-5 shrink-0 text-accent transition group-open:rotate-180" />
+                </summary>
+                <p className="pt-3 whitespace-pre-line text-muted">{fillFaq(localized(item.a, locale), vars)}</p>
+              </details>
+            ))}
       </div>
     </Section>
   );

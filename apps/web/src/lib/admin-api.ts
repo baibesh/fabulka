@@ -7,6 +7,8 @@ import {
   AdminReferenceSchema,
   BlockedCountriesSchema,
   CitySchema,
+  CountryEntrySchema,
+  FaqItemSchema,
   AdminStatsSchema,
   AdminTemplateSchema,
   ClientErrorGroupSchema,
@@ -25,6 +27,8 @@ import {
   type AdminReference,
   type BlockedCountries,
   type City,
+  type CountryEntry,
+  type FaqItem,
   type AdminStats,
   type AdminTemplate,
   type ClientErrorGroup,
@@ -154,6 +158,16 @@ export async function savePrices(prices: Prices): Promise<Prices> {
 
 export async function saveCities(cities: City[]): Promise<City[]> {
   return CitySchema.array().parse(await request("/api/admin/reference/cities", json("PUT", cities)));
+}
+
+/** Refused with 400 country_policy_blocked (Meta's list) or country_blocked (the owner's) for a blocked code. */
+export async function saveCountries(countries: CountryEntry[]): Promise<CountryEntry[]> {
+  return CountryEntrySchema.array().parse(await request("/api/admin/reference/countries", json("PUT", countries)));
+}
+
+/** The landing's questions, in order, drafts included. */
+export async function saveFaq(faq: FaqItem[]): Promise<FaqItem[]> {
+  return FaqItemSchema.array().parse(await request("/api/admin/reference/faq", json("PUT", faq)));
 }
 
 /** Refused with 400 country_policy_blocked for a code on Meta's list. */

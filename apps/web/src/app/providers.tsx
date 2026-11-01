@@ -1,12 +1,12 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { countryFromIp } from "@fabulka/shared";
 import { useEffect, useState } from "react";
-import { countryChosen, setCountry, setLocale, useI18n } from "@/i18n/i18n";
+import { countryChosen, setCountry, setCountryList, setLocale, useI18n } from "@/i18n/i18n";
 import { UI_LOCALES, type UiLocale } from "@/i18n/messages";
 import { whereAmI } from "@/lib/api";
 import { installErrorReporting } from "@/lib/telemetry";
+import { useReference } from "@/lib/use-price";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(() => new QueryClient());
@@ -25,13 +25,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
     if (lang && (UI_LOCALES as readonly string[]).includes(lang)) setLocale(lang as UiLocale);
   }, []);
 
-  // First visit: preselect the country from the visitor's address; the header switch overrides it.
+  // First visit: preselect the country from the visitor's address; the footer switch overrides it.
+  // The code is saved as is: one the site does not offer reads as "other".
   useEffect(() => {
     if (countryChosen()) return;
     whereAmI()
-      .then((country) => setCountry(countryFromIp(country)))
+      .then((country) => setCountry(country ?? "KZ"))
       .catch(() => undefined);
   }, []);
 
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <CountryListSync />
+      {children}
+    </QueryClientProvider>
+  );
+}
+
+/** Hands the owner's list of countries (GET /reference) to the language and country settings. */
+function CountryListSync() {
+  const countries = useReference().data?.countries;
+  useEffect(() => {
+    if (countries) setCountryList(countries);
+  }, [countries]);
+  return null;
 }

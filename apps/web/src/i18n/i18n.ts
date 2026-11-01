@@ -1,6 +1,6 @@
 "use client";
 
-import { COUNTRIES, languageFor, type Country } from "@fabulka/shared";
+import { DEFAULT_COUNTRIES, countryFromIp, countryInfo, languageFor, type Country, type CountryEntry } from "@fabulka/shared";
 import { useSyncExternalStore } from "react";
 import { format, type Vars } from "./format";
 import { MESSAGES, UI_LOCALES, type MessageKey, type UiLocale } from "./messages";
@@ -40,10 +40,27 @@ function subscribe(onChange: () => void) {
 const isLocale = (value: string | null): value is UiLocale =>
   value !== null && (UI_LOCALES as readonly string[]).includes(value);
 
-/** The saved country; Kazakhstan until one is detected or chosen. */
+/**
+ * The countries the site offers (GET /reference, see CountryListSync); today's defaults until they
+ * arrive.
+ */
+let countryList: readonly CountryEntry[] = DEFAULT_COUNTRIES;
+const currentCountryList = () => countryList;
+const defaultCountryList = () => DEFAULT_COUNTRIES as readonly CountryEntry[];
+
+/** Puts the owner's list of countries in place; the saved country and language follow it. */
+export function setCountryList(countries: readonly CountryEntry[]) {
+  if (JSON.stringify(countries) === JSON.stringify(countryList)) return;
+  countryList = countries;
+  window.dispatchEvent(new Event(CHANGE));
+}
+
+/**
+ * The saved country if the site offers it, else "other"; Kazakhstan (the home market) until one is
+ * detected or chosen. The code is saved as it was, so a country the owner lists later comes back.
+ */
 function currentCountry(): Country {
-  const saved = read(COUNTRY_KEY);
-  return (COUNTRIES as readonly (string | null)[]).includes(saved) ? (saved as Country) : "KZ";
+  return countryFromIp(read(COUNTRY_KEY), countryList);
 }
 
 /**
@@ -55,9 +72,9 @@ function currentLocale(): UiLocale {
   const saved = read(LOCALE_KEY);
   const country = currentCountry();
   const preferred = (navigator.languages?.length ? navigator.languages : [navigator.language]).map((l) => l.slice(0, 2));
-  const browser = preferred.find((l) => isLocale(l) && languageFor(country, l) === l) ?? null;
+  const browser = preferred.find((l) => isLocale(l) && languageFor(country, l, countryList) === l) ?? null;
   const wanted = [asked, saved, browser].find(isLocale) ?? "ru";
-  return languageFor(country, wanted);
+  return languageFor(country, wanted, countryList);
 }
 
 /**
@@ -85,7 +102,7 @@ export function setLocale(locale: UiLocale) {
  * country's first language; it is saved either way, so the switch never brings back an older one.
  */
 export function setCountry(country: Country) {
-  const locale = languageFor(country, currentLocale());
+  const locale = languageFor(countryFromIp(country, countryList), currentLocale(), countryList);
   write(COUNTRY_KEY, country);
   if (read(LOCALE_KEY) !== locale) setLocale(locale);
 }
@@ -94,12 +111,15 @@ export function setCountry(country: Country) {
 export const countryChosen = () => read(COUNTRY_KEY) !== null;
 
 /**
- * Interface language and country. Pages render in Russian on the server, then switch. The admin
- * (`"admin"`) shares the saved language with the site but chooses it by its own rules.
+ * Interface language and country: `country` is a listed ISO code or "other", `info` what the site
+ * offers there (languages, currency, print), `countries` the whole list. Pages render in Russian on
+ * the server, then switch. The admin (`"admin"`) shares the saved language with the site but
+ * chooses it by its own rules.
  */
 export function useI18n(scope: "site" | "admin" = "site") {
   const locale = useSyncExternalStore(subscribe, scope === "admin" ? adminLocale : currentLocale, () => "ru" as UiLocale);
   const country = useSyncExternalStore(subscribe, currentCountry, () => "KZ" as Country);
+  const countries = useSyncExternalStore(subscribe, currentCountryList, defaultCountryList);
   const t = (key: MessageKey, vars?: Vars) => format(MESSAGES[locale][key], vars, locale);
-  return { locale, country, t };
+  return { locale, country, countries, info: countryInfo(country, countries), t };
 }

@@ -1,5 +1,6 @@
-# Interface language and country: the switches in the header, the catalog in Kazakh and English,
-# and print offered only in Kazakhstan.
+# Interface language and country: the language button in the header and the country button in the
+# footer, each opening a dialog; the catalog in Kazakh and English, and print offered only in
+# Kazakhstan.
 appId: ${WEB}
 tags: [smoke, i18n]
 db: ${DATABASE_URL}
@@ -16,11 +17,22 @@ commands:
   - waitForVisible: { testId: hero-covers }
   - assertVisible: "Книга, где ваш ребёнок — главный герой"
 
-  - selectOption: { testId: ui-language, option: "ҚАЗ · Қазақша" }
+  - tapOn: { testId: ui-language }
+  - waitForVisible: { testId: ui-language-option-kk }
+  - tapOn: { testId: ui-language-option-kk }
   - waitForVisible: "Балаңыз басты кейіпкер болатын кітап"
+  - assertNotVisible: { testId: ui-language-option-kk }
+  - assertVisible: { testId: ui-language, contains: "ҚАЗ" }
   - tapOn: { testId: nav-catalog }
   - waitForVisible: "Ақ барыстың құпиясы"
-  - selectOption: { testId: ui-language, option: "EN · English" }
+  # The dialog closes on Esc without changing anything.
+  - tapOn: { testId: ui-language }
+  - waitForVisible: { testId: ui-language-option-en }
+  - pressKey: escape
+  - assertNotVisible: { testId: ui-language-option-en }
+  - assertVisible: "Ақ барыстың құпиясы"
+  - tapOn: { testId: ui-language }
+  - tapOn: { testId: ui-language-option-en }
   - waitForVisible: "The Secret of the Snow Leopard"
 
   # A book made while the interface is in English defaults to an English book.
@@ -41,7 +53,10 @@ commands:
   - assertVisible: { testId: order-print }
 
   # Outside Kazakhstan the PDF stays, print turns into a request.
-  - selectOption: { testId: ui-country, option: "Another country" }
+  - tapOn: { testId: ui-country }
+  - waitForVisible: { testId: ui-country-search }
+  - tapOn: { testId: ui-country-option-other }
+  - waitForVisible: { testId: ui-country, contains: "Another country" }
   - waitForVisible: { testId: want-print }
   - assertNotVisible: { testId: order-print }
   - tapOn: { testId: want-print }

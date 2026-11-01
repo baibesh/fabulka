@@ -16,9 +16,9 @@ export function useReference() {
 
 /** One more book of this kind, priced for the visitor's country: "1 900 ₸" or "$3.90"; null while loading. */
 export function useBookPrice(kind: BookKind): string | null {
-  const { country } = useI18n();
+  const { country, countries } = useI18n();
   const prices = useReference().data?.prices;
-  return prices ? formatPrice(bookPrice(kind, country, prices)) : null;
+  return prices ? formatPrice(bookPrice(kind, country, prices, countries)) : null;
 }
 
 /** One printed copy with this cover, "9 900 ₸"; null while loading. */

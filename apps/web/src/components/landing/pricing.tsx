@@ -1,6 +1,5 @@
 "use client";
 
-import { COUNTRY_INFO } from "@fabulka/shared";
 import { Check, Gift } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
@@ -20,7 +19,7 @@ interface Plan {
 
 /** The two kinds of books, the printed copy, and the free books every visitor starts with. */
 export function Pricing() {
-  const { t, locale, country } = useI18n();
+  const { t, locale, info } = useI18n();
   const reference = useReference().data;
   const templatePrice = useBookPrice("template");
   const customPrice = useBookPrice("custom");
@@ -54,7 +53,7 @@ export function Pricing() {
             }),
           ]
         : [],
-      note: COUNTRY_INFO[country].print ? undefined : t("book.print.unavailable"),
+      note: info.print ? undefined : t("book.print.unavailable"),
     },
   ];
 

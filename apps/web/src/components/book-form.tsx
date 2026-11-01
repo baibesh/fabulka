@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  COUNTRY_INFO,
   GENERATION_PAUSED,
   LANGUAGES,
   LIMIT_REACHED,
@@ -68,7 +67,7 @@ const label = "flex flex-col gap-1.5 text-sm font-semibold";
  */
 export function BookForm({ template }: { template?: Template }) {
   const router = useRouter();
-  const { t, locale, country } = useI18n();
+  const { t, locale, info } = useI18n();
   const ageOptions = template ? ages(template.ageMin, template.ageMax) : ages(2, 10);
   const form = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
@@ -92,7 +91,7 @@ export function BookForm({ template }: { template?: Template }) {
     if (!form.getFieldState("language").isDirty) form.setValue("language", locale);
   }, [form, locale]);
   // Only the languages offered in the visitor's country; a choice the new country lacks is dropped.
-  const bookLanguages = COUNTRY_INFO[country].languages;
+  const bookLanguages = info.languages;
   useEffect(() => {
     if (!bookLanguages.includes(form.getValues("language"))) form.setValue("language", bookLanguages[0]);
   }, [form, bookLanguages]);
