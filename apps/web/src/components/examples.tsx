@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@/lib/query";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/i18n/i18n";

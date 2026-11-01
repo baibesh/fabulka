@@ -1,7 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@/lib/query";
 import { CreateOrderSchema, cityName, type CreateOrderInput } from "@fabulka/shared";
 import { Loader2, Printer } from "lucide-react";
 import { useRouter } from "next/navigation";

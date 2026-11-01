@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@/lib/query";
 import { ArrowRight, BookOpen, CirclePause } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";

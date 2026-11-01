@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@/lib/query";
 import { BookOpen, LogIn, UserRound } from "lucide-react";
 import Link from "next/link";
 import { intlLocale } from "@/i18n/format";

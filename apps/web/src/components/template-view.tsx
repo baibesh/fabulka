@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@/lib/query";
 import type { Book, Template } from "@fabulka/shared";
 import { ArrowDown, Baby, BookOpen, Camera, Heart, MapPin, MessageCircleQuestion, PawPrint } from "lucide-react";
 import { use } from "react";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@/lib/query";
 import { CloudUpload, LogIn } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/i18n/i18n";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@/lib/query";
 import { AuthLogoutSchema, AuthMeSchema, type AuthMe } from "@fabulka/shared";
 import type { UiLocale } from "@/i18n/messages";
 import { clientKey, request } from "./api";

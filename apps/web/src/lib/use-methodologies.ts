@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@/lib/query";
 import { useI18n } from "@/i18n/i18n";
 import { listMethodologies } from "./api";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@/lib/query";
 import { ArrowDown } from "lucide-react";
 import Link from "next/link";
 import { BookReader } from "@/components/book-reader";
