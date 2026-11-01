@@ -154,7 +154,7 @@ export type Currency = z.infer<typeof CurrencySchema>;
 
 /**
  * Everywhere not in the owner's list (reference.countries). Always offered, never edited: English
- * and Russian, prices in dollars, no print.
+ * first, then Spanish, German and Russian, prices in dollars, no print.
  */
 export const OTHER_COUNTRY = "other";
 
@@ -169,7 +169,7 @@ export interface CountryInfo {
   print: boolean;
 }
 
-export const OTHER_COUNTRY_INFO: CountryInfo = { languages: ["en", "ru"], currency: "USD", print: false };
+export const OTHER_COUNTRY_INFO: CountryInfo = { languages: ["en", "es", "de", "ru"], currency: "USD", print: false };
 
 /**
  * The currency print is priced in (reference.prices.covers and deliveryKzt are tenge): a country
@@ -387,13 +387,16 @@ export const DEFAULT_CITIES: City[] = [
 const ruEn: Language[] = ["ru", "en"];
 const enRu: Language[] = ["en", "ru"];
 const en: Language[] = ["en"];
+const deEn: Language[] = ["de", "en"];
+const esEn: Language[] = ["es", "en"];
 const abroad = (code: string, languages: Language[]): CountryEntry => ({ code, languages, currency: "USD", print: false });
 
 /**
  * The countries the site launches with; the seed of reference.countries. Kazakhstan first (tenge,
  * print), then the neighbours where Russian is the common language (Russian first), the ones where
- * fewer families read it (English first), and the rest in English only. Nothing on Meta's list of
- * restricted territories. A stored list still equal to an older seed is upgraded to this one on
+ * fewer families read it (English first), the German- and Spanish-speaking ones (their language
+ * first, then English), and the rest in English only. Nothing on Meta's list of restricted
+ * territories. A stored list still equal to an older seed is upgraded to this one on
  * start (apps/api ReferenceService).
  */
 export const DEFAULT_COUNTRIES: CountryEntry[] = [
@@ -410,7 +413,14 @@ export const DEFAULT_COUNTRIES: CountryEntry[] = [
   abroad("MN", en),
   abroad("TR", en),
   abroad("AE", en),
-  abroad("DE", en),
+  abroad("DE", deEn),
+  abroad("AT", deEn),
+  abroad("CH", deEn),
+  abroad("ES", esEn),
+  abroad("MX", esEn),
+  abroad("AR", esEn),
+  abroad("CO", esEn),
+  abroad("CL", esEn),
   abroad("PL", en),
   abroad("CZ", en),
   abroad("GB", en),
@@ -433,101 +443,181 @@ export const DEFAULT_FAQ: FaqItem[] = [
   {
     id: "time",
     ...everywhere,
-    q: { ru: "Сколько ждать книгу?", kk: "Кітапты қанша күту керек?", en: "How long does it take?" },
+    q: {
+      ru: "Сколько ждать книгу?",
+      kk: "Кітапты қанша күту керек?",
+      en: "How long does it take?",
+      es: "¿Cuánto tarda en estar listo el libro?",
+      de: "Wie lange dauert es?",
+    },
     a: {
       ru: "Обычно около трёх минут: сначала пишется сказка, потом рисуются герой и страницы. Прогресс видно на странице книги, а готовую можно сразу листать и скачать в PDF.",
       kk: "Әдетте үш минуттай: алдымен ертегі жазылады, содан кейін кейіпкер мен беттер салынады. Барысы кітап бетінде көрінеді, дайын кітапты бірден парақтап, PDF түрінде жүктеуге болады.",
       en: "Usually about three minutes: first the story is written, then the hero and the pages are drawn. You can watch the progress on the book's page, then read the finished book or download the PDF right away.",
+      es: "Normalmente, unos tres minutos: primero se escribe el cuento y después se dibujan el protagonista y las páginas. Puedes seguir el progreso en la página del libro y, cuando esté listo, leerlo al momento o descargarlo en PDF.",
+      de: "Meist etwa drei Minuten: Zuerst entsteht die Geschichte, dann werden die Hauptfigur und die Seiten gezeichnet. Den Fortschritt siehst du auf der Seite des Buches – das fertige Buch kannst du sofort durchblättern oder als PDF herunterladen.",
     },
   },
   {
     id: "kazakh",
     ...onlyKz,
-    q: { ru: "Можно ли сделать книгу на казахском?", kk: "Кітапты қазақ тілінде жасауға бола ма?", en: "Can I make a book in Kazakh?" },
+    q: {
+      ru: "Можно ли сделать книгу на казахском?",
+      kk: "Кітапты қазақ тілінде жасауға бола ма?",
+      en: "Can I make a book in Kazakh?",
+      es: "¿Puedo hacer un libro en kazajo?",
+      de: "Kann ich ein Buch auf Kasachisch erstellen?",
+    },
     a: {
       ru: "Да. Язык книги выбирается в форме: қазақша, русский или English. Сказка пишется сразу на этом языке, а не переводится.",
       kk: "Иә. Кітап тілі формада таңдалады: қазақша, русский немесе English. Ертегі аударылмайды, бірден сол тілде жазылады.",
       en: "Yes. You choose the book's language in the form: қазақша, русский or English. The story is written in that language, not translated.",
+      es: "Sí. El idioma del libro se elige en el formulario: қазақша, русский o English. El cuento se escribe directamente en ese idioma, no se traduce.",
+      de: "Ja. Die Sprache des Buches wählst du im Formular: қазақша, русский oder English. Die Geschichte wird direkt in dieser Sprache geschrieben, nicht übersetzt.",
     },
   },
   {
     id: "languages",
     ...notKz,
-    q: { ru: "На каких языках можно сделать книгу?", kk: "Кітапты қай тілдерде жасауға болады?", en: "Which languages can a book be in?" },
+    q: {
+      ru: "На каких языках можно сделать книгу?",
+      kk: "Кітапты қай тілдерде жасауға болады?",
+      en: "Which languages can a book be in?",
+      es: "¿En qué idiomas puedo hacer el libro?",
+      de: "In welchen Sprachen gibt es die Bücher?",
+    },
     a: {
       ru: "Язык книги выбирается в форме: {languages}. Сказка пишется сразу на этом языке, а не переводится.",
       kk: "Кітап тілі формада таңдалады: {languages}. Ертегі аударылмайды, бірден сол тілде жазылады.",
       en: "You choose the book's language in the form: {languages}. The story is written in that language, not translated.",
+      es: "El idioma del libro se elige en el formulario: {languages}. El cuento se escribe directamente en ese idioma, no se traduce.",
+      de: "Die Sprache des Buches wählst du im Formular: {languages}. Die Geschichte wird direkt in dieser Sprache geschrieben, nicht übersetzt.",
     },
   },
   {
     id: "price-kz",
     ...onlyKz,
-    q: { ru: "Сколько стоит книга?", kk: "Кітап қанша тұрады?", en: "How much does a book cost?" },
+    q: {
+      ru: "Сколько стоит книга?",
+      kk: "Кітап қанша тұрады?",
+      en: "How much does a book cost?",
+      es: "¿Cuánto cuesta un libro?",
+      de: "Was kostet ein Buch?",
+    },
     a: {
       ru: "Первые книги — бесплатно. Дальше книга из каталога стоит {templatePrice}, своя история — {customPrice}. Цены в тенге; печатная книга оплачивается отдельно.",
       kk: "Алғашқы кітаптар — тегін. Одан кейін каталогтағы кітап — {templatePrice}, өз ертегің — {customPrice}. Бағалар теңгемен; басылған кітап бөлек төленеді.",
       en: "Your first books are free. After that a catalog book is {templatePrice} and a story of your own {customPrice}. Prices are in tenge; a printed copy is paid for separately.",
+      es: "Los primeros libros son gratis. Después, un libro del catálogo cuesta {templatePrice} y una historia propia, {customPrice}. Los precios están en tenges; el libro impreso se paga aparte.",
+      de: "Die ersten Bücher sind kostenlos. Danach kostet ein Buch aus dem Katalog {templatePrice}, eine eigene Geschichte {customPrice}. Die Preise sind in Tenge angegeben; ein gedrucktes Exemplar wird separat bezahlt.",
     },
   },
   {
     id: "price-abroad",
     ...notKz,
-    q: { ru: "Сколько стоит книга?", kk: "Кітап қанша тұрады?", en: "How much does a book cost?" },
+    q: {
+      ru: "Сколько стоит книга?",
+      kk: "Кітап қанша тұрады?",
+      en: "How much does a book cost?",
+      es: "¿Cuánto cuesta un libro?",
+      de: "Was kostet ein Buch?",
+    },
     a: {
       ru: "Первые книги — бесплатно. Дальше книга из каталога стоит {templatePrice}, своя история — {customPrice}. Для вашей страны цены указаны в долларах.",
       kk: "Алғашқы кітаптар — тегін. Одан кейін каталогтағы кітап — {templatePrice}, өз ертегің — {customPrice}. Сіздің еліңіз үшін бағалар долларда көрсетілген.",
       en: "Your first books are free. After that a catalog book is {templatePrice} and a story of your own {customPrice}. For your country prices are in US dollars.",
+      es: "Los primeros libros son gratis. Después, un libro del catálogo cuesta {templatePrice} y una historia propia, {customPrice}. En tu país, los precios se muestran en dólares estadounidenses.",
+      de: "Die ersten Bücher sind kostenlos. Danach kostet ein Buch aus dem Katalog {templatePrice}, eine eigene Geschichte {customPrice}. Für dein Land werden die Preise in US-Dollar angezeigt.",
     },
   },
   {
     id: "data",
     ...everywhere,
-    q: { ru: "Что происходит с данными ребёнка?", kk: "Баланың деректері не болады?", en: "What happens to my child's data?" },
+    q: {
+      ru: "Что происходит с данными ребёнка?",
+      kk: "Баланың деректері не болады?",
+      en: "What happens to my child's data?",
+      es: "¿Qué pasa con los datos de mi hijo?",
+      de: "Was passiert mit den Daten meines Kindes?",
+    },
     a: {
       ru: "Данные хранятся на серверах в Казахстане. Мы не просим фотографий детей: героя рисуют по описанию, а фото нужно только для игрушки, если захотите. Всё удалим по запросу на hello@fabulka.com.",
       kk: "Деректер Қазақстандағы серверлерде сақталады. Біз балалардың фотосын сұрамаймыз: кейіпкер сипаттама бойынша салынады, ал фото тек ойыншық үшін, қаласаңыз ғана керек. Сұрауыңыз бойынша бәрін өшіреміз: hello@fabulka.com.",
       en: "It is stored on servers in Kazakhstan. We never ask for photos of children: the hero is drawn from a description, and a photo is only needed for the toy, if you want one. We delete everything on request at hello@fabulka.com.",
+      es: "Se guardan en servidores en Kazajistán. Nunca pedimos fotos de los niños: el protagonista se dibuja a partir de una descripción, y la foto solo hace falta para el juguete, si quieres uno. Si nos lo pides en hello@fabulka.com, lo borramos todo.",
+      de: "Sie werden auf Servern in Kasachstan gespeichert. Wir fragen nie nach Fotos von Kindern: Die Hauptfigur wird nach einer Beschreibung gezeichnet, ein Foto brauchen wir nur für das Spielzeug – falls du eins möchtest. Auf Anfrage an hello@fabulka.com löschen wir alles.",
     },
   },
   {
     id: "print-kz",
     ...withPrint,
-    q: { ru: "Как заказать печатную книгу?", kk: "Басылған кітапқа қалай тапсырыс беремін?", en: "How do I get a printed book?" },
+    q: {
+      ru: "Как заказать печатную книгу?",
+      kk: "Басылған кітапқа қалай тапсырыс беремін?",
+      en: "How do I get a printed book?",
+      es: "¿Cómo pido el libro impreso?",
+      de: "Wie bekomme ich ein gedrucktes Buch?",
+    },
     a: {
       ru: "На странице готовой книги нажмите «Заказать печатную книгу». Мягкая обложка — {softCover}, твёрдая — {hardCover}. Бесплатная доставка: {freeCities}; в другие города — {delivery}.",
       kk: "Дайын кітаптың бетінде «Басылған кітапқа тапсырыс» батырмасын басыңыз. Жұмсақ мұқаба — {softCover}, қатты мұқаба — {hardCover}. Тегін жеткізу: {freeCities}; басқа қалаларға — {delivery}.",
       en: "On the finished book's page, press “Order a printed book”. A soft cover is {softCover}, a hard cover {hardCover}. Free delivery to {freeCities}; to other cities, {delivery}.",
+      es: "En la página del libro terminado, pulsa «Pedir el libro impreso». Tapa blanda: {softCover}; tapa dura: {hardCover}. Envío gratis a {freeCities}; a otras ciudades, {delivery}.",
+      de: "Wähle auf der Seite des fertigen Buches „Gedrucktes Buch bestellen“. Softcover: {softCover}, Hardcover: {hardCover}. Kostenloser Versand nach {freeCities}; in andere Städte: {delivery}.",
     },
   },
   {
     id: "print-abroad",
     ...withoutPrint,
-    q: { ru: "Можно ли заказать печатную книгу?", kk: "Басылған кітапқа тапсырыс беруге бола ма?", en: "Can I get a printed book?" },
+    q: {
+      ru: "Можно ли заказать печатную книгу?",
+      kk: "Басылған кітапқа тапсырыс беруге бола ма?",
+      en: "Can I get a printed book?",
+      es: "¿Puedo pedir el libro impreso?",
+      de: "Kann ich ein gedrucktes Buch bestellen?",
+    },
     a: {
       ru: "К сожалению, в вашей стране печатные книги пока недоступны, но мы планируем открыть печать и в других странах. А пока готовую книгу можно скачать в PDF и распечатать самим. Нажмите «Хочу печатную книгу» на странице книги — и мы сообщим, когда печать заработает у вас.",
       kk: "Өкінішке қарай, сіздің еліңізде басылған кітаптар әзірге қолжетімсіз, бірақ біз басып шығаруды басқа елдерде де ашуды жоспарлап отырмыз. Әзірге дайын кітапты PDF түрінде жүктеп, өзіңіз басып шығара аласыз. Кітап бетінде «Басылған кітап керек» батырмасын басыңыз — басып шығару сіздің елде іске қосылғанда хабарлаймыз.",
       en: "Unfortunately, printed books aren't available in your country yet, but we plan to bring printing to more countries. Meanwhile you can download the finished book as a PDF and print it yourself. Press “I want a printed book” on the book's page and we'll let you know when printing reaches you.",
+      es: "Lamentablemente, todavía no imprimimos libros en tu país, pero queremos llevar la impresión a más países. Mientras tanto, puedes descargar el libro terminado en PDF e imprimirlo en casa. Pulsa «Quiero un libro impreso» en la página del libro y te avisaremos cuando la impresión llegue a tu país.",
+      de: "Leider gibt es in deinem Land noch keine gedruckten Bücher, aber wir möchten den Druck bald in weitere Länder bringen. Bis dahin kannst du das fertige Buch als PDF herunterladen und selbst ausdrucken. Wähle auf der Seite des Buches „Ich möchte ein gedrucktes Buch“ – wir sagen dir Bescheid, sobald der Druck bei dir verfügbar ist.",
     },
   },
   {
     id: "account",
     ...everywhere,
-    q: { ru: "Нужно ли регистрироваться?", kk: "Тіркелу керек пе?", en: "Do I need to sign up?" },
+    q: {
+      ru: "Нужно ли регистрироваться?",
+      kk: "Тіркелу керек пе?",
+      en: "Do I need to sign up?",
+      es: "¿Tengo que registrarme?",
+      de: "Muss ich mich registrieren?",
+    },
     a: {
       ru: "Нет. Книги сохраняются в вашем браузере, в разделе «Мои книги». Достаточно открыть каталог и выбрать историю.",
       kk: "Жоқ. Кітаптар браузеріңізде, «Менің кітаптарым» бөлімінде сақталады. Каталогты ашып, ертегі таңдасаңыз жеткілікті.",
       en: "No. Your books are kept in your browser under “My books”. Just open the catalog and choose a story.",
+      es: "No. Tus libros se guardan en tu navegador, en «Mis libros». Solo tienes que abrir el catálogo y elegir una historia.",
+      de: "Nein. Deine Bücher werden in deinem Browser unter „Meine Bücher“ gespeichert. Öffne einfach den Katalog und wähle eine Geschichte.",
     },
   },
   {
     id: "dislike",
     ...everywhere,
-    q: { ru: "А если книга не понравится?", kk: "Кітап ұнамаса ше?", en: "What if I don't like the book?" },
+    q: {
+      ru: "А если книга не понравится?",
+      kk: "Кітап ұнамаса ше?",
+      en: "What if I don't like the book?",
+      es: "¿Y si el libro no me gusta?",
+      de: "Und wenn mir das Buch nicht gefällt?",
+    },
     a: {
       ru: "Сделайте новую: поменяйте ответы, тему или методику. Если что-то пошло не так, напишите нам на hello@fabulka.com — разберёмся.",
       kk: "Жаңасын жасаңыз: жауаптарды, тақырыпты не әдістемені өзгертіңіз. Бірдеңе дұрыс болмаса, hello@fabulka.com поштасына жазыңыз — көмектесеміз.",
       en: "Make another one: change the answers, the topic or the method. If something went wrong, write to hello@fabulka.com and we'll sort it out.",
+      es: "Haz otro: cambia las respuestas, el tema o el método. Si hubo algún problema, escríbenos a hello@fabulka.com y lo solucionamos.",
+      de: "Erstell einfach ein neues: Ändere die Antworten, das Thema oder die Methode. Wenn etwas schiefgelaufen ist, schreib uns an hello@fabulka.com – wir kümmern uns darum.",
     },
   },
 ];

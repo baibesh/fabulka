@@ -128,7 +128,48 @@ describe('MethodologiesService', () => {
       expect(methodology.createMany).toHaveBeenCalledWith(
         expect.objectContaining({ skipDuplicates: true }),
       );
+    });
+
+    it('fills in the Spanish and German seed texts only where a method has none', async () => {
+      const { service, rows, methodology } = makeService();
+      const seed = DEFAULT_METHODOLOGIES.find(
+        (m) => m.slug === 'social-story',
+      )!;
+      const owned = {
+        name: 'Historia social propia',
+        summary: 'Escrita en la administración.',
+      };
+      rows.set(
+        'social-story',
+        withDates({
+          slug: 'social-story',
+          texts: {
+            ru: { name: 'Своё название', summary: 'Своё описание' },
+            en: seed.texts.en,
+            es: owned,
+          },
+          source: 'edited in the admin',
+          published: true,
+          sortOrder: 0,
+        }),
+      );
+      await service.onModuleInit();
+
+      expect(rows.get('social-story')).toMatchObject({
+        source: 'edited in the admin',
+        texts: { ru: { name: 'Своё название' }, es: owned, de: seed.texts.de },
+      });
+      expect(rows.get('social-story')?.texts).not.toHaveProperty('kk');
+      expect(rows.get('growth-mindset')?.texts).toMatchObject({
+        es: DEFAULT_METHODOLOGIES[3].texts.es,
+      });
+
+      methodology.updateMany.mockClear();
+      await service.onModuleInit();
       expect(methodology.updateMany).not.toHaveBeenCalled();
+      expect(
+        (await service.list('de')).find((m) => m.slug === 'social-story')?.name,
+      ).toBe(seed.texts.de!.name);
     });
   });
 
@@ -167,6 +208,7 @@ describe('MethodologiesService', () => {
     it('reads the database once, and again after an edit', async () => {
       const { service, methodology } = makeService();
       await service.onModuleInit();
+      methodology.findMany.mockClear(); // start-up reads the seed methods to fill in their texts
       await service.list();
       await service.list('kk');
       await service.forBook(undefined, 5);

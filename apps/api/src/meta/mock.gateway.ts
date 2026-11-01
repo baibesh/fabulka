@@ -71,6 +71,26 @@ const MOCK_TEXT: Record<
       'What would you do?',
     ],
   },
+  es: {
+    title: (name) => `${name} y el viaje de las estrellas`,
+    page: (n, name, city) =>
+      `Página ${n}. ${name} empieza una nueva aventura en ${city}.`,
+    questions: [
+      '¿Qué pasó en el libro?',
+      '¿A quién ves en el dibujo?',
+      '¿Y tú qué harías?',
+    ],
+  },
+  de: {
+    title: (name) => `${name} und die Sternenreise`,
+    page: (n, name, city) =>
+      `Seite ${n}. ${name} bricht in ${city} zu einem neuen Abenteuer auf.`,
+    questions: [
+      'Was ist im Buch passiert?',
+      'Wen siehst du auf dem Bild?',
+      'Was würdest du tun?',
+    ],
+  },
 };
 
 /** What the mock "hears" in any recording, and the fields it pulls out of it. */

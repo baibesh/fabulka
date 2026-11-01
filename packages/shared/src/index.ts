@@ -12,6 +12,8 @@ export const BOOK_LABELS: Record<Language, { madeFor: (name: string) => string; 
   ru: { madeFor: (name) => `Специально для тебя, ${name}!`, end: "Конец", talk: "Поговорим?" },
   kk: { madeFor: (name) => `Арнайы саған, ${name}!`, end: "Соңы", talk: "Әңгімелесейік" },
   en: { madeFor: (name) => `Made just for you, ${name}!`, end: "The End", talk: "Let's talk" },
+  es: { madeFor: (name) => `¡Hecho especialmente para ti, ${name}!`, end: "Fin", talk: "¿Hablamos?" },
+  de: { madeFor: (name) => `Nur für dich gemacht, ${name}!`, end: "Ende", talk: "Lass uns reden" },
 };
 
 /** What the parent tells us about the child. */

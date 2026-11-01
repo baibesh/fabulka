@@ -49,7 +49,8 @@ describe('withAuthParam', () => {
 describe('login parameters', () => {
   it('passes only known languages and plain visitor keys', () => {
     expect(uiLocale('kk')).toBe('kk');
-    expect(uiLocale('de')).toBeUndefined();
+    expect(uiLocale('de')).toBe('de');
+    expect(uiLocale('fr')).toBeUndefined();
     expect(clientKeyParam('3f1c2a9e-0b7d-4c55-9a7e-1b2c3d4e5f60')).toBe(
       '3f1c2a9e-0b7d-4c55-9a7e-1b2c3d4e5f60',
     );

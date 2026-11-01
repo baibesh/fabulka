@@ -53,6 +53,8 @@ const LANGUAGE_BIAS: Record<Language, string[]> = {
   ru: [LANGUAGE_MODEL_NAMES.ru],
   kk: [LANGUAGE_MODEL_NAMES.kk, LANGUAGE_MODEL_NAMES.ru],
   en: [LANGUAGE_MODEL_NAMES.en],
+  es: [LANGUAGE_MODEL_NAMES.es],
+  de: [LANGUAGE_MODEL_NAMES.de],
 };
 /** What SAM is asked to find in the parent's photo. */
 const TOY_CONCEPT = 'toy';

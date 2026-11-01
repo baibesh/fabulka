@@ -12,7 +12,12 @@ import {
 import type { PrismaService } from '../prisma/prisma.service';
 import { RESTRICTED_COUNTRIES } from '../geo/restricted';
 import { CACHE_MS, ReferenceService } from './reference.service';
-import { SEEDED_COUNTRIES_V1, SEEDED_FAQ_V1 } from './seeded';
+import {
+  SEEDED_COUNTRIES_V1,
+  SEEDED_COUNTRIES_V2,
+  SEEDED_FAQ_V1,
+  SEEDED_FAQ_V2,
+} from './seeded';
 
 /** The Setting table in memory behind the few Prisma calls the service makes. */
 function settingsStore(initial: Record<string, unknown> = {}) {
@@ -97,6 +102,28 @@ describe('ReferenceService seeding', () => {
     expect(rows.get(REFERENCE_KEYS.faq)).toEqual(DEFAULT_FAQ);
     const pl = (await service.countries()).find((c) => c.code === 'PL');
     expect(pl?.languages).toEqual(['en']);
+  });
+
+  it('upgrades the seed stored before Spanish and German to today’s', async () => {
+    const { service, rows } = settingsStore({
+      [REFERENCE_KEYS.countries]: structuredClone(SEEDED_COUNTRIES_V2),
+      [REFERENCE_KEYS.faq]: structuredClone(SEEDED_FAQ_V2),
+    });
+    await service.onModuleInit();
+
+    expect(rows.get(REFERENCE_KEYS.countries)).toEqual(DEFAULT_COUNTRIES);
+    expect(rows.get(REFERENCE_KEYS.faq)).toEqual(DEFAULT_FAQ);
+    const countries = await service.countries();
+    expect(countries.find((c) => c.code === 'DE')?.languages).toEqual([
+      'de',
+      'en',
+    ]);
+    expect(countries.find((c) => c.code === 'MX')?.languages).toEqual([
+      'es',
+      'en',
+    ]);
+    const faq = await service.public();
+    expect(faq.faq.every((item) => item.q.es && item.q.de)).toBe(true);
   });
 
   it('matches the old seed whatever the key order the database keeps', async () => {

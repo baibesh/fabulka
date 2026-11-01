@@ -38,7 +38,12 @@ import {
 import type { ZodType } from 'zod';
 import { GEO_POLICY_URL, RESTRICTED_COUNTRIES } from '../geo/restricted';
 import { PrismaService } from '../prisma/prisma.service';
-import { SEEDED_COUNTRIES_V1, SEEDED_FAQ_V1 } from './seeded';
+import {
+  SEEDED_COUNTRIES_V1,
+  SEEDED_COUNTRIES_V2,
+  SEEDED_FAQ_V1,
+  SEEDED_FAQ_V2,
+} from './seeded';
 
 /** How long the reference data is kept in memory; an edit in the admin drops it at once. */
 export const CACHE_MS = 60_000;
@@ -77,8 +82,8 @@ const FIELDS = Object.keys(REFERENCE_KEYS) as (keyof Snapshot)[];
  * by the owner, so today's default replaces it on start; an edited one is left alone.
  */
 const SEEDED: Partial<Record<keyof Snapshot, unknown[]>> = {
-  countries: [SEEDED_COUNTRIES_V1],
-  faq: [SEEDED_FAQ_V1],
+  countries: [SEEDED_COUNTRIES_V1, SEEDED_COUNTRIES_V2],
+  faq: [SEEDED_FAQ_V1, SEEDED_FAQ_V2],
 };
 
 /** Whether two JSON values are equal, whatever the order of their object keys. */

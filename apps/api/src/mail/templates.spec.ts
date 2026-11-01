@@ -61,6 +61,16 @@ describe('mail templates', () => {
     ).toContain('деньги не списывались');
   });
 
+  it('writes to Spanish and German parents in their language', () => {
+    const price = { amount: 3.9, currency: 'USD' as const };
+    expect(
+      purchaseReceipt({ kind: 'custom', price }, 'es', site).text,
+    ).toContain('una historia propia');
+    expect(orderStatusChanged(order, 'printing', 'de', site).subject).toBe(
+      `Bestellung Nr. ${orderNumber(order.id)}: wird gedruckt — Fabulka`,
+    );
+  });
+
   it('shows a dollar purchase in dollars', () => {
     const mail = purchaseReceipt(
       { kind: 'template', price: { amount: 3.9, currency: 'USD' } },

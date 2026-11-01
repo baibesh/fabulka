@@ -1,12 +1,12 @@
 import type { TemplateTranslation } from '@fabulka/shared';
 
 /**
- * Kazakh and English text of the starting catalog. Russian is the template itself. Choice options
- * are listed in the same order as the Russian ones.
+ * Kazakh, English, Spanish and German text of the starting catalog. Russian is the template
+ * itself. Choice options are listed in the same order as the Russian ones.
  */
 export const SEED_TRANSLATIONS: Record<
   string,
-  Record<'kk' | 'en', TemplateTranslation>
+  Record<'kk' | 'en' | 'es' | 'de', TemplateTranslation>
 > = {
   'first-day-kindergarten': {
     kk: {
@@ -62,6 +62,67 @@ export const SEED_TRANSLATIONS: Record<
         },
       },
     },
+    es: {
+      title: 'El primer día en la guardería',
+      summary:
+        'Con calma y paso a paso: la despedida, la maestra, los juegos y el reencuentro con mamá o papá.',
+      questions: {
+        toy: {
+          label: '¿Qué juguete se llevará?',
+          placeholder: 'un conejito de peluche',
+        },
+        goodbye: {
+          label: '¿Cómo es la despedida por la mañana?',
+          options: [
+            'con un abrazo',
+            'diciendo adiós por la ventana',
+            'chocando los cinco',
+            'con un beso en la mejilla',
+          ],
+        },
+        teacher: {
+          label: '¿Cómo se llama la maestra o el maestro?',
+          placeholder: 'la maestra Lucía',
+        },
+        looking_forward: {
+          label: '¿Qué es lo que más ganas tiene de hacer?',
+          options: [
+            'jugar',
+            'dibujar',
+            'hacer nuevos amigos',
+            'salir al patio',
+          ],
+        },
+      },
+    },
+    de: {
+      title: 'Der erste Tag in der Kita',
+      summary:
+        'Ganz ruhig, Schritt für Schritt: der Abschied, die Erzieherin, Spielen und der Moment, wenn Mama oder Papa wiederkommt.',
+      questions: {
+        toy: {
+          label: 'Welches Kuscheltier kommt mit?',
+          placeholder: 'ein Plüschhase',
+        },
+        goodbye: {
+          label: 'Wie verabschiedet ihr euch morgens?',
+          options: [
+            'mit einer Umarmung',
+            'durchs Fenster winken',
+            'abklatschen',
+            'ein Küsschen auf die Wange',
+          ],
+        },
+        teacher: {
+          label: 'Wie heißt die Erzieherin oder der Erzieher?',
+          placeholder: 'Frau Müller',
+        },
+        looking_forward: {
+          label: 'Worauf freut sich dein Kind am meisten?',
+          options: ['Spielen', 'Malen', 'neue Freunde', 'draußen spielen'],
+        },
+      },
+    },
   },
   'snow-leopard-alatau': {
     kk: {
@@ -99,6 +160,45 @@ export const SEED_TRANSLATIONS: Record<
         color: {
           label: 'Favourite colour',
           options: ['red', 'blue', 'green', 'yellow', 'purple', 'pink'],
+        },
+      },
+    },
+    es: {
+      title: 'El secreto del leopardo de las nieves',
+      summary:
+        'Un viaje a las montañas de Alatau: un águila real, la niebla, un lago de montaña y una cría de leopardo de las nieves perdida.',
+      questions: {
+        friend: {
+          label: 'Su mejor amigo o amiga, que se une a la aventura',
+          placeholder: 'Mateo',
+        },
+        dream: {
+          label: '¿Qué sueña con ser cuando crezca?',
+          placeholder: 'bombero',
+        },
+        color: {
+          label: 'Color favorito',
+          options: ['rojo', 'azul', 'verde', 'amarillo', 'morado', 'rosa'],
+        },
+      },
+    },
+    de: {
+      title: 'Das Geheimnis des Schneeleoparden',
+      summary:
+        'Eine Reise ins Alatau-Gebirge: ein Steinadler, Nebel, ein Bergsee und ein verirrtes Schneeleopardenjunges.',
+      questions: {
+        friend: {
+          label:
+            'Wer kommt als beste Freundin oder bester Freund mit auf die Reise?',
+          placeholder: 'Ben',
+        },
+        dream: {
+          label: 'Was möchte dein Kind später einmal werden?',
+          placeholder: 'Bergretterin',
+        },
+        color: {
+          label: 'Lieblingsfarbe',
+          options: ['Rot', 'Blau', 'Grün', 'Gelb', 'Lila', 'Rosa'],
         },
       },
     },
@@ -164,6 +264,66 @@ export const SEED_TRANSLATIONS: Record<
         },
       },
     },
+    es: {
+      title: '¡Voy a aprender!',
+      summary:
+        'No me sale… todavía. Un libro sobre cómo la práctica y la ayuda de la familia convierten el «no puedo» en «¡sí puedo!».',
+      questions: {
+        skill: {
+          label: '¿Qué está aprendiendo ahora?',
+          options: [
+            'a andar en bicicleta',
+            'a nadar',
+            'a leer',
+            'a atarse los cordones',
+            'a patinar sobre hielo',
+            'a tocar la dombra',
+          ],
+        },
+        helper: {
+          label: '¿Quién le ayuda a aprender?',
+          options: [
+            'mamá',
+            'papá',
+            'el abuelo',
+            'la abuela',
+            'su hermano mayor',
+            'su hermana mayor',
+            'un entrenador',
+          ],
+        },
+      },
+    },
+    de: {
+      title: 'Ich lerne das!',
+      summary:
+        'Klappt noch nicht? Noch nicht! Ein Buch darüber, wie Üben und die Hilfe der Familie aus „Ich kann das nicht“ ein „Ich kann das!“ machen.',
+      questions: {
+        skill: {
+          label: 'Was lernt dein Kind gerade?',
+          options: [
+            'Fahrrad fahren',
+            'schwimmen',
+            'lesen',
+            'Schuhe binden',
+            'Schlittschuh laufen',
+            'Dombra spielen',
+          ],
+        },
+        helper: {
+          label: 'Wer hilft beim Lernen?',
+          options: [
+            'Mama',
+            'Papa',
+            'Opa',
+            'Oma',
+            'der große Bruder',
+            'die große Schwester',
+            'ein Trainer',
+          ],
+        },
+      },
+    },
   },
   'big-feelings': {
     kk: {
@@ -216,6 +376,68 @@ export const SEED_TRANSLATIONS: Record<
         },
       },
     },
+    es: {
+      title: 'Una tormenta por dentro',
+      summary:
+        'Sobre las emociones grandes: cómo notarlas, ponerles nombre, calmarse y hacer las paces.',
+      questions: {
+        feeling: {
+          label: '¿Qué emoción le cuesta más manejar?',
+          options: [
+            'la rabia',
+            'el miedo',
+            'sentirse dolido',
+            'los celos',
+            'la tristeza',
+          ],
+        },
+        trigger: {
+          label: '¿Qué suele provocarla?',
+          placeholder: 'cuando su hermano le quita los juguetes',
+        },
+        calm: {
+          label: '¿Qué le ayuda a calmarse?',
+          options: [
+            'los abrazos',
+            'respirar hondo',
+            'contar hasta cinco',
+            'un rincón tranquilo',
+            'dibujar',
+          ],
+        },
+      },
+    },
+    de: {
+      title: 'Ein Sturm im Bauch',
+      summary:
+        'Über große Gefühle: sie bemerken, benennen, sich beruhigen und sich wieder vertragen.',
+      questions: {
+        feeling: {
+          label: 'Welches Gefühl fällt deinem Kind am schwersten?',
+          options: [
+            'Wut',
+            'Angst',
+            'Gekränktsein',
+            'Eifersucht',
+            'Traurigkeit',
+          ],
+        },
+        trigger: {
+          label: 'Was löst es meistens aus?',
+          placeholder: 'wenn der große Bruder die Spielsachen wegnimmt',
+        },
+        calm: {
+          label: 'Was hilft beim Beruhigen?',
+          options: [
+            'Kuscheln',
+            'tief durchatmen',
+            'bis fünf zählen',
+            'eine ruhige Ecke',
+            'Malen',
+          ],
+        },
+      },
+    },
   },
   'nauryz-new-friend': {
     kk: {
@@ -256,6 +478,44 @@ export const SEED_TRANSLATIONS: Record<
         },
       },
     },
+    es: {
+      title: 'Nauryz con un nuevo amigo',
+      summary:
+        'La fiesta de la primavera en tu ciudad: nauryz kozhe, una yurta, el columpio altybakan y un amigo recién llegado de otro país.',
+      questions: {
+        friend_country: {
+          label: '¿De qué país llegó el nuevo amigo?',
+          options: ['Corea', 'Turquía', 'Brasil', 'Alemania', 'Japón'],
+        },
+        dish: {
+          label: 'Su delicia favorita de Nauryz',
+          options: ['nauryz kozhe', 'baursak', 'beshbarmak', 'chak-chak'],
+        },
+        tradition: {
+          label: 'La tradición de Nauryz de tu familia',
+          placeholder: 'vamos a casa de la abuela',
+        },
+      },
+    },
+    de: {
+      title: 'Nauryz mit einem neuen Freund',
+      summary:
+        'Frühlingsfest in der eigenen Stadt: Nauryz-Koshe, eine Jurte, die Altybakan-Schaukel und ein Freund, der gerade aus einem anderen Land hergezogen ist.',
+      questions: {
+        friend_country: {
+          label: 'Aus welchem Land ist der neue Freund hergezogen?',
+          options: ['Korea', 'Türkei', 'Brasilien', 'Deutschland', 'Japan'],
+        },
+        dish: {
+          label: 'Lieblingsleckerei zu Nauryz',
+          options: ['Nauryz-Koshe', 'Baursak', 'Beschbarmak', 'Tschak-Tschak'],
+        },
+        tradition: {
+          label: 'Eure Nauryz-Tradition in der Familie',
+          placeholder: 'wir besuchen Oma',
+        },
+      },
+    },
   },
   'bath-time': {
     kk: {
@@ -279,6 +539,36 @@ export const SEED_TRANSLATIONS: Record<
         sound: {
           label: 'What does your little one say when splashing?',
           options: ['splish-splash', 'plop-plop', 'drip-drop'],
+        },
+      },
+    },
+    es: {
+      title: '¡Chap, chap, a la bañera!',
+      summary:
+        'Un baño antes de dormir para los más pequeños: juguetes, burbujas, una cancioncita que se repite y dulces sueños.',
+      questions: {
+        toy: {
+          label: 'Su juguete favorito para el baño',
+          placeholder: 'un patito amarillo',
+        },
+        sound: {
+          label: '¿Qué dice cuando chapotea?',
+          options: ['chap-chap', 'plas-plas', 'plic-ploc'],
+        },
+      },
+    },
+    de: {
+      title: 'Plitsch-platsch, ab in die Wanne!',
+      summary:
+        'Das Abendbad für die Kleinsten: Spielzeug, Seifenblasen, ein kleines Lied zum Wiederholen und süße Träume.',
+      questions: {
+        toy: {
+          label: 'Lieblingsspielzeug in der Badewanne',
+          placeholder: 'eine gelbe Quietscheente',
+        },
+        sound: {
+          label: 'Was sagt dein Kind beim Planschen?',
+          options: ['plitsch-platsch', 'plopp-plopp', 'tropf-tropf'],
         },
       },
     },

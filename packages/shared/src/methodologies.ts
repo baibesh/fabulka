@@ -201,6 +201,14 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
         name: "Rhythm and repetition for toddlers",
         summary: "A familiar day with a repeating line, sounds to say along and a small, kind surprise.",
       },
+      es: {
+        name: "Ritmo y repetición para los más pequeños",
+        summary: "Un día conocido con una frase que se repite, sonidos para decir en voz alta y una pequeña sorpresa bonita.",
+      },
+      de: {
+        name: "Rhythmus und Wiederholung für die Kleinsten",
+        summary: "Ein vertrauter Tag mit einem Satz, der immer wiederkehrt, Geräuschen zum Mitsprechen und einer kleinen, liebevollen Überraschung.",
+      },
     },
     source: "Predictable and repetitive texts in early literacy; reality-based stories for toddlers",
     ageMin: 2,
@@ -233,6 +241,14 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       en: {
         name: "Social story",
         summary: "Calmly prepares for something new: kindergarten, the doctor, a flight, a move, a new sibling.",
+      },
+      es: {
+        name: "Historia social",
+        summary: "Prepara con calma para algo nuevo: la guardería, el médico, un vuelo, una mudanza, un hermanito.",
+      },
+      de: {
+        name: "Soziale Geschichte",
+        summary: "Bereitet in Ruhe auf Neues vor: Kita, Arztbesuch, Flug, Umzug oder ein Geschwisterchen.",
       },
     },
     source: "Social Stories by Carol Gray",
@@ -267,6 +283,14 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       en: {
         name: "Emotional intelligence",
         summary: "The hero learns to notice and name feelings, calm down and understand others.",
+      },
+      es: {
+        name: "Inteligencia emocional",
+        summary: "El protagonista aprende a notar y nombrar lo que siente, a calmarse y a entender a los demás.",
+      },
+      de: {
+        name: "Emotionale Intelligenz",
+        summary: "Die Hauptfigur lernt, Gefühle zu bemerken und zu benennen, sich zu beruhigen und andere zu verstehen.",
       },
     },
     source: "CASEL social and emotional learning framework; emotion coaching by John Gottman",
@@ -303,6 +327,14 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
         name: "Growth mindset",
         summary: "Can't do it — yet. The hero tries, makes mistakes, finds a way and gets there through effort.",
       },
+      es: {
+        name: "Mentalidad de crecimiento",
+        summary: "No me sale… todavía. El protagonista lo intenta, se equivoca, busca la manera y lo consigue con esfuerzo.",
+      },
+      de: {
+        name: "Wachstumsdenken",
+        summary: "„Ich kann das nicht“ – noch nicht! Die Hauptfigur probiert, macht Fehler, findet einen Weg und schafft es mit Ausdauer.",
+      },
     },
     source: "Growth mindset research by Carol Dweck",
     ageMin: 5,
@@ -337,6 +369,14 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
         name: "Mirrors and windows",
         summary: "Children see their own city and culture in the book and discover the worlds of other people.",
       },
+      es: {
+        name: "Espejos y ventanas",
+        summary: "Los niños reconocen en el libro su ciudad y su cultura, y descubren el mundo de otras personas.",
+      },
+      de: {
+        name: "Spiegel und Fenster",
+        summary: "Dein Kind entdeckt im Buch seine eigene Stadt und Kultur – und die Welt anderer Menschen.",
+      },
     },
     source: "\"Mirrors, windows and sliding glass doors\" by Rudine Sims Bishop",
     ageMin: 4,
@@ -369,6 +409,14 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       en: {
         name: "Adventure",
         summary: "A journey to a magical place built on the child's interests, where kindness and wit win.",
+      },
+      es: {
+        name: "Aventura",
+        summary: "Un viaje a un mundo mágico inspirado en lo que más le gusta al niño, donde ganan la bondad y el ingenio.",
+      },
+      de: {
+        name: "Abenteuer",
+        summary: "Eine Reise in eine magische Welt rund um die Lieblingsthemen deines Kindes, in der Freundlichkeit und Köpfchen gewinnen.",
       },
     },
     source: "The hero's journey (Campbell, Vogler), adapted for picture books",

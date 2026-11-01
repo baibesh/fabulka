@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { BookTemplate, Prisma } from '@prisma/client';
 import {
+  FALLBACK_LANGUAGES,
   LANGUAGES,
   type Answers,
   type ChildProfile,
@@ -18,6 +19,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { SEED_TEMPLATES } from './catalog';
 import { SEED_TRANSLATIONS } from './catalog-i18n';
+import { ADDED_LANGUAGES } from '../common/added-languages';
 
 type Translations = Partial<Record<Language, TemplateTranslation>>;
 
@@ -58,6 +60,34 @@ export class TemplatesService implements OnModuleInit {
         where: { slug, translations: { equals: {} } },
         data: { translations },
       });
+    }
+    await this.addSeedTranslations();
+  }
+
+  /**
+   * Gives the seed catalog books the translations of languages added after they were seeded
+   * (ADDED_LANGUAGES), where a book has none in that language; never replaces one that is there.
+   */
+  private async addSeedTranslations() {
+    const rows = await this.prisma.bookTemplate.findMany({
+      where: { slug: { in: Object.keys(SEED_TRANSLATIONS) } },
+      select: { slug: true, translations: true },
+    });
+    for (const row of rows) {
+      const seed: Translations = SEED_TRANSLATIONS[row.slug] ?? {};
+      const translations = { ...(row.translations as Translations | null) };
+      const missing = ADDED_LANGUAGES.filter(
+        (lang) => seed[lang] && !translations[lang],
+      );
+      if (!missing.length) continue;
+      for (const lang of missing) translations[lang] = seed[lang];
+      await this.prisma.bookTemplate.update({
+        where: { slug: row.slug },
+        data: { translations },
+      });
+      this.logger.log(
+        `added ${missing.join(', ')} to catalog book ${row.slug}`,
+      );
     }
   }
 
@@ -110,11 +140,20 @@ export function questions(row: BookTemplate): TemplateQuestion[] {
   return row.questions as unknown as TemplateQuestion[];
 }
 
+/**
+ * The translation to show in `lang`: its own, else its fallbacks' (English for Spanish and German);
+ * undefined where Russian, the book's own text in its columns, comes first.
+ */
 function translation(
   row: BookTemplate,
   lang: Language,
 ): TemplateTranslation | undefined {
-  return lang === 'ru' ? undefined : (row.translations as Translations)[lang];
+  const translations = (row.translations ?? {}) as Translations;
+  for (const l of FALLBACK_LANGUAGES[lang]) {
+    if (l === 'ru') return undefined;
+    if (translations[l]) return translations[l];
+  }
+  return undefined;
 }
 
 function localizedQuestions(

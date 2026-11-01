@@ -139,7 +139,7 @@ describe("orders", () => {
     expect(CreateOrderSchema.shape.email.safeParse("not-an-email").success).toBe(false);
     expect(CreateOrderSchema.shape.email.safeParse(`${"a".repeat(196)}@x.kz`).success).toBe(false);
     expect(CreateOrderSchema.shape.locale.safeParse("kk").success).toBe(true);
-    expect(CreateOrderSchema.shape.locale.safeParse("de").success).toBe(false);
+    expect(CreateOrderSchema.shape.locale.safeParse("fr").success).toBe(false);
   });
 
   it("walks the order through its stages", () => {
@@ -271,7 +271,7 @@ describe("countries", () => {
     expect(countryFromIp("KZ", owners)).toBe("other");
     expect(countryFromIp(null, owners)).toBe("UZ");
     expect(countryFromIp(null, [])).toBe("other");
-    expect(countryInfo("KZ", owners)).toEqual({ languages: ["en", "ru"], currency: "USD", print: false });
+    expect(countryInfo("KZ", owners)).toEqual({ languages: ["en", "es", "de", "ru"], currency: "USD", print: false });
   });
 
   it("never lists Russia or Belarus, and prints only in Kazakhstan", () => {
@@ -287,7 +287,14 @@ describe("countries", () => {
     expect(languageFor("KZ", "kk", list)).toBe("kk");
     expect(languageFor("UZ", "kk", list)).toBe("ru");
     expect(languageFor("KG", "en", list)).toBe("en");
-    expect(languageFor("DE", "kk", list)).toBe("en");
+    expect(languageFor("DE", "kk", list)).toBe("de");
+    expect(languageFor("DE", "ru", list)).toBe("de");
+    expect(languageFor("AT", "en", list)).toBe("en");
+    expect(languageFor("ES", "de", list)).toBe("es");
+    expect(languageFor("MX", "es", list)).toBe("es");
+    expect(languageFor("US", "es", list)).toBe("en");
+    expect(languageFor("other", "es", list)).toBe("es");
+    expect(languageFor("other", "de", list)).toBe("de");
     // Russian only where many families read it: never in Poland, English first in Georgia.
     expect(languageFor("PL", "ru", list)).toBe("en");
     expect(languageFor("GE", "kk", list)).toBe("en");
@@ -306,7 +313,7 @@ describe("countries", () => {
     expect(CountriesSchema.safeParse([{ ...kz, code: "XX" }]).success).toBe(false);
     expect(CountriesSchema.safeParse([{ ...kz, languages: [] }]).success).toBe(false);
     expect(CountriesSchema.safeParse([{ ...kz, languages: ["ru", "ru"] }]).success).toBe(false);
-    expect(CountriesSchema.safeParse([{ ...kz, languages: ["de"] }]).success).toBe(false);
+    expect(CountriesSchema.safeParse([{ ...kz, languages: ["fr"] }]).success).toBe(false);
     expect(CountriesSchema.safeParse([{ ...kz, currency: "EUR" }]).success).toBe(false);
   });
 
@@ -323,13 +330,15 @@ describe("localized texts", () => {
     expect(localized({ ru: "Привет", kk: "Сәлем", en: "Hi" }, "kk")).toBe("Сәлем");
     expect(localized({ ru: "Привет", en: "Hi" }, "kk")).toBe("Привет");
     expect(localized({ en: "Hi" }, "kk")).toBe("Hi");
+    expect(localized({ ru: "Привет", en: "Hi" }, "es")).toBe("Hi");
+    expect(localized({ ru: "Привет", en: "Hi", de: "Hallo" }, "de")).toBe("Hallo");
   });
 
   it("requires the base languages and drops empty optional ones", () => {
     const schema = localizedTextSchema(20);
     expect(schema.parse({ ru: " а ", en: "b", kk: "  " })).toEqual({ ru: "а", en: "b" });
     expect(schema.safeParse({ ru: "а", kk: "ә" }).success).toBe(false);
-    expect(schema.safeParse({ ru: "а", en: "b", de: "c" }).success).toBe(false);
+    expect(schema.safeParse({ ru: "а", en: "b", fr: "c" }).success).toBe(false);
     expect(schema.safeParse({ ru: "а".repeat(21), en: "b" }).success).toBe(false);
   });
 });
