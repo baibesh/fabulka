@@ -180,6 +180,11 @@ export async function publishTheme(id: string): Promise<AdminTheme> {
   return AdminThemeSchema.parse(await request(`/api/admin/themes/${id}/publish`, { method: "POST" }));
 }
 
+/** Takes a published theme back: no longer offered; books keep it, catalog books that named it pick by age. */
+export async function unpublishTheme(id: string): Promise<AdminTheme> {
+  return AdminThemeSchema.parse(await request(`/api/admin/themes/${id}/unpublish`, { method: "POST" }));
+}
+
 export const deleteTheme = (id: string) => request(`/api/admin/themes/${id}`, { method: "DELETE" });
 
 export async function saveFormats(formats: PrintFormat[]): Promise<PrintFormat[]> {

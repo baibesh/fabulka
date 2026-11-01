@@ -254,13 +254,27 @@ export class ThemesService {
     });
   }
 
+  /**
+   * Publishes a proposed theme, or takes it back. Unpublished, it is no longer offered to staff or
+   * parents; books keep their copy of it, and catalog books that named it go back to picking by age,
+   * as when it is deleted.
+   */
   async publish(id: string, published: boolean): Promise<AdminTheme> {
     const row = await this.prisma.theme
       .update({ where: { id }, data: { published } })
       .catch(() => {
         throw new NotFoundException(`theme ${id} not found`);
       });
+    if (!published) await this.releaseTemplates(id);
     return this.dto(row);
+  }
+
+  /** Catalog books that named the theme go back to a theme by age. */
+  private releaseTemplates(id: string) {
+    return this.prisma.bookTemplate.updateMany({
+      where: { layoutTheme: id },
+      data: { layoutTheme: null },
+    });
   }
 
   /**
@@ -270,10 +284,7 @@ export class ThemesService {
   async remove(id: string): Promise<void> {
     const { count } = await this.prisma.theme.deleteMany({ where: { id } });
     if (!count) throw new NotFoundException(`theme ${id} not found`);
-    await this.prisma.bookTemplate.updateMany({
-      where: { layoutTheme: id },
-      data: { layoutTheme: null },
-    });
+    await this.releaseTemplates(id);
     await rm(join(this.storage.root, 'themes', id), {
       recursive: true,
       force: true,

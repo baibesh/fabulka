@@ -159,6 +159,8 @@ function Editor({ initial }: { initial: AdminTemplate }) {
           <Field label={t("admin.template.layoutTheme")} hint={t("admin.template.layoutTheme.hint")}>
             <Select
               data-testid="template-layout-theme"
+              data-options={themes.map((theme) => theme.id).join(" ")}
+              data-loaded={allThemes.data ? "true" : "false"}
               value={draft.layoutTheme ?? ""}
               onChange={(e) => set("layoutTheme", e.target.value || null)}
             >

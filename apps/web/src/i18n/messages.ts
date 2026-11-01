@@ -818,6 +818,8 @@ const ru = {
   "design.photo.error.type": "Нужна фотография в формате JPEG, PNG или HEIC.",
   "design.photo.error.size": "Фото больше 8 МБ — выберите другое или уменьшите его.",
   "design.photo.error.decode": "Не получилось открыть это фото — попробуйте другое.",
+  "admin.themes.unpublish": "Снять с публикации",
+  "admin.themes.unpublish.hint": "Если снять тему с публикации, её больше не увидят сотрудники и родители. Готовые книги сохранят своё оформление, а книги каталога с этой темой снова будут подбирать тему по возрасту.",
 } as const;
 
 export type MessageKey = keyof typeof ru;
@@ -1636,6 +1638,8 @@ const kk: Messages = {
   "design.photo.error.type": "JPEG, PNG немесе HEIC пішіміндегі сурет керек.",
   "design.photo.error.size": "Сурет 8 МБ-тан үлкен — басқасын таңдаңыз не кішірейтіңіз.",
   "design.photo.error.decode": "Бұл суретті ашу мүмкін болмады — басқасын көріңіз.",
+  "admin.themes.unpublish": "Жариялаудан алу",
+  "admin.themes.unpublish.hint": "Тақырыпты жариялаудан алсаңыз, оны қызметкерлер мен ата-аналар енді көрмейді. Дайын кітаптар безендіруін сақтайды, ал осы тақырыптағы каталог кітаптары тақырыпты қайтадан жасқа қарай таңдайды.",
 };
 
 const en: Messages = {
@@ -2452,6 +2456,8 @@ const en: Messages = {
   "design.photo.error.type": "Please choose a JPEG, PNG or HEIC photo.",
   "design.photo.error.size": "The photo is over 8 MB: choose another one or make it smaller.",
   "design.photo.error.decode": "We could not open this photo: please try another one.",
+  "admin.themes.unpublish": "Unpublish",
+  "admin.themes.unpublish.hint": "Once unpublished, staff and parents no longer see the theme. Finished books keep their look, and catalog books that used it go back to a theme picked by age.",
 };
 
 const es: Messages = {
@@ -3268,6 +3274,8 @@ const es: Messages = {
   "design.photo.error.type": "Elige una foto en JPEG, PNG o HEIC.",
   "design.photo.error.size": "La foto pesa más de 8 MB: elige otra o redúcela.",
   "design.photo.error.decode": "No pudimos abrir esta foto: prueba con otra.",
+  "admin.themes.unpublish": "Retirar",
+  "admin.themes.unpublish.hint": "Al retirarlo, el personal y los padres dejan de ver el tema. Los libros ya hechos conservan su diseño y los libros del catálogo que lo usaban vuelven a elegir el tema según la edad.",
 };
 
 const de: Messages = {
@@ -4084,6 +4092,8 @@ const de: Messages = {
   "design.photo.error.type": "Bitte wähle ein Foto im Format JPEG, PNG oder HEIC.",
   "design.photo.error.size": "Das Foto ist größer als 8 MB: Wähle ein anderes oder verkleinere es.",
   "design.photo.error.decode": "Dieses Foto ließ sich nicht öffnen: Probiere ein anderes.",
+  "admin.themes.unpublish": "Zurückziehen",
+  "admin.themes.unpublish.hint": "Nach dem Zurückziehen sehen Team und Eltern das Thema nicht mehr. Fertige Bücher behalten ihr Aussehen, Katalogbücher mit diesem Thema wählen ihr Thema wieder nach dem Alter.",
 };
 
 export const MESSAGES: Record<UiLocale, Messages> = { ru, kk, en, es, de };

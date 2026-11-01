@@ -1,5 +1,11 @@
 import { UnprocessableEntityException } from '@nestjs/common';
-import { THEME_REFUSED, type ThemeCheck } from '@fabulka/shared';
+import {
+  LANGUAGES,
+  ProposedThemeSchema,
+  THEME_REFUSED,
+  themeFromProposal,
+  type ThemeCheck,
+} from '@fabulka/shared';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -123,3 +129,61 @@ describe('ThemesService.propose (Chromium)', () => {
     expect(message).toMatch(/Lobster is a display font/);
   });
 });
+
+describe('ThemesService.publish', () => {
+  function setup() {
+    const row = {
+      id: 'ai-1',
+      brief: 'лес',
+      theme: mockThemeRow(),
+      checks: [],
+      previews: {},
+      published: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const prisma = {
+      theme: {
+        update: jest.fn(({ data }: { data: { published: boolean } }) =>
+          Promise.resolve({ ...row, published: data.published }),
+        ),
+      },
+      bookTemplate: {
+        updateMany: jest.fn(() => Promise.resolve({ count: 2 })),
+      },
+    };
+    const service = new ThemesService(
+      prisma as unknown as PrismaService,
+      new MockGateway(0),
+      {} as PdfService,
+      { url: (p: string) => `/files/${p}` } as unknown as StorageService,
+      {} as JournalService,
+    );
+    return { service, prisma };
+  }
+
+  it('takes a theme back: catalog books that named it pick by age again', async () => {
+    const { service, prisma } = setup();
+    const theme = await service.publish('ai-1', false);
+    expect(theme.status).toBe('draft');
+    expect(prisma.bookTemplate.updateMany).toHaveBeenCalledWith({
+      where: { layoutTheme: 'ai-1' },
+      data: { layoutTheme: null },
+    });
+  });
+
+  it('leaves catalog books alone when publishing', async () => {
+    const { service, prisma } = setup();
+    expect((await service.publish('ai-1', true)).status).toBe('published');
+    expect(prisma.bookTemplate.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+/** A stored AI theme, as the mock proposes it, checked into a BookTheme. */
+function mockThemeRow() {
+  const theme = themeFromProposal(
+    'ai-1',
+    ProposedThemeSchema.parse(mockTheme('лес')),
+  );
+  return { ...theme, languages: [...LANGUAGES] };
+}

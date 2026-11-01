@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LANGUAGES, LANGUAGE_NAMES, THEME_REFUSED, ThemeRefusalSchema, type AdminTheme, type Language, type ThemeCheck } from "@fabulka/shared";
-import { Check, Sparkles, Trash2, X } from "lucide-react";
+import { Check, EyeOff, Sparkles, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/input";
 import { ErrorText } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
-import { adminThemes, deleteTheme, proposeTheme, publishTheme } from "@/lib/admin-api";
+import { adminThemes, deleteTheme, proposeTheme, publishTheme, unpublishTheme } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
 import { themeName } from "@/lib/themes";
 import { Card, PageTitle, useAdminI18n } from "./ui";
@@ -21,7 +21,7 @@ const QUERY = ["admin", "themes"];
  * /admin/themes: the curated themes (read-only) and the ones Muse Spark proposed. The owner types a
  * brief; the proposal is checked in code (fonts, contrast, sizes, glyphs, a sample book in all five
  * languages) and either refused with the reasons or kept as a draft with its page previews, which
- * the owner publishes — then staff and parents can pick it — or deletes.
+ * the owner publishes — then staff and parents can pick it — takes back again, or deletes.
  */
 export function ThemesPage() {
   const { t } = useAdminI18n();
@@ -129,6 +129,7 @@ function ThemeCard({ entry }: { entry: AdminTheme }) {
   const [confirm, setConfirm] = useState(false);
   const refresh = () => void queryClient.invalidateQueries({ queryKey: QUERY });
   const publish = useMutation({ mutationFn: () => publishTheme(theme.id), onSuccess: refresh });
+  const unpublish = useMutation({ mutationFn: () => unpublishTheme(theme.id), onSuccess: refresh });
   const remove = useMutation({ mutationFn: () => deleteTheme(theme.id), onSuccess: refresh });
   const previews = entry.previews[language] ?? [];
   return (
@@ -145,6 +146,19 @@ function ThemeCard({ entry }: { entry: AdminTheme }) {
                 {t("admin.themes.publish")}
               </Button>
             )}
+            {ai && entry.status === "published" && (
+              <Button
+                size="sm"
+                variant="secondary"
+                data-testid="theme-unpublish"
+                loading={unpublish.isPending}
+                icon={<EyeOff className="size-4" />}
+                title={t("admin.themes.unpublish.hint")}
+                onClick={() => unpublish.mutate()}
+              >
+                {t("admin.themes.unpublish")}
+              </Button>
+            )}
             {ai &&
               (confirm ? (
                 <Button size="sm" variant="danger" data-testid="theme-delete-confirm" loading={remove.isPending} onClick={() => remove.mutate()}>
@@ -158,6 +172,11 @@ function ThemeCard({ entry }: { entry: AdminTheme }) {
           </div>
         }
       >
+        {ai && entry.status === "published" && (
+          <p data-testid="theme-unpublish-hint" className="-mt-2 text-xs text-muted">
+            {t("admin.themes.unpublish.hint")}
+          </p>
+        )}
         {entry.brief && (
           <p className="-mt-2 text-sm text-muted">
             «{entry.brief}»{entry.createdAt && ` · ${date(entry.createdAt)}`}
@@ -205,7 +224,7 @@ function ThemeCard({ entry }: { entry: AdminTheme }) {
             </ol>
           </div>
         )}
-        {(publish.isError || remove.isError) && <ErrorText>{(publish.error ?? remove.error)?.message}</ErrorText>}
+        {(publish.isError || unpublish.isError || remove.isError) && <ErrorText>{(publish.error ?? unpublish.error ?? remove.error)?.message}</ErrorText>}
       </Card>
     </li>
   );

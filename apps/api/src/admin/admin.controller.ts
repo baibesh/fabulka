@@ -248,6 +248,13 @@ export class AdminController {
     return this.themes.publish(id, true);
   }
 
+  /** Takes a published theme back: no longer offered; books keep theirs, catalog books pick by age. */
+  @Post('themes/:id/unpublish')
+  @HttpCode(200)
+  unpublishTheme(@Param('id') id: string) {
+    return this.themes.publish(id, false);
+  }
+
   @Delete('themes/:id')
   @HttpCode(204)
   deleteTheme(@Param('id') id: string) {

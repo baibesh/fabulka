@@ -1,8 +1,9 @@
 # AI-proposed themes (mock models): the owner types a brief in «Темы», Muse Spark proposes a theme,
 # the code checks fonts, contrast, sizes and letters and renders a sample book in all five languages;
 # the owner looks at the previews per language and publishes it; staff pick it in the template editor
-# (which previews the sample book per language) and a parent switches a book to it. A pale theme is
-# refused with the reason.
+# (which previews the sample book per language) and a parent switches a book to it. Taken back, it
+# leaves the template editor, the catalog book and the parents' picker, while the book keeps its look.
+# A pale theme is refused with the reason.
 appId: ${WEB}
 tags: [admin, layout, themes]
 db: ${DATABASE_URL}
@@ -142,6 +143,42 @@ commands:
       extract: { bookTheme: "$[0].theme" }
       assert: { rows: 1, first: { source: ai, body: Literata, qa: ok } }
   - assertTrue: { equals: ["${bookTheme}", "${themeId}"] }
+  # The owner takes the theme back: no longer offered in the template editor or to parents; the
+  # catalog book goes back to a theme by age; the book keeps its copy.
+  - openLink: "${WEB}/admin/themes?lang=ru"
+  - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'][data-status=published] [data-testid=theme-unpublish-hint]" }
+  - tapOn: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-unpublish]" }
+  - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'][data-status=draft] [data-testid=theme-publish]" }
+  - sql:
+      query: 'select "layoutTheme" is null as auto from "BookTemplate" where slug = $1'
+      params: ["${slug}"]
+      readOnly: true
+      assert: { rows: 1, first: { auto: true } }
+  - request:
+      url: /themes
+      extract: { last: "$[-1:].id" }
+      assert: { status: 200 }
+  - assertTrue: "${'${last}' !== '${themeId}'}"
+  - openLink: "${WEB}/admin/catalog/${slug}"
+  - waitForVisible: { testId: template-editor }
+  - waitForVisible: { css: "[data-testid=template-layout-theme][data-loaded=true][data-options~=fairy]" }
+  - assertNotVisible: { css: "[data-testid=template-layout-theme][data-options~='${themeId}']" }
+  - sql:
+      query: 'select id from "Book" where child->>''name'' = $1'
+      params: ["${childName}"]
+      readOnly: true
+      extract: { bookId: "$[0].id" }
+  - openLink: "${WEB}/books/${bookId}?lang=ru"
+  - waitForVisible: { css: "[data-testid=book-reader][data-theme='${themeId}']", timeout: 20000 }
+  - waitForVisible: { testId: theme-fairy }
+  - assertNotVisible: { testId: "theme-${themeId}" }
+  - sql:
+      query: "select layout->'theme'->>'id' as theme from \"Book\" where id = $1"
+      params: ["${bookId}"]
+      readOnly: true
+      extract: { kept: "$[0].theme" }
+  - assertTrue: { equals: ["${kept}", "${themeId}"] }
+
   # The model calls are in the journal.
   - sql:
       query: >-
