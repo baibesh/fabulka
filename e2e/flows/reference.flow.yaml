@@ -133,6 +133,12 @@ commands:
   - waitForVisible: { testId: reference-error, contains: "Печать оплачивается в тенге" }
   - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-print]" }
   - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-default-en]" }
+  # Languages are chips: + lists only the ones not added yet.
+  - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-lang-add]" }
+  - waitForVisible: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-lang-option-es]" }
+  - assertNotVisible: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-lang-option-en]" }
+  - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-lang-option-es]" }
+  - waitForVisible: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-lang-es]" }
   - tapOn: { testId: reference-save }
   - waitForVisible: { testId: reference-saved }
   - assertNotVisible: { testId: reference-error }
@@ -140,7 +146,7 @@ commands:
       url: ${API}/reference
       assert:
         status: 200
-        json: { "$.countries[0].code": KZ, "$.countries[26].code": PT, "$.countries[26].languages[0]": en, "$.countries[26].currency": USD }
+        json: { "$.countries[0].code": KZ, "$.countries[26].code": PT, "$.countries[26].languages[0]": en, "$.countries[26].languages[2]": es, "$.countries[26].currency": USD }
   - openLink: "${WEB}/catalog?lang=ru"
   - waitForVisible: { testId: template-first-day-kindergarten }
   - tapOn: { testId: ui-country }
