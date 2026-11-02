@@ -55,11 +55,13 @@ commands:
   - request: { url: "${WEB}/de/catalog", assert: { status: 200 } }
   - assertTrue: { contains: ["${response.body}", "<title>${TITLE}</title>"] }
   - assertTrue: { contains: ["${response.body}", "<meta property=\"og:title\" content=\"${TITLE}\"/>"] }
-  - assertTrue: ${!http.get(WEB + "/en/catalog").body.includes(TITLE)}
+  - assertTrue: ${!http.get(WEB + "/ru/catalog").body.includes(TITLE) && !http.get(WEB + "/catalog").body.includes(TITLE)}
   # IndexNow heard about the page in all five languages.
   - request: { url: "${API}/test/indexnow", assert: { status: 200 } }
   - assertTrue: { contains: ["${response.body}", "http://localhost:3000/de/catalog"] }
   - assertTrue: { contains: ["${response.body}", "http://localhost:3000/kk/catalog"] }
+  - assertTrue: { contains: ["${response.body}", "http://localhost:3000/ru/catalog"] }
+  - assertTrue: { contains: ["${response.body}", "\"http://localhost:3000/catalog\""] }
   - assertTrue: { contains: ["${response.body}", "\"key\":\"e2e0indexnow0key0123\""] }
 
   # noindex: in the page's head and out of the sitemap (this language only).
@@ -72,7 +74,8 @@ commands:
   - assertTrue: { contains: ["${response.body}", "<meta name=\"robots\" content=\"noindex, follow\"/>"] }
   - request: { url: "${WEB}/sitemap.xml", assert: { status: 200 } }
   - assertTrue: ${!http.get(WEB + "/sitemap.xml").body.includes("<loc>" + SITE + "/de/catalog</loc>")}
-  - assertTrue: { contains: ["${response.body}", "<loc>${SITE}/en/catalog</loc>"] }
+  - assertTrue: { contains: ["${response.body}", "<loc>${SITE}/catalog</loc>"] }
+  - assertTrue: { contains: ["${response.body}", "<loc>${SITE}/ru/catalog</loc>"] }
 
   # History: newest first — publish, save (noindex), publish, save (the title). Reverting the first
   # save puts the defaults back; publishing makes them live.

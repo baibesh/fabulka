@@ -64,7 +64,7 @@ commands:
 
   # The page shows the sample with the child's name marked and explained, and what will change.
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/catalog/${slug}?lang=ru"
+  - openLink: "${WEB}/ru/catalog/${slug}"
   # The sample arrives only after hydration, by when the page has saved the language.
   - waitForVisible: { testId: sample-book }
   - assertVisible: "Так выглядит книга — у вас будет своя"
@@ -100,7 +100,7 @@ commands:
   - request:
       url: /templates/${slug}
       assert: { status: 200, json: { "$.sampleBookId": null, "$.sampleLanguage": null, "$.sampleDetails": null } }
-  - openLink: "${WEB}/catalog/${slug}?lang=ru"
+  - openLink: "${WEB}/ru/catalog/${slug}"
   - waitForVisible: { testId: template-changes }
   - assertNotVisible: { testId: sample-book }
 after:

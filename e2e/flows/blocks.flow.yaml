@@ -17,7 +17,7 @@ http:
 commands:
   # A book of your own from the wizard (a 5-year-old: «Сказка»).
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/create?lang=ru"
+  - openLink: "${WEB}/ru/create"
   - tapOn: { testId: voice-manual }
   - tapOn: { testId: child-name }
   - inputText: "${childName}"

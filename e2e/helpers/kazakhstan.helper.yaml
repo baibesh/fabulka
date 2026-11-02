@@ -1,0 +1,15 @@
+# Picks Kazakhstan in the footer, as a visitor would. The local test browser's address maps to no
+# country, so with no country cookie the site renders for "other" (dollars, no print, no Kazakh)
+# until one is picked; flows about tenge prices, print or Kazakh start here and then open the page
+# they test (the cookie stays for the rest of the flow). It picks on the short "create" page: a tap
+# on the footer of the long home page can miss (TAPSTEP_NOTES 9). Kept outside flows/: the config's
+# `flows/**` glob would run a helper there as a flow of its own (TAPSTEP_NOTES 13).
+commands:
+  - openLink: "${WEB}/create"
+  - waitForVisible: { testId: voice-manual }
+  - scrollUntilVisible: { testId: ui-country }
+  - tapOn: { testId: ui-country }
+  - waitForVisible: { testId: ui-country-option-KZ }
+  - tapOn: { testId: ui-country-option-KZ }
+  - extendedWaitUntil: { notVisible: { testId: ui-country-dialog }, timeout: 5000 }
+  - assertVisible: { testId: ui-country, contains: "Kazakhstan" }

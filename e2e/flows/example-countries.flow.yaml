@@ -148,9 +148,17 @@ commands:
   # The template's book still follows its template.
   - assertTrue: ${output.de.includes(templatedId) && !output.kz.includes(templatedId)}
 
-  # The home page in Kazakhstan (the local default): the book of its own is there.
+  # The home page with no country cookie: the test browser's (local) address gives "other", where
+  # neither book is shown.
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/?lang=ru"
+  - openLink: "${WEB}/ru"
+  - waitForVisible: { testId: hero-covers }
+  - assertVisible: { testId: ui-country, contains: "Другая страна" }
+  - assertNotVisible: { testId: "example-${plainId}" }
+  - assertNotVisible: { testId: "example-${templatedId}" }
+  # Kazakhstan, picked in the footer: the book of its own is there.
+  - runFlow: ../helpers/kazakhstan.helper.yaml
+  - openLink: "${WEB}/ru"
   - waitForVisible: { testId: hero-covers }
   - assertVisible: { testId: ui-country, contains: "Казахстан" }
   - waitForVisible: { testId: "example-${plainId}" }
@@ -158,7 +166,7 @@ commands:
 
   # Germany (picked in the footer of the shorter catalog page, as a tap far down the long home page
   # can miss): the template's book comes in, the book about Nauryz goes.
-  - openLink: "${WEB}/catalog"
+  - openLink: "${WEB}/ru/catalog"
   - waitForVisible: { testId: template-first-day-kindergarten }
   - tapOn: { testId: ui-country }
   - waitForVisible: { testId: ui-country-search }

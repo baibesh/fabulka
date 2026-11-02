@@ -51,3 +51,7 @@ Things noticed while using tapstep on Fabulka. Version: 0.13.11.
     opens, and only `-v` shows "acted on a page that had not settled (Network(3))". A
     `scrollUntilVisible` first makes it reliable. Printing that warning without `-v`, or retrying
     the scroll once the page settles, would have saved a long bisect.
+13. **A `.helper.yaml` matched by the config's `flows:` glob is run as a flow.** With
+    `flows: ["flows/**"]` in e2e/config.yaml, `tapstep test e2e/flows --config e2e/config.yaml` ran
+    `flows/kazakhstan.helper.yaml` on its own (and failed it: no page open), although directory runs
+    are documented to skip helpers. Workaround: keep helpers outside the glob (`e2e/helpers/`).

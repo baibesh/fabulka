@@ -20,7 +20,9 @@ env:
   dutchIp: 193.0.6.139
 commands:
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/?lang=ru"
+  # The test browser's address has no country: the visitor picks Kazakhstan (tenge, print).
+  - runFlow: ../helpers/kazakhstan.helper.yaml
+  - openLink: "${WEB}/ru"
   # The hero's covers render only after hydration, by when the page has saved the language.
   - waitForVisible: { testId: hero-covers }
   - openLink: "${WEB}/admin/login?lang=ru"
@@ -85,15 +87,16 @@ commands:
   - waitForVisible: { css: "[data-testid=city-row][data-id=turkestan]" }
 
   # The book page shows the new price.
-  - openLink: "${WEB}/catalog/first-day-kindergarten?lang=ru"
+  - openLink: "${WEB}/ru/catalog/first-day-kindergarten"
   - waitForVisible: { testId: template-title }
   - waitForVisible: { text: "2 450 ₸", childOf: { testId: book-price } }
 
-  # The checkout records the owner's price, whatever the client sends.
+  # The checkout records the owner's price, whatever the client sends (in Kazakhstan, as chosen on
+  # the site: a local address alone would be "other").
   - request:
       method: POST
       url: ${API}/quota/purchase
-      headers: { X-Client-Key: "${clientKey}" }
+      headers: { X-Client-Key: "${clientKey}", X-Country: KZ }
       json: { kind: template, priceKzt: 1 }
       assert: { status: "2xx" }
   - sql:
@@ -147,7 +150,7 @@ commands:
       assert:
         status: 200
         json: { "$.countries[0].code": KZ, "$.countries[26].code": PT, "$.countries[26].languages[0]": en, "$.countries[26].languages[2]": es, "$.countries[26].currency": USD }
-  - openLink: "${WEB}/catalog?lang=ru"
+  - openLink: "${WEB}/ru/catalog"
   - waitForVisible: { testId: template-first-day-kindergarten }
   - scrollUntilVisible: { testId: ui-country }
   - tapOn: { testId: ui-country }
@@ -189,7 +192,7 @@ commands:
   - assertNotVisible: { css: "[data-testid=country-row][data-code=PT]" }
   - tapOn: { testId: reference-save }
   - waitForVisible: { testId: reference-saved }
-  - openLink: "${WEB}/catalog?lang=ru"
+  - openLink: "${WEB}/ru/catalog"
   - waitForVisible: { testId: template-first-day-kindergarten }
   - waitForVisible: { testId: ui-country, contains: "Другая страна" }
   - scrollUntilVisible: { testId: ui-country }
@@ -230,7 +233,7 @@ commands:
   - tapOn: { testId: reference-save }
   - waitForVisible: { testId: reference-saved }
   - assertNotVisible: { testId: reference-error }
-  - openLink: "${WEB}/?lang=ru"
+  - openLink: "${WEB}/ru"
   - waitForVisible: { testId: hero-covers }
   - tapOn: "Нужно ли регистрироваться?"
   - waitForVisible: { contains: "Нет, регистрация не нужна: книги ждут вас" }

@@ -12,13 +12,13 @@ env:
   email: "parent+${Date.now()}@e2e.test"
 commands:
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/?lang=ru"
+  - openLink: "${WEB}/ru"
   # The hero's covers render only after hydration, by when the page has saved the language.
   - waitForVisible: { testId: hero-covers }
   # Signed out: the header offers to sign in, nothing asks for it.
   - waitForVisible: { testId: auth-login }
 
-  - openLink: "${WEB}/create"
+  - openLink: "${WEB}/ru/create"
   - tapOn: { testId: voice-manual }
   - tapOn: { testId: child-name }
   - inputText: "${childName}"

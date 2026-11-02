@@ -1,6 +1,7 @@
 # An order holds a name and an address: only the browser that made the book can order it or see it.
 # The parent gets a confirmation email (kept in memory by the API without RESEND_API_KEY). Print is
-# ordered only from a country with print: the one chosen on the site (X-Country), else the IP's.
+# ordered only from a country with print: the one chosen on the site (X-Country), else the IP's,
+# else "other" (no print). The steps order from Kazakhstan unless they say otherwise.
 device: none
 env:
   childName: "Owner ${Date.now()}"
@@ -9,6 +10,8 @@ env:
   parentEmail: "order-${Date.now()}@e2e.test"
 http:
   baseUrl: ${API}
+  headers:
+    X-Country: KZ
 commands:
   - request:
       method: POST

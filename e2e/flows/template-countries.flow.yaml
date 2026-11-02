@@ -119,15 +119,25 @@ commands:
   - assertTrue: ${output.exampleKz}
   - assertTrue: ${!output.exampleOther}
 
-  # The site: in Kazakhstan (the local default) the catalog has it.
+  # The site with no country cookie: the test browser's (local) address gives "other", which has
+  # only the books listed everywhere.
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/catalog?lang=ru"
+  - openLink: "${WEB}/ru/catalog"
+  - waitForVisible: { testId: template-first-day-kindergarten }
+  - assertVisible: { testId: ui-country, contains: "Другая страна" }
+  - assertNotVisible: { testId: "template-${slug}" }
+  - assertNotVisible: { testId: template-nauryz-new-friend }
+  # In Kazakhstan, picked in the footer, the catalog has it.
+  - runFlow: ../helpers/kazakhstan.helper.yaml
+  - openLink: "${WEB}/ru/catalog"
   - waitForVisible: { testId: template-first-day-kindergarten }
   - assertVisible: { testId: ui-country, contains: "Казахстан" }
   - assertVisible: { testId: "template-${slug}" }
   - assertVisible: { testId: template-nauryz-new-friend }
 
-  # Germany: the list updates without it, nor the books about Kazakhstan.
+  # Germany: the list updates without it, nor the books about Kazakhstan. Down to the footer first:
+  # tapping straight away can land while the page is still streaming in.
+  - scrollUntilVisible: { testId: ui-country }
   - tapOn: { testId: ui-country }
   - waitForVisible: { testId: ui-country-search }
   - tapOn: { testId: ui-country-search }

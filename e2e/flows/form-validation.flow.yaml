@@ -3,10 +3,12 @@ appId: ${WEB}
 tags: [smoke, form]
 commands:
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/?lang=ru"
+  # The test browser's address has no country: the visitor picks Kazakhstan (tenge, print).
+  - runFlow: ../helpers/kazakhstan.helper.yaml
+  - openLink: "${WEB}/ru"
   # The hero's covers render only after hydration, by when the page has saved the language.
   - waitForVisible: { testId: hero-covers }
-  - openLink: "${WEB}/create"
+  - openLink: "${WEB}/ru/create"
   # Voice input is on in e2e: the first step offers a recording, the link skips it.
   - waitForVisible: { css: "[data-step=voice]" }
   - assertVisible: { contains: "Шаг 1 из 5", childOf: { testId: wizard-step } }
@@ -51,4 +53,4 @@ commands:
   - tapOn: { testId: wizard-edit-child }
   - waitForVisible: { css: "[data-step=child]" }
   - assertVisible: { testId: child-interests, value: "футбол" }
-  - assertUrl: { equals: "${WEB}/create" }
+  - assertUrl: { equals: "${WEB}/ru/create" }

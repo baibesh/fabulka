@@ -12,6 +12,8 @@ http:
   baseUrl: ${API}
   headers:
     X-Client-Key: "${visitor}"
+    # Priced in tenge: a local address alone would be "other" (dollars).
+    X-Country: KZ
 commands:
   - request:
       url: /quota

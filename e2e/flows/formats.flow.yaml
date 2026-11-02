@@ -20,7 +20,9 @@ http:
   baseUrl: ${API}
 commands:
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/create?lang=ru"
+  # The test browser's address has no country: the visitor picks Kazakhstan (tenge, print).
+  - runFlow: ../helpers/kazakhstan.helper.yaml
+  - openLink: "${WEB}/ru/create"
   - tapOn: { testId: voice-manual }
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
@@ -62,7 +64,7 @@ commands:
       assert: { status: 200, json: { "$.formats[1].id": a4-landscape, "$.formats[1].prices.soft": 15500 } }
 
   # The parent's order form: the square book at today's price, then A4 landscape at the new one.
-  - openLink: "${WEB}/books/${bookId}/order?lang=ru"
+  - openLink: "${WEB}/ru/books/${bookId}/order"
   - waitForVisible: { testId: order-form }
   - waitForVisible: { css: "[data-testid=order-format-preview][data-format=square-210][data-width-mm='210']" }
   - assertVisible: { testId: order-total, text: "9 900 ₸" }

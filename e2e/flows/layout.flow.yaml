@@ -26,7 +26,7 @@ http:
 commands:
   # A book of your own from the wizard (a 5-year-old: the «Сказка» theme by age).
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/create?lang=ru"
+  - openLink: "${WEB}/ru/create"
   - tapOn: { testId: voice-manual }
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
@@ -141,7 +141,7 @@ commands:
       readOnly: true
       assert: { rows: 1, first: { n: 1 } }
   # The parent sees that it cannot be printed; an order is refused.
-  - openLink: "${WEB}/books/${bookId}?lang=ru"
+  - openLink: "${WEB}/ru/books/${bookId}"
   - waitForVisible: { testId: print-blocked }
 after:
   - sql: { exec: "update \"BookTemplate\" set \"layoutTheme\" = null where slug = $1", params: ["${slug}"] }

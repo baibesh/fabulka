@@ -31,8 +31,10 @@ before:
   - sql: { exec: "update \"Book\" set featured = true where id = $1", params: ["${bookId}"] }
 commands:
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/?lang=ru"
-  # The hero's covers render only after hydration, by when the page has saved the language.
+  # The test browser's address has no country: the visitor picks Kazakhstan.
+  - runFlow: ../helpers/kazakhstan.helper.yaml
+  - openLink: "${WEB}/ru"
+  # The hero's covers render only after hydration.
   - waitForVisible: { testId: hero-covers }
   - assertVisible: "Книга, где ваш ребёнок — главный герой"
   - assertVisible: { contains: "Первые книги — бесплатно, дальше — от 1 900 ₸" }
@@ -115,7 +117,7 @@ commands:
   - assertUrl: { equals: "${WEB}/kk/catalog" }
   - assertVisible: "Кітаптар каталогы"
   - assertVisible: { testId: custom-price, text: "$5.90" }
-  - openLink: "${WEB}/"
+  - openLink: "${WEB}/ru"
   - waitForVisible: { testId: hero-covers }
   - assertVisible: { contains: "Первые книги — бесплатно, дальше — от $3.90" }
   - assertVisible: "В вашей стране печати пока нет — мы планируем её открыть. А PDF легко распечатать самим."
@@ -146,7 +148,7 @@ commands:
   - assertVisible: { contains: "Ready in a few minutes: read it on screen or download the PDF." }
   - assertVisible: { contains: "Your first books are free, then from $3.90" }
   # From the top of the page again (the country dialog was opened from the footer).
-  - openLink: "${WEB}/en"
+  - openLink: "${WEB}/"
   - waitForVisible: { testId: hero-covers }
   - assertVisible: { testId: trust, containsDescendants: { text: "Books in English" } }
   - assertVisible: { testId: trust, containsDescendants: { text: "A PDF in minutes, ready to print at home" } }
@@ -159,15 +161,16 @@ commands:
   - tapOn: "Can I get a printed book?"
   - waitForVisible: { contains: "printed books aren't available in your country yet" }
   # The book page keeps the PDF and turns print into a request (an old ?lang= link lands on the
-  # English address).
-  - openLink: "${WEB}/books/${bookId}?lang=en"
+  # English, unprefixed address).
+  - openLink: "${WEB}/ru/books/${bookId}?lang=en"
   - waitForVisible: { testId: want-print }
+  - assertUrl: { equals: "${WEB}/books/${bookId}" }
   - assertNotVisible: { testId: order-print }
   - assertVisible: { contains: "Printed books aren't available in your country yet" }
   - assertVisible: { testId: download-pdf }
   - assertNotVisible: { contains: "₸" }
   # The order form is not offered there either.
-  - openLink: "${WEB}/en/books/${bookId}/order"
+  - openLink: "${WEB}/books/${bookId}/order"
   - waitForVisible: { testId: order-unavailable }
   - assertNotVisible: { testId: order-form }
 after:

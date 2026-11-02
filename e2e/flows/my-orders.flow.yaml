@@ -21,7 +21,9 @@ env:
 commands:
   # An anonymous book and a printed order of it, from this browser.
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/create?lang=ru"
+  # The test browser's address has no country: the visitor picks Kazakhstan (tenge, print).
+  - runFlow: ../helpers/kazakhstan.helper.yaml
+  - openLink: "${WEB}/ru/create"
   - tapOn: { testId: voice-manual }
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
@@ -100,7 +102,7 @@ commands:
         first: { events: 1 }
 
   # My orders, signed out: the card with the timeline (shipped is the current step, dated), the address.
-  - openLink: "${WEB}/my"
+  - openLink: "${WEB}/ru/my"
   - waitForVisible: { testId: my-order, timeout: 10000 }
   - assertVisible: { text: "Мои заказы" }
   - assertVisible: { testId: order-step-shipped, containsDescendants: { testId: order-step-date } }
@@ -176,7 +178,7 @@ commands:
       readOnly: true
       assert:
         first: { events: 1 }
-  - openLink: "${WEB}/orders/${orderId}"
+  - openLink: "${WEB}/ru/orders/${orderId}"
   - waitForVisible: { testId: order-step-delivered, containsDescendants: { testId: order-step-date }, timeout: 10000 }
   - assertVisible: { text: "${deliveredNote}" }
 after:

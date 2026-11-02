@@ -118,7 +118,7 @@ commands:
   - assertTrue: { equals: ["${saved}", "${themeId}"] }
 
   # A parent switches their book to it in the reader.
-  - openLink: "${WEB}/create?lang=ru"
+  - openLink: "${WEB}/ru/create"
   - tapOn: { testId: voice-manual }
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
@@ -168,7 +168,7 @@ commands:
       params: ["${childName}"]
       readOnly: true
       extract: { bookId: "$[0].id" }
-  - openLink: "${WEB}/books/${bookId}?lang=ru"
+  - openLink: "${WEB}/ru/books/${bookId}"
   - waitForVisible: { css: "[data-testid=book-reader][data-theme='${themeId}']", timeout: 20000 }
   - waitForVisible: { testId: theme-fairy }
   - assertNotVisible: { testId: "theme-${themeId}" }

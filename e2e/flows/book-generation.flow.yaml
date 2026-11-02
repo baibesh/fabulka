@@ -10,7 +10,7 @@ env:
   childName: "Айгерим ${Date.now()}"
 commands:
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/?lang=ru"
+  - openLink: "${WEB}/ru"
   # The hero's covers render only after hydration, by when the page has saved the language.
   - waitForVisible: { testId: hero-covers }
   # The header link: the home page below the hero may still grow as example books arrive.
