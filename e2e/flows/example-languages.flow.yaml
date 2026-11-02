@@ -1,0 +1,160 @@
+# An example is one story with a version per language. The admin makes an example of a finished
+# Russian book, translates it into English (mock models), and sees the English chip turn done; the
+# chips are listed English first, Russian last. The home page then shows the English version on `/`,
+# the Russian one on `/ru`, and on `/es`, where no example has a Spanish version, the catalog's
+# Spanish samples fill the block instead (never another language's version).
+appId: ${WEB}
+tags: [examples, admin, i18n]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  stamp: "${Date.now()}"
+  childName: "Тимур ${stamp}"
+  sampleName: "Lucía ${stamp}"
+  sampleSlug: not-yet
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+  headers:
+    X-Client-Key: "e2e-example-languages-${stamp}"
+    X-Demo-Code: E2E-DEMO
+before:
+  # No other example on these pages.
+  - sql: { exec: "delete from \"Example\"" }
+commands:
+  # A finished Russian book (a story of its own, shown everywhere), and a Spanish one from a catalog
+  # book listed everywhere, which becomes that catalog book's Spanish sample.
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${childName}", age: 6, gender: boy, interests: [горы], city: Алматы, language: ru }
+      extract: { bookId: "$.id" }
+      assert: { status: 201 }
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${sampleName}", age: 6, gender: girl, interests: [dinosaurios], city: Madrid, language: es }
+        template: ${sampleSlug}
+        answers: { skill: "a andar en bicicleta", helper: papá }
+      extract: { sampleId: "$.id" }
+      assert: { status: 201 }
+  - request:
+      url: /books/${bookId}
+      retryUntil:
+        status: 200
+        json: { "$.status": done }
+      timeout: 30000
+      extract: { ruTitle: "$.title" }
+  - request:
+      url: /books/${sampleId}
+      retryUntil:
+        status: 200
+        json: { "$.status": done }
+      timeout: 30000
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: PATCH
+      url: /admin/templates/${sampleSlug}
+      json: { samples: { es: "${sampleId}" } }
+      assert: { status: 200 }
+
+  # The admin makes the Russian book an example from its page.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - openLink: "${WEB}/admin/books/${bookId}"
+  - waitForVisible: { testId: make-example }
+  - assertVisible: { testId: make-example, text: "Make an example" }
+  - tapOn: { testId: make-example }
+  - waitForVisible: { testId: book-example, contains: "Русский" }
+  - request:
+      url: /admin/books/${bookId}
+      extract: { exampleId: "$.example.id" }
+      assert: { status: 200, json: { "$.example.language": ru } }
+
+  # «Examples»: a chip per language, English first and Russian last; only Russian is there.
+  - tapOn: { testId: admin-nav-examples }
+  - waitForVisible: { testId: "example-${exampleId}" }
+  - assertVisible: { testId: "example-${exampleId}-title", text: "${ruTitle}" }
+  - assertVisible: { css: "[data-testid='example-${exampleId}-languages'] > li:nth-child(1)[data-testid='example-${exampleId}-lang-en']" }
+  - assertVisible: { css: "[data-testid='example-${exampleId}-languages'] > li:nth-child(2)[data-testid='example-${exampleId}-lang-kk']" }
+  - assertVisible: { css: "[data-testid='example-${exampleId}-languages'] > li:nth-child(3)[data-testid='example-${exampleId}-lang-es']" }
+  - assertVisible: { css: "[data-testid='example-${exampleId}-languages'] > li:nth-child(4)[data-testid='example-${exampleId}-lang-de']" }
+  - assertVisible: { css: "[data-testid='example-${exampleId}-languages'] > li:nth-child(5)[data-testid='example-${exampleId}-lang-ru']" }
+  - assertVisible: { css: "[data-testid='example-${exampleId}-lang-ru'][data-state=done]" }
+  - assertVisible: { css: "[data-testid='example-${exampleId}-lang-en'][data-state=missing]" }
+
+  # Translated into English: "translating…", then done.
+  - tapOn: { testId: "example-${exampleId}-translate-en" }
+  - waitForVisible: { css: "[data-testid='example-${exampleId}-lang-en'][data-state=done]", timeout: 30000 }
+  - assertVisible: { css: "[data-testid='example-${exampleId}-lang-de'][data-state=missing]" }
+  # A language with a version cannot be translated into again.
+  - request:
+      method: POST
+      url: /admin/examples/${exampleId}/translate
+      json: { languages: [en] }
+      assert: { status: 409, json: { "$.code": example_language_taken } }
+  # The English book: the name in Latin letters, the same pictures (copied into its own folder).
+  - request:
+      url: /books/examples?lang=en&country=other
+      extract: { enId: "$[0].id", enTitle: "$[0].title" }
+      assert: { status: 200, json: { "$[0].kind": example, "$[0].language": en } }
+  - assertTrue: { contains: ["${enTitle}", "Timur ${stamp}"] }
+  - request:
+      url: /books/${enId}
+      extract: { enChild: "$.childName" }
+      assert: { status: 200, json: { "$.status": done, "$.language": en } }
+  # Assert values are taken as written, so the extracted ones are compared here.
+  - assertTrue: { equals: ["${enChild}", "Timur ${stamp}"] }
+  - sql:
+      query: "select count(*)::int as n from \"ModelCall\" where \"bookId\" = $1 and kind = 'translate' and status = 'ok'"
+      params: ["${enId}"]
+      readOnly: true
+      assert:
+        first: { n: 1 }
+
+  # The home page in English shows the English version, and it opens in English.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/"
+  - waitForVisible: { testId: hero-covers }
+  - waitForVisible: { testId: "example-${enId}" }
+  - assertVisible: { testId: "example-${enId}", containsDescendants: { contains: "Starry Journey" } }
+  - assertNotVisible: { testId: "example-${bookId}" }
+  - tapOn: { testId: "example-${enId}" }
+  - waitForVisible: { testId: book-title }
+  - assertVisible: { testId: book-title, contains: "Timur ${stamp}" }
+  - assertUrl: { equals: "${WEB}/books/${enId}" }
+
+  # In Russian, the Russian version.
+  - openLink: "${WEB}/ru"
+  - waitForVisible: { testId: hero-covers }
+  - waitForVisible: { testId: "example-${bookId}" }
+  - assertVisible: { testId: "example-${bookId}", containsDescendants: { contains: "${childName}" } }
+  - assertNotVisible: { testId: "example-${enId}" }
+
+  # In Spanish there is no version: the catalog's Spanish sample fills the block.
+  - openLink: "${WEB}/es"
+  - waitForVisible: { testId: hero-covers }
+  - waitForVisible: { css: "[data-testid='example-${sampleId}'][data-kind=sample]" }
+  - assertNotVisible: { testId: "example-${enId}" }
+  - assertNotVisible: { testId: "example-${bookId}" }
+after:
+  - sql: { exec: "delete from \"Example\"" }
+  - sql: { exec: "delete from \"Book\" where \"clientKey\" = $1 or (\"clientKey\" = 'staff:example-translation' and child->>'name' like $2)", params: ["e2e-example-languages-${stamp}", "%${stamp}"] }

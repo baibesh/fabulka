@@ -28,7 +28,9 @@ before:
         status: 200
         json: { "$.status": done }
       timeout: 30000
-  - sql: { exec: "update \"Book\" set featured = true where id = $1", params: ["${bookId}"] }
+  # An example of its own, first on the home page, with this book as its Russian version.
+  - sql: { exec: "insert into \"Example\" (id, \"sortOrder\") values ('landing-' || $1, -1000)", params: ["${bookId}"] }
+  - sql: { exec: "insert into \"ExampleVersion\" (\"exampleId\", language, \"bookId\") values ('landing-' || $1, 'ru', $1)", params: ["${bookId}"] }
 commands:
   - launchApp: { appId: "${WEB}", clearState: true }
   # The test browser's address has no country: the visitor picks Kazakhstan.
@@ -174,4 +176,5 @@ commands:
   - waitForVisible: { testId: order-unavailable }
   - assertNotVisible: { testId: order-form }
 after:
+  - sql: { exec: "delete from \"Example\" where id = 'landing-' || $1", params: ["${bookId}"] }
   - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

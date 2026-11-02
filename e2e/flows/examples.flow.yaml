@@ -1,5 +1,5 @@
-# Example books on the home page, set in the admin, and the pause told up front on the landing and
-# on the form.
+# Example books on the home page, set in the admin (a finished book made an example), and the pause
+# told up front on the landing and on the form.
 appId: ${WEB}
 tags: [smoke, examples]
 db: ${DATABASE_URL}
@@ -33,11 +33,11 @@ commands:
       timeout: 30000
       extract: { title: "$.title" }
 
-  # Only the admin picks examples; the session cookie from the login is carried on.
+  # Only the admin makes examples; the session cookie from the login is carried on.
   - request:
-      method: PATCH
-      url: /admin/books/${bookId}
-      json: { featured: true }
+      method: POST
+      url: /admin/examples
+      json: { bookId: "${bookId}" }
       assert: { status: 401 }
   - request:
       method: POST
@@ -45,21 +45,32 @@ commands:
       json: { email: "${adminEmail}", password: "${adminPassword}" }
       assert: { status: 204 }
   - request:
-      method: PATCH
-      url: /admin/books/${bookId}
-      json: { featured: "yes" }
+      method: POST
+      url: /admin/examples
+      json: { bookId: 42 }
       assert: { status: 400 }
   - request:
-      method: PATCH
-      url: /admin/books/${bookId}
-      json: { featured: true }
-      assert:
-        status: 200
-        json: { "$.featured": true }
+      method: POST
+      url: /admin/examples
+      json: { bookId: "no-such-book" }
+      assert: { status: 404, json: { "$.code": example_book_not_found } }
   - request:
-      url: /books/examples
+      method: POST
+      url: /admin/examples
+      json: { bookId: "${bookId}" }
+      assert:
+        status: 201
+        json: { "$.versions[0].language": ru, "$.versions[0].state": done }
+  # A book is the version of one example at most.
+  - request:
+      method: POST
+      url: /admin/examples
+      json: { bookId: "${bookId}" }
+      assert: { status: 409, json: { "$.code": example_book_taken } }
+  - request:
+      url: /books/examples?lang=ru
       extract: { exampleId: "$[0].id", exampleTitle: "$[0].title" }
-      assert: { status: 200 }
+      assert: { status: 200, json: { "$[0].kind": example } }
   # Assert values are taken as written, so the extracted ones are compared here.
   - assertTrue: { equals: ["${exampleId}", "${bookId}"] }
   - assertTrue: { equals: ["${exampleTitle}", "${title}"] }
@@ -122,3 +133,4 @@ commands:
 after:
   - sql: { exec: "delete from \"Setting\" where key = 'generation_paused'" }
   - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }
+  - sql: { exec: "delete from \"Example\" e where not exists (select 1 from \"ExampleVersion\" v where v.\"exampleId\" = e.id)" }

@@ -31,7 +31,7 @@ commands:
   - assertTrue: { contains: ["${output.de}", "first-day-kindergarten"] }
   - assertTrue: ${!output.de.includes('nauryz-new-friend') && !output.de.includes('snow-leopard-alatau')}
 
-  # A finished (mock) book from the template, featured as an example.
+  # A finished (mock) book from the template, made an example.
   - request:
       method: POST
       url: /books
@@ -53,10 +53,10 @@ commands:
       json: { email: "${adminEmail}", password: "${adminPassword}" }
       assert: { status: 204 }
   - request:
-      method: PATCH
-      url: /admin/books/${bookId}
-      json: { featured: true }
-      assert: { status: 200 }
+      method: POST
+      url: /admin/examples
+      json: { bookId: "${bookId}" }
+      assert: { status: 201 }
 
   # Only real codes of countries the site offers.
   - request:
@@ -109,7 +109,7 @@ commands:
   - evalScript: >-
       output.kz = output.slugs('&country=KZ'); output.de = output.slugs('&country=DE');
       output.other = output.slugs('&country=other'); output.none = output.slugs('');
-      const examples = (country) => json(http.get(API + '/books/examples?country=' + country).body).map((b) => b.id);
+      const examples = (country) => json(http.get(API + '/books/examples?lang=ru&country=' + country).body).map((b) => b.id);
       output.exampleKz = examples('KZ').includes(bookId); output.exampleOther = examples('other').includes(bookId)
   - assertTrue: ${output.kz.split(' ').includes(slug)}
   - assertTrue: ${!output.de.split(' ').includes(slug)}
@@ -188,3 +188,4 @@ commands:
 after:
   - sql: { exec: "update \"BookTemplate\" set countries = '{}' where slug = $1", params: ["${slug}"] }
   - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }
+  - sql: { exec: "delete from \"Example\" e where not exists (select 1 from \"ExampleVersion\" v where v.\"exampleId\" = e.id)" }
