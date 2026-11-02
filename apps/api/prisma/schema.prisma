@@ -330,3 +330,56 @@ model Theme {
 
   @@index([published, createdAt])
 }
+
+/// SEO of one public page in one language (admin «SEO»). Staff edit the draft; publishing copies it
+/// to `published`, which is what the site serves. Null fields (in either) mean the page's default.
+/// `page` is a key: home, catalog, create, privacy, terms, template:<slug>, book:<id>.
+model PageSeo {
+  page        String
+  /// The language version (Language in @fabulka/shared): SEO is per language, not per country.
+  language    String
+  /// SeoFields (@fabulka/shared): title, description, ogImage (a storage path), noindex.
+  draft       Json
+  /// SeoFields as last published; null until the first publish.
+  published   Json?
+  publishedAt DateTime?
+  /// Who last saved the draft (an email, when known).
+  updatedBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@id([page, language])
+}
+
+/// Every change made in the admin's SEO section: pages, redirects and settings, with who made it
+/// and the values before and after. A page's change can be reverted from here.
+model SeoHistory {
+  id        String   @id @default(cuid())
+  /// page, redirect or settings (SEO_HISTORY_KINDS).
+  kind      String
+  /// `<page key>@<language>` for a page, the redirect's id, or "settings".
+  target    String
+  /// save, publish, revert, create, update or delete (SEO_HISTORY_ACTIONS).
+  action    String
+  before    Json?
+  after     Json?
+  who       String?
+  createdAt DateTime @default(now())
+
+  @@index([kind, target, createdAt])
+  @@index([createdAt])
+}
+
+/// A redirect staff set up in the admin's SEO section, applied by the site's proxy.
+model Redirect {
+  id        String   @id @default(cuid())
+  /// A site path as visitors type it, language prefix included (/de/alt); no query.
+  from      String   @unique
+  /// A site path or an absolute http(s) URL.
+  to        String
+  /// 301 (permanent) or 302 (temporary).
+  status    Int      @default(301)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

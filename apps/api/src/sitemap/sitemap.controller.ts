@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import type { SitemapEntries } from '@fabulka/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 
 /**
  * What the site's sitemap.xml lists besides its fixed pages. Unlike GET /templates and GET
@@ -8,7 +9,10 @@ import { PrismaService } from '../prisma/prisma.service';
  */
 @Controller('sitemap')
 export class SitemapController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   @Get()
   async entries(): Promise<SitemapEntries> {
@@ -21,7 +25,7 @@ export class SitemapController {
       this.prisma.book.findMany({
         where: { featured: true, status: 'done', title: { not: null } },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, updatedAt: true },
+        select: { id: true, updatedAt: true, title: true, heroImagePath: true },
       }),
     ]);
     return {
@@ -32,6 +36,8 @@ export class SitemapController {
       examples: examples.map((b) => ({
         id: b.id,
         updatedAt: b.updatedAt.toISOString(),
+        title: b.title,
+        heroImageUrl: this.storage.url(b.heroImagePath),
       })),
     };
   }

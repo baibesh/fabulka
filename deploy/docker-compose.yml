@@ -30,6 +30,8 @@ services:
       STORAGE_DIR: /data/storage
       # Turn away visitors from countries where Meta's models may not be offered (apps/api/src/geo).
       GEO_BLOCK: "true"
+      # Where the API tells the web app to re-render after an SEO publish (REVALIDATE_SECRET in .env).
+      WEB_INTERNAL_URL: http://web:3000
     volumes:
       - storage:/data/storage
     depends_on:
@@ -46,6 +48,8 @@ services:
     restart: unless-stopped
     environment:
       API_URL: http://api:4000
+      # Checks the API's re-render requests after an SEO publish (the same value the API has).
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET:-}
     ports:
       - "127.0.0.1:${WEB_PORT:-13110}:3000"
     depends_on:

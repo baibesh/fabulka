@@ -30,6 +30,13 @@ import { MethodologiesController } from './methodologies/methodologies.controlle
 import { MethodologiesService } from './methodologies/methodologies.service';
 import { OrdersController } from './orders/orders.controller';
 import { SitemapController } from './sitemap/sitemap.controller';
+import {
+  SeoAdminController,
+  SeoController,
+  TestIndexNowController,
+} from './seo/seo.controller';
+import { SeoWebService } from './seo/seo-web.service';
+import { SeoService } from './seo/seo.service';
 import { OrdersService } from './orders/orders.service';
 import { PdfModule } from './pdf/pdf.service';
 import { PrismaModule } from './prisma/prisma.service';
@@ -89,6 +96,9 @@ class HealthController {
     VoiceController,
     TelemetryController,
     SitemapController,
+    SeoController,
+    SeoAdminController,
+    TestIndexNowController,
   ],
   providers: [
     ReferenceService,
@@ -108,6 +118,8 @@ class HealthController {
     AuthService,
     MailService,
     VoiceService,
+    SeoService,
+    SeoWebService,
   ],
 })
 export class AppModule implements NestModule {
