@@ -24,7 +24,6 @@ import {
   ModelCallSchema,
   type AdminBook,
   type AdminBookRow,
-  type UpdateBook,
   type AdminLogin,
   type AdminLoginOptions,
   type AdminMethodology,
@@ -52,6 +51,8 @@ import {
   type UpdateMethodology,
   type UpdateTemplate,
   AdminMeSchema,
+  AdminExampleSchema,
+  type AdminExample,
   AdminSeoPageSchema,
   PublishSeoResultSchema,
   RedirectSchema,
@@ -101,17 +102,51 @@ export async function adminBook(id: string): Promise<AdminBook> {
   return AdminBookSchema.parse(await request(`/api/admin/books/${id}`));
 }
 
-/** Puts a book among the home page's examples or takes it off, and sets the countries it shows in there. */
-export async function updateBook(id: string, patch: UpdateBook): Promise<AdminBook> {
-  return AdminBookSchema.parse(await request(`/api/admin/books/${id}`, json("PATCH", patch)));
-}
-
 /** Staff pin page layouts (null unpins) or change the theme; the API re-renders the book. */
 export async function pinLayout(id: string, patch: PinLayout): Promise<AdminBook> {
   return AdminBookSchema.parse(await request(`/api/admin/books/${id}/layout`, json("PATCH", patch)));
 }
 
 export const deleteBook = (id: string) => request(`/api/admin/books/${id}`, { method: "DELETE" });
+
+// ---- Examples (home page stories with a version per language) ----------------------------------
+
+/** Every example in the home page's order, with its versions in language order. */
+export async function adminExamples(): Promise<AdminExample[]> {
+  return AdminExampleSchema.array().parse(await request("/api/admin/examples"));
+}
+
+/** A new example with this finished book as its first version. */
+export async function createExample(bookId: string): Promise<AdminExample> {
+  return AdminExampleSchema.parse(await request("/api/admin/examples", json("POST", { bookId })));
+}
+
+/** A finished book as the example's version in the book's language. */
+export async function addExampleVersion(id: string, bookId: string): Promise<AdminExample> {
+  return AdminExampleSchema.parse(await request(`/api/admin/examples/${id}/versions`, json("POST", { bookId })));
+}
+
+/** Takes one version off (its book stays). */
+export const removeExampleVersion = (id: string, language: Language) =>
+  request(`/api/admin/examples/${id}/versions/${language}`, { method: "DELETE" });
+
+/** Takes the example off the home page (its books stay). */
+export const removeExample = (id: string) => request(`/api/admin/examples/${id}`, { method: "DELETE" });
+
+/** Where the example shows; empty follows its catalog book. */
+export async function updateExample(id: string, countries: string[]): Promise<AdminExample> {
+  return AdminExampleSchema.parse(await request(`/api/admin/examples/${id}`, json("PATCH", { countries })));
+}
+
+/** The home page's order: every example's id. */
+export async function reorderExamples(ids: string[]): Promise<AdminExample[]> {
+  return AdminExampleSchema.array().parse(await request("/api/admin/examples/order", json("POST", { ids })));
+}
+
+/** Starts translating the story into these languages (background jobs; the versions show "translating"). */
+export async function translateExample(id: string, languages: Language[]): Promise<AdminExample> {
+  return AdminExampleSchema.parse(await request(`/api/admin/examples/${id}/translate`, json("POST", { languages })));
+}
 
 export async function adminOrders(): Promise<AdminOrder[]> {
   return AdminOrderSchema.array().parse(await request("/api/admin/orders"));

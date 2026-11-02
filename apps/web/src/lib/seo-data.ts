@@ -75,10 +75,20 @@ export async function templateForSeo(slug: string, locale: UiLocale): Promise<Te
   return template;
 }
 
-/** What the sitemap lists besides the fixed pages; example books are also the public book pages. */
+/**
+ * The tag the API expires after a change in the admin's «Examples» (EXAMPLES_TAG in
+ * apps/api/src/seo/seo-web.service.ts): the example books below. The home page's examples are read
+ * on each request and need no expiry.
+ */
+export const EXAMPLES_TAG = "examples";
+
+/**
+ * What the sitemap lists besides the fixed pages; example books (each version in its own language)
+ * are also the public book pages.
+ */
 export async function publicPages(): Promise<SitemapEntries> {
   "use cache";
-  cacheTag(SEO_TAG, "sitemap");
+  cacheTag(SEO_TAG, "sitemap", EXAMPLES_TAG);
   const entries = await apiGet("/api/sitemap", SitemapEntriesSchema);
   cacheLife("minutes");
   return entries ?? { templates: [], examples: [] };

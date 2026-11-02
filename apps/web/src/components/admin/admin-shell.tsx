@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { AdminPermission } from "@fabulka/shared";
-import { BookOpen, GraduationCap, LayoutDashboard, Library, ListChecks, LogOut, Package, ScrollText, Palette, Search, ShieldAlert } from "lucide-react";
+import { BookOpen, GraduationCap, LayoutDashboard, Library, ListChecks, LogOut, Package, ScrollText, Palette, Search, ShieldAlert, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
@@ -19,6 +19,7 @@ const NAV: { href: string; label: MessageKey; icon: typeof BookOpen; permission:
   { href: "/admin/books", label: "admin.nav.books", icon: BookOpen, permission: "books" },
   { href: "/admin/orders", label: "admin.nav.orders", icon: Package, permission: "orders" },
   { href: "/admin/catalog", label: "admin.nav.catalog", icon: Library, permission: "catalog" },
+  { href: "/admin/examples", label: "admin.nav.examples", icon: Sparkles, permission: "examples" },
   { href: "/admin/methodologies", label: "admin.nav.methodologies", icon: GraduationCap, permission: "methodologies" },
   { href: "/admin/themes", label: "admin.nav.themes", icon: Palette, permission: "themes" },
   { href: "/admin/reference", label: "admin.nav.reference", icon: ListChecks, permission: "reference" },

@@ -13,8 +13,11 @@ export function useTemplates() {
   return useQuery({ queryKey: ["templates", locale, country], queryFn: () => listTemplates(locale, country) });
 }
 
-/** The example books for the visitor's country: those from catalog books listed there, and stories of their own. */
+/**
+ * The example books for the visitor's country, each in the page's language (never another one);
+ * switching the country or the language fetches them again.
+ */
 export function useExamples() {
-  const { country } = useI18n();
-  return useQuery({ queryKey: ["examples", country], queryFn: () => listExamples(country) });
+  const { locale, country } = useI18n();
+  return useQuery({ queryKey: ["examples", locale, country], queryFn: () => listExamples(locale, country) });
 }

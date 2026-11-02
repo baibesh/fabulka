@@ -77,7 +77,7 @@ export function BooksTable() {
                       book.childName,
                       book.template ? t("admin.books.fromCatalog") : t("admin.books.custom"),
                       book.demo && t("admin.books.demo"),
-                      book.featured && t("admin.books.featured"),
+                      book.example && t("admin.books.example"),
                       book.orders > 0 && t("admin.books.orders", { count: book.orders }),
                     ]
                       .filter(Boolean)

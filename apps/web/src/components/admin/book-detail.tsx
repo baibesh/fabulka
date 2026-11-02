@@ -1,14 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, ExternalLink, Star, Trash2 } from "lucide-react";
+import { Download, ExternalLink, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { adminBook, bookCalls, deleteBook, pinLayout, updateBook } from "@/lib/admin-api";
-import { useCountryName } from "@/hooks/use-country-name";
-import { Flag } from "@/components/ui/flag";
-import { CountriesField } from "./countries-field";
+import { addExampleVersion, adminBook, adminExamples, bookCalls, createExample, deleteBook, pinLayout } from "@/lib/admin-api";
+import { Menu, MenuItem } from "@/components/ui/menu";
+import { EXAMPLES_QUERY, useExampleError } from "./examples-page";
 import { CallDetail } from "./journal/call-detail";
 import { CallStatus } from "./journal/call-status";
 import { BOOK_STATUS_TONE, Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
@@ -20,7 +19,7 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { BackLink } from "@/components/ui/page";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { BookReader } from "@/components/book/book-reader";
-import { PAGE_VARIANTS, showcaseCountries, type AdminBook, type LayoutQa, type PageVariant } from "@fabulka/shared";
+import { LANGUAGE_NAMES, PAGE_VARIANTS, displayVersion, type AdminBook, type LayoutQa, type PageVariant } from "@fabulka/shared";
 import { themeName } from "@/lib/themes";
 import { Select } from "@/components/ui/input";
 
@@ -114,48 +113,72 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
 }
 
 /**
- * Where a featured book shows among the home page's examples. Saved on every change; an empty list
- * follows the template's countries (shown as the inherited value), or every country without one.
+ * The book among the home page's examples: which example it is the version of, or — for a finished
+ * book — «Make an example» (a new one with this book) and «Add as <language> version to an
+ * example…», listing the examples with no version in the book's language.
  */
-function BookCountries({ book }: { book: AdminBook }) {
+function ExampleActions({ book }: { book: AdminBook }) {
   const { t } = useAdminI18n();
-  const countryName = useCountryName("admin");
   const queryClient = useQueryClient();
-  const save = useMutation({
-    mutationFn: (countries: string[]) => updateBook(book.id, { countries }),
-    onSuccess: (updated) => queryClient.setQueryData(["admin", "book", book.id], updated),
-  });
-  const inherited = showcaseCountries([], book.templateCountries);
+  const errorText = useExampleError();
+  const language = LANGUAGE_NAMES[book.language];
+  const examples = useQuery({ queryKey: EXAMPLES_QUERY, queryFn: adminExamples, enabled: !book.example && book.status === "done" });
+  const done = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin", "book", book.id] });
+    void queryClient.invalidateQueries({ queryKey: EXAMPLES_QUERY });
+  };
+  const make = useMutation({ mutationFn: () => createExample(book.id), onSuccess: done });
+  const add = useMutation({ mutationFn: (exampleId: string) => addExampleVersion(exampleId, book.id), onSuccess: done });
+
+  if (book.example) {
+    return (
+      <Link href="/admin/examples" data-testid="book-example" data-example-id={book.example.id} className={buttonClass({ variant: "secondary" })}>
+        <Sparkles className="size-4" />
+        {t("admin.book.example.is", { language: LANGUAGE_NAMES[book.example.language] })}
+      </Link>
+    );
+  }
+  if (book.status !== "done") return null;
+  const open = examples.data?.filter((e) => !e.versions.some((v) => v.language === book.language)) ?? [];
   return (
-    <Card>
-      <CountriesField
-        testId="book-countries"
-        chipTestId="book-country"
-        label={t("admin.book.countries")}
-        hint={t("admin.book.countries.hint")}
-        empty={
-          <span data-testid="book-countries-inherited" data-value={inherited.join(" ")} className="flex flex-wrap items-center gap-2 text-sm text-muted">
-            {inherited.length === 0 ? (
-              t("admin.book.countries.all")
-            ) : (
-              <>
-                {t("admin.book.countries.inherited")}
-                {inherited.map((code) => (
-                  <span key={code} data-testid={`book-country-inherited-${code}`} className="flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1">
-                    <Flag code={code} />
-                    {countryName(code)}
-                  </span>
-                ))}
-              </>
-            )}
-          </span>
+    <>
+      <Button variant="secondary" data-testid="make-example" loading={make.isPending} icon={<Sparkles className="size-4" />} onClick={() => make.mutate()}>
+        {t("admin.book.example.make")}
+      </Button>
+      <Menu
+        data-testid="add-to-example-menu"
+        className="w-80"
+        trigger={({ props }) => (
+          <Button {...props} variant="secondary" data-testid="add-to-example" loading={add.isPending}>
+            {t("admin.book.example.add", { language })}
+          </Button>
+        )}
+      >
+        {(close) =>
+          open.length ? (
+            open.map((example) => {
+              const shown = displayVersion(example.versions, book.language);
+              return (
+                <MenuItem
+                  key={example.id}
+                  data-testid={`add-to-example-${example.id}`}
+                  onClick={() => {
+                    add.mutate(example.id);
+                    close();
+                  }}
+                >
+                  <span className="min-w-0 flex-1 truncate">{shown?.title ?? t("admin.untitled")}</span>
+                  <span className="text-xs text-muted">{example.versions.map((v) => v.language.toUpperCase()).join(" ")}</span>
+                </MenuItem>
+              );
+            })
+          ) : (
+            <p className="px-3 py-2 text-sm text-muted">{t("admin.book.example.none", { language })}</p>
+          )
         }
-        value={save.isPending && save.variables ? save.variables : book.countries}
-        onChange={(countries) => save.mutate(countries)}
-      />
-      {save.isPending && <span className="text-sm text-muted">{t("admin.book.layout.saving")}</span>}
-      {save.isError && <ErrorText>{save.error.message}</ErrorText>}
-    </Card>
+      </Menu>
+      {(make.isError || add.isError) && <ErrorText data-testid="example-action-error">{errorText(make.error ?? add.error)}</ErrorText>}
+    </>
   );
 }
 
@@ -199,12 +222,6 @@ export function BookDetail() {
   const methodName = useMethodologyName();
   const [confirming, setConfirming] = useState(false);
   const remove = useMutation({ mutationFn: () => deleteBook(id), onSuccess: () => router.replace("/admin/books"), onSettled: () => setConfirming(false) });
-  const queryClient = useQueryClient();
-  const feature = useMutation({
-    mutationFn: (featured: boolean) => updateBook(id, { featured }),
-    onSuccess: (updated) => queryClient.setQueryData(["admin", "book", id], updated),
-  });
-
   if (!book.data) return <QueryState error={book.error} scope="admin" />;
   const b = book.data;
   const facts: [string, string][] = [
@@ -238,20 +255,7 @@ export function BookDetail() {
               <ExternalLink className="size-4" />
               {t("admin.book.open")}
             </Link>
-            {/* Only a finished book goes on the home page; one already there can always come off. */}
-            {(b.status === "done" || b.featured) && (
-              <Button
-                variant="secondary"
-                data-testid="feature-toggle"
-                data-featured={b.featured}
-                aria-pressed={b.featured}
-                loading={feature.isPending}
-                icon={<Star className={`size-4 ${b.featured ? "fill-current" : ""}`} />}
-                onClick={() => feature.mutate(!b.featured)}
-              >
-                {b.featured ? t("admin.book.unfeature") : t("admin.book.feature")}
-              </Button>
-            )}
+            <ExampleActions book={b} />
             {b.pdfUrl && (
               <a href={b.pdfUrl} download className={buttonClass({ variant: "secondary" })}>
                 <Download className="size-4" />
@@ -269,10 +273,7 @@ export function BookDetail() {
       <div>
         <Badge tone={BOOK_STATUS_TONE[b.status]}>{bookStatus(b.status)}</Badge>
         {b.demo && <span className="ml-2 text-sm text-muted">{t("admin.book.demo")}</span>}
-        {b.featured && <span className="ml-2 text-sm text-muted">{t("admin.book.featured")}</span>}
       </div>
-      {feature.isError && <ErrorText>{feature.error.message}</ErrorText>}
-      {b.featured && <BookCountries book={b} />}
       {b.error && (
         <Notice as="p" role="alert" tone="danger">
           {b.error}

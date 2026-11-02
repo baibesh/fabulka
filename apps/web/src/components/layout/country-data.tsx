@@ -22,7 +22,7 @@ export async function CountryData({
   template,
   children,
 }: {
-  /** The page's language, for the data that has one (the catalog, the methods). */
+  /** The page's language, for the data that has one (the catalog, the examples, the methods). */
   locale?: UiLocale;
   need?: CountryNeed[];
   /** The catalog book's slug on its page (a route param, so it is awaited here, inside Suspense). */
@@ -41,7 +41,8 @@ export async function CountryData({
   await Promise.all([
     need.includes("templates") &&
       load(["templates", locale, country], `/api/templates?${new URLSearchParams({ lang: locale, country })}`, TemplateSummarySchema.array()),
-    need.includes("examples") && load(["examples", country], `/api/books/examples?${new URLSearchParams({ country })}`, ExampleBookSchema.array()),
+    need.includes("examples") &&
+      load(["examples", locale, country], `/api/books/examples?${new URLSearchParams({ lang: locale, country })}`, ExampleBookSchema.array()),
     need.includes("methodologies") && load(["methodologies", locale], `/api/methodologies?lang=${locale}`, MethodologySchema.array()),
     slug && load(["template", slug, locale], `/api/templates/${encodeURIComponent(slug)}?lang=${locale}`, TemplateSchema),
   ]);

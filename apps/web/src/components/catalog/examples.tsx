@@ -6,7 +6,10 @@ import { useI18n } from "@/i18n/i18n";
 import { useExamples } from "@/lib/use-catalog";
 import { SectionHeader } from "../ui/section-header";
 
-/** Finished books the admin picked for the visitor's country, to flip through before making their own. */
+/**
+ * Finished books to flip through before making their own: the examples staff set up for the visitor's
+ * country, each in the page's language, or the catalog's samples in that language when there are none.
+ */
 export function Examples() {
   const { t } = useI18n();
   const { data: examples } = useExamples();
@@ -25,7 +28,15 @@ export function Examples() {
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {examples?.map((book) => (
           <li key={book.id}>
-            <BookCard href={`/books/${book.id}`} data-testid={`example-${book.id}`} image={book.heroImageUrl} fit="contain" radius="md">
+            <BookCard
+              href={`/books/${book.id}`}
+              data-testid={`example-${book.id}`}
+              data-kind={book.kind}
+              lang={book.language}
+              image={book.heroImageUrl}
+              fit="contain"
+              radius="md"
+            >
               <span className="p-4 font-bold">{book.title}</span>
             </BookCard>
           </li>

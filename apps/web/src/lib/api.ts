@@ -173,9 +173,12 @@ export async function listMyBooks() {
   return MyBookSchema.array().parse(await request("/api/books"));
 }
 
-/** Finished books the admin picked for visitors to open: those for `country` (see GET /books/examples). */
-export async function listExamples(country: Country): Promise<ExampleBook[]> {
-  return ExampleBookSchema.array().parse(await request(`/api/books/examples?${new URLSearchParams({ country })}`));
+/**
+ * The home page's example books for `country`, in the page's language `lang` only (see GET
+ * /books/examples); catalog samples in that language when no example has a version in it.
+ */
+export async function listExamples(lang: Language, country: Country): Promise<ExampleBook[]> {
+  return ExampleBookSchema.array().parse(await request(`/api/books/examples?${new URLSearchParams({ lang, country })}`));
 }
 
 /** Whether new books are being created right now. */
