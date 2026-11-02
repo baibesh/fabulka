@@ -1,10 +1,16 @@
-import type {
-  BookKind,
-  Cover,
-  Currency,
-  Language,
-  OrderStatus,
+import {
+  localePath,
+  type BookKind,
+  type Cover,
+  type Currency,
+  type Language,
+  type OrderStatus,
 } from '@fabulka/shared';
+
+/** A page of the site in the mail's language: /orders/1 for Russian, /kk/orders/1 for Kazakh. */
+function siteLink(publicUrl: string, locale: Language, path: string): string {
+  return `${publicUrl}${localePath(locale, path)}`;
+}
 
 /** A rendered email: subject, HTML and the plain-text alternative. */
 export interface MailContent {
@@ -260,8 +266,8 @@ export function orderConfirmation(
       [t.total, kzt(order.totalKzt)],
     ]),
     links([
-      [t.track, `${publicUrl}/orders/${order.id}?lang=${locale}`],
-      [t.openBook, `${publicUrl}/books/${order.bookId}?lang=${locale}`],
+      [t.track, siteLink(publicUrl, locale, `/orders/${order.id}`)],
+      [t.openBook, siteLink(publicUrl, locale, `/books/${order.bookId}`)],
     ]),
     note(t.demoOrder),
     paragraph(t.signature),
@@ -287,8 +293,8 @@ export function orderStatusChanged(
       [t.total, kzt(order.totalKzt)],
     ]),
     links([
-      [t.track, `${publicUrl}/orders/${order.id}?lang=${locale}`],
-      [t.openBook, `${publicUrl}/books/${order.bookId}?lang=${locale}`],
+      [t.track, siteLink(publicUrl, locale, `/orders/${order.id}`)],
+      [t.openBook, siteLink(publicUrl, locale, `/books/${order.bookId}`)],
     ]),
     paragraph(t.signature),
   ]);
@@ -305,7 +311,7 @@ export function purchaseReceipt(
     paragraph(t.receiptIntro(KIND[locale][purchase.kind])),
     table(t.details, [[t.amount, money(purchase.price)]]),
     note(t.receiptDemo),
-    links([[t.create, `${publicUrl}/catalog?lang=${locale}`]]),
+    links([[t.create, siteLink(publicUrl, locale, '/catalog')]]),
     paragraph(t.signature),
   ]);
 }

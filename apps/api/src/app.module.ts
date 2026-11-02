@@ -29,6 +29,7 @@ import { MetaModule } from './meta/meta.module';
 import { MethodologiesController } from './methodologies/methodologies.controller';
 import { MethodologiesService } from './methodologies/methodologies.service';
 import { OrdersController } from './orders/orders.controller';
+import { SitemapController } from './sitemap/sitemap.controller';
 import { OrdersService } from './orders/orders.service';
 import { PdfModule } from './pdf/pdf.service';
 import { PrismaModule } from './prisma/prisma.service';
@@ -87,6 +88,7 @@ class HealthController {
     TestMailsController,
     VoiceController,
     TelemetryController,
+    SitemapController,
   ],
   providers: [
     ReferenceService,

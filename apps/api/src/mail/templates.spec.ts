@@ -1,4 +1,7 @@
 import { LANGUAGES } from '@fabulka/shared';
+
+/** The site's address prefix of a language: none for Russian. */
+const prefix = (locale: string) => (locale === 'ru' ? '' : `/${locale}`);
 import {
   kzt,
   orderConfirmation,
@@ -26,8 +29,9 @@ describe('mail templates', () => {
     expect(mail.subject).toContain(orderNumber(order.id));
     for (const body of [mail.html, mail.text]) {
       expect(body).toContain('29 800 ₸');
-      expect(body).toContain(`${site}/orders/${order.id}?lang=${locale}`);
-      expect(body).toContain(`${site}/books/book-1?lang=${locale}`);
+      expect(body).toContain(`${site}${prefix(locale)}/orders/${order.id}`);
+      expect(body).toContain(`${site}${prefix(locale)}/books/book-1`);
+      expect(body).not.toContain('?lang=');
       expect(body).toContain('Айгерим');
     }
     expect(mail.html).toContain('&lt;снежный&gt;');
@@ -37,7 +41,7 @@ describe('mail templates', () => {
   it.each(LANGUAGES)('renders the status change in %s', (locale) => {
     const mail = orderStatusChanged(order, 'shipped', locale, site);
     expect(mail.subject).toContain(orderNumber(order.id));
-    expect(mail.text).toContain(`${site}/orders/${order.id}`);
+    expect(mail.text).toContain(`${site}${prefix(locale)}/orders/${order.id}`);
     expect(mail.text).not.toContain('undefined');
   });
 
@@ -48,7 +52,7 @@ describe('mail templates', () => {
       site,
     );
     expect(mail.text).toContain('2 900 ₸');
-    expect(mail.html).toContain(`${site}/catalog?lang=${locale}`);
+    expect(mail.html).toContain(`${site}${prefix(locale)}/catalog`);
   });
 
   it('says in Russian that nothing was charged', () => {

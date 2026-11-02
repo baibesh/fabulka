@@ -259,28 +259,34 @@ export class AuthService {
     }
   }
 
-  /** Signs out here; the web then opens the returned URL to end the Keycloak session too. */
+  /**
+   * Signs out here; the web then opens the returned URL to end the Keycloak session too, which comes
+   * back to `returnTo` (a path on this site, e.g. "/en/catalog"; "/" otherwise). Keycloak accepts it
+   * as a post-logout redirect URI under PUBLIC_URL/* (realm-fabulka.json).
+   */
   async logout(
     cookieHeaderValue: string | undefined,
+    returnTo?: unknown,
   ): Promise<{ url: string; cookies: string[] }> {
+    const back = safeReturn(returnTo);
     const session = this.readSession(cookieHeaderValue);
     const cookies = [
       this.cookie(AUTH_SESSION_COOKIE, '', 0),
       this.cookie(ID_TOKEN_COOKIE, '', 0, AUTH_COOKIE_PATH),
     ];
     if (session?.admin) cookies.push(this.admin.clearedCookie());
-    let url = '/';
+    let url = back;
     if (this.oidc && session) {
       url =
         (await this.oidc
           .endSessionUrl(
             readCookie(cookieHeaderValue, ID_TOKEN_COOKIE),
-            `${this.publicUrl}/`,
+            `${this.publicUrl}${back}`,
           )
           .catch((error: unknown) => {
             this.logger.warn(`no Keycloak logout URL: ${message(error)}`);
             return undefined;
-          })) ?? '/';
+          })) ?? back;
     }
     return { url, cookies };
   }

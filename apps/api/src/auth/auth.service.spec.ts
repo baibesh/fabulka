@@ -137,6 +137,17 @@ describe('AuthService (mock provider)', () => {
     expect(out.cookies.join('\n')).toMatch(/admin_session=; .*Max-Age=0/);
   });
 
+  it('logs out back to the page it was on, with its language prefix', async () => {
+    const { auth } = setup();
+    const result = await signIn(auth);
+    expect((await auth.logout(jar(result.cookies), '/en/catalog')).url).toBe(
+      '/en/catalog',
+    );
+    expect((await auth.logout(jar(result.cookies), '//evil.com')).url).toBe(
+      '/',
+    );
+  });
+
   it('refuses the mock in production and is off without configuration', () => {
     const prod = setup({ NODE_ENV: 'production' }).auth;
     expect(prod.mock).toBe(false);

@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   HttpCode,
@@ -36,13 +37,18 @@ export class AuthController {
     redirect(response, await this.auth.callback(query, request.headers.cookie));
   }
 
+  /** { return: "/en/catalog" }: the page to come back to, with its language prefix. */
   @Post('logout')
   @HttpCode(200)
   async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
+    @Body() body: { return?: unknown } | undefined,
   ): Promise<AuthLogout> {
-    const { url, cookies } = await this.auth.logout(request.headers.cookie);
+    const { url, cookies } = await this.auth.logout(
+      request.headers.cookie,
+      body?.return,
+    );
     response.setHeader('Set-Cookie', cookies);
     return { url };
   }
