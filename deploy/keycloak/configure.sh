@@ -12,7 +12,9 @@
 #   2. sets the secret of the OIDC client fabulka-web (KEYCLOAK_CLIENT_SECRET)
 #   3. sets the Google identity provider client id/secret and the auto-link-by-email flow
 #   4. sets the SMTP password (RESEND_API_KEY) when it is present
-#   5. creates the realm role admin and grants it to FABULKA_ADMINS (comma-separated emails), with 2FA
+#   5. creates the realm roles of the admin and grants them, with 2FA: admin (everything) to
+#      FABULKA_ADMINS, seo (the SEO section only) to FABULKA_SEO (comma-separated emails each).
+#      What a role opens is ROLE_PERMISSIONS in packages/shared/src/admin-access.ts.
 #   6. sets the realm's languages (supportedLocales, defaultLocale) from realm-fabulka.json, which
 #      is imported only once, so a language added later reaches the live realm here
 set -euo pipefail
@@ -171,23 +173,30 @@ else
     echo "smtp: RESEND_API_KEY empty, SMTP stays without password (emails will fail)" >&2
 fi
 
-# --- 5. admin role -----------------------------------------------------------------
-# Holders of the realm role "admin" get into fabulka.com/admin; each must set up an authenticator app.
-if ! kc get "realms/$REALM/roles/admin" >/dev/null 2>&1; then
-    kc create "realms/$REALM/roles" -s name=admin -s 'description=Fabulka admin panel' >/dev/null
-    echo "role: admin created"
-fi
-for user in $(env_get FABULKA_ADMINS | tr ',' ' '); do
-    uid=$(kc get "realms/$REALM/users" -q exact=true -q "email=$user" --fields id --format csv --noquotes | head -n 1)
-    if [[ -z $uid ]]; then echo "admin: $user has not signed up yet, skipped" >&2; continue; fi
-    kc add-roles -r "$REALM" --uid "$uid" --rolename admin >/dev/null
-    if kc get "realms/$REALM/users/$uid/credentials" --fields type --format csv --noquotes | grep -qx otp; then
-        echo "admin: role granted to $user (authenticator app already set up)"
-    else
-        kc update "realms/$REALM/users/$uid" -s 'requiredActions=["CONFIGURE_TOTP"]' >/dev/null
-        echo "admin: role granted to $user, authenticator app required"
+# --- 5. admin roles ----------------------------------------------------------------
+# Holders of these realm roles get into fabulka.com/admin (each sees only the sections its role opens,
+# ROLE_PERMISSIONS in packages/shared/src/admin-access.ts); each must set up an authenticator app.
+# A new role: add it to ROLE_PERMISSIONS and a line below.
+grant_role() { # role, description, comma-separated emails
+    local role=$1 description=$2 emails=$3 user uid
+    if ! kc get "realms/$REALM/roles/$role" >/dev/null 2>&1; then
+        kc create "realms/$REALM/roles" -s "name=$role" -s "description=$description" >/dev/null
+        echo "role: $role created"
     fi
-done
+    for user in $(printf '%s' "$emails" | tr ',' ' '); do
+        uid=$(kc get "realms/$REALM/users" -q exact=true -q "email=$user" --fields id --format csv --noquotes | head -n 1)
+        if [[ -z $uid ]]; then echo "$role: $user has not signed up yet, skipped" >&2; continue; fi
+        kc add-roles -r "$REALM" --uid "$uid" --rolename "$role" >/dev/null
+        if kc get "realms/$REALM/users/$uid/credentials" --fields type --format csv --noquotes | grep -qx otp; then
+            echo "$role: role granted to $user (authenticator app already set up)"
+        else
+            kc update "realms/$REALM/users/$uid" -s 'requiredActions=["CONFIGURE_TOTP"]' >/dev/null
+            echo "$role: role granted to $user, authenticator app required"
+        fi
+    done
+}
+grant_role admin 'Fabulka admin panel' "$(env_get FABULKA_ADMINS)"
+grant_role seo 'Fabulka admin: SEO section only' "$(env_get FABULKA_SEO)"
 
 # --- 6. languages ---------------------------------------------------------------
 python3 -c '

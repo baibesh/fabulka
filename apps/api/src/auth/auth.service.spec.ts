@@ -35,7 +35,7 @@ function jar(cookies: string[]): string {
 
 async function signIn(
   auth: AuthService,
-  options: { admin?: boolean; returnTo?: string } = {},
+  options: { admin?: boolean; seo?: boolean; returnTo?: string } = {},
 ) {
   const login = await auth.login({
     return: options.returnTo ?? '/my',
@@ -47,6 +47,7 @@ async function signIn(
     state,
     email: 'Parent@Example.com',
     admin: options.admin ? 'on' : undefined,
+    seo: options.seo ? 'on' : undefined,
   });
   const params = new URL(callbackUrl, 'http://x').searchParams;
   return auth.callback(
@@ -76,7 +77,7 @@ describe('AuthService (mock provider)', () => {
       id: 'user-1',
       email: 'parent@example.com',
       name: 'parent',
-      admin: false,
+      roles: [],
     });
     expect(result.cookies.join('\n')).not.toContain('admin_session=');
   });
@@ -85,10 +86,27 @@ describe('AuthService (mock provider)', () => {
     const { auth, admin } = setup();
     const result = await signIn(auth, { admin: true });
     const token = /admin_session=([^;]+)/.exec(result.cookies.join(';'))![1];
-    expect(admin.verify(token)).toBe(true);
+    expect(admin.verify(token)).toEqual({
+      roles: ['admin'],
+      who: 'parent@example.com',
+    });
     expect(
       auth.me(auth.readSession(jar(result.cookies)) ?? null).user?.admin,
     ).toBe(true);
+  });
+
+  it('opens the admin with the SEO role only for the realm role seo', async () => {
+    const { auth, admin } = setup();
+    const result = await signIn(auth, { seo: true });
+    const token = /admin_session=([^;]+)/.exec(result.cookies.join(';'))![1];
+    expect(admin.verify(token)).toEqual({
+      roles: ['seo'],
+      who: 'parent@example.com',
+    });
+    const user = auth.me(auth.readSession(jar(result.cookies)) ?? null).user;
+    expect(user).toMatchObject({ admin: false, seo: true });
+    const out = await auth.logout(jar(result.cookies));
+    expect(out.cookies.join('\n')).toMatch(/admin_session=; .*Max-Age=0/);
   });
 
   it('sends a foreign return path home', async () => {

@@ -8,9 +8,19 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PASSWORD_LOGIN_DISABLED } from '@fabulka/shared';
+import {
+  PASSWORD_LOGIN_DISABLED,
+  SUPER_ROLE,
+  adminRolesOf,
+  type AdminRole,
+} from '@fabulka/shared';
 import { createHmac, randomBytes } from 'node:crypto';
-import { cookieHeader, sameString as same } from '../common/signed';
+import {
+  cookieHeader,
+  sameString as same,
+  seal,
+  unseal,
+} from '../common/signed';
 
 export const SESSION_COOKIE = 'admin_session';
 const SESSION_MS = 12 * 60 * 60 * 1000;
@@ -20,8 +30,17 @@ const FAILURE_WINDOW_MS = 15 * 60 * 1000;
 const MAX_TRACKED = 10_000;
 
 /**
- * Who may open the admin. The usual way in is Keycloak (realm role `admin`, see AuthService), which
- * calls issue(). The ADMIN_EMAIL / ADMIN_PASSWORD sign-in is an emergency fallback, on only with
+ * A signed-in admin session: its admin roles (ROLE_PERMISSIONS in @fabulka/shared says what they
+ * open) and who it is (an email, when known; for the SEO history).
+ */
+export interface AdminSession {
+  roles: AdminRole[];
+  who: string | null;
+}
+
+/**
+ * Who may open the admin. The usual way in is Keycloak (realm role `admin` for everything, `seo` for
+ * the SEO section only; see AuthService), which calls issue(). The ADMIN_EMAIL / ADMIN_PASSWORD sign-in is an emergency fallback, on only with
  * ADMIN_PASSWORD_LOGIN=true. A session is a signed, expiring token in an httpOnly cookie;
  * ADMIN_SECRET (else AUTH_SECRET) signs it (without one, sessions end when the API restarts, and
  * in production there are no sessions at all).
@@ -119,25 +138,49 @@ export class AdminAuthService {
       throw new UnauthorizedException('Неверная почта или пароль');
     }
     this.failures.delete(ip);
-    return this.issue(now);
+    return this.issue([SUPER_ROLE], this.email, now);
   }
 
-  /** A session token for someone already checked elsewhere (Keycloak realm role `admin`). */
-  issue(now = Date.now()): string {
+  /**
+   * A session token for someone already checked elsewhere (Keycloak realm roles): a sealed
+   * { roles, who } with an expiry, signed with a key of its own so no other token of the API passes.
+   */
+  issue(
+    roles: readonly AdminRole[] = [SUPER_ROLE],
+    who: string | null = null,
+    now = Date.now(),
+  ): string {
     if (!this.sessions) {
       throw new ServiceUnavailableException('The admin is not configured');
     }
-    const expires = now + SESSION_MS;
-    return `${expires}.${this.sign(expires)}`;
+    return seal(this.sessionKey, { r: [...roles], w: who }, SESSION_MS, now);
   }
 
-  /** True for an unexpired token this service signed. */
-  verify(token: string | undefined): boolean {
-    if (!token || !this.sessions) return false;
-    const [expires, signature] = token.split('.');
-    const at = Number(expires);
-    if (!signature || !Number.isFinite(at) || at < Date.now()) return false;
-    return same(signature, this.sign(at));
+  /**
+   * The session of an unexpired token this service signed, else null. Tokens made before roles
+   * (`<expires>.<signature>`) are admin sessions until they expire.
+   */
+  verify(token: string | undefined): AdminSession | null {
+    if (!token || !this.sessions) return null;
+    const [first, signature, extra] = token.split('.');
+    if (/^\d+$/.test(first) && signature && extra === undefined) {
+      const at = Number(first);
+      if (at < Date.now() || !same(signature, this.sign(at))) return null;
+      return { roles: [SUPER_ROLE], who: null };
+    }
+    const payload = unseal<{ r?: unknown; w?: unknown }>(
+      this.sessionKey,
+      token,
+    );
+    const roles = Array.isArray(payload?.r)
+      ? adminRolesOf(payload.r.filter((r) => typeof r === 'string'))
+      : [];
+    if (!roles.length) return null;
+    return { roles, who: typeof payload?.w === 'string' ? payload.w : null };
+  }
+
+  private get sessionKey(): string {
+    return `admin-session:${this.secret}`;
   }
 
   cookie(token: string): string {

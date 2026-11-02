@@ -1,6 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AUTH_ERROR, EmailSchema, type AuthMe } from '@fabulka/shared';
+import {
+  ADMIN_ROLES,
+  AUTH_ERROR,
+  EmailSchema,
+  SUPER_ROLE,
+  adminRolesOf,
+  type AdminRole,
+  type AuthMe,
+} from '@fabulka/shared';
 import { randomBytes } from 'node:crypto';
 import { AdminAuthService, readCookie } from '../admin/admin-auth.service';
 import { anonymousBooksOf } from '../books/books.service';
@@ -29,8 +37,6 @@ const AUTH_COOKIE_PATH = '/api/auth';
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const STATE_MS = 10 * 60 * 1000;
 const MOCK_CODE_MS = 60 * 1000;
-/** The realm role that also opens the admin. */
-const ADMIN_ROLE = 'admin';
 
 interface LoginState {
   state: string;
@@ -45,13 +51,16 @@ interface SessionPayload {
   uid: string;
   email: string | null;
   name: string | null;
-  admin: boolean;
+  /** Admin roles (ADMIN_ROLES in @fabulka/shared). */
+  roles?: AdminRole[];
+  /** Before roles: had the realm role admin. */
+  admin?: boolean;
 }
 
 interface MockCode {
   state: string;
   email: string;
-  admin: boolean;
+  roles: AdminRole[];
 }
 
 /** What a controller sends back: a redirect plus the cookies to set. */
@@ -197,7 +206,7 @@ export class AuthService {
       sub: string;
       email: string | null;
       name: string | null;
-      admin: boolean;
+      roles: AdminRole[];
       idToken?: string;
     };
     try {
@@ -232,7 +241,7 @@ export class AuthService {
         uid: user.id,
         email: identity.email,
         name: identity.name,
-        admin: identity.admin,
+        roles: identity.roles,
       };
       const cookies = [
         clearState,
@@ -252,7 +261,12 @@ export class AuthService {
           ),
         );
       }
-      if (identity.admin) cookies.push(this.admin.cookie(this.admin.issue()));
+      // Any admin role opens the admin, each with its own sections (ROLE_PERMISSIONS).
+      if (identity.roles.length) {
+        cookies.push(
+          this.admin.cookie(this.admin.issue(identity.roles, identity.email)),
+        );
+      }
       return { location: login.return, cookies };
     } catch (error) {
       return fail(message(error));
@@ -274,7 +288,7 @@ export class AuthService {
       this.cookie(AUTH_SESSION_COOKIE, '', 0),
       this.cookie(ID_TOKEN_COOKIE, '', 0, AUTH_COOKIE_PATH),
     ];
-    if (session?.admin) cookies.push(this.admin.clearedCookie());
+    if (session?.roles.length) cookies.push(this.admin.clearedCookie());
     let url = back;
     if (this.oidc && session) {
       url =
@@ -295,7 +309,12 @@ export class AuthService {
     return {
       enabled: this.enabled,
       user: user
-        ? { email: user.email, name: user.name, admin: user.admin }
+        ? {
+            email: user.email,
+            name: user.name,
+            admin: user.roles.includes(SUPER_ROLE),
+            seo: user.roles.length > 0 && !user.roles.includes(SUPER_ROLE),
+          }
         : null,
     };
   }
@@ -312,7 +331,11 @@ export class AuthService {
       id: session.uid,
       email: session.email ?? null,
       name: session.name ?? null,
-      admin: session.admin === true,
+      roles: Array.isArray(session.roles)
+        ? adminRolesOf(session.roles)
+        : session.admin === true
+          ? [SUPER_ROLE]
+          : [],
     };
   }
 
@@ -320,7 +343,7 @@ export class AuthService {
   mockAuthorize(query: {
     state?: unknown;
     email?: unknown;
-    admin?: unknown;
+    [role: string]: unknown;
   }): string {
     const email = EmailSchema.safeParse(query.email);
     const state = typeof query.state === 'string' ? query.state : '';
@@ -331,7 +354,9 @@ export class AuthService {
     const code: MockCode = {
       state,
       email: email.data.toLowerCase(),
-      admin: query.admin === 'on' || query.admin === 'true',
+      roles: adminRolesOf(
+        ADMIN_ROLES.filter((r) => query[r] === 'on' || query[r] === 'true'),
+      ),
     };
     const params = new URLSearchParams({
       code: seal(this.secret, { ...code }, MOCK_CODE_MS),
@@ -349,7 +374,7 @@ export class AuthService {
       sub: `mock:${mock.email}`,
       email: mock.email,
       name: mock.email.split('@')[0],
-      admin: mock.admin,
+      roles: Array.isArray(mock.roles) ? adminRolesOf(mock.roles) : [],
     };
   }
 
@@ -359,11 +384,12 @@ export class AuthService {
       login.verifier,
       login.nonce,
     );
+    const roles = realmRoles(id, access);
     return {
       sub: id.sub,
       email: claimString(id, 'email'),
       name: personName(id),
-      admin: realmRoles(id, access).has(ADMIN_ROLE),
+      roles: adminRolesOf(roles),
       idToken,
     };
   }

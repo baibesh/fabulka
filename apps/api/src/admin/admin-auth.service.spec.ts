@@ -22,7 +22,10 @@ describe('AdminAuthService', () => {
       'correct horse',
       '1.1.1.1',
     );
-    expect(service.verify(token)).toBe(true);
+    expect(service.verify(token)).toEqual({
+      roles: ['admin'],
+      who: 'admin@fabulka.com',
+    });
   });
 
   it('refuses a wrong password', () => {
@@ -38,15 +41,20 @@ describe('AdminAuthService', () => {
       'correct horse',
       '1.1.1.1',
     );
-    const [expires, signature] = token.split('.');
-    expect(service.verify(`${Number(expires) + 1}.${signature}`)).toBe(false);
-    expect(service.verify(`${Date.now() - 1}.${signature}`)).toBe(false);
-    expect(service.verify(undefined)).toBe(false);
+    const [body, signature] = token.split('.');
+    const forged = Buffer.from(
+      JSON.stringify({ r: ['admin'], w: 'x', exp: Date.now() + 1e9 }),
+    ).toString('base64url');
+    expect(service.verify(`${forged}.${signature}`)).toBeNull();
+    expect(service.verify(`${body}.${signature}x`)).toBeNull();
+    expect(service.verify(undefined)).toBeNull();
+    const expired = service.issue(['admin'], null, Date.now() - 13 * 3600_000);
+    expect(service.verify(expired)).toBeNull();
   });
 
   it('does not accept a token signed with another secret', () => {
     const token = auth().login('admin@fabulka.com', 'correct horse', '1.1.1.1');
-    expect(auth({ ADMIN_SECRET: 'other' }).verify(token)).toBe(false);
+    expect(auth({ ADMIN_SECRET: 'other' }).verify(token)).toBeNull();
   });
 
   it('makes an address wait after ten wrong passwords', () => {
@@ -81,7 +89,10 @@ describe('AdminAuthService', () => {
       AUTH_SECRET: 'auth-secret',
       NODE_ENV: 'production',
     });
-    expect(service.verify(service.issue())).toBe(true);
+    expect(service.verify(service.issue())).toEqual({
+      roles: ['admin'],
+      who: null,
+    });
     expect(() =>
       auth({ NODE_ENV: 'production', ADMIN_SECRET: '' }).issue(),
     ).toThrow('not configured');
@@ -111,6 +122,45 @@ describe('AdminAuthService', () => {
     expect(auth({ ADMIN_COOKIE_SECURE: 'true' }).cookie('t')).toContain(
       'Secure',
     );
+  });
+});
+
+describe('AdminAuthService roles', () => {
+  it('keeps the roles and who in the session', () => {
+    const service = auth();
+    expect(service.verify(service.issue(['seo'], 'seo@x.kz'))).toEqual({
+      roles: ['seo'],
+      who: 'seo@x.kz',
+    });
+  });
+
+  it('refuses a session with no admin role, and unknown roles', () => {
+    const service = auth();
+    expect(service.verify(service.issue([], null))).toBeNull();
+    expect(service.verify(service.issue(['owner' as never], null))).toBeNull();
+  });
+
+  it('does not take another signed token of the API (same secret) for a session', () => {
+    const service = auth({ ADMIN_SECRET: 'shared' });
+    // A token sealed with the bare secret, as the site session cookie is.
+    const { seal } =
+      jest.requireActual<typeof import('../common/signed')>('../common/signed');
+    const other = seal('shared', { r: ['admin'] }, 60_000);
+    expect(service.verify(other)).toBeNull();
+  });
+
+  it('still accepts a session made before roles, as admin', () => {
+    const service = auth();
+    const expires = Date.now() + 60_000;
+    const { createHmac } =
+      jest.requireActual<typeof import('node:crypto')>('node:crypto');
+    const signature = createHmac('sha256', 'test-secret')
+      .update(`admin.${expires}`)
+      .digest('base64url');
+    expect(service.verify(`${expires}.${signature}`)).toEqual({
+      roles: ['admin'],
+      who: null,
+    });
   });
 });
 

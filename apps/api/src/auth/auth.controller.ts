@@ -113,6 +113,7 @@ ${invalid ? '<p class="error" data-testid="mock-login-error">Enter a valid email
 <input type="hidden" name="state" value="${escaped}">
 <label>Email <input type="email" name="email" required data-testid="mock-login-email" autocomplete="off"></label>
 <label><input type="checkbox" name="admin" data-testid="mock-login-admin"> Realm role admin</label>
+<label><input type="checkbox" name="seo" data-testid="mock-login-seo"> Realm role seo</label>
 <button type="submit" data-testid="mock-login-submit">Sign in</button>
 </form></body></html>`;
 }
