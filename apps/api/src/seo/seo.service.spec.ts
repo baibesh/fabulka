@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import { EMPTY_SEO_FIELDS, type SeoFields } from '@fabulka/shared';
+import type { ExamplesService } from '../examples/examples.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { StorageService } from '../storage/storage.service';
 import type { SeoWebService } from './seo-web.service';
@@ -133,12 +134,16 @@ function setup() {
     revalidate: jest.fn().mockResolvedValue(true),
     pingIndexNow: jest.fn().mockResolvedValue('sent'),
     urls: (paths: string[]) => paths.map((p) => `https://fabulka.com${p}`),
+    urlsIn: (pages: { path: string }[]) =>
+      pages.map((p) => `https://fabulka.com${p.path}`),
   };
+  const examples = { publicVersions: jest.fn().mockResolvedValue([]) };
   const storage = { url: (p: string | null) => (p ? `/files/${p}` : null) };
   const service = new SeoService(
     prisma as unknown as PrismaService,
     storage as unknown as StorageService,
     web as unknown as SeoWebService,
+    examples as unknown as ExamplesService,
     {
       get: (_: string, fallback: string) => fallback,
     } as unknown as ConfigService,

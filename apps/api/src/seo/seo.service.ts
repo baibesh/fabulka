@@ -37,6 +37,7 @@ import {
 } from '@fabulka/shared';
 import { randomBytes } from 'node:crypto';
 import sharp from 'sharp';
+import { ExamplesService } from '../examples/examples.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { REDIRECTS_TAG, SEO_TAG, SeoWebService } from './seo-web.service';
@@ -106,6 +107,7 @@ export class SeoService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly web: SeoWebService,
+    private readonly examples: ExamplesService,
     config: ConfigService,
   ) {
     this.siteHost = new URL(
@@ -122,7 +124,7 @@ export class SeoService {
         where: { published: true },
         orderBy: { sortOrder: 'asc' },
       }),
-      this.exampleBooks(),
+      this.exampleBooks(language),
       this.prisma.pageSeo.findMany({ where: { language } }),
     ]);
     const byKey = new Map(rows.map((row) => [row.page, row]));
@@ -227,9 +229,24 @@ export class SeoService {
         }),
       ]),
     );
-    const urls = this.web.urls([
-      ...new Set(pending.map((row) => seoPagePath(row.page))),
-    ]);
+    // An example book's page is public in its own language only; other pages in all of them.
+    const urls = [
+      ...new Set([
+        ...this.web.urls(
+          pending
+            .filter((row) => seoPageKind(row.page) !== 'book')
+            .map((row) => seoPagePath(row.page)),
+        ),
+        ...this.web.urlsIn(
+          pending
+            .filter((row) => seoPageKind(row.page) === 'book')
+            .map((row) => ({
+              path: seoPagePath(row.page),
+              language: row.language as Language,
+            })),
+        ),
+      ]),
+    ];
     const revalidated = await this.web.revalidate([SEO_TAG]);
     const indexNow = await this.web.pingIndexNow(urls);
     return { published: pending.length, urls, revalidated, indexNow };
@@ -506,13 +523,14 @@ export class SeoService {
 
   // ---- Helpers --------------------------------------------------------------------------------
 
-  /** Example books staff picked: public pages with SEO of their own. */
-  private exampleBooks() {
-    return this.prisma.book.findMany({
-      where: { featured: true, status: 'done', title: { not: null } },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, title: true, heroImagePath: true },
-    });
+  /**
+   * Example books in `language`: each finished version of an example is a public page with SEO of
+   * its own, in its own language only.
+   */
+  private async exampleBooks(language: Language) {
+    return (await this.examples.publicVersions()).filter(
+      (v) => v.language === language,
+    );
   }
 
   private toAdmin(

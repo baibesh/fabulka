@@ -7,7 +7,7 @@ import { z } from "zod";
 // in Keycloak (deploy/keycloak/configure.sh).
 
 /** The admin's sections, in nav order. */
-export const ADMIN_PERMISSIONS = ["dashboard", "books", "orders", "catalog", "methodologies", "themes", "reference", "journal", "seo"] as const;
+export const ADMIN_PERMISSIONS = ["dashboard", "books", "orders", "catalog", "examples", "methodologies", "themes", "reference", "journal", "seo"] as const;
 export const AdminPermissionSchema = z.enum(ADMIN_PERMISSIONS);
 export type AdminPermission = z.infer<typeof AdminPermissionSchema>;
 

@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { LANGUAGES, localePath } from '@fabulka/shared';
+import { LANGUAGES, localePath, type Language } from '@fabulka/shared';
 
 /** The cache tags the site's SEO data carries (apps/web/src/lib/seo-data.ts). */
 export const SEO_TAG = 'seo';
 export const REDIRECTS_TAG = 'seo-redirects';
+/** The site's cached list of example books (book pages' metadata, the sitemap): after «Examples» changes. */
+export const EXAMPLES_TAG = 'examples';
 
 export type IndexNowResult = 'sent' | 'off' | 'failed' | 'skipped';
 
@@ -78,6 +80,14 @@ export class SeoWebService {
         ),
       ),
     ];
+  }
+
+  /** These site paths in one language version each, as absolute URLs. */
+  urlsIn(pages: { path: string; language: Language }[]): string[] {
+    return pages.map(({ path, language }) => {
+      const local = localePath(language, path);
+      return local === '/' ? this.publicUrl : `${this.publicUrl}${local}`;
+    });
   }
 
   /** Tells IndexNow these URLs changed. */

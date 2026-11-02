@@ -28,11 +28,22 @@ import { cutout, type Segment } from '../toy/cutout';
 import { jpegSize } from '../toy/jpeg-size';
 import { sanitizePrefill } from '../voice/prefill';
 import {
+  type BookTranslation,
+  BookTranslationSchema,
+  translationProblem,
+} from '../examples/translation';
+import {
   PREFILL_INSTRUCTIONS,
   prefillPrompt,
   type PrefillBrief,
   REVIEW_INSTRUCTIONS,
   reviewPrompt,
+  SHORTEN_INSTRUCTIONS,
+  type ShortenBrief,
+  shortenPrompt,
+  TRANSLATE_INSTRUCTIONS,
+  type TranslationBrief,
+  translatePrompt,
   STORY_INSTRUCTIONS,
   TOY_DESCRIPTION_PROMPT,
   type Companions,
@@ -575,6 +586,89 @@ export class MetaGateway implements ModelGateway {
     };
   }
 
+  async translateBook(
+    brief: TranslationBrief,
+  ): Promise<{ translation: BookTranslation; costUsd: number }> {
+    let costUsd = 0;
+    let error = '';
+    for (let attempt = 0; attempt < STORY_ATTEMPTS; attempt++) {
+      const input =
+        translatePrompt(brief) +
+        (error ? `\nYour previous output was invalid: ${error}` : '');
+      const call = this.journal.start({
+        kind: 'translate',
+        model: this.options.storyModel,
+        prompt: input,
+        attempt: attempt + 1,
+      });
+      const response = await call.request(
+        this.client.responses.create({
+          model: this.options.storyModel,
+          instructions: TRANSLATE_INSTRUCTIONS,
+          input,
+          text: { format: { type: 'json_object' } },
+        }),
+      );
+      costUsd += tokenCost(response);
+      try {
+        const translation = BookTranslationSchema.parse(
+          JSON.parse(response.output_text),
+        );
+        const problem = translationProblem(brief, translation);
+        if (problem) throw new Error(problem);
+        call.ok(spend(response));
+        return { translation, costUsd };
+      } catch (problem) {
+        call.fail(problem, {
+          ...spend(response),
+          code: 'invalid_output',
+          output: response.output_text,
+        });
+        error =
+          problem instanceof Error
+            ? problem.message.slice(0, 500)
+            : String(problem);
+      }
+    }
+    throw new Error(
+      `Muse Spark returned an invalid translation ${STORY_ATTEMPTS} times: ${error}`,
+    );
+  }
+
+  async shortenPage(
+    brief: ShortenBrief,
+  ): Promise<{ text: string; costUsd: number }> {
+    const input = shortenPrompt(brief);
+    const call = this.journal.start({
+      kind: 'shorten',
+      model: this.options.storyModel,
+      prompt: input,
+    });
+    const response = await call.request(
+      this.client.responses.create({
+        model: this.options.storyModel,
+        instructions: SHORTEN_INSTRUCTIONS,
+        input,
+        text: { format: { type: 'json_object' } },
+        reasoning: { effort: 'low' },
+      }),
+    );
+    const parsed = ShortenSchema.safeParse(
+      safeJson(response.output_text || '{}'),
+    );
+    if (!parsed.success) {
+      const problem = new Error('Muse Spark returned no shortened page');
+      call.fail(problem, {
+        ...spend(response),
+        code: 'invalid_output',
+        output: response.output_text,
+      });
+      throw problem;
+    }
+    call.ok(spend(response));
+    return { text: parsed.data.text, costUsd: tokenCost(response) };
+  }
+
   /** One picture; a refused reference to the earlier picture is asked again (REFERENCE_ATTEMPTS). */
   private async draw(
     kind: ModelCallKind,
@@ -703,6 +797,15 @@ function spend(response: Response): CallOutcome {
 }
 
 const ReviewSchema = z.object({ safe: z.boolean(), reason: z.string() });
+const ShortenSchema = z.object({ text: z.string().trim().min(1) });
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 const TranscribeResponseSchema = z.object({
   transcript: z.string(),
   audioDurationMs: z.number().default(0),

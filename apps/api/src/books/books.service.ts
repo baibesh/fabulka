@@ -21,7 +21,6 @@ import {
   blankPage,
   bookFormatOf,
   calmSpace,
-  exampleShownIn,
   defaultThemeId,
   newLayout,
   planBook,
@@ -42,7 +41,6 @@ import {
   type UpdateLayout,
   type ChildProfile,
   type CreateBookInput,
-  type ExampleBook,
   type Language,
   type MyBook,
 } from '@fabulka/shared';
@@ -131,9 +129,6 @@ interface Job {
   /** The uploaded toy photo, when the parent sent one. */
   toyUpload?: string;
 }
-
-/** Example books shown on the home page at most. */
-const EXAMPLE_COUNT = 12;
 
 /** Page illustrations generated at once; each chains from the hero sheet, not from each other. */
 const PAGE_CONCURRENCY = 4;
@@ -277,30 +272,6 @@ export class BooksService implements OnModuleInit {
       language: row.language as Language,
       heroImageUrl: this.storage.url(row.heroImagePath),
       createdAt: row.createdAt.toISOString(),
-    }));
-  }
-
-  /**
-   * Finished books the admin picked as examples, newest first: those shown in `country` by the
-   * book's own countries, else its catalog book's (exampleShownIn). Staff feature only a handful,
-   * so all are read and filtered here, where the rule lives.
-   */
-  async listExamples(country: string | null = null): Promise<ExampleBook[]> {
-    const featured = await this.prisma.book.findMany({
-      where: { featured: true, status: 'done', title: { not: null } },
-      orderBy: { createdAt: 'desc' },
-      include: { template: { select: { countries: true } } },
-    });
-    const rows = featured
-      .filter((row) =>
-        exampleShownIn(row.countries, row.template?.countries, country),
-      )
-      .slice(0, EXAMPLE_COUNT);
-    return rows.map((row) => ({
-      id: row.id,
-      title: row.title!,
-      language: row.language as Language,
-      heroImageUrl: this.storage.url(row.heroImagePath),
     }));
   }
 
@@ -535,7 +506,7 @@ export class BooksService implements OnModuleInit {
   }
 
   /** Lays the book out, prints it and runs render QA; the result's layout records what QA did. */
-  private async renderPdf(row: BookRow, layout = layoutOf(row.layout)) {
+  async renderPdf(row: BookRow, layout = layoutOf(row.layout)) {
     const book = storedBook(row);
     const labels = BOOK_LABELS[book.language];
     const checked = withHeadingCheck(layout, [
@@ -902,7 +873,7 @@ interface Spend {
 }
 
 /** Runs at most `limit` tasks at once; the rest wait in order. */
-class Slots {
+export class Slots {
   private active = 0;
   private readonly waiting: (() => void)[] = [];
 

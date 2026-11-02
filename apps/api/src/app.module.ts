@@ -17,6 +17,9 @@ import { AuthService } from './auth/auth.service';
 import { SessionMiddleware } from './auth/current-user';
 import { BooksController } from './books/books.controller';
 import { BooksService } from './books/books.service';
+import { ExamplesAdminController } from './examples/examples.controller';
+import { ExamplesService } from './examples/examples.service';
+import { TranslatorService } from './examples/translator.service';
 import { GeoController } from './geo/geo.controller';
 import { GeoGuard } from './geo/geo.guard';
 import { GeoService } from './geo/geo.service';
@@ -91,6 +94,7 @@ class HealthController {
     ToysController,
     AdminAuthController,
     AdminController,
+    ExamplesAdminController,
     AuthController,
     TestMailsController,
     VoiceController,
@@ -120,6 +124,8 @@ class HealthController {
     VoiceService,
     SeoService,
     SeoWebService,
+    ExamplesService,
+    TranslatorService,
   ],
 })
 export class AppModule implements NestModule {

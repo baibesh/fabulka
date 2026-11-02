@@ -11,14 +11,14 @@ import type { TemplatesService } from '../templates/templates.service';
 import { curatedThemes } from '../themes/curated.testing';
 import { AdminService } from './admin.service';
 
-function makeService(prisma: unknown) {
+function makeService(prisma: unknown, storage: unknown = {}) {
   const books = { toDto: (row: { id: string }) => ({ id: row.id }) };
   return new AdminService(
     prisma as PrismaService,
     books as unknown as BooksService,
     {} as QuotaService,
     {} as SettingsService,
-    {} as StorageService,
+    storage as StorageService,
     {} as TemplatesService,
     {} as MethodologiesService,
     curatedThemes(),
@@ -30,110 +30,57 @@ function makeService(prisma: unknown) {
 }
 
 /** A book row with what AdminService.book reads besides the DTO. */
-const row = (
-  status: string,
-  featured: boolean,
-  countries: string[] = [],
-  template: string[] | null = null,
-) => ({
+const row = (exampleOf: { exampleId: string; language: string } | null) => ({
   id: 'b1',
-  status,
-  featured,
+  status: 'done',
   child: { name: 'Арман' },
   theme: null,
   answers: null,
   country: null,
   demo: false,
-  countries,
-  template: template && { slug: 'nauryz-new-friend', countries: template },
+  template: null,
+  exampleOf,
   costUsd: 0,
   clientKey: 'k',
 });
 
-describe('AdminService.updateBook', () => {
-  it('puts a finished book among the examples', async () => {
-    const update = jest.fn().mockResolvedValue({});
+describe('AdminService.book', () => {
+  it('says which example the book is a version of, and in which language', async () => {
     const findUnique = jest
       .fn()
-      .mockResolvedValueOnce({ status: 'done', countries: [] })
-      .mockResolvedValueOnce(row('done', true));
-    const service = makeService({ book: { findUnique, update } });
-
-    const book = await service.updateBook('b1', { featured: true });
-
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 'b1' },
-      data: { featured: true },
+      .mockResolvedValueOnce(row({ exampleId: 'ex1', language: 'ru' }))
+      .mockResolvedValueOnce(row(null));
+    const service = makeService({ book: { findUnique } });
+    expect((await service.book('b1')).example).toEqual({
+      id: 'ex1',
+      language: 'ru',
     });
-    expect(book.featured).toBe(true);
-    expect(book.countries).toEqual([]);
-    expect(book.templateCountries).toBeNull();
-  });
-
-  it('refuses a book that is not finished, but lets one be taken off', async () => {
-    const update = jest.fn().mockResolvedValue({});
-    const findUnique = jest
-      .fn()
-      .mockResolvedValueOnce({ status: 'failed', countries: [] })
-      .mockResolvedValueOnce({ status: 'failed', countries: [] })
-      .mockResolvedValueOnce(row('failed', false));
-    const service = makeService({ book: { findUnique, update } });
-
-    await expect(service.updateBook('b1', { featured: true })).rejects.toThrow(
-      'только готовую книгу',
-    );
-    expect(update).not.toHaveBeenCalled();
-    await service.updateBook('b1', { featured: false });
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 'b1' },
-      data: { featured: false },
-    });
-  });
-
-  it("sets the countries it is shown in and reads back its catalog book's", async () => {
-    const update = jest.fn().mockResolvedValue({});
-    const findUnique = jest
-      .fn()
-      .mockResolvedValueOnce({ status: 'done', countries: [] })
-      .mockResolvedValueOnce(row('done', true, ['KZ'], ['KZ', 'DE']));
-    const service = makeService({ book: { findUnique, update } });
-
-    const book = await service.updateBook('b1', { countries: ['KZ'] });
-
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 'b1' },
-      data: { countries: ['KZ'] },
-    });
-    expect(book.countries).toEqual(['KZ']);
-    expect(book.templateCountries).toEqual(['KZ', 'DE']);
-  });
-
-  it('refuses a country the site does not offer, but keeps one the book has', async () => {
-    const update = jest.fn().mockResolvedValue({});
-    const findUnique = jest
-      .fn()
-      .mockResolvedValueOnce({ status: 'done', countries: ['XK'] })
-      .mockResolvedValueOnce({ status: 'done', countries: ['XK'] })
-      .mockResolvedValueOnce(row('done', true, ['XK']));
-    const service = makeService({ book: { findUnique, update } });
-
-    // FR is a real code, but not in reference.countries.
-    await expect(
-      service.updateBook('b1', { countries: ['KZ', 'FR'] }),
-    ).rejects.toThrow('FR');
-    expect(update).not.toHaveBeenCalled();
-    // XK is no longer offered, but the book already had it.
-    await service.updateBook('b1', { countries: ['XK', 'KZ'] });
-    expect(update).toHaveBeenCalled();
+    expect((await service.book('b1')).example).toBeNull();
   });
 
   it('says when the book does not exist', async () => {
     const findUnique = jest.fn().mockResolvedValue(null);
     await expect(
-      makeService({ book: { findUnique } }).updateBook('nope', {
-        featured: true,
-      }),
+      makeService({ book: { findUnique } }).book('nope'),
     ).rejects.toThrow('book nope not found');
+  });
+});
+
+describe('AdminService.deleteBook', () => {
+  it('deletes the book, its files and an example left with no version', async () => {
+    const deleteMany = jest.fn().mockResolvedValue({ count: 1 });
+    const examples = jest.fn().mockResolvedValue({ count: 1 });
+    const removeDir = jest.fn().mockResolvedValue(undefined);
+    const service = makeService(
+      { book: { deleteMany }, example: { deleteMany: examples } },
+      { removeDir },
+    );
+    await service.deleteBook('b1');
+    expect(deleteMany).toHaveBeenCalledWith({ where: { id: 'b1' } });
+    expect(removeDir).toHaveBeenCalledWith('books/b1');
+    expect(examples).toHaveBeenCalledWith({
+      where: { versions: { none: {} } },
+    });
   });
 });
 

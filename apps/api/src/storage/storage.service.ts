@@ -1,6 +1,7 @@
 import { Global, Injectable, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  copyFile,
   mkdir,
   readdir,
   readFile,
@@ -39,8 +40,21 @@ export class StorageService {
     );
   }
 
+  /** Copies a stored file to another path (its folder is made); returns the new path. */
+  async copy(fromPath: string, toPath: string): Promise<string> {
+    const to = join(this.root, toPath);
+    await mkdir(dirname(to), { recursive: true });
+    await copyFile(join(this.root, fromPath), to);
+    return toPath;
+  }
+
   remove(relativePath: string): Promise<void> {
     return rm(join(this.root, relativePath), { force: true });
+  }
+
+  /** Deletes a folder and everything in it (a book's files). */
+  removeDir(relativePath: string): Promise<void> {
+    return rm(join(this.root, relativePath), { recursive: true, force: true });
   }
 
   /** Deletes files in a folder that were last written more than `ageMs` ago; returns how many. */

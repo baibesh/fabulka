@@ -28,7 +28,6 @@ import {
   PinLayoutSchema,
   PricesSchema,
   UpdateBlockedSchema,
-  UpdateBookSchema,
   UpdateMethodologySchema,
   UpdateOrderStatusSchema,
   UpdateTemplateSchema,
@@ -47,7 +46,6 @@ import {
   type Prices,
   type PrintFormat,
   type UpdateBlocked,
-  type UpdateBook,
   type UpdateMethodology,
   type UpdateTemplate,
 } from '@fabulka/shared';
@@ -159,15 +157,6 @@ export class AdminController {
   @RequirePermission('books')
   bookCalls(@Param('id') id: string) {
     return this.journal.bookCalls(id);
-  }
-
-  @Patch('books/:id')
-  @RequirePermission('books')
-  updateBook(
-    @Param('id') id: string,
-    @Body(new ZodPipe(UpdateBookSchema)) body: UpdateBook,
-  ) {
-    return this.admin.updateBook(id, body);
   }
 
   /** Staff pin a page's layout or change the theme; the book is re-rendered and re-checked. */

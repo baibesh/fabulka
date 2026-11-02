@@ -13,13 +13,10 @@ import {
   type ChildProfile,
   type Language,
   type SampleOption,
-  type UpdateBook,
   type UpdateTemplate,
   TemplateBlocksSchema,
 } from '@fabulka/shared';
 import { Prisma } from '@prisma/client';
-import { rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import { BooksService, withTemplate } from '../books/books.service';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -163,7 +160,11 @@ export class AdminService {
       where: status ? { status: status as never } : undefined,
       orderBy: { createdAt: 'desc' },
       take: 200,
-      include: { ...withTemplate, _count: { select: { orders: true } } },
+      include: {
+        ...withTemplate,
+        _count: { select: { orders: true } },
+        exampleOf: { select: { exampleId: true } },
+      },
     });
     return rows.map((row) => ({
       id: row.id,
@@ -175,7 +176,7 @@ export class AdminService {
       template: row.template?.slug ?? null,
       country: row.country,
       demo: row.demo,
-      featured: row.featured,
+      example: row.exampleOf !== null,
       costUsd: row.costUsd,
       orders: row._count.orders,
       createdAt: row.createdAt.toISOString(),
@@ -185,7 +186,10 @@ export class AdminService {
   async book(id: string): Promise<AdminBook> {
     const row = await this.prisma.book.findUnique({
       where: { id },
-      include: { template: { select: { slug: true, countries: true } } },
+      include: {
+        template: { select: { slug: true } },
+        exampleOf: { select: { exampleId: true, language: true } },
+      },
     });
     if (!row) throw new NotFoundException(`book ${id} not found`);
     return {
@@ -195,46 +199,26 @@ export class AdminService {
       answers: row.answers as Answers | null,
       country: row.country,
       demo: row.demo,
-      featured: row.featured,
-      countries: row.countries,
-      templateCountries: row.template?.countries ?? null,
+      example: row.exampleOf
+        ? {
+            id: row.exampleOf.exampleId,
+            language: row.exampleOf.language as Language,
+          }
+        : null,
       costUsd: row.costUsd,
       clientKey: row.clientKey,
     };
   }
 
   /**
-   * Shows a book on the home page as an example, or takes it off (only a finished one goes on), and
-   * sets the countries it is shown in there (empty: as its catalog book's say).
+   * Deletes a book, its orders and its files, e.g. when a parent asks to. An example it was the
+   * only version of goes too.
    */
-  async updateBook(id: string, patch: UpdateBook): Promise<AdminBook> {
-    const row = await this.prisma.book.findUnique({
-      where: { id },
-      select: { status: true, countries: true },
-    });
-    if (!row) throw new NotFoundException(`book ${id} not found`);
-    if (patch.featured && row.status !== 'done') {
-      throw new BadRequestException(
-        'В примеры можно поставить только готовую книгу',
-      );
-    }
-    if (patch.countries)
-      await this.assertCountries(patch.countries, row.countries);
-    await this.prisma.book.update({
-      where: { id },
-      data: { featured: patch.featured, countries: patch.countries },
-    });
-    return this.book(id);
-  }
-
-  /** Deletes a book, its orders and its files, e.g. when a parent asks to. */
   async deleteBook(id: string): Promise<void> {
     const { count } = await this.prisma.book.deleteMany({ where: { id } });
     if (!count) throw new NotFoundException(`book ${id} not found`);
-    await rm(join(this.storage.root, 'books', id), {
-      recursive: true,
-      force: true,
-    });
+    await this.storage.removeDir(`books/${id}`);
+    await this.prisma.example.deleteMany({ where: { versions: { none: {} } } });
   }
 
   /** The catalog books; sampleOptions is filled for one book only (template()). */

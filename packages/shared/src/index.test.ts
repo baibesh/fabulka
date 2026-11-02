@@ -14,9 +14,15 @@ import {
   localizedTextSchema,
   pickLanguage,
   UpdateTemplateSchema,
-  UpdateBookSchema,
   catalogCountry,
   exampleShownIn,
+  exampleVersionState,
+  displayVersion,
+  isExampleError,
+  ReorderExamplesSchema,
+  TranslateExampleSchema,
+  transliterate,
+  UpdateExampleSchema,
   showcaseCountries,
   methodologyText,
   cityId,
@@ -588,17 +594,51 @@ describe("example countries", () => {
     expect(exampleShownIn([], [], null)).toBe(true);
   });
 
-  it("patches a book's featured flag or countries, validated like a template's", () => {
-    expect(UpdateBookSchema.parse({ countries: [" kz"] })).toEqual({ countries: ["KZ"] });
-    expect(UpdateBookSchema.parse({ countries: [] })).toEqual({ countries: [] });
-    expect(UpdateBookSchema.parse({ featured: true })).toEqual({ featured: true });
-    expect(UpdateBookSchema.parse({ featured: false, countries: ["DE"] })).toEqual({ featured: false, countries: ["DE"] });
-    expect(UpdateBookSchema.safeParse({}).success).toBe(false);
-    expect(UpdateBookSchema.safeParse({ countries: ["other"] }).success).toBe(false);
-    expect(UpdateBookSchema.safeParse({ countries: ["XX"] }).success).toBe(false);
-    expect(UpdateBookSchema.safeParse({ countries: ["KZ", "kz"] }).success).toBe(false);
-    expect(UpdateBookSchema.safeParse({ countries: "KZ" }).success).toBe(false);
-    expect(UpdateBookSchema.safeParse({ featured: "yes" }).success).toBe(false);
+});
+
+describe("examples", () => {
+  it("tells a version's state from its book's status", () => {
+    expect(exampleVersionState("done")).toBe("done");
+    expect(exampleVersionState("failed")).toBe("failed");
+    expect(exampleVersionState("story")).toBe("translating");
+    expect(exampleVersionState("queued")).toBe("translating");
+  });
+
+  it("validates countries, the order and the languages to translate into", () => {
+    expect(UpdateExampleSchema.parse({ countries: [" kz"] })).toEqual({ countries: ["KZ"] });
+    expect(UpdateExampleSchema.safeParse({ countries: ["other"] }).success).toBe(false);
+    expect(UpdateExampleSchema.safeParse({}).success).toBe(false);
+    expect(TranslateExampleSchema.parse({ languages: ["en", "de"] })).toEqual({ languages: ["en", "de"] });
+    expect(TranslateExampleSchema.safeParse({ languages: [] }).success).toBe(false);
+    expect(TranslateExampleSchema.safeParse({ languages: ["fr"] }).success).toBe(false);
+    expect(TranslateExampleSchema.safeParse({ languages: ["en", "en"] }).success).toBe(false);
+    expect(ReorderExamplesSchema.safeParse({ ids: [] }).success).toBe(false);
+    expect(isExampleError("example_language_taken")).toBe(true);
+    expect(isExampleError("admin_forbidden")).toBe(false);
+  });
+
+  it("shows the admin's language version, else the first finished one", () => {
+    const versions = [
+      { language: "en" as const, state: "translating" as const },
+      { language: "kk" as const, state: "done" as const },
+      { language: "ru" as const, state: "done" as const },
+    ];
+    expect(displayVersion(versions, "ru")?.language).toBe("ru");
+    expect(displayVersion(versions, "en")?.language).toBe("kk");
+    expect(displayVersion([{ language: "de" as const, state: "failed" as const }], "en")?.language).toBe("de");
+    expect(displayVersion([], "en")).toBeNull();
+  });
+
+  it("spells a name in the script of the book's language", () => {
+    expect(transliterate("Тимур", "en")).toBe("Timur");
+    expect(transliterate("Amina", "ru")).toBe("Амина");
+    expect(transliterate("Amina", "kk")).toBe("Амина");
+    expect(transliterate("Амина", "de")).toBe("Amina");
+    expect(transliterate("Жансая", "es")).toBe("Zhansaya");
+    expect(transliterate("Айгерим", "en")).toBe("Aygerim");
+    // Already in that script: as it is.
+    expect(transliterate("Amina", "es")).toBe("Amina");
+    expect(transliterate("Тимур", "kk")).toBe("Тимур");
   });
 });
 

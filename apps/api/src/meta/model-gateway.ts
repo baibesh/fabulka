@@ -4,11 +4,14 @@ import type {
   Story,
   VoicePrefill,
 } from '@fabulka/shared';
+import type { BookTranslation } from '../examples/translation';
 import type {
   Companions,
   PrefillBrief,
+  ShortenBrief,
   StoryBrief,
   TextSpace,
+  TranslationBrief,
 } from './prompts';
 
 export const MODEL_GATEWAY = Symbol('MODEL_GATEWAY');
@@ -103,4 +106,14 @@ export interface ModelGateway {
   extractPrefill(
     brief: PrefillBrief,
   ): Promise<{ fields: PrefillFields; costUsd: number }>;
+  /**
+   * Muse Spark translates a finished book (its title, pages, talk questions, dedication and photo
+   * caption) and spells the child's name in the target script. Throws when the model returns no
+   * valid translation after its retries.
+   */
+  translateBook(
+    brief: TranslationBrief,
+  ): Promise<{ translation: BookTranslation; costUsd: number }>;
+  /** Muse Spark shortens one translated page whose text did not fit its layout. */
+  shortenPage(brief: ShortenBrief): Promise<{ text: string; costUsd: number }>;
 }

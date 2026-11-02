@@ -13,6 +13,8 @@ import {
 import {
   catalogCountry,
   CreateBookSchema,
+  DEFAULT_LANGUAGE,
+  LanguageSchema,
   GENERATION_PAUSED,
   OTHER_COUNTRY,
   type Book,
@@ -27,6 +29,7 @@ import {
 import { CurrentUser, type SessionUser } from '../auth/current-user';
 import { CurrentClient, type Client } from '../common/client';
 import { ZodPipe } from '../common/zod.pipe';
+import { ExamplesService } from '../examples/examples.service';
 import { GeoService } from '../geo/geo.service';
 import { ReferenceService } from '../reference/reference.service';
 import { QuotaService } from '../quota/quota.service';
@@ -41,6 +44,7 @@ export class BooksController {
     private readonly settings: SettingsService,
     private readonly geo: GeoService,
     private readonly reference: ReferenceService,
+    private readonly showcase: ExamplesService,
   ) {}
 
   @Post()
@@ -79,13 +83,19 @@ export class BooksController {
   }
 
   /**
-   * Books for every visitor to open; declared before :id so "examples" is not taken for an id.
-   * ?country= as for GET /templates: a book is shown in its own countries if staff set any, else
-   * where its catalog book is listed, else everywhere (exampleShownIn).
+   * The home page's example books; declared before :id so "examples" is not taken for an id.
+   * ?country= as for GET /templates: an example is shown in its own countries if staff set any, else
+   * where its catalog book is listed, else everywhere (exampleShownIn). ?lang= is the page's
+   * language (English when missing or unknown): each example in exactly that language, none in
+   * another; with none at all, the catalog samples in that language fill in.
    */
   @Get('examples')
-  examples(@Query('country') country?: string): Promise<ExampleBook[]> {
-    return this.books.listExamples(catalogCountry(country));
+  examples(
+    @Query('country') country?: string,
+    @Query('lang') lang?: string,
+  ): Promise<ExampleBook[]> {
+    const language = LanguageSchema.safeParse(lang).data ?? DEFAULT_LANGUAGE;
+    return this.showcase.forSite(catalogCountry(country), language);
   }
 
   /**

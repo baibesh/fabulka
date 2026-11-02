@@ -65,24 +65,20 @@ model Book {
   demo            Boolean         @default(false)
   /// Visitor's country (ISO code) when blocking by country is on; shows demand in the admin.
   country         String?
-  /// Picked in the admin to show every visitor on the home page as an example (done books only).
-  featured        Boolean         @default(false)
-  /// Country codes (reference.countries) where it is shown as an example; empty: as its catalog
-  /// book's countries say, or everywhere for a story of its own (showcaseCountries in shared).
-  countries       String[]        @default([])
   orders          Order[]
   printInterest   PrintInterest[]
   /// Every request to the models made for this book (the journal in the admin).
   modelCalls      ModelCall[]
   /// The catalog book this one is the sample of (in its language), if the admin picked it.
   sampleOf        TemplateSample?
+  /// The home page example this book is the version of (in its language), if staff made it one.
+  exampleOf       ExampleVersion?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
   @@index([clientKey])
   @@index([userId])
   @@index([createdAt, demo])
-  @@index([featured, createdAt])
 }
 
 /// A parent who signed in with Keycloak. Only the Keycloak subject is kept here: the email and
@@ -224,6 +220,36 @@ model TemplateSample {
   createdAt  DateTime     @default(now())
 
   @@id([templateId, language])
+}
+
+/// A story on the home page's examples, in one or more languages (admin «Examples»). The home page
+/// shows, for each example listed in the visitor's country, its version in exactly the page's
+/// language. Deleting an example keeps its books.
+model Example {
+  id        String           @id @default(cuid())
+  /// Country codes (reference.countries) where it is shown; empty: as its catalog book's countries
+  /// say, or everywhere for a story of its own (showcaseCountries in @fabulka/shared).
+  countries String[]         @default([])
+  /// Ascending: the order of the home page.
+  sortOrder Int              @default(0)
+  versions  ExampleVersion[]
+  createdAt DateTime         @default(now())
+
+  @@index([sortOrder])
+}
+
+/// An example in one language: a book in that language (finished, or being translated from another
+/// version). A book is the version of one example at most; deleting either removes the row.
+model ExampleVersion {
+  example   Example  @relation(fields: [exampleId], references: [id], onDelete: Cascade)
+  exampleId String
+  /// The book's language (Language in @fabulka/shared).
+  language  String
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  bookId    String   @unique
+  createdAt DateTime @default(now())
+
+  @@id([exampleId, language])
 }
 
 /// A story method a book follows, edited in the admin; seeded from DEFAULT_METHODOLOGIES in

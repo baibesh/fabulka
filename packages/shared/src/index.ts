@@ -22,6 +22,7 @@ export * from "./layout";
 export * from "./locale-path";
 export * from "./seo";
 export * from "./admin-access";
+export * from "./examples";
 
 /** What the parent tells us about the child. */
 export const ChildProfileSchema = z.object({
@@ -265,12 +266,17 @@ export const MyBookSchema = z.object({
 });
 export type MyBook = z.infer<typeof MyBookSchema>;
 
-/** A finished book the admin picked to show every visitor on the home page. */
+/**
+ * A finished book on the home page's examples (GET /books/examples), in the page's language: an
+ * example's version in that language, or, when no example has one, a catalog book's sample.
+ */
 export const ExampleBookSchema = z.object({
   id: z.string(),
   title: z.string(),
   language: LanguageSchema,
   heroImageUrl: z.string().nullable(),
+  /** "example": a version of an example staff set up; "sample": a catalog book's sample filling in. */
+  kind: z.enum(["example", "sample"]).default("example"),
 });
 export type ExampleBook = z.infer<typeof ExampleBookSchema>;
 
@@ -280,6 +286,7 @@ export type ExampleBook = z.infer<typeof ExampleBookSchema>;
  */
 export const SitemapEntriesSchema = z.object({
   templates: z.array(z.object({ slug: z.string(), updatedAt: z.string() })),
+  /** Every finished version of every example: a public page in its own language only. */
   examples: z.array(
     z.object({
       id: z.string(),
@@ -287,6 +294,10 @@ export const SitemapEntriesSchema = z.object({
       /** For the book page's title and OG image (older APIs leave them out). */
       title: z.string().nullable().optional(),
       heroImageUrl: z.string().nullable().optional(),
+      /** The book's language: its page is listed in that language version of the site only. */
+      language: LanguageSchema.optional(),
+      /** The same story's finished versions, book id by language (this one included): its hreflang alternates. */
+      versions: z.partialRecord(LanguageSchema, z.string()).optional(),
     }),
   ),
 });
@@ -599,7 +610,8 @@ export const AdminBookRowSchema = z.object({
   template: z.string().nullable(),
   country: z.string().nullable(),
   demo: z.boolean(),
-  featured: z.boolean(),
+  /** A version of a home page example. */
+  example: z.boolean(),
   costUsd: z.number(),
   orders: z.number().int(),
   createdAt: z.string(),
@@ -612,33 +624,12 @@ export const AdminBookSchema = BookSchema.extend({
   answers: AnswersSchema.nullable(),
   country: z.string().nullable(),
   demo: z.boolean(),
-  /** Shown on the home page among the example books. */
-  featured: z.boolean(),
-  /**
-   * Where it is shown as an example (reference.countries codes); empty: as `templateCountries`
-   * say (showcaseCountries).
-   */
-  countries: z.array(z.string()),
-  /** Its catalog book's countries (empty: everywhere); null for a story of its own. */
-  templateCountries: z.array(z.string()).nullable(),
+  /** The home page example it is a version of, and in which language; null when it is none. */
+  example: z.object({ id: z.string(), language: LanguageSchema }).nullable(),
   costUsd: z.number(),
   clientKey: z.string(),
 });
 export type AdminBook = z.infer<typeof AdminBookSchema>;
-
-/** Body of PATCH /admin/books/:id: what to change, at least one of them. */
-export const UpdateBookSchema = z
-  .object({
-    featured: z.boolean(),
-    /**
-     * Where it is shown as an example: codes from reference.countries (the API refuses others), or
-     * empty to follow its catalog book's countries (everywhere for a story of its own).
-     */
-    countries: TemplateCountriesSchema,
-  })
-  .partial()
-  .refine((patch) => patch.featured !== undefined || patch.countries !== undefined, "Nothing to change");
-export type UpdateBook = z.infer<typeof UpdateBookSchema>;
 
 export const AdminOrderSchema = OrderSchema.extend({
   phone: z.string(),
@@ -740,6 +731,10 @@ export const MODEL_CALL_KINDS = [
   "theme",
   /** Muse Image draws an AI theme's ornament. */
   "ornament",
+  /** Muse Spark translates an example book into another language (admin «Examples»). */
+  "translate",
+  /** Muse Spark shortens a translated page whose text does not fit the layout. */
+  "shorten",
 ] as const;
 export const ModelCallKindSchema = z.enum(MODEL_CALL_KINDS);
 export type ModelCallKind = z.infer<typeof ModelCallKindSchema>;

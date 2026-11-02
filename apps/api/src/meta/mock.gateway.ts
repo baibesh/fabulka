@@ -1,6 +1,8 @@
 import {
   GRID,
+  countWords,
   encodeGrid,
+  transliterate,
   type Language,
   type ModelCallKind,
   type PageSubject,
@@ -13,7 +15,13 @@ import type {
   ModelGateway,
   PrefillFields,
 } from './model-gateway';
-import type { PrefillBrief, StoryBrief } from './prompts';
+import type { BookTranslation } from '../examples/translation';
+import type {
+  PrefillBrief,
+  ShortenBrief,
+  StoryBrief,
+  TranslationBrief,
+} from './prompts';
 
 const COLORS = [
   '#F9D9A8',
@@ -292,6 +300,55 @@ export class MockGateway implements ModelGateway {
         ...(theme && { theme: 'динозавры и рисование' }),
         ...(Object.keys(answers).length && { answers }),
       },
+      costUsd: 0,
+    };
+  }
+
+  /**
+   * The same book every time in the target language: the child's name (and city, and toy's name)
+   * spelled in its script letter by letter, the mock's title and pages in that language, its talk
+   * questions as many as the original's, the dedication and caption marked with the language.
+   */
+  async translateBook(
+    brief: TranslationBrief,
+  ): Promise<{ translation: BookTranslation; costUsd: number }> {
+    await this.pretend('translate');
+    const text = MOCK_TEXT[brief.to];
+    const name = transliterate(brief.child.name, brief.to);
+    const city = transliterate(brief.child.city, brief.to);
+    return {
+      translation: {
+        title: text.title(name),
+        child_name: name,
+        city,
+        toy_name: brief.toyName ? transliterate(brief.toyName, brief.to) : null,
+        pages: brief.pages.map((p) => ({
+          page: p.page,
+          text: text.page(p.page, name, city),
+        })),
+        talk_questions: brief.talkQuestions.map(
+          (_, i) => text.questions[i % text.questions.length],
+        ),
+        dedication: brief.dedication
+          ? `[${brief.to}] ${brief.dedication}`
+          : null,
+        photo_caption: brief.photoCaption
+          ? `[${brief.to}] ${brief.photoCaption}`
+          : null,
+      },
+      costUsd: 0,
+    };
+  }
+
+  /** The page's first words, as many as allowed. */
+  async shortenPage({ text, maxWords }: ShortenBrief) {
+    await this.pretend('shorten');
+    const words = text.split(/\s+/u).filter(Boolean);
+    return {
+      text:
+        countWords(text) <= maxWords
+          ? text
+          : words.slice(0, maxWords).join(' '),
       costUsd: 0,
     };
   }
