@@ -6,11 +6,23 @@ import { CountryData } from "@/components/layout/country-data";
 import type { UiLocale } from "@/i18n/messages";
 import { T } from "@/i18n/t";
 import { BackLink, PageContainer } from "@/components/ui/page";
-import { alternates } from "@/lib/seo";
+import { TemplateJsonLd } from "@/components/seo/json-ld";
+import { pageMetadata, templateForSeo } from "@/lib/seo-data";
 
+/** The catalog book's own title, summary and cover by default, over which staff may set their own. */
 export async function generateMetadata({ params }: PageProps<"/[locale]/catalog/[slug]">): Promise<Metadata> {
   const { locale, slug } = await params;
-  return { alternates: alternates(locale as UiLocale, `/catalog/${slug}`) };
+  const template = await templateForSeo(slug, locale as UiLocale);
+  return pageMetadata(locale as UiLocale, `template:${slug}`, {
+    label: template?.title,
+    summary: template?.summary,
+    coverUrl: template?.coverUrl,
+  });
+}
+
+/** The book as a product with the visitor's price, and its breadcrumb (the slug and the cookie are read here). */
+async function TemplateStructuredData({ locale, slug }: { locale: UiLocale; slug: Promise<string> }) {
+  return <TemplateJsonLd locale={locale} slug={await slug} />;
 }
 
 export default async function TemplatePage({ params }: PageProps<"/[locale]/catalog/[slug]">) {
@@ -32,6 +44,7 @@ export default async function TemplatePage({ params }: PageProps<"/[locale]/cata
         <CountryData locale={locale} need={["methodologies"]} template={params.then((p) => p.slug)}>
           <TemplateView />
         </CountryData>
+        <TemplateStructuredData locale={locale} slug={params.then((p) => p.slug)} />
       </Suspense>
     </PageContainer>
   );

@@ -2,16 +2,18 @@ import type { Metadata } from "next";
 import { LegalPage } from "@/components/layout/legal-page";
 import { PageContainer } from "@/components/ui/page";
 import type { UiLocale } from "@/i18n/messages";
-import { alternates } from "@/lib/seo";
+import { PageBreadcrumb } from "@/components/seo/json-ld";
+import { pageMetadata } from "@/lib/seo-data";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/privacy">): Promise<Metadata> {
-  const { locale } = await params;
-  return { title: "Конфиденциальность", alternates: alternates(locale as UiLocale, "/privacy") };
+  return pageMetadata((await params).locale as UiLocale, "privacy");
 }
 
-export default function Page() {
+export default async function Page({ params }: PageProps<"/[locale]/privacy">) {
+  const locale = (await params).locale as UiLocale;
   return (
     <PageContainer width="md" gap="none">
+      <PageBreadcrumb locale={locale} label="footer.privacy" path="/privacy" />
       <LegalPage doc="privacy" />
     </PageContainer>
   );

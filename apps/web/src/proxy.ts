@@ -1,5 +1,6 @@
 import { DEFAULT_LANGUAGE, isLanguage, localePath, splitLocalePath } from "@fabulka/shared";
 import { NextResponse, type NextRequest } from "next/server";
+import { redirectFor } from "./lib/redirects";
 
 /**
  * Language in the address. Russian, the default, has none: /catalog is served by the /ru/catalog
@@ -8,9 +9,18 @@ import { NextResponse, type NextRequest } from "next/server";
  * links with ?lang=xx redirect to that language's address. Nobody is redirected by Accept-Language
  * or a cookie: the address alone decides the language, for visitors and search engines alike.
  * Anything else in the first segment (/fr/…) is just a path under the Russian site, so it is a 404.
+ * Before all that, the redirects staff set up in the admin's SEO section (kept for a minute).
  */
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
+
+  const custom = await redirectFor(pathname);
+  if (custom) {
+    // A path keeps the request's query; an absolute URL is taken as written.
+    const url = custom.to.startsWith("/") ? new URL(custom.to, request.nextUrl) : new URL(custom.to);
+    if (custom.to.startsWith("/") && !custom.to.includes("?")) url.search = request.nextUrl.search;
+    return NextResponse.redirect(url, custom.status);
+  }
   const { language, path, prefixed } = splitLocalePath(pathname);
 
   const asked = searchParams.get("lang");
@@ -36,7 +46,7 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // The site's pages only: not the admin, the API and generated files (proxied to the API in
-  // next.config.ts), Next's own files, or anything with a file extension (covers, robots.txt,
-  // sitemap.xml, the icon).
-  matcher: ["/((?!admin|api|files|_next|.*\\..*).*)"],
+  // next.config.ts), Next's own files, the API's revalidation route, or anything with a file
+  // extension (covers, robots.txt, sitemap.xml, the icon, the IndexNow key).
+  matcher: ["/((?!admin|api|files|_next|internal/|.*\\..*).*)"],
 };

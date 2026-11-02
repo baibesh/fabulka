@@ -25,6 +25,9 @@ const nextConfig: NextConfig = {
     return [
       { source: "/api/:path*", destination: `${API_URL}/api/:path*` },
       { source: "/files/:path*", destination: `${API_URL}/files/:path*` },
+      // The IndexNow key file at the site's root (/<key>.txt): the API answers for its INDEXNOW_KEY
+      // only, 404 otherwise. Files in public/ and robots.txt come first (rewrites run after them).
+      { source: "/:key([A-Za-z0-9-]{8,128}).txt", destination: `${API_URL}/api/seo/indexnow/:key` },
     ];
   },
 };

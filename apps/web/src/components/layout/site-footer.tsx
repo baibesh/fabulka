@@ -2,6 +2,7 @@
 
 import { LocaleLink } from "@/i18n/routing";
 import { useI18n } from "@/i18n/i18n";
+import { ConsentSettingsLink } from "../seo/analytics";
 import { CountryPicker } from "./locale-pickers";
 import { Logo } from "./logo";
 
@@ -21,6 +22,7 @@ export function SiteFooter() {
           <LocaleLink href="/terms" className="hover:text-foreground">
             {t("footer.terms")}
           </LocaleLink>
+          <ConsentSettingsLink className="hover:text-foreground" />
           <a href="mailto:hello@fabulka.com" className="hover:text-foreground">
             hello@fabulka.com
           </a>

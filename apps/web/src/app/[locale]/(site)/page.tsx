@@ -14,16 +14,11 @@ import { Pricing } from "@/components/landing/pricing";
 import { ToyStory } from "@/components/landing/toy-story";
 import { TrustStrip } from "@/components/landing/trust-strip";
 import type { UiLocale } from "@/i18n/messages";
-import { alternates } from "@/lib/seo";
+import { SiteJsonLd } from "@/components/seo/json-ld";
+import { pageMetadata } from "@/lib/seo-data";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]">): Promise<Metadata> {
-  const { locale } = await params;
-  return {
-    title: { absolute: "Fabulka — персональная детская книга, где ваш ребёнок главный герой" },
-    description:
-      "Сказка по методике детского развития, где ребёнок узнаёт себя на каждой иллюстрации. PDF за несколько минут, а в Казахстане — печать и доставка. Первые книги — бесплатно.",
-    alternates: alternates(locale as UiLocale, "/"),
-  };
+  return pageMetadata((await params).locale as UiLocale, "home");
 }
 
 export default async function Home({ params }: PageProps<"/[locale]">) {
@@ -32,6 +27,7 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
   // the landing renders at request time; the prerendered shell is the same page before that data.
   return (
     <MotionConfig reducedMotion="user">
+      <SiteJsonLd locale={locale} />
       <Suspense fallback={<Landing />}>
         <CountryData locale={locale} need={["templates", "examples", "methodologies"]}>
           <Landing />

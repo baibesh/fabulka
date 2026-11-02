@@ -8,7 +8,7 @@ export interface LegalDoc {
 
 const privacyEs: LegalDoc = {
   title: "Política de privacidad",
-  updated: "Actualizado el 1 de noviembre de 2026",
+  updated: "Actualizado el 2 de noviembre de 2026",
   sections: [
     {
       title: "Quiénes somos",
@@ -46,7 +46,8 @@ const privacyEs: LegalDoc = {
     {
       title: "Tus derechos",
       text: [
-        "Puedes preguntarnos qué datos tenemos sobre ti, corregirlos o eliminarlos. Solo usamos el almacenamiento del navegador que el sitio necesita (idioma, país, clave anónima) y ningún rastreador publicitario.",
+        "Puedes preguntarnos qué datos tenemos sobre ti, corregirlos o eliminarlos. Solo usamos el almacenamiento del navegador que el sitio necesita (idioma, país, clave anónima).",
+        "Las herramientas de analítica y medición (como Google Analytics, Yandex Metrica o Meta Pixel) solo se activan si las aceptas en el aviso de cookies. Puedes cambiar tu elección en cualquier momento en «Configurar cookies», al pie de la página.",
       ],
     },
   ],
@@ -87,7 +88,7 @@ const termsEs: LegalDoc = {
 
 const privacyDe: LegalDoc = {
   title: "Datenschutzerklärung",
-  updated: "Aktualisiert am 1. November 2026",
+  updated: "Aktualisiert am 2. November 2026",
   sections: [
     {
       title: "Wer wir sind",
@@ -125,7 +126,8 @@ const privacyDe: LegalDoc = {
     {
       title: "Deine Rechte",
       text: [
-        "Du kannst erfragen, welche Daten wir über dich gespeichert haben, sie berichtigen oder löschen lassen. Wir nutzen nur den Browserspeicher, den die Website benötigt (Sprache, Land, anonymer Schlüssel), und keine Werbetracker.",
+        "Du kannst erfragen, welche Daten wir über dich gespeichert haben, sie berichtigen oder löschen lassen. Wir nutzen nur den Browserspeicher, den die Website benötigt (Sprache, Land, anonymer Schlüssel).",
+        "Analyse- und Messwerkzeuge (etwa Google Analytics, Yandex Metrica oder Meta Pixel) werden nur aktiviert, wenn du sie im Cookie-Hinweis akzeptierst. Deine Wahl kannst du jederzeit unter „Cookie-Einstellungen“ unten auf der Seite ändern.",
       ],
     },
   ],
@@ -169,7 +171,7 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
   privacy: {
     ru: {
       title: "Политика конфиденциальности",
-      updated: "Обновлено 1 ноября 2026",
+      updated: "Обновлено 2 ноября 2026",
       sections: [
         {
           title: "Кто мы",
@@ -213,14 +215,15 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         {
           title: "Ваши права",
           text: [
-            "Вы можете узнать, какие данные о вас хранятся, исправить или удалить их. Мы используем только необходимое хранилище браузера (язык, страна, анонимный ключ) и не подключаем рекламные трекеры.",
+            "Вы можете узнать, какие данные о вас хранятся, исправить или удалить их. Мы используем только необходимое хранилище браузера (язык, страна, анонимный ключ).",
+            "Инструменты аналитики и измерений (например, Google Analytics, Яндекс Метрика или Meta Pixel) включаются, только если вы согласитесь на них в окне про cookie. Выбор можно изменить в любой момент в «Настройках cookie» внизу страницы.",
           ],
         },
       ],
     },
     kk: {
       title: "Құпиялылық саясаты",
-      updated: "2026 жылғы 1 қарашада жаңартылды",
+      updated: "2026 жылғы 2 қарашада жаңартылды",
       sections: [
         {
           title: "Біз кімбіз",
@@ -258,14 +261,15 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         {
           title: "Сіздің құқықтарыңыз",
           text: [
-            "Сіз өзіңіз туралы қандай деректер сақталатынын біліп, оларды түзете немесе жоя аласыз. Біз тек браузердің қажетті қоймасын (тіл, ел, анонимді кілт) пайдаланамыз және жарнамалық трекерлер қоспаймыз.",
+            "Сіз өзіңіз туралы қандай деректер сақталатынын біліп, оларды түзете немесе жоя аласыз. Біз тек браузердің қажетті қоймасын (тіл, ел, анонимді кілт) пайдаланамыз.",
+            "Аналитика және өлшеу құралдары (мысалы, Google Analytics, Яндекс Метрика немесе Meta Pixel) cookie туралы терезеде келісім берсеңіз ғана қосылады. Таңдауыңызды кез келген уақытта беттің төменгі жағындағы «Cookie баптаулары» арқылы өзгертуге болады.",
           ],
         },
       ],
     },
     en: {
       title: "Privacy policy",
-      updated: "Updated 1 November 2026",
+      updated: "Updated 2 November 2026",
       sections: [
         {
           title: "Who we are",
@@ -303,7 +307,8 @@ export const LEGAL: Record<"privacy" | "terms", Record<UiLocale, LegalDoc>> = {
         {
           title: "Your rights",
           text: [
-            "You can ask what data we hold about you, correct it or delete it. We only use the browser storage the site needs (language, country, anonymous key) and no advertising trackers.",
+            "You can ask what data we hold about you, correct it or delete it. We only use the browser storage the site needs (language, country, anonymous key).",
+            "Analytics and measurement tools (such as Google Analytics, Yandex Metrica or Meta Pixel) are switched on only if you accept them in the cookie notice. You can change your choice at any time under “Cookie settings” at the bottom of the page.",
           ],
         },
       ],

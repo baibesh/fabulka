@@ -6,17 +6,18 @@ import { CountryData } from "@/components/layout/country-data";
 import type { UiLocale } from "@/i18n/messages";
 import { T } from "@/i18n/t";
 import { BackLink, PageContainer, PageHeader } from "@/components/ui/page";
-import { alternates } from "@/lib/seo";
+import { PageBreadcrumb } from "@/components/seo/json-ld";
+import { pageMetadata } from "@/lib/seo-data";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/create">): Promise<Metadata> {
-  const { locale } = await params;
-  return { alternates: alternates(locale as UiLocale, "/create") };
+  return pageMetadata((await params).locale as UiLocale, "create");
 }
 
 export default async function CreatePage({ params }: PageProps<"/[locale]/create">) {
   const locale = (await params).locale as UiLocale;
   return (
     <PageContainer width="md" gap="lg">
+      <PageBreadcrumb locale={locale} label="nav.create" path="/create" />
       <BackLink href="/catalog">
         <T k="common.back.catalog" />
       </BackLink>
