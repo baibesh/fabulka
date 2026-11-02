@@ -1,4 +1,4 @@
-import { localePath, seoPageKind, seoPagePath, type PublishedSeo, type SeoStaticPage } from "@fabulka/shared";
+import { DEFAULT_LANGUAGE, localePath, seoPageKind, seoPagePath, type PublishedSeo, type SeoStaticPage } from "@fabulka/shared";
 import type { Metadata } from "next";
 import { format } from "../i18n/format";
 import { MESSAGES, type MessageKey, type UiLocale } from "../i18n/messages";
@@ -44,7 +44,7 @@ export interface ResolvedSeo {
  * One of the five languages: a page's [locale] can be anything for a moment (a missing file such as
  * /apple-touch-icon.png reaches the route before the layout answers 404), and metadata runs first.
  */
-export const siteLocale = (locale: string): UiLocale => (locale in MESSAGES ? (locale as UiLocale) : "ru");
+export const siteLocale = (locale: string): UiLocale => (locale in MESSAGES ? (locale as UiLocale) : DEFAULT_LANGUAGE);
 
 const message = (locale: UiLocale, key: MessageKey, vars?: Record<string, string>) => {
   const language = siteLocale(locale);

@@ -12,6 +12,7 @@ import type {
   Prisma,
 } from '@prisma/client';
 import {
+  DEFAULT_LANGUAGE,
   LanguageSchema,
   CITY_UNKNOWN,
   PRINT_BLOCKED,
@@ -316,7 +317,7 @@ export class OrdersService {
     return (
       LanguageSchema.safeParse(row.locale).data ??
       LanguageSchema.safeParse(book.language).data ??
-      'ru'
+      DEFAULT_LANGUAGE
     );
   }
 

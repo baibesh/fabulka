@@ -3,7 +3,7 @@ import { LocaleLink } from "@/i18n/routing";
 import { T } from "@/i18n/t";
 import { Logo } from "./logo";
 
-/** The 404 screen: the site's (in the page's language) and the global one (in Russian). */
+/** The 404 screen: the site's (in the page's language) and the global one (in the default language). */
 export function NotFoundContent() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-6 text-center">

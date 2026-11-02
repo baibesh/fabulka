@@ -72,6 +72,6 @@ describe("seoMetadata", () => {
 
 describe("siteLocale", () => {
   it("keeps metadata working for a [locale] that is not a language (a missing file)", () => {
-    expect(resolveSeo("apple-touch-icon.png" as never, { key: "home" }, null).title).toBe(MESSAGES.ru["seo.home.title"]);
+    expect(resolveSeo("apple-touch-icon.png" as never, { key: "home" }, null).title).toBe(MESSAGES.en["seo.home.title"]);
   });
 });

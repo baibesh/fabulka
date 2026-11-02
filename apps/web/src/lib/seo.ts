@@ -1,22 +1,22 @@
 import { DEFAULT_LANGUAGE, localePath } from "@fabulka/shared";
 import type { Metadata } from "next";
-import { UI_LOCALES, type UiLocale } from "../i18n/messages";
+import { MESSAGES, UI_LOCALES, type UiLocale } from "../i18n/messages";
 
 /** The site's address: absolute URLs in metadata, the sitemap and robots.txt. */
 export const SITE_URL = (process.env.SITE_URL ?? "https://fabulka.com").replace(/\/+$/, "");
 
-const description =
-  "Персональная детская книга, где ваш ребёнок — главный герой: сказка по детской методике и иллюстрации — на казахском, русском, английском, испанском или немецком. Powered by Meta Muse models.";
+const title = MESSAGES[DEFAULT_LANGUAGE]["seo.site.title"];
+const description = MESSAGES[DEFAULT_LANGUAGE]["seo.site.description"];
 
-/** What every page starts from (each root layout exports it). */
+/** What every page starts from (each root layout exports it), in the site's default language. */
 export const siteMetadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: "Fabulka — книга, где ваш ребёнок главный герой", template: "%s · Fabulka" },
+  title: { default: title, template: "%s · Fabulka" },
   description,
   openGraph: {
     type: "website",
     siteName: "Fabulka",
-    title: "Fabulka — книга, где ваш ребёнок главный герой",
+    title,
     description,
     images: [{ url: "/og.jpg", width: 1200, height: 630 }],
   },
@@ -25,7 +25,7 @@ export const siteMetadata: Metadata = {
 
 /**
  * The language versions of a site path, by hreflang: each language's address, and x-default for the
- * unprefixed Russian one.
+ * unprefixed one of the default language.
  */
 export function languageVersions(path: string): Record<string, string> {
   return {

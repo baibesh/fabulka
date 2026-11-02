@@ -37,7 +37,7 @@ export class AuthController {
     redirect(response, await this.auth.callback(query, request.headers.cookie));
   }
 
-  /** { return: "/en/catalog" }: the page to come back to, with its language prefix. */
+  /** { return: "/ru/catalog" }: the page to come back to, with its language prefix. */
   @Post('logout')
   @HttpCode(200)
   async logout(

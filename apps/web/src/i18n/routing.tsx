@@ -9,16 +9,17 @@ import { useI18n } from "./i18n";
 export { localePath, splitLocalePath };
 
 /**
- * The page's path without its language: `/catalog` on /catalog, /en/catalog and on the /ru/catalog
- * the server renders a Russian page as, so it is the same while hydrating and after.
+ * The page's path without its language: `/catalog` on /catalog, /ru/catalog and on the /en/catalog
+ * the server renders an English (default language) page as, so it is the same while hydrating and
+ * after.
  */
 export function useBarePath(): string {
   return splitLocalePath(usePathname() ?? "/").path;
 }
 
 /**
- * A site link in the page's language: `<LocaleLink href="/catalog">` goes to /catalog on a Russian
- * page and to /en/catalog on an English one. Hashes, other sites and the admin stay as they are.
+ * A site link in the page's language: `<LocaleLink href="/catalog">` goes to /catalog on an English
+ * page and to /ru/catalog on a Russian one. Hashes, other sites and the admin stay as they are.
  */
 export function LocaleLink({ href, ...rest }: Omit<ComponentProps<typeof Link>, "href"> & { href: string }) {
   const { locale } = useI18n();

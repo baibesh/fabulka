@@ -1,6 +1,6 @@
 "use client";
 
-import { OTHER_COUNTRY, countryFromIp, countryInfo, type Country } from "@fabulka/shared";
+import { DEFAULT_LANGUAGE, OTHER_COUNTRY, countryFromIp, countryInfo, type Country } from "@fabulka/shared";
 import { Check, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -32,10 +32,14 @@ function useGoToLanguage() {
   };
 }
 
+/** The site's default language (English) first, the rest in the order given. */
+const defaultFirst = (languages: readonly UiLocale[]): UiLocale[] =>
+  [...languages].sort((a, b) => Number(b === DEFAULT_LANGUAGE) - Number(a === DEFAULT_LANGUAGE));
+
 /**
  * A flag button with the interface language's code; it opens a dialog of languages to choose from.
  * On the site (`scope="site"`, the header) it offers the languages of the visitor's country and the
- * page's own, and goes to the same page in the chosen language; in the admin (`scope="admin"`, the
+ * page's own, English (the default language) first, and goes to the same page in the chosen language; in the admin (`scope="admin"`, the
  * sidebar and the sign-in card) all five, for the admin's own language store. Test ids: the button
  * is `testId`, each option `${optionPrefix}${language}`.
  */
@@ -55,7 +59,7 @@ export function LanguagePicker({
   const [open, setOpen] = useState(false);
   const goTo = useGoToLanguage();
   const admin = scope === "admin";
-  const languages: readonly UiLocale[] = admin ? UI_LOCALES : info.languages.includes(locale) ? info.languages : [...info.languages, locale];
+  const languages: readonly UiLocale[] = admin ? UI_LOCALES : defaultFirst(info.languages.includes(locale) ? info.languages : [...info.languages, locale]);
   const label = t(admin ? "admin.language" : "nav.language");
   const choose = (language: UiLocale) => {
     setOpen(false);

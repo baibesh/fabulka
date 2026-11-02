@@ -11,8 +11,9 @@ import { useBarePath } from "@/i18n/routing";
 import { Notice } from "../ui/notice";
 
 /**
- * The language this visitor would rather read, if it is not Russian: the one they picked on the site
- * before (the preference cookie), else the first of the browser's languages the site has.
+ * The language this visitor would rather read, if it is not the default one (English): the one they
+ * picked on the site before (the preference cookie), else the first of the browser's languages the
+ * site has (Russian, Kazakh, Spanish or German).
  */
 function wanted(): UiLocale | null {
   const saved = localePreference();
@@ -23,9 +24,10 @@ function wanted(): UiLocale | null {
 }
 
 /**
- * On the unprefixed (Russian) pages: a small offer of this page in the visitor's language, written in
- * that language. Only an offer: nobody is redirected, and search engines see the Russian page as is.
- * Closing it remembers Russian as the preference, so it does not come back.
+ * On the unprefixed pages (the default language, English): a small offer of this page in the
+ * visitor's language, written in that language. Only an offer: nobody is redirected, and search
+ * engines see the English page as is. Closing it remembers English as the preference, so it does not
+ * come back.
  */
 export function LocaleSuggestion() {
   const { locale } = useI18n();

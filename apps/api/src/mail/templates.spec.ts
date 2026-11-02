@@ -1,7 +1,8 @@
-import { LANGUAGES } from '@fabulka/shared';
+import { DEFAULT_LANGUAGE, LANGUAGES } from '@fabulka/shared';
 
-/** The site's address prefix of a language: none for Russian. */
-const prefix = (locale: string) => (locale === 'ru' ? '' : `/${locale}`);
+/** The site's address prefix of a language: none for the default one (English). */
+const prefix = (locale: string) =>
+  locale === DEFAULT_LANGUAGE ? '' : `/${locale}`;
 import {
   kzt,
   orderConfirmation,
@@ -43,6 +44,15 @@ describe('mail templates', () => {
     expect(mail.subject).toContain(orderNumber(order.id));
     expect(mail.text).toContain(`${site}${prefix(locale)}/orders/${order.id}`);
     expect(mail.text).not.toContain('undefined');
+  });
+
+  it('links Russian mail to /ru and English mail to unprefixed addresses', () => {
+    expect(orderStatusChanged(order, 'shipped', 'ru', site).text).toContain(
+      `${site}/ru/orders/${order.id}`,
+    );
+    expect(orderStatusChanged(order, 'shipped', 'en', site).text).toContain(
+      `${site}/orders/${order.id}`,
+    );
   });
 
   it.each(LANGUAGES)('renders the purchase receipt in %s', (locale) => {

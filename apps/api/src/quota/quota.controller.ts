@@ -1,5 +1,10 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
-import { PurchaseSchema, type Purchase, type Quota } from '@fabulka/shared';
+import {
+  DEFAULT_LANGUAGE,
+  PurchaseSchema,
+  type Purchase,
+  type Quota,
+} from '@fabulka/shared';
 import { CurrentUser, type SessionUser } from '../auth/current-user';
 import { CurrentClient, type Client } from '../common/client';
 import { ZodPipe } from '../common/zod.pipe';
@@ -49,7 +54,7 @@ export class QuotaController {
         email,
         purchaseReceipt(
           { kind: body.kind, price },
-          body.locale ?? 'ru',
+          body.locale ?? DEFAULT_LANGUAGE,
           this.mail.publicUrl,
         ),
       );

@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
   };
 }
 
-/** Every language is prerendered; the proxy serves Russian at unprefixed addresses (src/proxy.ts). */
+/** Every language is prerendered; the proxy serves the default language (English) at unprefixed addresses (src/proxy.ts). */
 export function generateStaticParams() {
   return UI_LOCALES.map((locale) => ({ locale }));
 }
