@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  DEFAULT_LANGUAGE,
   LANGUAGE_NAMES,
   LanguageSchema,
   SEO_DESCRIPTION_LIMIT,
@@ -37,7 +38,7 @@ import { Counter, GooglePreview, HistoryList, SocialPreview, seoWarnings } from 
 export function SeoEditor() {
   const params = useSearchParams();
   const key = params.get("key") ?? "home";
-  const language = LanguageSchema.catch("ru").parse(params.get("version"));
+  const language = LanguageSchema.catch(DEFAULT_LANGUAGE).parse(params.get("version"));
   const page = useQuery({ queryKey: ["admin", "seo", "page", key, language], queryFn: () => seoPage(key, language) });
   if (!page.data) return <QueryState error={page.error} scope="admin" />;
   return <Editor key={`${key}:${language}`} page={page.data} language={language} />;

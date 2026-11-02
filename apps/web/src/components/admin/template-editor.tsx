@@ -9,11 +9,13 @@ import {
   DEFAULT_BLOCKS,
   OPTIONAL_KINDS,
   BOOK_THEMES,
+  DEFAULT_LANGUAGE,
   LANGUAGES,
   LANGUAGE_NAMES,
   SAMPLE_BOOKS,
   TemplateBlocksSchema,
   defaultThemeId,
+  inLanguageOrder,
   methodologyText,
   newLayout,
   pickLanguage,
@@ -426,7 +428,7 @@ function SamplesCard({ template, onChange }: { template: AdminTemplate; onChange
  */
 function TemplatePreview({ template, blocks, theme }: { template: AdminTemplate; blocks: TemplateBlocks | null; theme: BookTheme | null }) {
   const { t } = useAdminI18n();
-  const [language, setLanguage] = useState<Language>(template.languages[0] ?? "ru");
+  const [language, setLanguage] = useState<Language>(inLanguageOrder(template.languages)[0] ?? DEFAULT_LANGUAGE);
   const sampleLanguage = pickLanguage(
     LANGUAGES.filter((l) => template.samples[l]),
     language,

@@ -1,12 +1,20 @@
 import { z } from "zod";
 
 /**
- * Interface and book languages. Everything language-keyed is built from this list (forms iterate
- * it, texts are dictionaries keyed by it), so adding a language starts here.
+ * Interface and book languages, in the order they are listed everywhere: English first, Russian last.
+ * Everything language-keyed is built from this list (forms and tabs iterate it, texts are
+ * dictionaries keyed by it), so adding a language starts here. The order is for display only: which
+ * text stands in for a missing one is FALLBACK_LANGUAGES, and a country's default language is the
+ * first of its own list.
  */
-export const LANGUAGES = ["ru", "kk", "en", "es", "de"] as const;
+export const LANGUAGES = ["en", "kk", "es", "de", "ru"] as const;
 export const LanguageSchema = z.enum(LANGUAGES);
 export type Language = z.infer<typeof LanguageSchema>;
+
+/** These languages in the order they are listed (LANGUAGES), whatever order they are kept in. */
+export function inLanguageOrder<T extends Language>(languages: readonly T[]): T[] {
+  return LANGUAGES.filter((language): language is T => (languages as readonly Language[]).includes(language));
+}
 
 /** Each language's name in that language, for pickers. */
 export const LANGUAGE_NAMES: Record<Language, string> = {

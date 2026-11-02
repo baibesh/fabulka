@@ -66,12 +66,12 @@ describe('ThemesService.propose (Chromium)', () => {
     expect(theme.status).toBe('draft');
     expect(theme.theme).toMatchObject({
       source: 'ai',
-      languages: ['ru', 'kk', 'en', 'es', 'de'],
+      languages: ['en', 'kk', 'es', 'de', 'ru'],
       fonts: { body: { family: 'Literata' } },
     });
     expect(theme.checks.every((c) => c.ok)).toBe(true);
     expect(theme.checks.filter((c) => c.check === 'render')).toHaveLength(5);
-    expect(Object.keys(theme.previews)).toEqual(['ru', 'kk', 'en', 'es', 'de']);
+    expect(Object.keys(theme.previews)).toEqual(['en', 'kk', 'es', 'de', 'ru']);
     const png = await readFile(
       join(root, theme.previews.kk![0].replace('/files/', '')),
     );

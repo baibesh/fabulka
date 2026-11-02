@@ -1,6 +1,6 @@
 "use client";
 
-import { DEFAULT_COUNTRIES, OTHER_COUNTRY, countryFromIp, countryInfo, type Country, type CountryEntry } from "@fabulka/shared";
+import { DEFAULT_COUNTRIES, DEFAULT_LANGUAGE, OTHER_COUNTRY, countryFromIp, countryInfo, type Country, type CountryEntry } from "@fabulka/shared";
 import { createContext, useContext, useSyncExternalStore } from "react";
 import { COOKIE_MAX_AGE, COUNTRY_COOKIE, LOCALE_COOKIE } from "./cookies";
 import { format, type Vars } from "./format";
@@ -106,12 +106,13 @@ function currentCountry(): Country {
 }
 
 /**
- * The admin's language: ?lang= on this page, else the saved choice, else Russian. Not narrowed to the
- * country's languages and not taken from the browser, so the panel opens in Russian until switched.
+ * The admin's language: ?lang= on this page, else the saved choice, else the default language
+ * (English). Not narrowed to the country's languages and not taken from the browser, so the panel
+ * opens in English until switched.
  */
 function adminLocale(): UiLocale {
   const asked = new URLSearchParams(window.location.search).get("lang");
-  return [asked, read(ADMIN_LOCALE_KEY)].find(isLocale) ?? "ru";
+  return [asked, read(ADMIN_LOCALE_KEY)].find(isLocale) ?? DEFAULT_LANGUAGE;
 }
 
 /** The admin's language switch (the site switches language by going to the page's other address). */
@@ -175,7 +176,8 @@ export function migrateSettings() {
   if (isLocale(locale) && readCookie(LOCALE_COOKIE) === null) setLocalePreference(locale);
 }
 
-const ru = () => "ru" as UiLocale;
+/** What the server renders the admin in: it cannot see the saved choice, so the default language. */
+const defaultLocale = (): UiLocale => DEFAULT_LANGUAGE;
 
 /**
  * Interface language and country: `locale` is the page's language (from its address), `country` a
@@ -186,7 +188,7 @@ const ru = () => "ru" as UiLocale;
 export function useI18n(scope: "site" | "admin" = "site") {
   const pageLocale = useContext(LocaleContext);
   const server = useContext(CountryContext);
-  const stored = useSyncExternalStore(subscribe, adminLocale, ru);
+  const stored = useSyncExternalStore(subscribe, adminLocale, defaultLocale);
   const locale = scope === "site" && pageLocale ? pageLocale : stored;
   const serverCountries = server?.countries ?? DEFAULT_COUNTRIES;
   const country = useSyncExternalStore(subscribe, currentCountry, () => server?.country ?? countryFromIp(null, serverCountries));

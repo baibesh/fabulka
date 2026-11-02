@@ -9,6 +9,7 @@ import {
   ISO_COUNTRY_CODES,
   LANGUAGES,
   LANGUAGE_NAMES,
+  inLanguageOrder,
   type BlockedCountries,
   type CountryEntry,
   type Language,
@@ -202,8 +203,9 @@ export function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; bl
 }
 
 /**
- * A country's languages as chips in their order: the first is the default (a filled star; the star
- * on another chip makes that one the default), × takes a language off, and + lists the ones left.
+ * A country's languages as chips in the usual order (English first, Russian last); the default, kept
+ * first in the list, has a filled star (the star on another chip makes that one the default), ×
+ * takes a language off, and + lists the ones left.
  */
 function LanguageChips({
   languages,
@@ -220,7 +222,7 @@ function LanguageChips({
   return (
     <FlagChips
       testId="country-lang"
-      values={languages}
+      values={inLanguageOrder(languages)}
       options={LANGUAGES}
       name={(language) => LANGUAGE_NAMES[language]}
       flag={(language) => LANGUAGE_FLAGS[language]}
@@ -228,9 +230,9 @@ function LanguageChips({
       removeLabel={(language) => t("admin.reference.country.removeLanguage", { language })}
       onAdd={onAdd}
       onRemove={onRemove}
-      accent={(_, index) => index === 0}
-      extra={(language, index) => {
-        if (index === 0)
+      accent={(language) => language === languages[0]}
+      extra={(language) => {
+        if (language === languages[0])
           return (
             <span className="flex items-center gap-1 px-1 text-xs font-normal text-accent">
               <Star className="size-3.5 fill-current" aria-hidden />

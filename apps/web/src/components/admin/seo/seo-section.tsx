@@ -1,6 +1,6 @@
 "use client";
 
-import { LanguageSchema, type AdminSeoPage, type Language } from "@fabulka/shared";
+import { DEFAULT_LANGUAGE, LanguageSchema, type AdminSeoPage, type Language } from "@fabulka/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Info, Send } from "lucide-react";
 import Link from "next/link";
@@ -21,10 +21,14 @@ import { LanguageFlags } from "./shared";
 const TABS = ["pages", "redirects", "settings"] as const;
 type Tab = (typeof TABS)[number];
 
-/** The language and tab of /admin/seo live in its address (?version=de&tab=settings), so links and Back keep them. Not ?lang=, which is the admin's own interface language. */
+/**
+ * The language and tab of /admin/seo live in its address (?version=de&tab=settings), so links and
+ * Back keep them; without ?version= the site's default language (English). Not ?lang=, which is the
+ * admin's own interface language.
+ */
 export function useSeoParams() {
   const params = useSearchParams();
-  const language = LanguageSchema.catch("ru").parse(params.get("version"));
+  const language = LanguageSchema.catch(DEFAULT_LANGUAGE).parse(params.get("version"));
   const tab = (TABS as readonly string[]).includes(params.get("tab") ?? "") ? (params.get("tab") as Tab) : "pages";
   return { language, tab };
 }

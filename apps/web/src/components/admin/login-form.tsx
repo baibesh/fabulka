@@ -5,6 +5,7 @@ import { KeyRound, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { adminLogin, adminLoginOptions } from "@/lib/admin-api";
+import { ApiError } from "@/lib/api";
 import { LanguagePicker } from "@/components/layout/locale-pickers";
 import { useAdminI18n } from "./ui";
 import { Spinner } from "@/components/ui/spinner";
@@ -16,9 +17,10 @@ import { ErrorText } from "@/components/ui/notice";
 /**
  * The way in: Keycloak (realm role `admin`, or `seo` for the SEO section only; 2FA there) and, only
  * when ADMIN_PASSWORD_LOGIN is on, the emergency email and password. An older API without the options gets the password form.
+ * Keycloak's pages open in the admin's current language (English until switched; ui_locales).
  */
 export function LoginForm() {
-  const { t } = useAdminI18n();
+  const { t, locale } = useAdminI18n();
   const options = useQuery({ queryKey: ["admin-login-options"], queryFn: adminLoginOptions, retry: false });
   const keycloak = options.data?.keycloak ?? false;
   const password = options.data?.password ?? options.isError;
@@ -31,11 +33,9 @@ export function LoginForm() {
       </div>
       {options.isPending && <Spinner className="text-muted" />}
       {keycloak && (
-        // An API route that redirects to Keycloak, not a page (the site's root [locale] segment makes
-        // the rule take any path for one).
-        // eslint-disable-next-line @next/next/no-html-link-for-pages
+        // An API route that redirects to Keycloak, not a page, so a plain link.
         <a
-          href="/api/auth/login?return=/admin"
+          href={`/api/auth/login?${new URLSearchParams({ return: "/admin", lang: locale })}`}
           data-testid="admin-login-keycloak"
           className={buttonClass({ size: "lg" })}
         >
@@ -56,6 +56,13 @@ function PasswordForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const login = useMutation({ mutationFn: adminLogin, onSuccess: () => router.replace("/admin") });
+  // The API words these refusals in Russian; the two a person meets here follow the admin's language.
+  const loginError = (error: Error) =>
+    error instanceof ApiError && error.status === 401
+      ? t("admin.login.error.invalid")
+      : error instanceof ApiError && error.status === 429
+        ? t("admin.login.error.tooMany")
+        : error.message;
 
   return (
     <form
@@ -71,7 +78,7 @@ function PasswordForm() {
       <Field label={t("admin.login.password")}>
         <Input data-testid="admin-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
       </Field>
-      {login.isError && <ErrorText className="text-sm">{login.error.message}</ErrorText>}
+      {login.isError && <ErrorText className="text-sm">{loginError(login.error)}</ErrorText>}
       <Button type="submit" size="lg" data-testid="admin-submit" loading={login.isPending}>
         {t("admin.login.submit")}
       </Button>

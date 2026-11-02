@@ -7,6 +7,7 @@ import {
   METHODOLOGY_AGE_MIN,
   METHODOLOGY_IN_USE,
   BASE_LANGUAGES,
+  DEFAULT_LANGUAGE,
   LANGUAGES,
   LANGUAGE_NAMES,
   UpdateMethodologySchema,
@@ -87,6 +88,12 @@ export function MethodologyPage() {
   return <MethodologyEditor key={method.data.updatedAt} initial={method.data} />;
 }
 
+/** How many catalog books and created books follow a method the API refused to delete. */
+function inUseCounts(error: Error): { templates: number; books: number } {
+  const body = (error instanceof ApiError ? error.body : null) as { templates?: unknown; books?: unknown } | null;
+  return { templates: Number(body?.templates ?? 0), books: Number(body?.books ?? 0) };
+}
+
 /** Edits a method, or with no `initial` creates one. */
 export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
   const router = useRouter();
@@ -110,7 +117,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
         },
   );
   const tabs = useTabsId();
-  const [lang, setLang] = useState<Language>("ru");
+  const [lang, setLang] = useState<Language>(DEFAULT_LANGUAGE);
   const [problems, setProblems] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState(false);
   const sortOrder = draft.sortOrder ?? (all.data?.at(-1)?.sortOrder ?? -10) + 10;
@@ -124,13 +131,29 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
     void queryClient.invalidateQueries({ queryKey: ["methodologies"] });
   };
 
+  // The shared schema words its own refusals in Russian; the ones it adds are shown in the admin's language.
+  const problemText = (issue: { path: PropertyKey[]; message: string; code: string }, texts: MethodologyTexts) => {
+    const path = issue.path.join(".");
+    if (issue.code === "too_small" && path === "source") return t("admin.method.error.source");
+    if (issue.code === "too_small" && path === "structure") return t("admin.method.error.structure");
+    if (issue.code !== "custom") return issue.message;
+    if (path === "ageMax") return t("admin.method.error.ages");
+    if (path === "texts.ru.name") return t("admin.method.error.ruName");
+    if (path === "texts.ru.summary") return t("admin.method.error.ruSummary");
+    if (path === "published") {
+      const missing = BASE_LANGUAGES.filter((l) => !texts[l]?.name || !texts[l]?.summary);
+      return t("admin.method.error.publish", { languages: BASE_LANGUAGES.join(", "), missing: missing.join(", ") });
+    }
+    return issue.message;
+  };
+
   const save = useMutation({
     mutationFn: async (next: Draft) => {
       // Checked here with the API's own rules, so each problem is shown next to its field.
       const body = { ...fields(next, sortOrder), slug: next.slug };
       const parsed = initial ? UpdateMethodologySchema.safeParse(body) : CreateMethodologySchema.safeParse(body);
       if (!parsed.success) {
-        setProblems(Object.fromEntries(parsed.error.issues.map((issue) => [issue.path.join("."), issue.message])));
+        setProblems(Object.fromEntries(parsed.error.issues.map((issue) => [issue.path.join("."), problemText(issue, body.texts)])));
         return null;
       }
       setProblems({});
@@ -222,7 +245,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       />
       {remove.isError && (
         <Notice data-testid="methodology-delete-error" role="alert" tone="warning" className="items-start">
-          <p>{remove.error.message}</p>
+          <p>{inUse ? t("admin.method.error.inUse", inUseCounts(remove.error)) : remove.error.message}</p>
           {inUse && draft.published && (
             <Button
               variant="secondary"

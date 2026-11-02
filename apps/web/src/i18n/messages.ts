@@ -1,6 +1,7 @@
-import { LANGUAGE_NAMES } from "@fabulka/shared";
+import { LANGUAGES, LANGUAGE_NAMES } from "@fabulka/shared";
 
-export const UI_LOCALES = ["ru", "kk", "en", "es", "de"] as const;
+/** The interface languages: the book languages, in the same order (English first, Russian last). */
+export const UI_LOCALES = LANGUAGES;
 export type UiLocale = (typeof UI_LOCALES)[number];
 
 /** Each language's own name; the list lives with the languages in @fabulka/shared. */
@@ -392,6 +393,8 @@ const ru = {
   "admin.login.email": "Почта",
   "admin.login.password": "Пароль",
   "admin.login.submit": "Войти",
+  "admin.login.error.invalid": "Неверная почта или пароль",
+  "admin.login.error.tooMany": "Слишком много попыток, попробуйте позже",
 
   "admin.dashboard.title": "Дашборд",
   "admin.dashboard.paused": "Генерация на паузе",
@@ -580,6 +583,13 @@ const ru = {
   "admin.method.remove.no": "Отмена",
   "admin.method.unpublish": "Снять с публикации",
   "admin.method.check": "Проверьте поля:",
+  "admin.method.error.ages": "Возраст «до» меньше возраста «от»",
+  "admin.method.error.inUse": "Методику нельзя удалить: её используют книги каталога ({templates}) и созданные книги ({books}). Снимите её с публикации — тогда её перестанут предлагать родителям.",
+  "admin.method.error.ruName": "Назовите методику по-русски",
+  "admin.method.error.ruSummary": "Опишите методику по-русски",
+  "admin.method.error.source": "Укажите источник методики",
+  "admin.method.error.structure": "Нужен хотя бы один шаг сюжета",
+  "admin.method.error.publish": "Чтобы опубликовать, заполните название и описание на языках {languages}: не хватает {missing}",
 
   "admin.journal.title": "Журнал",
   "admin.journal.tab.calls": "Запросы к моделям",
@@ -682,7 +692,7 @@ const ru = {
   "admin.reference.error.country": "Нужен двухбуквенный код страны ISO 3166, например NL",
   "admin.reference.error.countryMeta": "Эта страна уже заблокирована по правилам Meta",
   "admin.reference.error.countryDuplicate": "Эта страна уже в списке",
-  "admin.reference.countries.hint": "Страны в списке на сайте, в этом порядке. От страны зависят языки сайта и книг (первый — язык по умолчанию), валюта цены и печать.",
+  "admin.reference.countries.hint": "Страны в списке на сайте, в этом порядке. От страны зависят языки сайта и книг (язык со звёздочкой — по умолчанию), валюта цены и печать.",
   "admin.reference.country.languages": "Языки",
   "admin.reference.country.default": "по умолчанию",
   "admin.reference.country.makeDefault": "Сделать «{language}» языком по умолчанию",
@@ -1361,6 +1371,8 @@ const kk: Messages = {
   "admin.login.email": "Электрондық пошта",
   "admin.login.password": "Құпиясөз",
   "admin.login.submit": "Кіру",
+  "admin.login.error.invalid": "Пошта немесе құпиясөз қате",
+  "admin.login.error.tooMany": "Әрекет тым көп, кейінірек қайталап көріңіз",
 
   "admin.dashboard.title": "Шолу",
   "admin.dashboard.paused": "Генерация кідіртілді",
@@ -1549,6 +1561,13 @@ const kk: Messages = {
   "admin.method.remove.no": "Болдырмау",
   "admin.method.unpublish": "Жариялаудан алу",
   "admin.method.check": "Өрістерді тексеріңіз:",
+  "admin.method.error.ages": "«Дейін» жасы «бастап» жасынан кіші",
+  "admin.method.error.inUse": "Әдістемені жою мүмкін емес: оны каталог кітаптары ({templates}) және жасалған кітаптар ({books}) қолданады. Оны жариялаудан алыңыз — сонда ол ата-аналарға ұсынылмайды.",
+  "admin.method.error.ruName": "Әдістеменің орысша атауын жазыңыз",
+  "admin.method.error.ruSummary": "Әдістеменің орысша сипаттамасын жазыңыз",
+  "admin.method.error.source": "Әдістеменің дереккөзін көрсетіңіз",
+  "admin.method.error.structure": "Кемінде бір сюжет қадамы қажет",
+  "admin.method.error.publish": "Жариялау үшін атауы мен сипаттамасын мына тілдерде толтырыңыз: {languages}; жетіспейді: {missing}",
 
   "admin.journal.title": "Журнал",
   "admin.journal.tab.calls": "Модельдерге сұраулар",
@@ -1651,7 +1670,7 @@ const kk: Messages = {
   "admin.reference.error.country": "ISO 3166 бойынша екі әріпті ел коды керек, мысалы NL",
   "admin.reference.error.countryMeta": "Бұл ел Meta ережелері бойынша бұғатталған",
   "admin.reference.error.countryDuplicate": "Бұл ел тізімде бар",
-  "admin.reference.countries.hint": "Сайттағы тізімдегі елдер, осы ретпен. Сайт пен кітап тілдері (біріншісі — әдепкі тіл), баға валютасы және басып шығару елге байланысты.",
+  "admin.reference.countries.hint": "Сайттағы тізімдегі елдер, осы ретпен. Сайт пен кітап тілдері (жұлдызшасы бар тіл — әдепкі), баға валютасы және басып шығару елге байланысты.",
   "admin.reference.country.languages": "Тілдер",
   "admin.reference.country.default": "әдепкі",
   "admin.reference.country.makeDefault": "«{language}» тілін әдепкі ету",
@@ -2328,6 +2347,8 @@ const en: Messages = {
   "admin.login.email": "Email",
   "admin.login.password": "Password",
   "admin.login.submit": "Sign in",
+  "admin.login.error.invalid": "Wrong email or password",
+  "admin.login.error.tooMany": "Too many attempts, try again later",
 
   "admin.dashboard.title": "Dashboard",
   "admin.dashboard.paused": "Generation is paused",
@@ -2516,6 +2537,13 @@ const en: Messages = {
   "admin.method.remove.no": "Cancel",
   "admin.method.unpublish": "Unpublish",
   "admin.method.check": "Check the fields:",
+  "admin.method.error.ages": "The “to” age is below the “from” age",
+  "admin.method.error.inUse": "This method can't be deleted: catalog books ({templates}) and created books ({books}) use it. Unpublish it instead, and parents will no longer be offered it.",
+  "admin.method.error.ruName": "Name the method in Russian",
+  "admin.method.error.ruSummary": "Describe the method in Russian",
+  "admin.method.error.source": "Give the method's source",
+  "admin.method.error.structure": "At least one story step is needed",
+  "admin.method.error.publish": "To publish, fill in the name and summary in {languages}: missing {missing}",
 
   "admin.journal.title": "Journal",
   "admin.journal.tab.calls": "Model calls",
@@ -2618,7 +2646,7 @@ const en: Messages = {
   "admin.reference.error.country": "Use a two-letter ISO 3166 country code, e.g. NL",
   "admin.reference.error.countryMeta": "Meta’s policy blocks this country already",
   "admin.reference.error.countryDuplicate": "This country is listed already",
-  "admin.reference.countries.hint": "Countries listed on the site, in this order. The country sets the languages of the site and books (the first is the default), the price currency and print.",
+  "admin.reference.countries.hint": "Countries listed on the site, in this order. The country sets the languages of the site and books (the one with the star is the default), the price currency and print.",
   "admin.reference.country.languages": "Languages",
   "admin.reference.country.default": "default",
   "admin.reference.country.makeDefault": "Make {language} the default language",
@@ -3295,6 +3323,8 @@ const es: Messages = {
   "admin.login.email": "Correo electrónico",
   "admin.login.password": "Contraseña",
   "admin.login.submit": "Entrar",
+  "admin.login.error.invalid": "Correo o contraseña incorrectos",
+  "admin.login.error.tooMany": "Demasiados intentos, inténtalo más tarde",
 
   "admin.dashboard.title": "Panel",
   "admin.dashboard.paused": "La generación está en pausa",
@@ -3483,6 +3513,13 @@ const es: Messages = {
   "admin.method.remove.no": "Cancelar",
   "admin.method.unpublish": "Retirar",
   "admin.method.check": "Revisa los campos:",
+  "admin.method.error.ages": "La edad «hasta» es menor que la edad «desde»",
+  "admin.method.error.inUse": "No se puede eliminar esta metodología: la usan libros del catálogo ({templates}) y libros creados ({books}). Retírala y dejará de ofrecerse a los padres.",
+  "admin.method.error.ruName": "Pon el nombre de la metodología en ruso",
+  "admin.method.error.ruSummary": "Describe la metodología en ruso",
+  "admin.method.error.source": "Indica la fuente de la metodología",
+  "admin.method.error.structure": "Hace falta al menos un paso de la trama",
+  "admin.method.error.publish": "Para publicar, rellena el nombre y la descripción en {languages}: falta {missing}",
 
   "admin.journal.title": "Registro",
   "admin.journal.tab.calls": "Llamadas a modelos",
@@ -3585,7 +3622,7 @@ const es: Messages = {
   "admin.reference.error.country": "Usa un código de país ISO 3166 de dos letras, p. ej. NL",
   "admin.reference.error.countryMeta": "La política de Meta ya bloquea este país",
   "admin.reference.error.countryDuplicate": "Este país ya está en la lista",
-  "admin.reference.countries.hint": "Países que aparecen en el sitio, en este orden. El país define los idiomas del sitio y de los libros (el primero es el predeterminado), la moneda de los precios y la impresión.",
+  "admin.reference.countries.hint": "Países que aparecen en el sitio, en este orden. El país define los idiomas del sitio y de los libros (el que tiene la estrella es el predeterminado), la moneda de los precios y la impresión.",
   "admin.reference.country.languages": "Idiomas",
   "admin.reference.country.default": "predeterminado",
   "admin.reference.country.makeDefault": "Hacer de {language} el idioma predeterminado",
@@ -4262,6 +4299,8 @@ const de: Messages = {
   "admin.login.email": "E-Mail",
   "admin.login.password": "Passwort",
   "admin.login.submit": "Anmelden",
+  "admin.login.error.invalid": "Falsche E-Mail oder falsches Passwort",
+  "admin.login.error.tooMany": "Zu viele Versuche, bitte später erneut versuchen",
 
   "admin.dashboard.title": "Übersicht",
   "admin.dashboard.paused": "Generierung pausiert",
@@ -4450,6 +4489,13 @@ const de: Messages = {
   "admin.method.remove.no": "Abbrechen",
   "admin.method.unpublish": "Veröffentlichung aufheben",
   "admin.method.check": "Prüf die Felder:",
+  "admin.method.error.ages": "Das „bis“-Alter ist kleiner als das „ab“-Alter",
+  "admin.method.error.inUse": "Diese Methode kann nicht gelöscht werden: Katalogbücher ({templates}) und erstellte Bücher ({books}) verwenden sie. Heb stattdessen die Veröffentlichung auf, dann wird sie Eltern nicht mehr angeboten.",
+  "admin.method.error.ruName": "Gib der Methode einen russischen Namen",
+  "admin.method.error.ruSummary": "Beschreib die Methode auf Russisch",
+  "admin.method.error.source": "Gib die Quelle der Methode an",
+  "admin.method.error.structure": "Mindestens ein Handlungsschritt ist nötig",
+  "admin.method.error.publish": "Zum Veröffentlichen Name und Beschreibung in {languages} ausfüllen: es fehlt {missing}",
 
   "admin.journal.title": "Protokoll",
   "admin.journal.tab.calls": "Modellaufrufe",
@@ -4552,7 +4598,7 @@ const de: Messages = {
   "admin.reference.error.country": "Gib einen zweistelligen Ländercode nach ISO 3166 ein, z. B. NL",
   "admin.reference.error.countryMeta": "Dieses Land ist durch Metas Richtlinie bereits gesperrt",
   "admin.reference.error.countryDuplicate": "Dieses Land ist bereits in der Liste",
-  "admin.reference.countries.hint": "Länder, die auf der Website angezeigt werden, in dieser Reihenfolge. Das Land bestimmt die Sprachen der Website und der Bücher (die erste ist Standard), die Währung der Preise und den Druck.",
+  "admin.reference.countries.hint": "Länder, die auf der Website angezeigt werden, in dieser Reihenfolge. Das Land bestimmt die Sprachen der Website und der Bücher (die mit dem Stern ist Standard), die Währung der Preise und den Druck.",
   "admin.reference.country.languages": "Sprachen",
   "admin.reference.country.default": "Standard",
   "admin.reference.country.makeDefault": "{language} als Standardsprache festlegen",
