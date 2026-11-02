@@ -154,7 +154,7 @@
   <div class="${properties.kcLoginContainer!}">
     <#-- Fabulka: a way back to the site, and the logo links there too. -->
     <#assign siteUrl = (client?? && client.baseUrl?has_content)?then(client.baseUrl, "https://fabulka.com/")>
-    <#assign siteUrl = siteUrl + (siteUrl?contains("?"))?then("&", "?") + "lang=" + (locale.currentLanguageTag)!"ru">
+    <#assign siteUrl = siteUrl + (siteUrl?contains("?"))?then("&", "?") + "lang=" + (locale.currentLanguageTag)!"en">
     <a id="kc-back-to-site" href="${siteUrl}">
       <span aria-hidden="true">←</span> ${msg("backToSite")}
     </a>

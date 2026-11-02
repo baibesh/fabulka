@@ -29,7 +29,7 @@
     "es",
     "de"
   ],
-  "defaultLocale": "ru",
+  "defaultLocale": "en",
   "loginTheme": "fabulka",
   "emailTheme": "fabulka",
   "ssoSessionIdleTimeoutRememberMe": 2592000,
