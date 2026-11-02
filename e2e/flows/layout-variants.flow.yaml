@@ -79,7 +79,7 @@ commands:
   - waitForVisible: { testId: pause-card }
   - openLink: "${WEB}/admin/books/${bookId}"
   - waitForVisible: { css: "[data-testid=render-qa][data-status=ok]" }
-  - selectOption: { testId: pin-2, option: "Текст под картинкой" }
+  - selectOption: { testId: pin-2, option: "Text below the picture" }
   - waitForVisible: { css: "[data-testid=pin-2]:not([disabled])" }
   - request:
       url: /books/${bookId}

@@ -23,7 +23,7 @@ http:
   baseUrl: ${API}
 commands:
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/admin/login?lang=ru"
+  - openLink: "${WEB}/admin/login"
   - waitForVisible: { testId: admin-login }
   - tapOn: { testId: admin-email }
   - inputText: "${adminEmail}"
@@ -71,7 +71,9 @@ commands:
   - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'][data-status=draft]" }
   - assertNotVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-check][data-ok=false]" }
   - assertVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-ornament]" }
-  # Previews in each of the five languages.
+  # Previews in each of the five languages, English first and Russian last.
+  - assertVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [role=group] > [data-testid=theme-preview-lang-en]:first-child" }
+  - assertVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [role=group] > [data-testid=theme-preview-lang-ru]:last-child" }
   - tapOn: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-preview-lang-ru]" }
   - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-previews][data-language=ru] img[src*='/ru-0.png']" }
   - tapOn: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-preview-lang-kk]" }
@@ -145,7 +147,7 @@ commands:
   - assertTrue: { equals: ["${bookTheme}", "${themeId}"] }
   # The owner takes the theme back: no longer offered in the template editor or to parents; the
   # catalog book goes back to a theme by age; the book keeps its copy.
-  - openLink: "${WEB}/admin/themes?lang=ru"
+  - openLink: "${WEB}/admin/themes"
   - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'][data-status=published] [data-testid=theme-unpublish-hint]" }
   - tapOn: { css: "[data-testid=theme-card][data-id='${themeId}'] [data-testid=theme-unpublish]" }
   - waitForVisible: { css: "[data-testid=theme-card][data-id='${themeId}'][data-status=draft] [data-testid=theme-publish]" }

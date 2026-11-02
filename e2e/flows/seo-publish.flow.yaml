@@ -82,7 +82,7 @@ commands:
   - waitForVisible: { testId: seo-history-3 }
   - assertVisible: { text: "admin@e2e.test", index: 0 }
   - tapOn: { testId: seo-revert-3 }
-  - waitForVisible: "Возврат"
+  - waitForVisible: "Reverted"
   - assertVisible: { testId: seo-preview-title, text: "${DEFAULT_TITLE}" }
   - tapOn: { testId: seo-publish }
   - waitForVisible: { testId: seo-state-live, timeout: 15000 }

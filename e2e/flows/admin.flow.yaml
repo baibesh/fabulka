@@ -24,19 +24,19 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "wrong-password"
   - tapOn: { testId: admin-submit }
-  - assertVisible: "Неверная почта или пароль"
+  - assertVisible: "Wrong email or password"
 
   - tapOn: { testId: admin-password }
   - eraseText: 40
   - inputText: "e2e-admin-password"
   - tapOn: { testId: admin-submit }
   - waitForVisible: { testId: pause-card }
-  - assertVisible: "Генерация работает"
-  - assertVisible: "Спрос по странам"
+  - assertVisible: "Generation is running"
+  - assertVisible: "Demand by country"
 
   # Pause: new books are refused until it is lifted.
   - tapOn: { testId: pause-toggle }
-  - waitForVisible: "Генерация на паузе"
+  - waitForVisible: "Generation is paused"
   - request:
       method: POST
       url: ${API}/books
@@ -44,7 +44,7 @@ commands:
       json: { child: { name: Пауза, age: 5, gender: girl, interests: [мячи], city: Алматы } }
       assert: { status: 503, json: { "$.code": generation_paused } }
   - tapOn: { testId: pause-toggle }
-  - waitForVisible: "Генерация работает"
+  - waitForVisible: "Generation is running"
 
   # The other sections open.
   - tapOn: { testId: admin-nav-books }

@@ -32,11 +32,15 @@ commands:
   - waitForVisible: { testId: methodologies-table }
   - assertVisible: { css: "[data-testid=methodology-row][data-slug=social-story]" }
 
-  # A new method: names in Russian and English only, ages 5–7, one beat.
+  # A new method: names in Russian and English only, ages 5–7, one beat. The language tabs list
+  # English first and open on it.
   - tapOn: { testId: methodology-new }
   - waitForVisible: { testId: methodology-editor }
+  - assertVisible: { css: "[role=tablist] > [data-testid=methodology-tab-en]:first-child[aria-selected=true]" }
+  - assertVisible: { css: "[role=tablist] > [data-testid=methodology-tab-ru]:last-child" }
   - tapOn: { testId: methodology-slug }
   - inputText: "${slug}"
+  - tapOn: { testId: methodology-tab-ru }
   - tapOn: { testId: methodology-name-ru }
   - inputText: "Тестовая методика"
   - tapOn: { testId: methodology-summary-ru }
@@ -60,14 +64,14 @@ commands:
   - waitForVisible: { testId: methodology-preview-text }
   - assertVisible: { contains: "Story method: ${slug} (E2E test source)" }
   - assertVisible: { contains: "- The hero tries something new and feels unsure." }
-  - assertVisible: { contains: "ребёнка 6 лет" }
+  - assertVisible: { contains: "an example for a 6-year-old" }
 
   # The English summary is still missing, and English is required to publish: pointed out, nothing
   # saved. Kazakh is not required.
   - tapOn: { testId: methodology-published }
   - tapOn: { testId: methodology-save }
   # The problems are listed at the top of the form.
-  - scrollUntilVisible: { contains: "не хватает en", direction: up }
+  - scrollUntilVisible: { contains: "missing en", direction: up }
   - assertUrl: { contains: "/admin/methodologies/new" }
   - tapOn: { testId: methodology-tab-en }
   - tapOn: { testId: methodology-summary-en }
@@ -117,7 +121,7 @@ commands:
   - tapOn: { testId: methodology-delete }
   - tapOn: { testId: methodology-delete-confirm }
   - waitForVisible: { testId: methodology-delete-error }
-  - assertVisible: { contains: "Снимите её с публикации" }
+  - assertVisible: { contains: "Unpublish it instead" }
   - assertVisible: { testId: methodology-unpublish }
 
   # The new one is deleted; a book can no longer ask for it.

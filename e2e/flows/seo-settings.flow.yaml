@@ -35,7 +35,7 @@ commands:
   - tapOn: { testId: seo-settings-robots }
   - inputText: "Disallow: /e2e-private"
   - tapOn: { testId: seo-settings-save }
-  - waitForVisible: { testId: seo-settings-saved, contains: "обновлён" }
+  - waitForVisible: { testId: seo-settings-saved, contains: "the site is updated" }
 
   # The verification tag and the robots line are live at once.
   - request: { url: "${WEB}/de", assert: { status: 200 } }

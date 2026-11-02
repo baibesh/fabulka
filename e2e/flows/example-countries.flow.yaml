@@ -102,7 +102,7 @@ commands:
 
   # The admin: the template's book shows its template's country as the inherited value.
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/admin/login?lang=ru"
+  - openLink: "${WEB}/admin/login"
   - waitForVisible: { testId: admin-login }
   - tapOn: { testId: admin-email }
   - inputText: "${adminEmail}"
@@ -112,19 +112,19 @@ commands:
   - waitForVisible: { testId: pause-card }
   - openLink: "${WEB}/admin/books/${templatedId}"
   - waitForVisible: { css: "[data-testid=book-countries][data-loaded=true]" }
-  - assertVisible: { testId: book-countries-inherited, contains: "Как у шаблона" }
-  - assertVisible: { testId: book-country-inherited-DE, contains: "Германия" }
+  - assertVisible: { testId: book-countries-inherited, contains: "As its template" }
+  - assertVisible: { testId: book-country-inherited-DE, contains: "Germany" }
 
   # The book of its own: everywhere, until the admin picks Kazakhstan.
   - openLink: "${WEB}/admin/books/${plainId}"
   - waitForVisible: { css: "[data-testid=book-countries][data-loaded=true]" }
-  - assertVisible: "Страны"
-  - assertVisible: { testId: book-countries-inherited, text: "Все страны" }
+  - assertVisible: "Countries"
+  - assertVisible: { testId: book-countries-inherited, text: "All countries" }
   - tapOn: { testId: book-country-add }
   - waitForVisible: { testId: book-country-menu }
   - tapOn: { testId: book-country-option-KZ }
   - waitForVisible: { testId: book-country-KZ }
-  - assertVisible: { text: "Казахстан", childOf: { testId: book-country-KZ } }
+  - assertVisible: { text: "Kazakhstan", childOf: { testId: book-country-KZ } }
   - waitForVisible: { css: "[data-testid=book-countries][data-value=KZ]" }
   - assertNotVisible: { testId: book-countries-inherited }
   - sql:
@@ -194,7 +194,7 @@ commands:
   - assertNotVisible: { testId: "example-${plainId}" }
 
   # The admin takes Kazakhstan off again: everywhere.
-  - openLink: "${WEB}/admin/login?lang=ru"
+  - openLink: "${WEB}/admin/login"
   - waitForVisible: { testId: admin-login }
   - tapOn: { testId: admin-email }
   - inputText: "${adminEmail}"
@@ -205,7 +205,7 @@ commands:
   - openLink: "${WEB}/admin/books/${plainId}"
   - waitForVisible: { testId: book-country-KZ }
   - tapOn: { testId: book-country-remove-KZ }
-  - waitForVisible: { testId: book-countries-inherited, text: "Все страны" }
+  - waitForVisible: { testId: book-countries-inherited, text: "All countries" }
   - waitForVisible: { css: "[data-testid=book-countries][data-value='']" }
   - sql:
       query: "select cardinality(countries) as n from \"Book\" where id = $1"

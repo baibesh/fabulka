@@ -75,7 +75,7 @@ commands:
       headers: { X-Client-Key: "e2e-layout-stranger-${childName}" }
       assert: { status: 200, json: { "$.editable": false, "$.layout.theme.id": little } }
 
-  # Staff pick «Приключение» for a catalog book in the admin; a new book from it gets that theme.
+  # Staff pick «Adventure» for a catalog book in the admin; a new book from it gets that theme.
   - openLink: "${WEB}/admin"
   - waitForVisible: { testId: admin-login }
   - tapOn: { testId: admin-email }
@@ -86,7 +86,7 @@ commands:
   - waitForVisible: { testId: pause-card }
   - openLink: "${WEB}/admin/catalog/${slug}"
   - waitForVisible: { testId: template-editor }
-  - selectOption: { testId: template-layout-theme, option: "Приключение" }
+  - selectOption: { testId: template-layout-theme, option: "Adventure" }
   - tapOn: { testId: template-save }
   - waitForVisible: { testId: template-saved }
   - sql:
@@ -131,7 +131,7 @@ commands:
       testId: render-issues
       containsDescendants:
         - { contains: "story-1" }
-        - { contains: "Текст не помещается" }
+        - { contains: "Text does not fit" }
   # The journal has the render call that blocked it.
   - sql:
       query: >-

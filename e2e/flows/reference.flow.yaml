@@ -1,4 +1,4 @@
-# Reference data in the admin («Справочники»): the owner changes the catalog book price without
+# Reference data in the admin («Reference data»): the owner changes the catalog book price without
 # touching code, and the book page and the checkout use it; adds a delivery city; adds a country to
 # the site's list and takes it off again (a Meta-blocked one is refused); edits the home page FAQ
 # and adds a question for Uzbekistan only; blocks one more
@@ -25,7 +25,7 @@ commands:
   - openLink: "${WEB}/ru"
   # The hero's covers render only after hydration, by when the page has saved the language.
   - waitForVisible: { testId: hero-covers }
-  - openLink: "${WEB}/admin/login?lang=ru"
+  - openLink: "${WEB}/admin/login"
   - waitForVisible: { testId: admin-login }
   - tapOn: { testId: admin-email }
   - inputText: "${adminEmail}"
@@ -36,7 +36,7 @@ commands:
   - tapOn: { testId: admin-nav-reference }
   - waitForVisible: { testId: reference-tabs }
   - waitForVisible: { testId: reference-prices }
-  - assertVisible: "Справочники"
+  - assertVisible: "Reference data"
 
   # A price in fractions of a cent is pointed out next to its field, and nothing is saved.
   - tapOn: { testId: price-template-kzt }
@@ -46,7 +46,7 @@ commands:
   - eraseText
   - inputText: "4.999"
   - tapOn: { testId: reference-save }
-  - waitForVisible: { testId: reference-error, contains: "не больше двух знаков" }
+  - waitForVisible: { testId: reference-error, contains: "at most two decimals" }
   - request:
       url: ${API}/reference
       assert: { status: 200, json: { "$.prices.books.template.KZT": 1900 } }
@@ -118,7 +118,7 @@ commands:
       assert: { rows: 1, first: { kzt: 0, usd: 4.9 } }
 
   # Countries: Portugal added with English first, offered on the site, then taken off again.
-  - openLink: "${WEB}/admin/reference?lang=ru"
+  - openLink: "${WEB}/admin/reference"
   - waitForVisible: { testId: reference-tabs }
   - tapOn: { testId: reference-tab-countries }
   - waitForVisible: { testId: reference-countries }
@@ -133,7 +133,7 @@ commands:
   # Print is priced in tenge: not offered with prices in dollars.
   - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-print]" }
   - tapOn: { testId: reference-save }
-  - waitForVisible: { testId: reference-error, contains: "Печать оплачивается в тенге" }
+  - waitForVisible: { testId: reference-error, contains: "Print is priced in tenge" }
   - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-print]" }
   - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-default-en]" }
   # Languages are chips: + lists only the ones not added yet.
@@ -142,6 +142,8 @@ commands:
   - assertNotVisible: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-lang-option-en]" }
   - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-lang-option-es]" }
   - waitForVisible: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-lang-es]" }
+  # Shown in the usual order, English first and Russian last, whichever is the default.
+  - assertVisible: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-lang-en] + [data-testid=country-lang-es] + [data-testid=country-lang-ru]" }
   - tapOn: { testId: reference-save }
   - waitForVisible: { testId: reference-saved }
   - assertNotVisible: { testId: reference-error }
@@ -178,7 +180,7 @@ commands:
         - { code: RU, languages: [ru], currency: USD, print: false }
       assert: { status: 400, json: { "$.code": country_policy_blocked, "$.countries[0]": RU } }
   # Taken off in the admin: the site no longer offers it, and a visitor who chose it is "other".
-  - openLink: "${WEB}/admin/reference?lang=ru"
+  - openLink: "${WEB}/admin/reference"
   - waitForVisible: { testId: reference-tabs }
   - tapOn: { testId: reference-tab-countries }
   - waitForVisible: { css: "[data-testid=country-row][data-code=PT]" }
@@ -204,14 +206,14 @@ commands:
   - pressKey: escape
 
   # FAQ: an answer edited and a question for Uzbekistan only, both on the home page.
-  - openLink: "${WEB}/admin/reference?lang=ru"
+  - openLink: "${WEB}/admin/reference"
   - waitForVisible: { testId: reference-tabs }
   - tapOn: { testId: reference-tab-faq }
   - waitForVisible: { testId: reference-faq }
   # Print answers follow the country's print flag, not a list of countries.
   - scrollUntilVisible: { css: "[data-testid=faq-row][data-id=print-abroad]", centerElement: true }
-  - assertVisible: { css: "[data-testid=faq-row][data-id=print-kz]", containsDescendants: { text: "Страны с печатью" } }
-  - assertVisible: { css: "[data-testid=faq-row][data-id=print-abroad]", containsDescendants: { text: "Страны без печати" } }
+  - assertVisible: { css: "[data-testid=faq-row][data-id=print-kz]", containsDescendants: { text: "Countries with print" } }
+  - assertVisible: { css: "[data-testid=faq-row][data-id=print-abroad]", containsDescendants: { text: "Countries without print" } }
   - tapOn: { css: "[data-testid=faq-row][data-id=account] [data-testid=faq-toggle]" }
   - tapOn: { css: "[data-testid=faq-row][data-id=account] [data-testid=faq-a-ru]" }
   - eraseText
@@ -223,7 +225,7 @@ commands:
   - inputText: "Пока нет, но мы над этим думаем."
   # English is required too: pointed out, nothing saved.
   - tapOn: { testId: reference-save }
-  - waitForVisible: { testId: reference-error, contains: "Нужен вопрос" }
+  - waitForVisible: { testId: reference-error, contains: "A question is needed" }
   - tapOn: { css: "[data-testid=faq-row]:last-child [data-testid=faq-q-en]" }
   - inputText: "Is there gift wrapping?"
   - tapOn: { css: "[data-testid=faq-row]:last-child [data-testid=faq-a-en]" }
@@ -254,19 +256,19 @@ commands:
   - waitForVisible: "Is there gift wrapping?"
 
   # Blocked countries: Meta's list is read-only, with nothing to remove.
-  - openLink: "${WEB}/admin/reference?lang=ru"
+  - openLink: "${WEB}/admin/reference"
   - waitForVisible: { testId: reference-tabs }
   - tapOn: { testId: reference-tab-blocked }
   - waitForVisible: { testId: blocked-meta }
   - assertVisible: { css: "[data-testid=blocked-meta-row][data-code=RU]" }
   - assertVisible: { css: "[data-testid=blocked-meta-row][data-code=IN]" }
   - assertNotVisible: { css: "[data-testid=blocked-meta] button" }
-  - assertVisible: { contains: "Дополнительных стран нет", childOf: { testId: blocked-extra } }
+  - assertVisible: { contains: "No extra countries", childOf: { testId: blocked-extra } }
   # A Meta country cannot be added as one of the owner's, an unknown code is refused.
   - tapOn: { testId: blocked-input }
   - inputText: "RU"
   - tapOn: { testId: blocked-add }
-  - waitForVisible: { testId: reference-error, contains: "уже заблокирована по правилам Meta" }
+  - waitForVisible: { testId: reference-error, contains: "policy blocks this country already" }
   - tapOn: { testId: blocked-input }
   - eraseText
   - inputText: "QQ"
@@ -310,10 +312,10 @@ commands:
       url: ${API}/templates
       headers: { X-Real-IP: "${dutchIp}" }
       assert: { status: 200 }
-  - openLink: "${WEB}/admin/reference?lang=ru"
+  - openLink: "${WEB}/admin/reference"
   - waitForVisible: { testId: reference-tabs }
   - tapOn: { testId: reference-tab-blocked }
-  - waitForVisible: { contains: "Дополнительных стран нет", childOf: { testId: blocked-extra } }
+  - waitForVisible: { contains: "No extra countries", childOf: { testId: blocked-extra } }
   - assertVisible: { css: "[data-testid=blocked-meta-row][data-code=RU]" }
 after:
   # The seeded FAQ again: without its row the API serves the defaults once a save below drops its cache.

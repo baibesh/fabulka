@@ -93,7 +93,7 @@ commands:
 
   # Staff see the English sample in the template editor and pick the Russian book for Russian.
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/admin/login?lang=en"
+  - openLink: "${WEB}/admin/login"
   - waitForVisible: { testId: admin-login }
   - tapOn: { testId: admin-email }
   - inputText: "${adminEmail}"
@@ -104,6 +104,9 @@ commands:
   - openLink: "${WEB}/admin/catalog/${slug}"
   - waitForVisible: { testId: template-samples }
   - assertVisible: "Samples by language"
+  # Listed English first, Russian last.
+  - assertVisible: { css: "[data-testid=template-samples] li:first-child [data-testid=template-sample-en]" }
+  - assertVisible: { css: "[data-testid=template-samples] li:last-child [data-testid=template-sample-ru]" }
   - assertVisible: { css: "[data-testid=template-sample-en][data-value='${enBook}']" }
   - assertVisible: { css: "[data-testid=template-sample-ru][data-value='']" }
   - selectOption: { testId: template-sample-ru, optionValue: "${ruBook}" }

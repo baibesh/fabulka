@@ -77,7 +77,7 @@ commands:
 
   # The admin lists the book in Kazakhstan only, from the template editor.
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/admin/login?lang=ru"
+  - openLink: "${WEB}/admin/login"
   - waitForVisible: { testId: admin-login }
   - tapOn: { testId: admin-email }
   - inputText: "${adminEmail}"
@@ -87,14 +87,14 @@ commands:
   - waitForVisible: { testId: pause-card }
   - openLink: "${WEB}/admin/catalog/${slug}"
   - waitForVisible: { css: "[data-testid=template-countries][data-loaded=true]" }
-  - assertVisible: "Страны"
-  - assertVisible: { testId: template-countries-all, text: "Все страны" }
+  - assertVisible: "Countries"
+  - assertVisible: { testId: template-countries-all, text: "All countries" }
   - tapOn: { testId: template-country-add }
   - waitForVisible: { testId: template-country-menu }
-  - assertVisible: { testId: template-country-option-DE, contains: "Германия" }
+  - assertVisible: { testId: template-country-option-DE, contains: "Germany" }
   - tapOn: { testId: template-country-option-KZ }
   - waitForVisible: { testId: template-country-KZ }
-  - assertVisible: { text: "Казахстан", childOf: { testId: template-country-KZ } }
+  - assertVisible: { text: "Kazakhstan", childOf: { testId: template-country-KZ } }
   - assertNotVisible: { testId: template-countries-all }
   - tapOn: { testId: template-save }
   - waitForVisible: { testId: template-saved }
@@ -169,7 +169,7 @@ commands:
   - assertVisible: { contains: "Plitsch-platsch" }
 
   # The admin takes the country off again: everywhere.
-  - openLink: "${WEB}/admin/login?lang=ru"
+  - openLink: "${WEB}/admin/login"
   - waitForVisible: { testId: admin-login }
   - tapOn: { testId: admin-email }
   - inputText: "${adminEmail}"

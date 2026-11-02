@@ -41,7 +41,7 @@ commands:
       assert: { rows: 1, first: { format: square-210 } }
 
   # The owner raises the A4 landscape softcover price.
-  - openLink: "${WEB}/admin/login?lang=ru"
+  - openLink: "${WEB}/admin/login"
   - waitForVisible: { testId: admin-login }
   - tapOn: { testId: admin-email }
   - inputText: "${adminEmail}"
@@ -49,7 +49,7 @@ commands:
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
   - waitForVisible: { testId: pause-card }
-  - openLink: "${WEB}/admin/reference?lang=ru"
+  - openLink: "${WEB}/admin/reference"
   - waitForVisible: { testId: reference-tabs }
   - tapOn: { testId: reference-tab-formats }
   - waitForVisible: { testId: reference-formats }
@@ -101,7 +101,7 @@ commands:
 
   # The admin sees the format and downloads the print file: 297×210 mm plus 3 mm bleed and 10 mm for
   # the crop marks on every side: 323×236 mm.
-  - openLink: "${WEB}/admin/orders?lang=ru"
+  - openLink: "${WEB}/admin/orders"
   - waitForVisible: { css: "[data-testid=order-format][data-format=a4-landscape]" }
   - assertVisible: { css: "[data-testid=order-print-file][href='/api/admin/orders/${orderId}/print.pdf']" }
   - request:

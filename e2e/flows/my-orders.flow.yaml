@@ -161,7 +161,7 @@ commands:
   - tapOn: { testId: order-history-toggle, index: 0 }
   - waitForVisible: { testId: order-history }
   - assertVisible: { text: "${note}" }
-  - assertVisible: { testId: order-history-event, containsDescendants: { text: "Отправлен" } }
+  - assertVisible: { testId: order-history-event, containsDescendants: { text: "Shipped" } }
 
   # From the list the admin marks it delivered, with a note; the parent sees it on the timeline.
   - selectOption: { testId: order-status-select, index: 0, optionValue: delivered }
