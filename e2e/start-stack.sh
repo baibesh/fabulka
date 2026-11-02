@@ -14,6 +14,9 @@ export ADMIN_EMAIL=admin@e2e.test ADMIN_PASSWORD=e2e-admin-password ADMIN_SECRET
 export ADMIN_PASSWORD_LOGIN=true
 # Sign-in through the API's fake identity provider; emails are kept in memory (GET /api/test/mails).
 export AUTH_MOCK=true AUTH_SECRET=e2e-auth-secret PUBLIC_URL=http://localhost:3000 RESEND_API_KEY=
+# SEO publish re-renders the site at once; IndexNow pings go to the API's test endpoint (GET /api/test/indexnow).
+export REVALIDATE_SECRET=e2e-revalidate-secret WEB_INTERNAL_URL=http://localhost:3000
+export INDEXNOW_KEY=e2e0indexnow0key0123 INDEXNOW_ENDPOINT=http://localhost:4000/api/test/indexnow
 export STORAGE_DIR="${STORAGE_DIR:-$ROOT/apps/api/storage-e2e}" PORT=4000
 
 (cd "$ROOT/apps/api" && node dist/main.js > "$ROOT/e2e/api.log" 2>&1 &)

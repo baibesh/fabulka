@@ -40,3 +40,14 @@ Things noticed while using tapstep on Fabulka. Version: 0.13.11.
     with the right name and type — but `FileReader` fails on it, as if Chromium got the relative path
     unresolved. An absolute path works: `files: "${PWD}/e2e/fixtures/child.jpg"` (run from the repo
     root). The step should hand Chromium the path it resolved.
+11. **`scroll` sometimes hangs for 90 s with "the page looks stuck" while the page is idle.** With
+    the system Chrome every scroll failed this way (even `scroll` on the static /terms, where a
+    MutationObserver saw nothing and a real Chrome scrolled fine); `--browser managed`, as CI runs
+    it, fixed most of it, but a long directory run still hit it now and then on pages that pass on
+    their own. The message blames the page; naming the browser, or saying what did not answer
+    (no frame? no scroll end?), would make it actionable.
+12. **A `tapOn` right after `openLink` can scroll to an element while the page is still streaming
+    in, then miss it.** A footer button below a growing catalog: the step passes, the dialog never
+    opens, and only `-v` shows "acted on a page that had not settled (Network(3))". A
+    `scrollUntilVisible` first makes it reliable. Printing that warning without `-v`, or retrying
+    the scroll once the page settles, would have saved a long bisect.

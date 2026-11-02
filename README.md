@@ -79,6 +79,15 @@ Languages live in the address: Russian unprefixed (`/catalog`), the others under
 browser language). The visitor's country is a cookie (`fabulka_country`) the server reads, so the
 first HTML already has that country's prices, catalog and FAQ.
 
+The admin's «SEO» section (`/admin/seo`) lets SEO staff tune each page per language version without
+a deploy: title, description, OG image and noindex over localized defaults, with Google and social
+previews, a change history with revert, redirects (applied in the proxy) and global settings
+(search console verification, analytics behind a cookie consent banner, extra robots.txt lines).
+Saving keeps a draft; publishing expires the site's cached SEO data at once (the API calls the web's
+`/internal/revalidate` with `REVALIDATE_SECRET`) and pings IndexNow (`INDEXNOW_KEY`). Who opens what
+is `ROLE_PERMISSIONS` in `packages/shared/src/admin-access.ts`: Keycloak realm role `admin` opens
+everything, `seo` only SEO.
+
 Known limitations: generation is an in-process queue, not a durable job table; Kazakh and English
 catalog text is not yet editable in the admin.
 

@@ -1,0 +1,98 @@
+# The admin's SEO for one page in one language (/de/catalog): the defaults are German, an edit is a
+# draft until it is published, publishing changes the served HTML at once (no deploy) and pings
+# IndexNow (the API's test endpoint here) with every language version; noindex reaches the page and
+# the sitemap; the history reverts the page to its defaults.
+appId: ${WEB}
+tags: [admin, seo]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  SITE: https://fabulka.com
+  TITLE: "E2E Kinderbuch-Katalog"
+  DEFAULT_TITLE: "Katalog personalisierter Kinderbücher — Fabulka"
+before:
+  - sql: { exec: "delete from \"PageSeo\" where page = 'catalog' and language = 'de'" }
+  - sql: { exec: "delete from \"SeoHistory\" where target = 'catalog@de'" }
+commands:
+  # German defaults, not Russian.
+  - request: { url: "${WEB}/de/catalog", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "<title>${DEFAULT_TITLE}</title>"] }
+
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "admin@e2e.test"
+  - tapOn: { testId: admin-password }
+  - inputText: "e2e-admin-password"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - tapOn: { testId: admin-nav-seo }
+  - waitForVisible: { testId: seo-language-note }
+  # Pick the language version, then the page.
+  - tapOn: { testId: seo-lang-de }
+  - assertUrl: { contains: "version=de" }
+  - waitForVisible: { testId: seo-edit-catalog }
+  - tapOn: { testId: seo-edit-catalog }
+  - waitForVisible: { testId: seo-editor }
+  - assertVisible: { testId: seo-preview-title, text: "${DEFAULT_TITLE}" }
+  - assertVisible: { testId: seo-title-count, contains: "/60" }
+
+  # The preview follows the typing; a save is a draft only.
+  - tapOn: { testId: seo-title }
+  - inputText: "${TITLE}"
+  - assertVisible: { testId: seo-preview-title, text: "${TITLE}" }
+  - tapOn: { testId: seo-save }
+  - waitForVisible: { testId: seo-saved }
+  - assertTrue: ${!http.get(WEB + "/de/catalog").body.includes(TITLE)}
+
+  # Publish: the served HTML changes at once, title and Open Graph alike; other languages keep theirs.
+  - tapOn: { testId: seo-publish }
+  - waitForVisible: { testId: seo-state-live, timeout: 15000 }
+  - request: { url: "${WEB}/de/catalog", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "<title>${TITLE}</title>"] }
+  - assertTrue: { contains: ["${response.body}", "<meta property=\"og:title\" content=\"${TITLE}\"/>"] }
+  - assertTrue: ${!http.get(WEB + "/en/catalog").body.includes(TITLE)}
+  # IndexNow heard about the page in all five languages.
+  - request: { url: "${API}/test/indexnow", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "http://localhost:3000/de/catalog"] }
+  - assertTrue: { contains: ["${response.body}", "http://localhost:3000/kk/catalog"] }
+  - assertTrue: { contains: ["${response.body}", "\"key\":\"e2e0indexnow0key0123\""] }
+
+  # noindex: in the page's head and out of the sitemap (this language only).
+  - tapOn: { testId: seo-noindex }
+  - waitForVisible: { testId: seo-state-pending }
+  - assertVisible: { testId: seo-preview-hidden }
+  - tapOn: { testId: seo-publish }
+  - waitForVisible: { testId: seo-state-live, timeout: 15000 }
+  - request: { url: "${WEB}/de/catalog", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "<meta name=\"robots\" content=\"noindex, follow\"/>"] }
+  - request: { url: "${WEB}/sitemap.xml", assert: { status: 200 } }
+  - assertTrue: ${!http.get(WEB + "/sitemap.xml").body.includes("<loc>" + SITE + "/de/catalog</loc>")}
+  - assertTrue: { contains: ["${response.body}", "<loc>${SITE}/en/catalog</loc>"] }
+
+  # History: newest first — publish, save (noindex), publish, save (the title). Reverting the first
+  # save puts the defaults back; publishing makes them live.
+  - waitForVisible: { testId: seo-history-3 }
+  - assertVisible: { text: "admin@e2e.test", index: 0 }
+  - tapOn: { testId: seo-revert-3 }
+  - waitForVisible: "Возврат"
+  - assertVisible: { testId: seo-preview-title, text: "${DEFAULT_TITLE}" }
+  - tapOn: { testId: seo-publish }
+  - waitForVisible: { testId: seo-state-live, timeout: 15000 }
+  - request: { url: "${WEB}/de/catalog", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "<title>${DEFAULT_TITLE}</title>"] }
+  - assertTrue: ${!http.get(WEB + "/de/catalog").body.includes("noindex")}
+  - sql:
+      query: "select count(*)::int as n from \"SeoHistory\" where target = 'catalog@de' and action = 'revert' and who = 'admin@e2e.test'"
+      readOnly: true
+      assert: { first: { n: 1 } }
+after:
+  - sql: { exec: "delete from \"PageSeo\" where page = 'catalog' and language = 'de'" }
+  - sql: { exec: "delete from \"SeoHistory\" where target = 'catalog@de'" }
+  # Re-render the site from the defaults even if the flow stopped half-way.
+  - request: { method: POST, url: "${API}/admin/login", json: { email: "admin@e2e.test", password: "e2e-admin-password" } }
+  - request: { method: POST, url: "${API}/admin/seo/publish", json: {} }

@@ -149,6 +149,7 @@ commands:
         json: { "$.countries[0].code": KZ, "$.countries[26].code": PT, "$.countries[26].languages[0]": en, "$.countries[26].languages[2]": es, "$.countries[26].currency": USD }
   - openLink: "${WEB}/catalog?lang=ru"
   - waitForVisible: { testId: template-first-day-kindergarten }
+  - scrollUntilVisible: { testId: ui-country }
   - tapOn: { testId: ui-country }
   - tapOn: { testId: ui-country-search }
   - inputText: "Португ"
@@ -191,6 +192,7 @@ commands:
   - openLink: "${WEB}/catalog?lang=ru"
   - waitForVisible: { testId: template-first-day-kindergarten }
   - waitForVisible: { testId: ui-country, contains: "Другая страна" }
+  - scrollUntilVisible: { testId: ui-country }
   - tapOn: { testId: ui-country }
   - tapOn: { testId: ui-country-search }
   - inputText: "Португ"
@@ -236,6 +238,7 @@ commands:
   # In Uzbekistan the new question shows, in English too since it has an English text.
   - tapOn: { testId: nav-catalog }
   - waitForVisible: { testId: template-first-day-kindergarten }
+  - scrollUntilVisible: { testId: ui-country }
   - tapOn: { testId: ui-country }
   - tapOn: { testId: ui-country-option-UZ }
   - waitForVisible: { testId: ui-country, contains: "Узбекистан" }

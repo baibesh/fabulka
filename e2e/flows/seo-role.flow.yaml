@@ -1,0 +1,72 @@
+# The SEO role (Keycloak realm role `seo`, the test provider here): the admin opens on its SEO section
+# only. The API answers 403 for every other admin route, the nav shows SEO alone, and any other admin
+# page shows the 403 view. Admin keeps every section.
+appId: ${WEB}
+tags: [admin, seo, auth]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  seoEmail: "seo+${Date.now()}@e2e.test"
+  browserEmail: "seo-ui+${Date.now()}@e2e.test"
+commands:
+  # Through the API: sign in with the realm role seo, then ask the admin.
+  - request:
+      url: ${API}/auth/login
+      query: { return: /api/admin/me }
+      headers: { Accept: application/json }
+      extract: { state: "$.state" }
+      assert: { status: 200 }
+  - request:
+      url: ${API}/auth/mock/authorize
+      query: { state: "${state}", email: "${seoEmail}", seo: "on" }
+      assert: { status: 200, json: { "$.roles[0]": seo, "$.permissions[0]": seo } }
+  - assertTrue: { contains: ["${response.body}", "\"permissions\":[\"seo\"]"] }
+  - assertTrue: { contains: ["${response.body}", "${seoEmail}"] }
+  - request: { url: "${API}/admin/seo/pages?lang=de", assert: { status: 200 } }
+  - request: { url: "${API}/admin/seo/settings", assert: { status: 200 } }
+  - request: { url: "${API}/admin/stats", assert: { status: 403, json: { "$.code": admin_forbidden } } }
+  - request: { url: "${API}/admin/orders", assert: { status: 403 } }
+  - request: { url: "${API}/admin/books", assert: { status: 403 } }
+  - request: { url: "${API}/admin/templates", assert: { status: 403 } }
+  - request: { url: "${API}/admin/reference", assert: { status: 403 } }
+  - request: { method: PUT, url: "${API}/admin/reference/faq", json: [], assert: { status: 403 } }
+  - request: { method: POST, url: "${API}/admin/pause", json: { paused: true }, assert: { status: 403 } }
+  - request: { url: "${API}/auth/me", assert: { status: 200, json: { "$.user.admin": false, "$.user.seo": true } } }
+  # Signed out: 401, not 403.
+  - request: { method: POST, url: "${API}/auth/logout", assert: { status: 200 } }
+  - request: { url: "${API}/admin/seo/pages?lang=de", assert: { status: 401 } }
+
+  # In the browser: the SEO role lands on SEO and sees nothing else.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login-keycloak }
+  - tapOn: { testId: admin-login-keycloak }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${browserEmail}"
+  - check: { testId: mock-login-seo }
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { testId: seo-language-note, timeout: 15000 }
+  - assertUrl: { contains: "/admin/seo" }
+  - assertVisible: { testId: admin-nav-seo }
+  - assertNotVisible: { testId: admin-nav-dashboard }
+  - assertNotVisible: { testId: admin-nav-orders }
+  - assertNotVisible: { testId: admin-nav-books }
+  - assertNotVisible: { testId: admin-nav-reference }
+  # Another section by its address: the 403 view, with the way back to SEO.
+  - openLink: "${WEB}/admin/orders"
+  - waitForVisible: { testId: admin-forbidden, timeout: 15000 }
+  - assertVisible: "403"
+  - assertNotVisible: { testId: orders-table }
+  - tapOn: { testId: admin-forbidden-home }
+  - waitForVisible: { testId: seo-language-note }
+  # The account menu on the site leads to the admin as well.
+  - openLink: "${WEB}/catalog"
+  - waitForVisible: { testId: auth-account, timeout: 15000 }
+  - tapOn: { testId: auth-account }
+  - assertVisible: { testId: auth-admin }
+after:
+  - sql: { exec: "delete from \"User\" where sub = any($1::text[])", params: ["{mock:${seoEmail},mock:${browserEmail}}"] }

@@ -1,0 +1,92 @@
+# The SEO section's global settings: a search console verification tag in every page's head, extra
+# robots.txt lines, and analytics that load only on the public site and only after the visitor
+# accepts the cookie banner (declined by default; the choice is kept in a cookie and can be changed
+# from the footer). The admin never loads them.
+appId: ${WEB}
+tags: [admin, seo]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+before:
+  - sql: { exec: "delete from \"Setting\" where key like 'seo.%'" }
+commands:
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "admin@e2e.test"
+  - tapOn: { testId: admin-password }
+  - inputText: "e2e-admin-password"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - tapOn: { testId: admin-nav-seo }
+  - tapOn: { testId: seo-tab-settings }
+  - waitForVisible: { testId: seo-settings }
+  # A wrong analytics id cannot be saved.
+  - tapOn: { testId: seo-settings-ga4 }
+  - inputText: "UA-1234"
+  - assertVisible: { testId: seo-settings-save, enabled: false }
+  - eraseText: 10
+  - inputText: "G-E2ETEST12"
+  - tapOn: { testId: seo-settings-google }
+  - inputText: "e2e-google-code-123"
+  - tapOn: { testId: seo-settings-robots }
+  - inputText: "Disallow: /e2e-private"
+  - tapOn: { testId: seo-settings-save }
+  - waitForVisible: { testId: seo-settings-saved, contains: "обновлён" }
+
+  # The verification tag and the robots line are live at once.
+  - request: { url: "${WEB}/de", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "<meta name=\"google-site-verification\" content=\"e2e-google-code-123\"/>"] }
+  # The server never sends the trackers: they start in the browser after consent.
+  - assertTrue: ${!http.get(WEB + "/de").body.includes("googletagmanager.com/gtag")}
+  # The API checks the settings too: robots.txt takes robots directives only.
+  - request: { method: POST, url: "${API}/admin/login", json: { email: "admin@e2e.test", password: "e2e-admin-password" } }
+  - request: { url: "${API}/admin/seo/settings", assert: { status: 200, json: { "$.verification.google": "e2e-google-code-123", "$.analytics.ga4": "G-E2ETEST12", "$.robots": "Disallow: /e2e-private" } } }
+  - request:
+      method: PUT
+      url: ${API}/admin/seo/settings
+      json:
+        verification: { google: "", yandex: "", bing: "" }
+        analytics: { gtm: "", ga4: "", yandexMetrika: "", metaPixel: "" }
+        robots: "<script>"
+        sitemapExamples: true
+      assert: { status: 400 }
+  - request: { url: "${WEB}/robots.txt", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "Disallow: /e2e-private"] }
+  - assertTrue: { contains: ["${response.body}", "Disallow: /admin"] }
+
+  # A new visitor: the banner, and no analytics until they choose.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/de/catalog"
+  - waitForVisible: { testId: consent-banner }
+  - assertNotVisible: { css: "html[data-analytics]" }
+  # Declined: the banner goes and stays gone, still nothing loads.
+  - tapOn: { testId: consent-decline }
+  - assertNotVisible: { testId: consent-banner }
+  - openLink: "${WEB}/de/create"
+  - waitForVisible: "Eigene Geschichte"
+  - assertNotVisible: { testId: consent-banner }
+  - assertNotVisible: { css: "html[data-analytics]" }
+  # Changed from the footer: accepted, the trackers start, and on the next page load too.
+  - scrollUntilVisible: { testId: consent-settings }
+  - tapOn: { testId: consent-settings }
+  - waitForVisible: { testId: consent-banner }
+  - tapOn: { testId: consent-accept }
+  - waitForVisible: { css: "html[data-analytics~=ga4]" }
+  - assertNotVisible: { testId: consent-banner }
+  - openLink: "${WEB}/de"
+  - waitForVisible: { css: "html[data-analytics~=ga4]" }
+  # Never in the admin.
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-login }
+  - assertNotVisible: { css: "html[data-analytics]" }
+  - assertNotVisible: { testId: consent-banner }
+after:
+  - sql: { exec: "delete from \"Setting\" where key like 'seo.%'" }
+  - sql: { exec: "delete from \"SeoHistory\" where kind = 'settings'" }
+  # Re-render the site without analytics even if the flow stopped half-way (other flows must not see the banner).
+  - request: { method: POST, url: "${API}/admin/login", json: { email: "admin@e2e.test", password: "e2e-admin-password" } }
+  - request: { method: POST, url: "${API}/admin/seo/publish", json: {} }

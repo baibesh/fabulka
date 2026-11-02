@@ -111,6 +111,8 @@ commands:
   # Spain: Spanish and English; a German interface gives way to Spanish.
   - openLink: "${WEB}/de/catalog"
   - waitForVisible: "Buchkatalog"
+  # Down to the footer first: tapping straight away can land while the page is still streaming in.
+  - scrollUntilVisible: { testId: ui-country }
   - tapOn: { testId: ui-country }
   - waitForVisible: { testId: ui-country-search }
   - tapOn: { testId: ui-country-search }
