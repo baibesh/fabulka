@@ -45,6 +45,7 @@ import {
   toyPrompt,
   pagePrompt,
   petPrompt,
+  softenScene,
   storyPrompt,
 } from './prompts';
 
@@ -92,6 +93,17 @@ export function isMissingReference(error: unknown): boolean {
     /referenced response/i.test(message) &&
     /not found|expired/i.test(message)
   );
+}
+
+/**
+ * Muse Image's 400 for a prompt its safety filter refused: "The response was filtered due to the
+ * prompt triggering our content management policy." The SDK error carries only the status and
+ * this message.
+ */
+export function isSafetyRefusal(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  const message = error instanceof Error ? error.message : String(error);
+  return status === 400 && /content (?:management )?policy/i.test(message);
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -447,19 +459,27 @@ export class MetaGateway implements ModelGateway {
     );
   }
 
-  drawPage(
+  /** A scene the safety filter refused is drawn once more in a gentler form (softenScene). */
+  async drawPage(
     scenePrompt: string,
     anchorRef: string,
     companions: Companions,
     style?: string,
     textSpace?: TextSpace,
   ): Promise<GeneratedImage> {
-    return this.draw(
-      'page',
-      pagePrompt(scenePrompt, companions, style, textSpace),
-      '1536x1024',
-      anchorRef,
-    );
+    const draw = (scene: string) =>
+      this.draw(
+        'page',
+        pagePrompt(scene, companions, style, textSpace),
+        '1536x1024',
+        anchorRef,
+      );
+    try {
+      return await draw(scenePrompt);
+    } catch (error) {
+      if (!isSafetyRefusal(error)) throw error;
+      return draw(softenScene(scenePrompt));
+    }
   }
 
   /** POST /asr/transcribe is not part of the OpenAI SDK: a multipart request of its own. */

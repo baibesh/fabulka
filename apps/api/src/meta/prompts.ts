@@ -42,6 +42,8 @@ Return only JSON of this exact shape:
   as "the hero", the pet as "the pet" and the favourite toy, when there is one, as "the toy";
   describe the place and action, not the style.
   Mention the pet and the toy only in scenes they are actually in.
+  Show a strong feeling through the hero's posture in a wider shot, never as a close-up of
+  an upset face or clenched fists; in a bath the hero sits in deep foam up to the shoulders.
   Any other character that appears on more than one page is described with the exact same
   words (species, colors, distinctive details) in every scene_prompt it appears in.
 - "talk_questions" are 3 to 5 short questions, in the book's language, that the parent asks
@@ -208,6 +210,42 @@ export function pagePrompt(
     ? ` Leave the ${textSpace} third empty and calm.`
     : '';
   return `${space}${scenePrompt}. The hero is the same child as in the hero character sheet shown earlier.${pet}${toy}${reminder} ${style}`;
+}
+
+/** Words of a scene that Muse Image's safety filter refused, and their gentler stand-ins. */
+const GENTLER: [RegExp, string][] = [
+  [/\b(?:extreme |tight )?close[- ]?ups?(?: shot| view)?\b/gi, 'wide shot'],
+  [
+    /\b(?:tightly )?(?:(?:clenched|balled) )?fists(?: clenched| balled)?\b|\bclenched hands\b/gi,
+    'arms held close',
+  ],
+  [/\bclenched (?:teeth|jaw)\b/gi, 'a pout'],
+  [
+    /\b(?:an? |her |his )?(?:(?:hot|bright|warm|burning|angry),? )*(?:red|reddened|flushed) (?:face|cheeks)\b/gi,
+    'a little frown',
+  ],
+  [
+    /\b(?:big |streaming )?tears(?: streaming| rolling)?(?: down (?:her|his|the) (?:face|cheeks))?/gi,
+    'a sad look',
+  ],
+  [/\b(?:crying|sobbing|screaming|shouting|yelling)\b/gi, 'upset'],
+];
+
+/**
+ * The scene of a page Muse Image refused for safety, in a gentler form for one more try
+ * (MetaGateway.drawPage). The refusals were close-ups of an angry child ("clenched fists, hot red
+ * face") and a child in a bathtub: here the feeling is left to the posture in a wider shot, and a
+ * bath is drawn in deep foam with only the head and shoulders above it.
+ */
+export function softenScene(scene: string): string {
+  const gentle = GENTLER.reduce(
+    (text, [words, instead]) => text.replace(words, instead),
+    scene,
+  ).replace(/[.\s]+$/, '');
+  const pose = /\b(?:bath|bathtub|tub|bathing)\b/i.test(scene)
+    ? 'the hero sits in thick white foam up to the shoulders, only the head and shoulders above the foam and the water'
+    : "the hero's whole body is in the picture and the feeling shows in the posture";
+  return `${gentle}. A calm wide view from a little distance: ${pose}`;
 }
 
 export const REVIEW_INSTRUCTIONS = `You review picture books for young children before they are
