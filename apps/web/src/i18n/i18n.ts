@@ -1,12 +1,15 @@
 "use client";
 
-import { DEFAULT_COUNTRIES, countryFromIp, countryInfo, languageFor, type Country, type CountryEntry } from "@fabulka/shared";
-import { useSyncExternalStore } from "react";
+import { DEFAULT_COUNTRIES, countryFromIp, countryInfo, type Country, type CountryEntry } from "@fabulka/shared";
+import { createContext, useContext, useSyncExternalStore } from "react";
+import { COOKIE_MAX_AGE, COUNTRY_COOKIE, LOCALE_COOKIE } from "./cookies";
 import { format, type Vars } from "./format";
 import { MESSAGES, UI_LOCALES, type MessageKey, type UiLocale } from "./messages";
 
-const LOCALE_KEY = "fabulka.locale";
-const COUNTRY_KEY = "fabulka.country";
+/** The admin's own language store (the site takes its language from the address). */
+const ADMIN_LOCALE_KEY = "fabulka.locale";
+/** Where the country used to be kept, before the cookie; moved over once (migrateSettings). */
+const LEGACY_COUNTRY_KEY = "fabulka.country";
 const CHANGE = "fabulka:settings";
 
 export type { Country };
@@ -19,13 +22,18 @@ function read(key: string): string | null {
   }
 }
 
-function write(key: string, value: string) {
+function readCookie(name: string): string | null {
   try {
-    localStorage.setItem(key, value);
+    const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : null;
   } catch {
-    // Private mode: the choice lasts until the page closes.
+    return null;
   }
-  window.dispatchEvent(new Event(CHANGE));
+}
+
+function writeCookie(name: string, value: string) {
+  const secure = window.location.protocol === "https:" ? "; secure" : "";
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${COOKIE_MAX_AGE}; samesite=lax${secure}`;
 }
 
 function subscribe(onChange: () => void) {
@@ -37,8 +45,22 @@ function subscribe(onChange: () => void) {
   };
 }
 
-const isLocale = (value: string | null): value is UiLocale =>
-  value !== null && (UI_LOCALES as readonly string[]).includes(value);
+const changed = () => window.dispatchEvent(new Event(CHANGE));
+
+export const isLocale = (value: string | null | undefined): value is UiLocale =>
+  typeof value === "string" && (UI_LOCALES as readonly string[]).includes(value);
+
+/**
+ * The language of the page: the address's (`/en/…`), handed down by the [locale] layout. Null
+ * outside the site (the admin, the global 404).
+ */
+export const LocaleContext = createContext<UiLocale | null>(null);
+
+/**
+ * What the server knew when it rendered this part (CountryScope): the visitor's country from the
+ * cookie and the owner's list of countries. Hydration starts from it, so prices and lists match.
+ */
+export const CountryContext = createContext<{ country: Country; countries: readonly CountryEntry[] } | null>(null);
 
 /**
  * The countries the site offers (GET /reference, see CountryListSync); today's defaults until they
@@ -46,13 +68,20 @@ const isLocale = (value: string | null): value is UiLocale =>
  */
 let countryList: readonly CountryEntry[] = DEFAULT_COUNTRIES;
 const currentCountryList = () => countryList;
-const defaultCountryList = () => DEFAULT_COUNTRIES as readonly CountryEntry[];
 
-/** Puts the owner's list of countries in place; the saved country and language follow it. */
+/** Puts the owner's list of countries in place; the saved country follows it. */
 export function setCountryList(countries: readonly CountryEntry[]) {
-  if (JSON.stringify(countries) === JSON.stringify(countryList)) return;
+  if (adoptCountryList(countries)) changed();
+}
+
+/**
+ * The same, without telling subscribers: for a list the server rendered with, taken over while
+ * hydrating so the first client render already uses it. True when the list changed.
+ */
+export function adoptCountryList(countries: readonly CountryEntry[]): boolean {
+  if (typeof window === "undefined" || JSON.stringify(countries) === JSON.stringify(countryList)) return false;
   countryList = countries;
-  window.dispatchEvent(new Event(CHANGE));
+  return true;
 }
 
 /**
@@ -60,21 +89,7 @@ export function setCountryList(countries: readonly CountryEntry[]) {
  * detected or chosen. The code is saved as it was, so a country the owner lists later comes back.
  */
 function currentCountry(): Country {
-  return countryFromIp(read(COUNTRY_KEY), countryList);
-}
-
-/**
- * ?lang= on this page, else the saved choice, else the first of the browser's preferred languages
- * that the visitor's country offers, else Russian; then narrowed to the country's languages.
- */
-function currentLocale(): UiLocale {
-  const asked = new URLSearchParams(window.location.search).get("lang");
-  const saved = read(LOCALE_KEY);
-  const country = currentCountry();
-  const preferred = (navigator.languages?.length ? navigator.languages : [navigator.language]).map((l) => l.slice(0, 2));
-  const browser = preferred.find((l) => isLocale(l) && languageFor(country, l, countryList) === l) ?? null;
-  const wanted = [asked, saved, browser].find(isLocale) ?? "ru";
-  return languageFor(country, wanted, countryList);
+  return countryFromIp(readCookie(COUNTRY_COOKIE), countryList);
 }
 
 /**
@@ -83,9 +98,10 @@ function currentLocale(): UiLocale {
  */
 function adminLocale(): UiLocale {
   const asked = new URLSearchParams(window.location.search).get("lang");
-  return [asked, read(LOCALE_KEY)].find(isLocale) ?? "ru";
+  return [asked, read(ADMIN_LOCALE_KEY)].find(isLocale) ?? "ru";
 }
 
+/** The admin's language switch (the site switches language by going to the page's other address). */
 export function setLocale(locale: UiLocale) {
   // A ?lang= in the address outranks the saved choice, so a choice made here drops it.
   const url = new URL(window.location.href);
@@ -93,36 +109,75 @@ export function setLocale(locale: UiLocale) {
     url.searchParams.delete("lang");
     window.history.replaceState(window.history.state, "", url);
   }
-  write(LOCALE_KEY, locale);
+  try {
+    localStorage.setItem(ADMIN_LOCALE_KEY, locale);
+  } catch {
+    // Private mode: the choice lasts until the page closes.
+  }
+  changed();
   document.documentElement.lang = locale;
 }
 
+/** The language the visitor picked on the site last, as a preference (never a redirect). */
+export const localePreference = (): UiLocale | null => {
+  const saved = readCookie(LOCALE_COOKIE);
+  return isLocale(saved) ? saved : null;
+};
+
+export function setLocalePreference(locale: UiLocale) {
+  writeCookie(LOCALE_COOKIE, locale);
+}
+
 /**
- * Saves the country. The language on screen stays if the country offers it, else gives way to the
- * country's first language; it is saved either way, so the switch never brings back an older one.
+ * Saves the country in its cookie, for the server's next render too; every part that depends on it
+ * (prices, the catalog, the examples, the FAQ) follows at once. The page's language stays: the
+ * country picker itself goes to another language when the country does not offer this one.
  */
 export function setCountry(country: Country) {
-  const locale = languageFor(countryFromIp(country, countryList), currentLocale(), countryList);
-  write(COUNTRY_KEY, country);
-  if (read(LOCALE_KEY) !== locale) setLocale(locale);
+  writeCookie(COUNTRY_COOKIE, country);
+  changed();
 }
 
 /** The country saved on this browser (picked or detected), as saved; null before either. */
-export const savedCountry = () => read(COUNTRY_KEY);
+export const savedCountry = () => readCookie(COUNTRY_COOKIE);
 
 /** Whether the visitor has picked a country yet (otherwise it is detected once). */
-export const countryChosen = () => read(COUNTRY_KEY) !== null;
+export const countryChosen = () => readCookie(COUNTRY_COOKIE) !== null;
 
 /**
- * Interface language and country: `country` is a listed ISO code or "other", `info` what the site
- * offers there (languages, currency, print), `countries` the whole list. Pages render in Russian on
- * the server, then switch. The admin (`"admin"`) shares the saved language with the site but
- * chooses it by its own rules.
+ * Moves what older versions kept in localStorage to the cookies, once: the country (now read by the
+ * server) and the last language, which becomes the language preference.
+ */
+export function migrateSettings() {
+  const country = read(LEGACY_COUNTRY_KEY);
+  if (country !== null) {
+    if (!countryChosen()) setCountry(country);
+    try {
+      localStorage.removeItem(LEGACY_COUNTRY_KEY);
+    } catch {
+      // Nothing to clean up.
+    }
+  }
+  const locale = read(ADMIN_LOCALE_KEY);
+  if (isLocale(locale) && readCookie(LOCALE_COOKIE) === null) setLocalePreference(locale);
+}
+
+const ru = () => "ru" as UiLocale;
+
+/**
+ * Interface language and country: `locale` is the page's language (from its address), `country` a
+ * listed ISO code or "other", `info` what the site offers there (languages, currency, print),
+ * `countries` the whole list. The country comes from its cookie; inside a CountryScope the server
+ * rendered with the same one. The admin (`"admin"`) keeps its own language store.
  */
 export function useI18n(scope: "site" | "admin" = "site") {
-  const locale = useSyncExternalStore(subscribe, scope === "admin" ? adminLocale : currentLocale, () => "ru" as UiLocale);
-  const country = useSyncExternalStore(subscribe, currentCountry, () => "KZ" as Country);
-  const countries = useSyncExternalStore(subscribe, currentCountryList, defaultCountryList);
+  const pageLocale = useContext(LocaleContext);
+  const server = useContext(CountryContext);
+  const stored = useSyncExternalStore(subscribe, adminLocale, ru);
+  const locale = scope === "site" && pageLocale ? pageLocale : stored;
+  const serverCountries = server?.countries ?? DEFAULT_COUNTRIES;
+  const country = useSyncExternalStore(subscribe, currentCountry, () => server?.country ?? countryFromIp(null, serverCountries));
+  const countries = useSyncExternalStore(subscribe, currentCountryList, () => serverCountries);
   const t = (key: MessageKey, vars?: Vars) => format(MESSAGES[locale][key], vars, locale);
   return { locale, country, countries, info: countryInfo(country, countries), t };
 }

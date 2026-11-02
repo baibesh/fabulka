@@ -1,10 +1,12 @@
 "use client";
 
-import { OTHER_COUNTRY, type Country } from "@fabulka/shared";
+import { OTHER_COUNTRY, countryFromIp, countryInfo, type Country } from "@fabulka/shared";
 import { Check, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { setCountry, setLocale, useI18n } from "@/i18n/i18n";
+import { setCountry, setLocale, setLocalePreference, useI18n } from "@/i18n/i18n";
 import { LOCALE_NAMES, UI_LOCALES, type UiLocale } from "@/i18n/messages";
+import { localePath, splitLocalePath } from "@/i18n/routing";
 import { LANGUAGE_FLAGS, languageCode, regionName } from "@/lib/regions";
 import { useCountryName } from "@/hooks/use-country-name";
 import { Flag } from "../ui/flag";
@@ -16,10 +18,26 @@ const option =
 
 
 /**
+ * The same page in another language: its address in that language, with this page's query and hash.
+ * The choice is remembered as a preference (a cookie), which only ever suggests, never redirects.
+ * The address is read on the click, so the pickers render without the route (they sit in the
+ * prerendered shell).
+ */
+function useGoToLanguage() {
+  const router = useRouter();
+  return (language: UiLocale) => {
+    setLocalePreference(language);
+    const { pathname, search, hash } = window.location;
+    router.push(localePath(language, splitLocalePath(pathname).path) + search + hash);
+  };
+}
+
+/**
  * A flag button with the interface language's code; it opens a dialog of languages to choose from.
- * On the site (`scope="site"`, the header) it offers the languages of the visitor's country; in the
- * admin (`scope="admin"`, the sidebar and the sign-in card) all five, for the admin's own language
- * store. Test ids: the button is `testId`, each option `${optionPrefix}${language}`.
+ * On the site (`scope="site"`, the header) it offers the languages of the visitor's country and the
+ * page's own, and goes to the same page in the chosen language; in the admin (`scope="admin"`, the
+ * sidebar and the sign-in card) all five, for the admin's own language store. Test ids: the button
+ * is `testId`, each option `${optionPrefix}${language}`.
  */
 export function LanguagePicker({
   scope = "site",
@@ -35,12 +53,14 @@ export function LanguagePicker({
   const { t, locale, country, info } = useI18n(scope);
   const countryName = useCountryName();
   const [open, setOpen] = useState(false);
+  const goTo = useGoToLanguage();
   const admin = scope === "admin";
-  const languages: readonly UiLocale[] = admin ? UI_LOCALES : info.languages;
+  const languages: readonly UiLocale[] = admin ? UI_LOCALES : info.languages.includes(locale) ? info.languages : [...info.languages, locale];
   const label = t(admin ? "admin.language" : "nav.language");
   const choose = (language: UiLocale) => {
-    setLocale(language);
     setOpen(false);
+    if (admin) setLocale(language);
+    else if (language !== locale) goTo(language);
   };
   return (
     <>
@@ -89,9 +109,15 @@ export function LanguagePicker({
 
 const normalize = (text: string) => text.toLocaleLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
 
-/** Footer button: the visitor's country; opens the countries the site offers, with a search. */
+/**
+ * Footer button: the visitor's country; opens the countries the site offers, with a search. Prices,
+ * the catalog and the FAQ follow at once. Picking a country that does not offer the page's language
+ * goes to the page in the country's first language (the visitor asked for that country; merely
+ * opening a page in another language never switches it).
+ */
 export function CountryPicker() {
-  const { t, country, countries } = useI18n();
+  const { t, locale, country, countries } = useI18n();
+  const goTo = useGoToLanguage();
   const countryName = useCountryName();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -102,6 +128,8 @@ export function CountryPicker() {
   const choose = (code: Country) => {
     setCountry(code);
     close();
+    const { languages } = countryInfo(countryFromIp(code, countries), countries);
+    if (!languages.includes(locale)) goTo(languages[0]);
   };
   // Found by its name in any interface language or by its code, whatever language is on screen.
   const wanted = normalize(query.trim());

@@ -3,7 +3,7 @@
 import { useQuery } from "@/lib/query";
 import { ArrowRight, BookOpen, CirclePause } from "lucide-react";
 import { motion } from "motion/react";
-import Link from "next/link";
+import { LocaleLink } from "@/i18n/routing";
 import { useI18n } from "@/i18n/i18n";
 import { getStatus } from "@/lib/api";
 import { useExamples, useTemplates } from "@/lib/use-catalog";
@@ -65,10 +65,10 @@ export function Hero() {
           <h1 className="text-4xl font-extrabold leading-tight sm:text-5xl">{t("landing.hero.title")}</h1>
           <p className="text-lg text-muted sm:text-xl">{t(lead)}</p>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Link href="/catalog" data-testid="hero-cta" className={primaryButton}>
+            <LocaleLink href="/catalog" data-testid="hero-cta" className={primaryButton}>
               {t("landing.hero.cta")}
               <ArrowRight className="size-5" />
-            </Link>
+            </LocaleLink>
             {Boolean(examples?.length) && (
               <a href="#example" data-testid="hero-example" className={secondaryButton}>
                 <BookOpen className="size-5" />
@@ -104,14 +104,14 @@ function Covers() {
               }}
               className={`absolute ${PILE[i]}`}
             >
-              <Link
+              <LocaleLink
                 href={`/catalog/${book.slug}`}
                 aria-label={book.title}
                 className="block overflow-hidden rounded-2xl border-4 border-card shadow-xl transition duration-300 hover:-translate-y-1.5 hover:scale-[1.03] hover:shadow-2xl"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- covers are static files of any size */}
                 <img src={book.coverUrl!} alt="" className="aspect-square w-full object-cover" />
-              </Link>
+              </LocaleLink>
             </motion.li>
           ))}
         </ul>

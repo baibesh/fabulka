@@ -2,7 +2,7 @@
 
 import { useQuery } from "@/lib/query";
 import { BookOpen, LogIn, UserRound } from "lucide-react";
-import Link from "next/link";
+import { LocaleLink } from "@/i18n/routing";
 import { intlLocale } from "@/i18n/format";
 import { useI18n } from "@/i18n/i18n";
 import { listMyBooks } from "@/lib/api";
@@ -24,9 +24,9 @@ export function MyBooks() {
         icon={<BookOpen className="size-10 text-accent" />}
         title={t("my.empty.title")}
         action={
-          <Link href="/catalog" className={buttonClass()}>
+          <LocaleLink href="/catalog" className={buttonClass()}>
             {t("my.empty.cta")}
-          </Link>
+          </LocaleLink>
         }
       >
         {t("my.empty.text")}
@@ -37,7 +37,7 @@ export function MyBooks() {
     <ul data-testid="my-books" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {books.data.map((book) => (
         <li key={book.id}>
-          <Link href={`/books/${book.id}`} className="flex gap-4 rounded-2xl border border-border bg-card p-4 transition hover:border-accent">
+          <LocaleLink href={`/books/${book.id}`} className="flex gap-4 rounded-2xl border border-border bg-card p-4 transition hover:border-accent">
             {book.heroImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
               <img src={book.heroImageUrl} alt="" className="size-20 shrink-0 rounded-xl bg-white object-contain" />
@@ -49,7 +49,7 @@ export function MyBooks() {
               <span className="text-sm text-muted">{book.status === "done" ? t("my.status.done") : book.status === "failed" ? t("my.status.failed") : t("my.status.working")}</span>
               <span className="text-xs text-muted">{new Date(book.createdAt).toLocaleDateString(intlLocale(locale))}</span>
             </div>
-          </Link>
+          </LocaleLink>
         </li>
       ))}
     </ul>

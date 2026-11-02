@@ -1,8 +1,7 @@
 "use client";
 
 import { BookHeart, Library, Wand2 } from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { LocaleLink, useBarePath } from "@/i18n/routing";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
 import { AuthMenu, AuthNotice } from "../account/auth-menu";
@@ -16,20 +15,21 @@ const NAV: { href: string; label: MessageKey; icon: typeof Library; testId: stri
 ];
 
 export function SiteHeader() {
-  const pathname = usePathname();
+  // Without the language, so the same on the server (/ru/…) and in the browser (/…).
+  const pathname = useBarePath();
   const { t } = useI18n();
   return (
     <>
       <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-0.5 px-4 sm:gap-2">
-          <Link href="/" data-testid="nav-home" aria-label={t("nav.home")} className="mr-auto">
+          <LocaleLink href="/" data-testid="nav-home" aria-label={t("nav.home")} className="mr-auto">
             <Logo />
-          </Link>
+          </LocaleLink>
           <nav className="flex items-center sm:gap-1">
             {NAV.map(({ href, label, icon: Icon, testId }) => {
               const active = pathname.startsWith(href);
               return (
-                <Link
+                <LocaleLink
                   key={href}
                   href={href}
                   data-testid={testId}
@@ -40,7 +40,7 @@ export function SiteHeader() {
                 >
                   <Icon className="size-4" />
                   <span className="hidden md:inline">{t(label)}</span>
-                </Link>
+                </LocaleLink>
               );
             })}
           </nav>

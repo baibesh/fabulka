@@ -2,32 +2,32 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { countryChosen, setCountry, setCountryList, setLocale, useI18n } from "@/i18n/i18n";
-import { UI_LOCALES, type UiLocale } from "@/i18n/messages";
+import { LocaleContext, countryChosen, isLocale, migrateSettings, setCountry, setCountryList, setLocale, useI18n } from "@/i18n/i18n";
+import type { UiLocale } from "@/i18n/messages";
 import { whereAmI } from "@/lib/api";
 import { installErrorReporting } from "@/lib/telemetry";
 import { useReference } from "@/lib/use-price";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+/** `locale` is the site page's language (from its address); the admin and the global 404 pass none. */
+export function Providers({ locale = null, children }: { locale?: UiLocale | null; children: React.ReactNode }) {
   const [client] = useState(() => new QueryClient());
-  const { locale } = useI18n();
-
-  useEffect(() => {
-    document.documentElement.lang = locale;
-  }, [locale]);
 
   // Errors visitors run into go to the admin's journal (message and page only, no form values).
   useEffect(() => installErrorReporting(), []);
 
-  // A link can choose the language: ?lang=kk, ?lang=de (and it sticks, like the header switch).
+  // The admin's language can come with a link (/admin?lang=en) and sticks, like its switch. The
+  // site's ?lang= links never get here: the proxy redirects them to the language's address.
   useEffect(() => {
+    if (locale) return;
     const lang = new URLSearchParams(window.location.search).get("lang");
-    if (lang && (UI_LOCALES as readonly string[]).includes(lang)) setLocale(lang as UiLocale);
-  }, []);
+    if (isLocale(lang)) setLocale(lang);
+  }, [locale]);
 
   // First visit: preselect the country from the visitor's address; the footer switch overrides it.
-  // The code is saved as is: one the site does not offer reads as "other".
+  // The code is saved as is: one the site does not offer reads as "other". Settings older versions
+  // kept in localStorage move to their cookies first.
   useEffect(() => {
+    migrateSettings();
     if (countryChosen()) return;
     whereAmI()
       .then((country) => setCountry(country ?? "KZ"))
@@ -35,11 +35,24 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <QueryClientProvider client={client}>
-      <CountryListSync />
-      {children}
-    </QueryClientProvider>
+    <LocaleContext value={locale}>
+      <QueryClientProvider client={client}>
+        <DocumentLanguage />
+        <CountryListSync />
+        {children}
+      </QueryClientProvider>
+    </LocaleContext>
   );
+}
+
+/** Keeps <html lang> on the language shown: the site's root layout sets it, the admin switches it here. */
+function DocumentLanguage() {
+  // The page's language on the site; outside it (the admin) the admin's own store.
+  const { locale } = useI18n();
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+  return null;
 }
 
 /** Hands the owner's list of countries (GET /reference) to the language and country settings. */

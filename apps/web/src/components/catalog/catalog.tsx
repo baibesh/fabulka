@@ -1,7 +1,7 @@
 "use client";
 
 import { Wand2 } from "lucide-react";
-import Link from "next/link";
+import { LocaleLink } from "@/i18n/routing";
 import { useI18n } from "@/i18n/i18n";
 import { useTemplates } from "@/lib/use-catalog";
 import { useMethodologies } from "@/lib/use-methodologies";
@@ -60,7 +60,7 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
       ))}
       {/* A whole row under the books on wider screens, so it never sits alone under a full row. */}
       <li className={`sm:col-span-2 lg:col-span-3 ${preview ? "max-sm:w-[78%] max-sm:shrink-0 max-sm:snap-start" : ""}`}>
-        <Link
+        <LocaleLink
           href="/create"
           data-testid="create-own"
           className={`${bookCardClass} items-center justify-center gap-3 rounded-3xl border-dashed p-8 text-center sm:flex-row sm:gap-5 sm:text-left`}
@@ -73,7 +73,7 @@ export function Catalog({ preview = false }: { preview?: boolean }) {
           <Badge data-testid="custom-price" tone="solid" size="md" className="sm:ml-auto">
             {customPrice ?? <PriceSkeleton />}
           </Badge>
-        </Link>
+        </LocaleLink>
       </li>
     </ul>
   );

@@ -2,7 +2,7 @@
 
 import { useQuery } from "@/lib/query";
 import { BookOpen, ChevronRight, Package } from "lucide-react";
-import Link from "next/link";
+import { LocaleLink } from "@/i18n/routing";
 import { useEffect } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { listMyOrders } from "@/lib/api";
@@ -66,14 +66,14 @@ export function MyOrders() {
               </div>
               <OrderTimeline order={order} compact />
               <OrderAddress order={order} />
-              <Link
+              <LocaleLink
                 href={`/orders/${order.id}`}
                 data-testid="my-order-open"
                 className="flex items-center gap-1 self-start text-sm font-semibold text-accent"
               >
                 {t("my.orders.open")}
                 <ChevronRight className="size-4" />
-              </Link>
+              </LocaleLink>
             </Card>
           ))}
         </ul>

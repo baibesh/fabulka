@@ -3,7 +3,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { BookHeart, LogIn, LogOut, Package, ShieldCheck, UserRound, X } from "lucide-react";
 import { AUTH_ERROR } from "@fabulka/shared";
-import Link from "next/link";
+import { LocaleLink } from "@/i18n/routing";
 import { useState } from "react";
 import { useClientValue } from "@/hooks/use-hydrated";
 import { useI18n } from "@/i18n/i18n";
@@ -14,12 +14,14 @@ import { Spinner } from "../ui/spinner";
 
 /**
  * The header's sign-in: «Войти» for a visitor, the account menu once signed in, nothing while
- * sign-in is off. Signing in is never required, so this stays out of the way.
+ * sign-in is off. Signing in is never required, so this stays out of the way. `pathname` is the
+ * page's path without its language.
  */
 export function AuthMenu({ pathname }: { pathname: string }) {
   const { t, locale } = useI18n();
   const me = useMe();
-  const signOut = useMutation({ mutationFn: logout });
+  // Back to this page, in this language, after signing out (and in: loginUrl).
+  const signOut = useMutation({ mutationFn: () => logout(pathname, locale) });
 
   if (!me.data?.enabled) return null;
   const user = me.data.user;
@@ -74,19 +76,19 @@ export function AuthMenu({ pathname }: { pathname: string }) {
               )}
             </div>
           )}
-          <Link href="/my" role="menuitem" onClick={close} className={menuItemClass}>
+          <LocaleLink href="/my" role="menuitem" onClick={close} className={menuItemClass}>
             <BookHeart className="size-4 text-accent" />
             {t("auth.my")}
-          </Link>
-          <Link href="/my#orders" role="menuitem" data-testid="auth-orders" onClick={close} className={menuItemClass}>
+          </LocaleLink>
+          <LocaleLink href="/my#orders" role="menuitem" data-testid="auth-orders" onClick={close} className={menuItemClass}>
             <Package className="size-4 text-accent" />
             {t("auth.orders")}
-          </Link>
+          </LocaleLink>
           {user.admin && (
-            <Link href="/admin" role="menuitem" data-testid="auth-admin" onClick={close} className={menuItemClass}>
+            <LocaleLink href="/admin" role="menuitem" data-testid="auth-admin" onClick={close} className={menuItemClass}>
               <ShieldCheck className="size-4 text-accent" />
               {t("auth.admin")}
-            </Link>
+            </LocaleLink>
           )}
           <MenuItem data-testid="auth-logout" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
             {signOut.isPending ? <Spinner size="sm" /> : <LogOut className="size-4 text-muted" />}

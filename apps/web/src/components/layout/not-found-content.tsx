@@ -1,9 +1,10 @@
-import Link from "next/link";
-import { Logo } from "@/components/layout/logo";
-import { T } from "@/i18n/t";
 import { buttonClass } from "@/components/ui/button";
+import { LocaleLink } from "@/i18n/routing";
+import { T } from "@/i18n/t";
+import { Logo } from "./logo";
 
-export default function NotFound() {
+/** The 404 screen: the site's (in the page's language) and the global one (in Russian). */
+export function NotFoundContent() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-6 text-center">
       <Logo />
@@ -11,9 +12,9 @@ export default function NotFound() {
       <p className="text-lg text-muted">
         <T k="notFound.text" />
       </p>
-      <Link href="/catalog" className={buttonClass()}>
+      <LocaleLink href="/catalog" className={buttonClass()}>
         <T k="notFound.cta" />
-      </Link>
+      </LocaleLink>
     </main>
   );
 }

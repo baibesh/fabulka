@@ -1,9 +1,13 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { OrderForm } from "@/components/order/order-form";
 import { T } from "@/i18n/t";
 import { BackLink, PageContainer } from "@/components/ui/page";
 
-export default function OrderPage({ params }: PageProps<"/books/[id]/order">) {
+/** A family's own page: kept out of search (robots.txt disallows it too). */
+export const metadata: Metadata = { robots: { index: false, follow: false } };
+
+export default function OrderPage({ params }: PageProps<"/[locale]/books/[id]/order">) {
   return (
     <PageContainer width="sm">
       <Suspense

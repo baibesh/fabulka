@@ -31,6 +31,9 @@ export function LoginForm() {
       </div>
       {options.isPending && <Spinner className="text-muted" />}
       {keycloak && (
+        // An API route that redirects to Keycloak, not a page (the site's root [locale] segment makes
+        // the rule take any path for one).
+        // eslint-disable-next-line @next/next/no-html-link-for-pages
         <a
           href="/api/auth/login?return=/admin"
           data-testid="admin-login-keycloak"

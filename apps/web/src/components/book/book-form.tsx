@@ -12,8 +12,7 @@ import {
   type VoicePrefill,
 } from "@fabulka/shared";
 import { ArrowLeft, ArrowRight, BookOpen, CirclePause } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { LocaleLink, useLocaleRouter } from "@/i18n/routing";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch, type FieldErrors, type FieldPath } from "react-hook-form";
 import { ApiError, createBook, getQuota, getStatus, uploadToy } from "@/lib/api";
@@ -35,7 +34,7 @@ import { Button } from "../ui/button";
  * step, each step checked before the next, and everything shown once more before the book starts.
  */
 export function BookForm({ template }: { template?: Template }) {
-  const router = useRouter();
+  const router = useLocaleRouter();
   const { t, locale, info } = useI18n();
   const ageOptions = template ? ages(template.ageMin, template.ageMax) : ages(2, 10);
   const form = useForm<FormValues>({
@@ -55,12 +54,13 @@ export function BookForm({ template }: { template?: Template }) {
     },
   });
   const age = Number(useWatch({ control: form.control, name: "age" }));
-  // The interface language is known only after hydration; the book follows it until changed by hand.
+  // The book follows the page's language (another address, another language) until changed by hand.
   useEffect(() => {
     if (!form.getFieldState("language").isDirty) form.setValue("language", locale);
   }, [form, locale]);
-  // Only the languages offered in the visitor's country; a choice the new country lacks is dropped.
-  const bookLanguages = info.languages;
+  // The languages offered in the visitor's country, and the page's own if the country lacks it (the
+  // address decides the language: an English page in Kazakhstan still offers an English book).
+  const bookLanguages = useMemo(() => (info.languages.includes(locale) ? info.languages : [...info.languages, locale]), [info.languages, locale]);
   useEffect(() => {
     if (!bookLanguages.includes(form.getValues("language"))) form.setValue("language", bookLanguages[0]);
   }, [form, bookLanguages]);
@@ -198,9 +198,9 @@ export function BookForm({ template }: { template?: Template }) {
         title={t("form.paused.title")}
       >
         <p className="text-muted">{t("form.paused.text")}</p>
-        <Link href="/#examples" data-testid="paused-examples" className="self-start font-semibold text-accent">
+        <LocaleLink href="/#examples" data-testid="paused-examples" className="self-start font-semibold text-accent">
           {t("form.paused.examples")} →
-        </Link>
+        </LocaleLink>
       </Notice>
     )}
     <form

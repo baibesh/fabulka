@@ -19,6 +19,9 @@ const ru = {
   "nav.country.hint": "От страны зависят цены, языки сайта и книг и доставка печатных книг.",
   "nav.country.search": "Найти страну",
   "nav.country.empty": "Такой страны нет в списке — выберите «Другая страна».",
+  "locale.suggest.text": "Эта страница есть и на русском.",
+  "locale.suggest.open": "Открыть на русском",
+  "locale.suggest.dismiss": "Не показывать",
 
   "auth.login": "Войти",
   "auth.account": "Аккаунт",
@@ -854,6 +857,9 @@ const kk: Messages = {
   "nav.country.hint": "Бағалар, сайт пен кітап тілдері және басылған кітапты жеткізу елге байланысты.",
   "nav.country.search": "Елді іздеу",
   "nav.country.empty": "Мұндай ел тізімде жоқ — «Басқа ел» дегенді таңдаңыз.",
+  "locale.suggest.text": "Бұл бет қазақ тілінде де бар.",
+  "locale.suggest.open": "Қазақша ашу",
+  "locale.suggest.dismiss": "Көрсетпеу",
 
   "auth.login": "Кіру",
   "auth.account": "Аккаунт",
@@ -1687,6 +1693,9 @@ const en: Messages = {
   "nav.country.hint": "Prices, the languages of the site and books, and printed book delivery depend on the country.",
   "nav.country.search": "Search countries",
   "nav.country.empty": "This country is not on the list — choose “Another country”.",
+  "locale.suggest.text": "This page is also available in English.",
+  "locale.suggest.open": "Open in English",
+  "locale.suggest.dismiss": "Dismiss",
 
   "auth.login": "Sign in",
   "auth.account": "Account",
@@ -2521,6 +2530,9 @@ const es: Messages = {
   "nav.country.hint": "Del país dependen los precios, los idiomas del sitio y de los libros, y el envío de los libros impresos.",
   "nav.country.search": "Buscar país",
   "nav.country.empty": "Este país no está en la lista: elige «Otro país».",
+  "locale.suggest.text": "Esta página también está disponible en español.",
+  "locale.suggest.open": "Abrir en español",
+  "locale.suggest.dismiss": "Ocultar",
 
   "auth.login": "Iniciar sesión",
   "auth.account": "Cuenta",
@@ -3355,6 +3367,9 @@ const de: Messages = {
   "nav.country.hint": "Das Land bestimmt die Preise, die Sprachen der Website und der Bücher sowie den Versand gedruckter Bücher.",
   "nav.country.search": "Land suchen",
   "nav.country.empty": "Dieses Land ist nicht in der Liste – wähle „Anderes Land“.",
+  "locale.suggest.text": "Diese Seite gibt es auch auf Deutsch.",
+  "locale.suggest.open": "Auf Deutsch öffnen",
+  "locale.suggest.dismiss": "Ausblenden",
 
   "auth.login": "Anmelden",
   "auth.account": "Konto",

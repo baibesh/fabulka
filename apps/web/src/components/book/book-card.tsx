@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { LocaleLink } from "@/i18n/routing";
 import type { ComponentProps, ReactNode } from "react";
 import { cx } from "../ui/cx";
 
@@ -17,9 +17,9 @@ export function BookCard({
   className,
   children,
   ...rest
-}: ComponentProps<typeof Link> & { image: string | null | undefined; fit?: "cover" | "contain"; radius?: "md" | "lg"; children: ReactNode }) {
+}: ComponentProps<typeof LocaleLink> & { image: string | null | undefined; fit?: "cover" | "contain"; radius?: "md" | "lg"; children: ReactNode }) {
   return (
-    <Link className={cx(bookCardClass, radius === "lg" ? "rounded-3xl" : "rounded-2xl", className)} {...rest}>
+    <LocaleLink className={cx(bookCardClass, radius === "lg" ? "rounded-3xl" : "rounded-2xl", className)} {...rest}>
       {image ? (
         // eslint-disable-next-line @next/next/no-img-element -- covers are static files and generated pictures of any size
         <img
@@ -31,6 +31,6 @@ export function BookCard({
         <div className="aspect-square w-full bg-border" />
       )}
       {children}
-    </Link>
+    </LocaleLink>
   );
 }

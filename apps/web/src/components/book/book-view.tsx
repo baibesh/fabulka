@@ -7,7 +7,7 @@ import { useQuery } from "@/lib/query";
 import { type Book, type BookStatus } from "@fabulka/shared";
 import { AlertTriangle, Check, Download, MessageCircleQuestion, Printer, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
-import Link from "next/link";
+import { LocaleLink } from "@/i18n/routing";
 import { useI18n } from "@/i18n/i18n";
 import { getBook, wantPrint } from "@/lib/api";
 import { useMethodologies } from "@/lib/use-methodologies";
@@ -90,14 +90,14 @@ export function BookView() {
               {t("design.blocked")}
             </Notice>
           ) : info.print ? (
-            <Link
+            <LocaleLink
               data-testid="order-print"
               href={`/books/${book.id}/order`}
               className={buttonClass({ variant: "outline" })}
             >
               <Printer className="size-5" />
               {printPrice ? t("book.order", { price: printPrice }) : <PriceSkeleton className="w-48" />}
-            </Link>
+            </LocaleLink>
           ) : (
             <WantPrint bookId={book.id} />
           )}

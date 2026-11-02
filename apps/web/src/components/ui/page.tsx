@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { LocaleLink } from "@/i18n/routing";
 import type { ComponentProps, ReactNode } from "react";
 import { cx, variants } from "./cx";
 
@@ -55,6 +55,6 @@ export function PageHeader({
 }
 
 /** The way back to the page above: a small accent link («← Каталог»). The arrow is part of the text. */
-export function BackLink({ className, ...rest }: ComponentProps<typeof Link>) {
-  return <Link className={cx("flex items-center gap-1 self-start text-sm font-semibold text-accent hover:underline", className)} {...rest} />;
+export function BackLink({ className, ...rest }: ComponentProps<typeof LocaleLink>) {
+  return <LocaleLink className={cx("flex items-center gap-1 self-start text-sm font-semibold text-accent hover:underline", className)} {...rest} />;
 }

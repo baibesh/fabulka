@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { LocaleLink } from "@/i18n/routing";
 import { useI18n } from "@/i18n/i18n";
 import { CountryPicker } from "./locale-pickers";
 import { Logo } from "./logo";
@@ -15,12 +15,12 @@ export function SiteFooter() {
           <span>{t("footer.tagline")}</span>
         </div>
         <nav className="flex flex-wrap items-center gap-4">
-          <Link href="/privacy" className="hover:text-foreground">
+          <LocaleLink href="/privacy" className="hover:text-foreground">
             {t("footer.privacy")}
-          </Link>
-          <Link href="/terms" className="hover:text-foreground">
+          </LocaleLink>
+          <LocaleLink href="/terms" className="hover:text-foreground">
             {t("footer.terms")}
-          </Link>
+          </LocaleLink>
           <a href="mailto:hello@fabulka.com" className="hover:text-foreground">
             hello@fabulka.com
           </a>
