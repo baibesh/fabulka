@@ -1,31 +1,23 @@
-import {
-  DEFAULT_COUNTRIES,
-  ExampleBookSchema,
-  MethodologySchema,
-  ReferenceSchema,
-  TemplateSchema,
-  TemplateSummarySchema,
-  countryFromIp,
-} from "@fabulka/shared";
+import { DEFAULT_LANGUAGE, ExampleBookSchema, MethodologySchema, TemplateSchema, TemplateSummarySchema } from "@fabulka/shared";
 import { QueryClient, dehydrate, type QueryKey } from "@tanstack/react-query";
-import { cookies } from "next/headers";
-import { COUNTRY_COOKIE } from "@/i18n/cookies";
 import type { UiLocale } from "@/i18n/messages";
 import { serverGet } from "@/lib/server-api";
+import { visitorCountry } from "@/lib/visitor-country";
 import { CountryScope } from "./country-scope";
 
 /** What a page part needs besides the reference data (prices, countries, FAQ), which it always gets. */
 export type CountryNeed = "templates" | "examples" | "methodologies";
 
 /**
- * The visitor's country for the server render: read from its cookie, with the data that depends on
- * it (and on the page's language) fetched here, so the first HTML already has the right prices,
- * currency, catalog, examples and FAQ. Reading the cookie makes this part dynamic: put it inside a
- * <Suspense> and keep the rest of the page static. Query keys match the client hooks
+ * The visitor's country for the server render: from its cookie, else from the visitor's IP, else
+ * "other" (visitorCountry), with the data that depends on it (and on the page's language) fetched
+ * here, so the first HTML already has the right prices, currency, catalog, examples and FAQ.
+ * Reading the cookie and the address makes this part dynamic: put it inside a <Suspense> and keep
+ * the rest of the page static. Query keys match the client hooks
  * (useReference, useTemplates, useExamples, useMethodologies, the template page's query).
  */
 export async function CountryData({
-  locale = "ru",
+  locale = DEFAULT_LANGUAGE,
   need = [],
   template,
   children,
@@ -37,10 +29,7 @@ export async function CountryData({
   template?: Promise<string>;
   children: React.ReactNode;
 }) {
-  const saved = (await cookies()).get(COUNTRY_COOKIE)?.value ?? null;
-  const reference = await serverGet("/api/reference", ReferenceSchema);
-  const countries = reference?.countries ?? DEFAULT_COUNTRIES;
-  const country = countryFromIp(saved, countries);
+  const { country, saved, detected, countries, reference } = await visitorCountry();
 
   const client = new QueryClient();
   const load = async <T,>(key: QueryKey, path: string, schema: { parse(value: unknown): T }) => {
@@ -58,7 +47,7 @@ export async function CountryData({
   ]);
 
   return (
-    <CountryScope saved={saved} countries={countries} state={dehydrate(client)}>
+    <CountryScope country={country} saved={saved} detected={detected} countries={countries} state={dehydrate(client)}>
       {children}
     </CountryScope>
   );

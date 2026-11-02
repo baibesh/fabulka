@@ -74,10 +74,13 @@ and Luhansk regions, so those are not blocked by IP.
 - The schema ships as Prisma migrations; CI applies them to a fresh database, runs the E2E flows and
   only then builds the images, so a red commit never reaches `:latest`.
 
-Languages live in the address: Russian unprefixed (`/catalog`), the others under `/kk`, `/en`, `/es`,
-`/de` (`apps/web/src/proxy.ts`; `/ru/…` and old `?lang=` links redirect, nobody is redirected by
-browser language). The visitor's country is a cookie (`fabulka_country`) the server reads, so the
-first HTML already has that country's prices, catalog and FAQ.
+Languages live in the address: English, the default, unprefixed (`/catalog`), the others under `/ru`,
+`/kk`, `/es`, `/de` (`apps/web/src/proxy.ts`; `/en/…` and old `?lang=` links redirect, nobody is
+redirected by browser language; English pages only offer the visitor's language in a banner). The
+default is one constant, `DEFAULT_LANGUAGE` in `packages/shared/src/locale-path.ts`. The visitor's
+country is a cookie (`fabulka_country`) the server reads; on a first visit the server takes the
+country of the visitor's IP (the API's `GET /api/geo`), else "other" (dollar prices), so the first
+HTML already has that country's prices, catalog and FAQ.
 
 The admin's «SEO» section (`/admin/seo`) lets SEO staff tune each page per language version without
 a deploy: title, description, OG image and noindex over localized defaults, with Google and social

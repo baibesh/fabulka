@@ -2,13 +2,12 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { LocaleContext, countryChosen, isLocale, migrateSettings, setCountry, setCountryList, setLocale, useI18n } from "@/i18n/i18n";
+import { LocaleContext, isLocale, migrateSettings, setCountryList, setLocale, useI18n } from "@/i18n/i18n";
 import type { UiLocale } from "@/i18n/messages";
-import { whereAmI } from "@/lib/api";
 import { installErrorReporting } from "@/lib/telemetry";
 import { useReference } from "@/lib/use-price";
 
-/** `locale` is the site page's language (from its address); the admin and the global 404 pass none. */
+/** `locale` is the site page's language (from its address; the global 404 passes the default one); the admin passes none. */
 export function Providers({ locale = null, children }: { locale?: UiLocale | null; children: React.ReactNode }) {
   const [client] = useState(() => new QueryClient());
 
@@ -23,16 +22,9 @@ export function Providers({ locale = null, children }: { locale?: UiLocale | nul
     if (isLocale(lang)) setLocale(lang);
   }, [locale]);
 
-  // First visit: preselect the country from the visitor's address; the footer switch overrides it.
-  // The code is saved as is: one the site does not offer reads as "other". Settings older versions
-  // kept in localStorage move to their cookies first.
-  useEffect(() => {
-    migrateSettings();
-    if (countryChosen()) return;
-    whereAmI()
-      .then((country) => setCountry(country ?? "KZ"))
-      .catch(() => undefined);
-  }, []);
+  // Settings older versions kept in localStorage move to their cookies (the site's pages also do it
+  // before saving the country the server detected, see CountryScope).
+  useEffect(() => migrateSettings(), []);
 
   return (
     <LocaleContext value={locale}>

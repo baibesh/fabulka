@@ -3,6 +3,7 @@ import {
   type BookTheme,
   BookSchema,
   ExampleBookSchema,
+  GeoSchema,
   MethodologySchema,
   MyBookSchema,
   OrderSchema,
@@ -211,8 +212,7 @@ export async function getReference(): Promise<Reference> {
 
 /** The visitor's country by IP, or null when unknown (e.g. locally). */
 export async function whereAmI(): Promise<string | null> {
-  const body = (await request("/api/geo")) as { country: string | null };
-  return body.country;
+  return GeoSchema.parse(await request("/api/geo")).country;
 }
 
 /** Records that someone in a country without print wants this book printed. */

@@ -316,13 +316,14 @@ describe("countries", () => {
     expect(countryFromIp("DE", list)).toBe("DE");
     expect(countryFromIp("NL", list)).toBe("other");
     expect(countryFromIp("other", list)).toBe("other");
-    expect(countryFromIp(null, list)).toBe("KZ");
+    expect(countryFromIp(null, list)).toBe("other");
+    expect(countryFromIp("", list)).toBe("other");
   });
 
-  it("follows the owner's list: an unlisted country is other, no country the first listed", () => {
+  it("follows the owner's list: an unlisted country is other, and so is no country", () => {
     const owners = [{ code: "UZ", languages: ["ru" as const], currency: "USD" as const, print: false }];
     expect(countryFromIp("KZ", owners)).toBe("other");
-    expect(countryFromIp(null, owners)).toBe("UZ");
+    expect(countryFromIp(null, owners)).toBe("other");
     expect(countryFromIp(null, [])).toBe("other");
     expect(countryInfo("KZ", owners)).toEqual({ languages: ["en", "es", "de", "ru"], currency: "USD", print: false });
   });

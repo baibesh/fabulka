@@ -1,6 +1,6 @@
 "use client";
 
-import { DEFAULT_COUNTRIES, countryFromIp, countryInfo, type Country, type CountryEntry } from "@fabulka/shared";
+import { DEFAULT_COUNTRIES, OTHER_COUNTRY, countryFromIp, countryInfo, type Country, type CountryEntry } from "@fabulka/shared";
 import { createContext, useContext, useSyncExternalStore } from "react";
 import { COOKIE_MAX_AGE, COUNTRY_COOKIE, LOCALE_COOKIE } from "./cookies";
 import { format, type Vars } from "./format";
@@ -85,11 +85,24 @@ export function adoptCountryList(countries: readonly CountryEntry[]): boolean {
 }
 
 /**
- * The saved country if the site offers it, else "other"; Kazakhstan (the home market) until one is
- * detected or chosen. The code is saved as it was, so a country the owner lists later comes back.
+ * With no country cookie yet: the country the server rendered the page for (the visitor's IP, else
+ * "other", see visitorCountry), so the browser's first renders agree with the HTML until the
+ * cookie is written.
+ */
+let unsavedCountry: Country = OTHER_COUNTRY;
+
+/** Takes over the country the server rendered with while there is no cookie (CountryScope). */
+export function adoptUnsavedCountry(country: Country) {
+  if (typeof window !== "undefined") unsavedCountry = country;
+}
+
+/**
+ * The saved country if the site offers it, else "other"; before one is saved, the one the server
+ * rendered with. The code is saved as it was, so a country the owner lists later comes back.
  */
 function currentCountry(): Country {
-  return countryFromIp(readCookie(COUNTRY_COOKIE), countryList);
+  const saved = readCookie(COUNTRY_COOKIE);
+  return saved === null ? unsavedCountry : countryFromIp(saved, countryList);
 }
 
 /**
@@ -141,7 +154,7 @@ export function setCountry(country: Country) {
 /** The country saved on this browser (picked or detected), as saved; null before either. */
 export const savedCountry = () => readCookie(COUNTRY_COOKIE);
 
-/** Whether the visitor has picked a country yet (otherwise it is detected once). */
+/** Whether the visitor has a country saved yet (picked, or detected on the first visit). */
 export const countryChosen = () => readCookie(COUNTRY_COOKIE) !== null;
 
 /**

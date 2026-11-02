@@ -314,14 +314,18 @@ export function countryInfo(country: Country, countries: readonly CountryEntry[]
 
 /**
  * Our country for an ISO code (the visitor's IP or a saved choice): a listed one, else "other". No
- * code at all (a local address, say) is taken for Kazakhstan, the home market, or the first listed
- * country when Kazakhstan is not offered.
+ * code at all (a local or unknown address, a crawler) is "other" too: nobody is assumed to be in
+ * Kazakhstan.
  */
 export function countryFromIp(iso: string | null, countries: readonly CountryEntry[]): Country {
-  if (!iso) return countries.find((c) => c.code === "KZ")?.code ?? countries[0]?.code ?? OTHER_COUNTRY;
+  if (!iso) return OTHER_COUNTRY;
   const code = iso.trim().toUpperCase();
   return countries.some((c) => c.code === code) ? code : OTHER_COUNTRY;
 }
+
+/** GET /geo: the visitor's ISO country by IP, null for a local or unknown address. */
+export const GeoSchema = z.object({ country: z.string().nullable() });
+export type Geo = z.infer<typeof GeoSchema>;
 
 /** `language` when the country offers it, else the country's default language. */
 export function languageFor(country: Country, language: Language, countries: readonly CountryEntry[]): Language {

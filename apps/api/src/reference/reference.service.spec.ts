@@ -474,13 +474,13 @@ describe('ReferenceService countries', () => {
     expect(setting.upsert).not.toHaveBeenCalled();
   });
 
-  it('takes the country chosen on the site, else the IP’s', async () => {
+  it('takes the country chosen on the site, else the IP’s, else other', async () => {
     const { service } = settingsStore();
     expect(await service.visitorCountry('PL', 'KZ')).toBe('PL');
     expect(await service.visitorCountry('other', 'KZ')).toBe('other');
     expect(await service.visitorCountry('NL', 'KZ')).toBe('other');
     expect(await service.visitorCountry(undefined, 'UZ')).toBe('UZ');
-    expect(await service.visitorCountry(undefined, null)).toBe('KZ');
+    expect(await service.visitorCountry(undefined, null)).toBe('other');
   });
 
   it('refuses an empty list, duplicates and unknown codes', async () => {

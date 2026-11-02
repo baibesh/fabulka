@@ -1,12 +1,10 @@
-import { DEFAULT_COUNTRIES, ReferenceSchema, bookPrice, countryFromIp, localePath } from "@fabulka/shared";
-import { cookies } from "next/headers";
-import { COUNTRY_COOKIE } from "@/i18n/cookies";
+import { bookPrice, localePath } from "@fabulka/shared";
 import { format } from "@/i18n/format";
 import { MESSAGES, type MessageKey, type UiLocale } from "@/i18n/messages";
 import { SITE_URL } from "@/lib/seo";
 import { templateForSeo } from "@/lib/seo-data";
 import { siteLocale } from "@/lib/seo-meta";
-import { serverGet } from "@/lib/server-api";
+import { visitorCountry } from "@/lib/visitor-country";
 
 /** Structured data for search engines (schema.org as JSON-LD); `<` escaped so no text can end the script. */
 export function JsonLd({ data }: { data: Record<string, unknown> }) {
@@ -72,15 +70,14 @@ export function PageBreadcrumb({ locale, label, path }: { locale: UiLocale; labe
 
 /**
  * A catalog book as a product with its offer: the price of one more book of this kind in the
- * visitor's country (the cookie, read here like CountryData does), so render it inside <Suspense>.
+ * visitor's country (the cookie, else the IP, else "other", like CountryData), so render it inside
+ * <Suspense>.
  */
 export async function TemplateJsonLd({ locale, slug }: { locale: UiLocale; slug: string }) {
   const template = await templateForSeo(slug, locale);
   if (!template) return null;
-  const saved = (await cookies()).get(COUNTRY_COOKIE)?.value ?? null;
-  const reference = await serverGet("/api/reference", ReferenceSchema);
-  const countries = reference?.countries ?? DEFAULT_COUNTRIES;
-  const price = reference ? bookPrice("template", countryFromIp(saved, countries), reference.prices, countries) : null;
+  const { country, countries, reference } = await visitorCountry();
+  const price = reference ? bookPrice("template", country, reference.prices, countries) : null;
   const url = absolute(localePath(locale, `/catalog/${slug}`));
   return (
     <>

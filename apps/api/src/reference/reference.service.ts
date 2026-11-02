@@ -310,8 +310,8 @@ export class ReferenceService implements OnModuleInit {
 
   /**
    * The visitor's country as the site has it: the one chosen on the site (the x-country header),
-   * else the one of their IP; a listed code or "other". No code at all (a local address) is
-   * Kazakhstan.
+   * else the one of their IP; a listed code or "other". No code at all (a local or unknown
+   * address) is "other" too, as on the site.
    */
   async visitorCountry(
     chosen: string | undefined,
