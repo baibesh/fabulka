@@ -1,6 +1,6 @@
 # Interface language and country: the language button in the header and the country button in the
-# footer, each opening a dialog; the catalog in Kazakh, English, German and Spanish, print offered
-# only in Kazakhstan, and a book written in Spanish.
+# footer, each opening a dialog; the catalog in Kazakh, English, German and Spanish (the books about
+# Kazakhstan listed there only), print offered only in Kazakhstan, and a book written in Spanish.
 appId: ${WEB}
 tags: [smoke, i18n]
 db: ${DATABASE_URL}
@@ -88,7 +88,9 @@ commands:
   - waitForVisible: { testId: ui-country-option-DE }
   - tapOn: { testId: ui-country-option-DE }
   - waitForVisible: "Buchkatalog"
-  - assertVisible: "Das Geheimnis des Schneeleoparden"
+  # The books about Kazakhstan are listed there only.
+  - waitForVisible: "Der erste Tag in der Kita"
+  - assertNotVisible: "Das Geheimnis des Schneeleoparden"
   - assertVisible: { testId: ui-country, contains: "Deutschland" }
   - assertVisible: { testId: ui-language, contains: "DE" }
   - assertVisible: { testId: custom-price, text: "$5.90" }
@@ -114,7 +116,7 @@ commands:
   - waitForVisible: { testId: ui-country-option-ES }
   - tapOn: { testId: ui-country-option-ES }
   - waitForVisible: "Catálogo de libros"
-  - assertVisible: "El secreto del leopardo de las nieves"
+  - waitForVisible: "El primer día en la guardería"
   - assertVisible: { testId: ui-country, contains: "España" }
   - tapOn: { testId: ui-language }
   - waitForVisible: { testId: ui-language-option-es }

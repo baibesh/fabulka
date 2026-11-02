@@ -192,10 +192,28 @@ describe('BooksService', () => {
       },
     ]);
 
-    const examples = await makeService({ book: { findMany } }).listExamples();
+    const examples = await makeService({ book: { findMany } }).listExamples(
+      'KZ',
+    );
 
+    // Books of a story of their own, and from catalog books listed everywhere or in Kazakhstan.
     expect(findMany).toHaveBeenCalledWith({
-      where: { featured: true, status: 'done', title: { not: null } },
+      where: {
+        featured: true,
+        status: 'done',
+        title: { not: null },
+        OR: [
+          { templateId: null },
+          {
+            template: {
+              OR: [
+                { countries: { isEmpty: true } },
+                { countries: { has: 'KZ' } },
+              ],
+            },
+          },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       take: 12,
     });
@@ -207,6 +225,21 @@ describe('BooksService', () => {
         heroImageUrl: null,
       },
     ]);
+  });
+
+  it('shows "other" visitors only examples listed everywhere', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    await makeService({ book: { findMany } }).listExamples(null);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { templateId: null },
+            { template: { OR: [{ countries: { isEmpty: true } }] } },
+          ],
+        }) as unknown,
+      }),
+    );
   });
 
   describe('a book of your own', () => {

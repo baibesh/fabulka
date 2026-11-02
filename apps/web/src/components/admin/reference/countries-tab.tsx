@@ -13,12 +13,11 @@ import {
   type CountryEntry,
   type Language,
 } from "@fabulka/shared";
-import { Plus, Star, X } from "lucide-react";
+import { Plus, Star } from "lucide-react";
 import { useState } from "react";
 import { Flag } from "@/components/ui/flag";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/choice";
-import { Menu, MenuItem } from "@/components/ui/menu";
 import { cx } from "@/components/ui/cx";
 import { Select } from "@/components/ui/input";
 import { useCountryName } from "@/hooks/use-country-name";
@@ -26,6 +25,7 @@ import { intlLocale } from "@/i18n/format";
 import { saveCountries } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
 import { LANGUAGE_FLAGS } from "@/lib/regions";
+import { FlagChips } from "../chips";
 import { Card, useAdminI18n } from "../ui";
 import { errorText, issuesByPath, nextKey, RowActions, SaveBar, useRows, useSaved } from "./shared";
 
@@ -217,89 +217,40 @@ function LanguageChips({
   onDefault: (language: Language) => void;
 }) {
   const { t } = useAdminI18n();
-  const left = LANGUAGES.filter((language) => !languages.includes(language));
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {languages.map((language, index) => {
-        const name = LANGUAGE_NAMES[language];
-        const isDefault = index === 0;
-        const makeDefaultLabel = t("admin.reference.country.makeDefault", { language: name });
+    <FlagChips
+      testId="country-lang"
+      values={languages}
+      options={LANGUAGES}
+      name={(language) => LANGUAGE_NAMES[language]}
+      flag={(language) => LANGUAGE_FLAGS[language]}
+      addLabel={t("admin.reference.country.addLanguage")}
+      removeLabel={(language) => t("admin.reference.country.removeLanguage", { language })}
+      onAdd={onAdd}
+      onRemove={onRemove}
+      accent={(_, index) => index === 0}
+      extra={(language, index) => {
+        if (index === 0)
+          return (
+            <span className="flex items-center gap-1 px-1 text-xs font-normal text-accent">
+              <Star className="size-3.5 fill-current" aria-hidden />
+              {t("admin.reference.country.default")}
+            </span>
+          );
+        const makeDefaultLabel = t("admin.reference.country.makeDefault", { language: LANGUAGE_NAMES[language] });
         return (
-          <span
-            key={language}
-            data-testid={`country-lang-${language}`}
-            className={cx(
-              "flex items-center gap-1 rounded-full border py-1 pr-1 pl-2.5 text-sm font-semibold",
-              isDefault ? "border-accent bg-accent/10" : "border-border bg-card",
-            )}
+          <button
+            type="button"
+            data-testid={`country-default-${language}`}
+            aria-label={makeDefaultLabel}
+            title={makeDefaultLabel}
+            onClick={() => onDefault(language)}
+            className="rounded-full p-1 text-muted hover:bg-accent/10 hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
           >
-            <Flag code={LANGUAGE_FLAGS[language]} />
-            <span>{name}</span>
-            {isDefault ? (
-              <span className="flex items-center gap-1 px-1 text-xs font-normal text-accent">
-                <Star className="size-3.5 fill-current" aria-hidden />
-                {t("admin.reference.country.default")}
-              </span>
-            ) : (
-              <button
-                type="button"
-                data-testid={`country-default-${language}`}
-                aria-label={makeDefaultLabel}
-                title={makeDefaultLabel}
-                onClick={() => onDefault(language)}
-                className="rounded-full p-1 text-muted hover:bg-accent/10 hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
-              >
-                <Star className="size-3.5" aria-hidden />
-              </button>
-            )}
-            <button
-              type="button"
-              data-testid={`country-lang-remove-${language}`}
-              aria-label={t("admin.reference.country.removeLanguage", { language: name })}
-              title={t("admin.reference.country.removeLanguage", { language: name })}
-              onClick={() => onRemove(language)}
-              className="rounded-full p-1 text-muted hover:bg-danger/10 hover:text-danger focus-visible:outline-2 focus-visible:outline-accent"
-            >
-              <X className="size-3.5" aria-hidden />
-            </button>
-          </span>
+            <Star className="size-3.5" aria-hidden />
+          </button>
         );
-      })}
-      {left.length > 0 && (
-        <Menu
-          align="start"
-          data-testid="country-lang-menu"
-          className="w-56"
-          trigger={({ props }) => (
-            <button
-              type="button"
-              {...props}
-              data-testid="country-lang-add"
-              aria-label={t("admin.reference.country.addLanguage")}
-              title={t("admin.reference.country.addLanguage")}
-              className="flex size-8 items-center justify-center rounded-full border border-dashed border-border text-muted hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
-            >
-              <Plus className="size-4" aria-hidden />
-            </button>
-          )}
-        >
-          {(close) =>
-            left.map((language) => (
-              <MenuItem
-                key={language}
-                data-testid={`country-lang-option-${language}`}
-                onClick={() => {
-                  onAdd(language);
-                  close();
-                }}
-              >
-                <Flag code={LANGUAGE_FLAGS[language]} />
-                {LANGUAGE_NAMES[language]}
-              </MenuItem>
-            ))
-          }
-        </Menu>
-      )}
-    </div>
+      }}
+    />
   );
 }

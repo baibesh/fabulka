@@ -7,11 +7,20 @@ http:
   headers:
     X-Client-Key: "e2e-${childName}"
 commands:
+  # The visitor's country picks the books: Kazakhstan has all six.
+  - request:
+      url: /templates
+      query: { country: KZ }
+      assert:
+        status: 200
+        json: { "$[5].slug": bath-time, "$[4].slug": nauryz-new-friend, "$[0].slug": first-day-kindergarten, "$[0].coverUrl": /catalog/first-day-kindergarten.jpg }
+  # With no country (as for "other") only the books listed everywhere: the snow leopard (second
+  # in Kazakhstan) and Nauryz are left out.
   - request:
       url: /templates
       assert:
         status: 200
-        json: { "$[5].slug": bath-time, "$[0].slug": first-day-kindergarten, "$[0].coverUrl": /catalog/first-day-kindergarten.jpg }
+        json: { "$[3].slug": bath-time, "$[1].slug": not-yet }
   - request:
       url: /templates/not-yet
       assert:

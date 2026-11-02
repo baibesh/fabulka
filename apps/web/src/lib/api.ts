@@ -14,6 +14,7 @@ import {
   ToyUploadResultSchema,
   VoicePrefillSchema,
   type Book,
+  type Country,
   type CreateBookInput,
   type CreateOrderInput,
   type ExampleBook,
@@ -152,8 +153,10 @@ export async function transcribeVoice(audio: Blob, language: Language, template?
   return VoicePrefillSchema.parse(body);
 }
 
-export async function listTemplates(lang: Language): Promise<TemplateSummary[]> {
-  return TemplateSummarySchema.array().parse(await request(`/api/templates?lang=${lang}`));
+/** The catalog books listed in `country` (an ISO code or "other"), in `lang`. */
+export async function listTemplates(lang: Language, country: Country): Promise<TemplateSummary[]> {
+  const query = new URLSearchParams({ lang, country });
+  return TemplateSummarySchema.array().parse(await request(`/api/templates?${query}`));
 }
 
 export async function getTemplate(slug: string, lang: Language): Promise<Template> {
@@ -169,9 +172,9 @@ export async function listMyBooks() {
   return MyBookSchema.array().parse(await request("/api/books"));
 }
 
-/** Finished books the admin picked for every visitor to open. */
-export async function listExamples(): Promise<ExampleBook[]> {
-  return ExampleBookSchema.array().parse(await request("/api/books/examples"));
+/** Finished books the admin picked for visitors to open: those for `country` (see GET /books/examples). */
+export async function listExamples(country: Country): Promise<ExampleBook[]> {
+  return ExampleBookSchema.array().parse(await request(`/api/books/examples?${new URLSearchParams({ country })}`));
 }
 
 /** Whether new books are being created right now. */

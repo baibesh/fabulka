@@ -1,16 +1,15 @@
 "use client";
 
-import { useQuery } from "@/lib/query";
 import { BookCard } from "../book/book-card";
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/i18n/i18n";
-import { listExamples } from "@/lib/api";
+import { useExamples } from "@/lib/use-catalog";
 import { SectionHeader } from "../ui/section-header";
 
-/** Finished books the admin picked, for visitors to flip through before making their own. */
+/** Finished books the admin picked for the visitor's country, to flip through before making their own. */
 export function Examples() {
   const { t } = useI18n();
-  const { data: examples } = useQuery({ queryKey: ["examples"], queryFn: listExamples });
+  const { data: examples } = useExamples();
   const section = useRef<HTMLElement>(null);
   const shown = Boolean(examples?.length);
 

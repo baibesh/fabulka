@@ -14,6 +14,7 @@ import {
   localizedTextSchema,
   pickLanguage,
   UpdateTemplateSchema,
+  catalogCountry,
   methodologyText,
   cityId,
   cityName,
@@ -523,6 +524,27 @@ describe("reference data", () => {
     expect(UpdateBlockedSchema.safeParse({ extra: ["XX"] }).success).toBe(false);
     expect(UpdateBlockedSchema.safeParse({ extra: ["NLD"] }).success).toBe(false);
     expect(UpdateBlockedSchema.safeParse({ extra: ["NL", "nl"] }).success).toBe(false);
+  });
+});
+
+describe("template countries", () => {
+  it("takes distinct ISO codes, upper-cased, or none for everywhere", () => {
+    expect(UpdateTemplateSchema.parse({ countries: [" kz", "DE"] })).toEqual({ countries: ["KZ", "DE"] });
+    expect(UpdateTemplateSchema.parse({ countries: [] })).toEqual({ countries: [] });
+    expect(UpdateTemplateSchema.safeParse({ countries: ["XX"] }).success).toBe(false);
+    expect(UpdateTemplateSchema.safeParse({ countries: ["other"] }).success).toBe(false);
+    expect(UpdateTemplateSchema.safeParse({ countries: ["KAZ"] }).success).toBe(false);
+    expect(UpdateTemplateSchema.safeParse({ countries: ["KZ", "kz"] }).success).toBe(false);
+    expect(UpdateTemplateSchema.safeParse({ countries: "KZ" }).success).toBe(false);
+  });
+
+  it("reads the visitor's country for the catalog: a code, else null", () => {
+    expect(catalogCountry("KZ")).toBe("KZ");
+    expect(catalogCountry(" de ")).toBe("DE");
+    expect(catalogCountry("other")).toBeNull();
+    expect(catalogCountry(undefined)).toBeNull();
+    expect(catalogCountry("")).toBeNull();
+    expect(catalogCountry("XX")).toBeNull();
   });
 });
 

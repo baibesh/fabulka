@@ -8,8 +8,10 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
+  catalogCountry,
   CreateBookSchema,
   GENERATION_PAUSED,
   OTHER_COUNTRY,
@@ -76,10 +78,13 @@ export class BooksController {
     return this.books.listMine(client.key, user?.id);
   }
 
-  /** Books for every visitor to open; declared before :id so "examples" is not taken for an id. */
+  /**
+   * Books for every visitor to open; declared before :id so "examples" is not taken for an id.
+   * ?country= as for GET /templates: a book from a catalog book is shown where that one is listed.
+   */
   @Get('examples')
-  examples(): Promise<ExampleBook[]> {
-    return this.books.listExamples();
+  examples(@Query('country') country?: string): Promise<ExampleBook[]> {
+    return this.books.listExamples(catalogCountry(country));
   }
 
   /**

@@ -1,0 +1,180 @@
+# Catalog books limited to countries: the admin lists a book in Kazakhstan only, and the catalog and
+# the home page's examples show it there and hide it elsewhere ("other" included), while its page
+# still opens by a direct link. The two books about Kazakhstan are listed there only from the start.
+appId: ${WEB}
+tags: [catalog, i18n, admin]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Страны ${Date.now()}"
+  slug: bath-time
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+  headers:
+    X-Client-Key: "e2e-countries-${childName}"
+    X-Demo-Code: E2E-DEMO
+before:
+  - sql: { exec: "update \"BookTemplate\" set countries = '{}' where slug = $1", params: ["${slug}"] }
+commands:
+  # Nauryz and the snow leopard are listed in Kazakhstan only; the rest everywhere.
+  - evalScript: >-
+      output.slugs = (query) => json(http.get(API + '/templates?lang=en' + query).body).map((t) => t.slug).join(' ');
+      output.kz = output.slugs('&country=KZ'); output.de = output.slugs('&country=DE')
+  - assertTrue: { contains: ["${output.kz}", "nauryz-new-friend"] }
+  - assertTrue: { contains: ["${output.kz}", "snow-leopard-alatau"] }
+  - assertTrue: { contains: ["${output.de}", "first-day-kindergarten"] }
+  - assertTrue: ${!output.de.includes('nauryz-new-friend') && !output.de.includes('snow-leopard-alatau')}
+
+  # A finished (mock) book from the template, featured as an example.
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${childName}", age: 3, gender: boy, interests: [утята], city: Алматы, language: ru }
+        template: ${slug}
+        answers: { toy: резиновый утёнок }
+      extract: { bookId: "$.id" }
+      assert: { status: 201 }
+  - request:
+      url: /books/${bookId}
+      retryUntil:
+        status: 200
+        json: { "$.status": done }
+      timeout: 30000
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: PATCH
+      url: /admin/books/${bookId}
+      json: { featured: true }
+      assert: { status: 200 }
+
+  # Only real codes of countries the site offers.
+  - request:
+      method: PATCH
+      url: /admin/templates/${slug}
+      json: { countries: [XX] }
+      assert: { status: 400 }
+  - request:
+      method: PATCH
+      url: /admin/templates/${slug}
+      json: { countries: [other] }
+      assert: { status: 400 }
+  - request:
+      method: PATCH
+      url: /admin/templates/${slug}
+      json: { countries: [FR] }
+      assert: { status: 400 }
+
+  # The admin lists the book in Kazakhstan only, from the template editor.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login?lang=ru"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - openLink: "${WEB}/admin/catalog/${slug}"
+  - waitForVisible: { css: "[data-testid=template-countries][data-loaded=true]" }
+  - assertVisible: "Страны"
+  - assertVisible: { testId: template-countries-all, text: "Все страны" }
+  - tapOn: { testId: template-country-add }
+  - waitForVisible: { testId: template-country-menu }
+  - assertVisible: { testId: template-country-option-DE, contains: "Германия" }
+  - tapOn: { testId: template-country-option-KZ }
+  - waitForVisible: { testId: template-country-KZ }
+  - assertVisible: { text: "Казахстан", childOf: { testId: template-country-KZ } }
+  - assertNotVisible: { testId: template-countries-all }
+  - tapOn: { testId: template-save }
+  - waitForVisible: { testId: template-saved }
+  - sql:
+      query: "select array_to_string(countries, ',') as countries from \"BookTemplate\" where slug = $1"
+      params: ["${slug}"]
+      readOnly: true
+      assert:
+        first: { countries: KZ }
+
+  # Listed in Kazakhstan; not in Germany, for "other" or with no country at all.
+  - evalScript: >-
+      output.kz = output.slugs('&country=KZ'); output.de = output.slugs('&country=DE');
+      output.other = output.slugs('&country=other'); output.none = output.slugs('');
+      const examples = (country) => json(http.get(API + '/books/examples?country=' + country).body).map((b) => b.id);
+      output.exampleKz = examples('KZ').includes(bookId); output.exampleOther = examples('other').includes(bookId)
+  - assertTrue: ${output.kz.split(' ').includes(slug)}
+  - assertTrue: ${!output.de.split(' ').includes(slug)}
+  - assertTrue: ${!output.other.split(' ').includes(slug)}
+  - assertTrue: ${!output.none.split(' ').includes(slug)}
+  # Its book among the examples goes with it.
+  - assertTrue: ${output.exampleKz}
+  - assertTrue: ${!output.exampleOther}
+
+  # The site: in Kazakhstan (the local default) the catalog has it.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/catalog?lang=ru"
+  - waitForVisible: { testId: template-first-day-kindergarten }
+  - assertVisible: { testId: ui-country, contains: "Казахстан" }
+  - assertVisible: { testId: "template-${slug}" }
+  - assertVisible: { testId: template-nauryz-new-friend }
+
+  # Germany: the list updates without it, nor the books about Kazakhstan.
+  - tapOn: { testId: ui-country }
+  - waitForVisible: { testId: ui-country-search }
+  - tapOn: { testId: ui-country-search }
+  - inputText: "Герм"
+  - waitForVisible: { testId: ui-country-option-DE }
+  - tapOn: { testId: ui-country-option-DE }
+  - waitForVisible: "Buchkatalog"
+  - waitForVisible: "Der erste Tag in der Kita"
+  - assertNotVisible: { testId: "template-${slug}" }
+  - assertNotVisible: { testId: template-nauryz-new-friend }
+  - assertNotVisible: { testId: template-snow-leopard-alatau }
+
+  # Another country: only the books listed everywhere either.
+  - tapOn: { testId: ui-country }
+  - waitForVisible: { testId: ui-country-search }
+  - tapOn: { testId: ui-country-option-other }
+  - waitForVisible: { testId: ui-country, contains: "Anderes Land" }
+  - waitForVisible: { testId: template-first-day-kindergarten }
+  - assertNotVisible: { testId: "template-${slug}" }
+  - assertNotVisible: { testId: template-snow-leopard-alatau }
+  # Nor on the home page: its example is left out too.
+  - tapOn: { testId: nav-home }
+  - waitForVisible: { testId: hero-covers }
+  - assertNotVisible: { testId: "example-${bookId}" }
+
+  # The book's page still opens by a direct link.
+  - openLink: "${WEB}/catalog/${slug}"
+  - waitForVisible: { testId: template-title }
+  - assertVisible: { contains: "Plitsch-platsch" }
+
+  # The admin takes the country off again: everywhere.
+  - openLink: "${WEB}/admin/login?lang=ru"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - openLink: "${WEB}/admin/catalog/${slug}"
+  - waitForVisible: { testId: template-country-KZ }
+  - tapOn: { testId: template-country-remove-KZ }
+  - waitForVisible: { testId: template-countries-all }
+  - tapOn: { testId: template-save }
+  - waitForVisible: { testId: template-saved }
+  - evalScript: "output.de = output.slugs('&country=DE')"
+  - assertTrue: ${output.de.split(' ').includes(slug)}
+after:
+  - sql: { exec: "update \"BookTemplate\" set countries = '{}' where slug = $1", params: ["${slug}"] }
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

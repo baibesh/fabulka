@@ -55,6 +55,7 @@ import {
   questions,
   questionsInAnyLanguage,
   TemplatesService,
+  listedWhere,
 } from '../templates/templates.service';
 import { toyUploadPath } from '../toy/toys.controller';
 import { layoutOf, withHeadingCheck } from '../layout/layout';
@@ -279,10 +280,18 @@ export class BooksService implements OnModuleInit {
     }));
   }
 
-  /** Finished books the admin picked as examples, newest first. */
-  async listExamples(): Promise<ExampleBook[]> {
+  /**
+   * Finished books the admin picked as examples, newest first: those from a catalog book listed in
+   * `country` (see listedWhere), and every one of a story of its own.
+   */
+  async listExamples(country: string | null = null): Promise<ExampleBook[]> {
     const rows = await this.prisma.book.findMany({
-      where: { featured: true, status: 'done', title: { not: null } },
+      where: {
+        featured: true,
+        status: 'done',
+        title: { not: null },
+        OR: [{ templateId: null }, { template: listedWhere(country) }],
+      },
       orderBy: { createdAt: 'desc' },
       take: EXAMPLE_COUNT,
     });

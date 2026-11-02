@@ -5,7 +5,8 @@ import { ArrowRight, BookOpen, CirclePause } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useI18n } from "@/i18n/i18n";
-import { getStatus, listExamples, listTemplates } from "@/lib/api";
+import { getStatus } from "@/lib/api";
+import { useExamples, useTemplates } from "@/lib/use-catalog";
 import { useBookPrice } from "@/lib/use-price";
 import { PriceSkeleton } from "../book/price-skeleton";
 import { LogoMark } from "@/components/layout/logo";
@@ -41,7 +42,7 @@ export function Hero() {
   const { t, country, info } = useI18n();
   // Print and delivery are promised only where there is print; Kazakhstan's line names it.
   const lead = info.print ? (country === "KZ" ? "landing.hero.lead" : "landing.hero.lead.print") : "landing.hero.lead.pdf";
-  const { data: examples } = useQuery({ queryKey: ["examples"], queryFn: listExamples });
+  const { data: examples } = useExamples();
   const paused = useQuery({ queryKey: ["status"], queryFn: getStatus }).data?.paused === true;
   const price = useBookPrice("template");
 
@@ -83,10 +84,9 @@ export function Hero() {
   );
 }
 
-/** Covers of the first catalog books. They arrive from the API once the page is running. */
+/** Covers of the first catalog books listed in the visitor's country. They arrive from the API once the page is running. */
 function Covers() {
-  const { locale } = useI18n();
-  const { data: templates } = useQuery({ queryKey: ["templates", locale], queryFn: () => listTemplates(locale) });
+  const { data: templates } = useTemplates();
   const covers = templates?.filter((book) => book.coverUrl).slice(0, PILE.length) ?? [];
 
   return (

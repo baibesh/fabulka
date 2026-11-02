@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import {
   LanguageSchema,
+  catalogCountry,
   type Template,
   type TemplateSummary,
 } from '@fabulka/shared';
@@ -10,12 +11,20 @@ import { TemplatesService } from './templates.service';
 export class TemplatesController {
   constructor(private readonly templates: TemplatesService) {}
 
-  /** ?lang=ru|kk|en picks the interface language; anything else falls back to Russian. */
+  /**
+   * ?lang= picks the interface language (anything else falls back to Russian); ?country= the
+   * visitor's country on the site: the books listed there. "other", none or an unknown code get
+   * only the books listed everywhere.
+   */
   @Get()
-  list(@Query('lang') lang?: string): Promise<TemplateSummary[]> {
-    return this.templates.list(language(lang));
+  list(
+    @Query('lang') lang?: string,
+    @Query('country') country?: string,
+  ): Promise<TemplateSummary[]> {
+    return this.templates.list(language(lang), catalogCountry(country));
   }
 
+  /** Any published book, wherever it is listed: a direct link opens it from every country. */
   @Get(':slug')
   get(
     @Param('slug') slug: string,

@@ -52,6 +52,7 @@ export class TemplatesService implements OnModuleInit {
         // Covers ship with the web app (apps/web/public/catalog).
         coverUrl: `/catalog/${t.slug}.jpg`,
         translations: SEED_TRANSLATIONS[t.slug] ?? {},
+        countries: t.countries ?? [],
         sortOrder: i,
       })),
       skipDuplicates: true,
@@ -97,9 +98,13 @@ export class TemplatesService implements OnModuleInit {
     }
   }
 
-  async list(lang: Language = 'ru'): Promise<TemplateSummary[]> {
+  /** The published books listed in `country` (see listedWhere), in catalog order. */
+  async list(
+    lang: Language = 'ru',
+    country: string | null = null,
+  ): Promise<TemplateSummary[]> {
     const rows = await this.prisma.bookTemplate.findMany({
-      where: { published: true },
+      where: { published: true, ...listedWhere(country) },
       orderBy: { sortOrder: 'asc' },
     });
     return rows.map((row) => summary(row, lang));
@@ -150,6 +155,21 @@ export class TemplatesService implements OnModuleInit {
       throw new NotFoundException(`книги «${slug}» нет в каталоге`);
     return row;
   }
+}
+
+/**
+ * The catalog books listed to a visitor from `country` (an ISO code, or null for "other" and
+ * unknown ones): those with no countries, plus those with this one.
+ */
+export function listedWhere(
+  country: string | null,
+): Prisma.BookTemplateWhereInput {
+  const everywhere: Prisma.BookTemplateWhereInput = {
+    countries: { isEmpty: true },
+  };
+  return {
+    OR: country ? [everywhere, { countries: { has: country } }] : [everywhere],
+  };
 }
 
 export function questions(row: BookTemplate): TemplateQuestion[] {

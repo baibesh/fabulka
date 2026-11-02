@@ -199,6 +199,9 @@ model BookTemplate {
   translations Json     @default("{}")
   published    Boolean  @default(true)
   sortOrder    Int      @default(0)
+  /// Country codes (reference.countries) where the catalog lists it; empty: everywhere. Its page
+  /// opens from anywhere by a direct link.
+  countries    String[] @default([])
   books        Book[]   @relation("TemplateBooks")
   /// Finished books made from this template, shown on its page as examples: one per language.
   samples      TemplateSample[]

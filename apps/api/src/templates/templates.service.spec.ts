@@ -1,5 +1,5 @@
 import type { PrismaService } from '../prisma/prisma.service';
-import { TemplatesService } from './templates.service';
+import { listedWhere, TemplatesService } from './templates.service';
 
 /** A published catalog book row with what get() reads. */
 const template = {
@@ -80,6 +80,51 @@ describe('TemplatesService.get', () => {
       sampleBookId: null,
       sampleLanguage: null,
       sampleDetails: null,
+    });
+  });
+});
+
+describe('TemplatesService.list', () => {
+  function listing() {
+    const findMany = jest.fn().mockResolvedValue([template]);
+    const prisma = { bookTemplate: { findMany } };
+    return {
+      templates: new TemplatesService(prisma as unknown as PrismaService),
+      findMany,
+    };
+  }
+
+  it("lists the books with no countries and those with the visitor's", async () => {
+    const { templates, findMany } = listing();
+    const got = await templates.list('en', 'KZ');
+    expect(got.map((t) => t.slug)).toEqual(['bath-time']);
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        published: true,
+        OR: [{ countries: { isEmpty: true } }, { countries: { has: 'KZ' } }],
+      },
+      orderBy: { sortOrder: 'asc' },
+    });
+  });
+
+  it('lists only the books listed everywhere without a country', async () => {
+    const { templates, findMany } = listing();
+    await templates.list('en', null);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { published: true, OR: [{ countries: { isEmpty: true } }] },
+      }),
+    );
+  });
+});
+
+describe('listedWhere', () => {
+  it('matches the shared rule', () => {
+    expect(listedWhere('DE')).toEqual({
+      OR: [{ countries: { isEmpty: true } }, { countries: { has: 'DE' } }],
+    });
+    expect(listedWhere(null)).toEqual({
+      OR: [{ countries: { isEmpty: true } }],
     });
   });
 });

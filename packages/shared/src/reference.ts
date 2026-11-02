@@ -329,6 +329,22 @@ export function languageFor(country: Country, language: Language, countries: rea
   return languages.includes(language) ? language : languages[0];
 }
 
+/**
+ * The country a catalog list is for (GET /templates?country=, GET /books/examples?country=): an ISO
+ * code, upper-cased; null for "other", a missing or an unknown one — such visitors get only the
+ * books listed everywhere.
+ */
+export function catalogCountry(param: string | null | undefined): string | null {
+  const parsed = CountryCodeSchema.safeParse(param ?? "");
+  return parsed.success ? parsed.data : null;
+}
+
+/** A catalog book's countries as staff set them: distinct ISO codes; empty means everywhere. */
+export const TemplateCountriesSchema = z
+  .array(CountryCodeSchema)
+  .max(ISO_COUNTRY_CODES.length)
+  .refine((list) => new Set(list).size === list.length, "Duplicate country");
+
 /** Body of PUT /admin/reference/blocked: the countries the owner blocks on top of Meta's list. */
 export const UpdateBlockedSchema = z.object({
   extra: z

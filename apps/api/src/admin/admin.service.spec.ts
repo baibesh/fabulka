@@ -1,8 +1,10 @@
 import type { ConfigService } from '@nestjs/config';
+import { DEFAULT_COUNTRIES } from '@fabulka/shared';
 import type { BooksService } from '../books/books.service';
 import type { MethodologiesService } from '../methodologies/methodologies.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { QuotaService } from '../quota/quota.service';
+import type { ReferenceService } from '../reference/reference.service';
 import type { SettingsService } from '../settings/settings.service';
 import type { StorageService } from '../storage/storage.service';
 import type { TemplatesService } from '../templates/templates.service';
@@ -20,6 +22,9 @@ function makeService(prisma: unknown) {
     {} as TemplatesService,
     {} as MethodologiesService,
     curatedThemes(),
+    {
+      countries: () => Promise.resolve(DEFAULT_COUNTRIES),
+    } as unknown as ReferenceService,
     { get: () => 150 } as unknown as ConfigService,
   );
 }
@@ -103,6 +108,7 @@ describe('AdminService.updateTemplate samples', () => {
     stylePrompt: null,
     layoutTheme: null,
     blocks: null,
+    countries: ['KZ', 'XK'],
     _count: { books: 2 },
     samples: [{ language: 'ru', bookId: 'ru-book' }],
   };
@@ -173,5 +179,30 @@ describe('AdminService.updateTemplate samples', () => {
       service.updateTemplate('bath-time', { samples: { en: 'en-book' } }),
     ).rejects.toThrow();
     expect(tx.templateSample.create).not.toHaveBeenCalled();
+  });
+
+  it('sets the countries the catalog lists it in', async () => {
+    const { service, tx } = setup(null);
+    await service.updateTemplate('bath-time', { countries: ['KZ', 'DE'] });
+    expect(tx.bookTemplate.update).toHaveBeenCalledWith({
+      where: { slug: 'bath-time' },
+      data: { countries: ['KZ', 'DE'] },
+    });
+    expect((await service.template('bath-time')).countries).toEqual([
+      'KZ',
+      'XK',
+    ]);
+  });
+
+  it('refuses a country the site does not offer, but keeps one it has', async () => {
+    const { service, tx } = setup(null);
+    // FR is a real code, but not in reference.countries.
+    await expect(
+      service.updateTemplate('bath-time', { countries: ['KZ', 'FR'] }),
+    ).rejects.toThrow('FR');
+    expect(tx.bookTemplate.update).not.toHaveBeenCalled();
+    // XK is no longer offered, but the book already had it.
+    await service.updateTemplate('bath-time', { countries: ['XK'] });
+    expect(tx.bookTemplate.update).toHaveBeenCalled();
   });
 });

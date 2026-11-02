@@ -1,10 +1,9 @@
 "use client";
 
-import { useQuery } from "@/lib/query";
 import { Wand2 } from "lucide-react";
 import Link from "next/link";
 import { useI18n } from "@/i18n/i18n";
-import { listTemplates } from "@/lib/api";
+import { useTemplates } from "@/lib/use-catalog";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { useBookPrice } from "@/lib/use-price";
 import { PriceSkeleton } from "../book/price-skeleton";
@@ -20,8 +19,8 @@ const PREVIEW_BOOKS = 6;
  * is the strip on the home page: the first books only, side by side and swiped through on phones.
  */
 export function Catalog({ preview = false }: { preview?: boolean }) {
-  const { t, locale } = useI18n();
-  const { data: templates, error } = useQuery({ queryKey: ["templates", locale], queryFn: () => listTemplates(locale) });
+  const { t } = useI18n();
+  const { data: templates, error } = useTemplates();
   const { data: methods } = useMethodologies();
   const methodName = (slug: string) => methods?.find((m) => m.slug === slug)?.name;
   const templatePrice = useBookPrice("template");

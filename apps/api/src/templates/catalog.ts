@@ -14,6 +14,8 @@ export interface SeedTemplate {
   stylePrompt?: string;
   /** Muse Image prompt for the catalog cover (scripts/catalog-covers.ts). */
   coverPrompt: string;
+  /** Country codes where the catalog lists it (BookTemplate.countries); left out: everywhere. */
+  countries?: string[];
 }
 
 /**
@@ -78,6 +80,8 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
   },
   {
     slug: 'snow-leopard-alatau',
+    // About Kazakhstan: listed only there (migration z14_template_countries for older databases).
+    countries: ['KZ'],
     title: 'Тайна снежного барса',
     summary:
       'Путешествие в горы Алатау: беркут, туман, горное озеро и потерявшийся детёныш снежного барса.',
@@ -233,6 +237,8 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
   },
   {
     slug: 'nauryz-new-friend',
+    // About Kazakhstan: listed only there (migration z14_template_countries for older databases).
+    countries: ['KZ'],
     title: 'Наурыз с новым другом',
     summary:
       'Весенний праздник в родном городе: наурыз-коже, юрта, качели алтыбакан и друг, который недавно приехал из другой страны.',

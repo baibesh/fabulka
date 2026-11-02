@@ -12,7 +12,7 @@ import {
   TemplateBlocksSchema,
   ThemeCheckSchema,
 } from "./layout";
-import { countryInfo, type City, type Country, type CountryEntry, type Currency, type PrintFormat, type Prices } from "./reference";
+import { TemplateCountriesSchema, countryInfo, type City, type Country, type CountryEntry, type Currency, type PrintFormat, type Prices } from "./reference";
 
 export * from "./language";
 export * from "./methodologies";
@@ -643,6 +643,8 @@ export const AdminTemplateSchema = TemplateSchema.omit({ sampleDetails: true, sa
   layoutTheme: z.string().nullable(),
   /** The blocks its books get; null: the default ones (DEFAULT_BLOCKS). */
   blocks: TemplateBlocksSchema.nullable(),
+  /** Country codes (reference.countries) where the catalog lists it; empty: everywhere. */
+  countries: z.array(z.string()),
   books: z.number().int(),
 });
 export type AdminTemplate = z.infer<typeof AdminTemplateSchema>;
@@ -667,6 +669,11 @@ export const UpdateTemplateSchema = z
      * on its page, or null for none there. Languages left out keep theirs.
      */
     samples: z.partialRecord(LanguageSchema, z.string().min(1).nullable()),
+    /**
+     * Where the catalog lists it: codes from reference.countries (the API refuses others), or
+     * empty for everywhere. Its page opens from anywhere by a direct link.
+     */
+    countries: TemplateCountriesSchema,
     published: z.boolean(),
     sortOrder: z.number().int(),
   })

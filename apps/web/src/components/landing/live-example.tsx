@@ -5,13 +5,14 @@ import { ArrowDown } from "lucide-react";
 import Link from "next/link";
 import { BookReader } from "@/components/book/book-reader";
 import { useI18n } from "@/i18n/i18n";
-import { getBook, listExamples } from "@/lib/api";
+import { getBook } from "@/lib/api";
+import { useExamples } from "@/lib/use-catalog";
 import { Section } from "./section";
 
 /** The newest example book, open to flip through right here; nothing at all when there is none. */
 export function LiveExample() {
   const { t } = useI18n();
-  const { data: examples } = useQuery({ queryKey: ["examples"], queryFn: listExamples });
+  const { data: examples } = useExamples();
   const newest = examples?.[0];
   const { data: book } = useQuery({
     queryKey: ["book", newest?.id],

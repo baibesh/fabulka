@@ -23,6 +23,7 @@ import { BooksService, withTemplate } from '../books/books.service';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { QuotaService, startOfDay } from '../quota/quota.service';
+import { ReferenceService } from '../reference/reference.service';
 import { SettingsService } from '../settings/settings.service';
 import { StorageService } from '../storage/storage.service';
 import { questions, TemplatesService } from '../templates/templates.service';
@@ -51,6 +52,7 @@ export class AdminService {
     private readonly templates: TemplatesService,
     private readonly methodologies: MethodologiesService,
     private readonly themes: ThemesService,
+    private readonly reference: ReferenceService,
     config: ConfigService,
   ) {
     this.budgetUsd = Number(config.get('MODEL_BUDGET_USD', 150));
@@ -298,6 +300,7 @@ export class AdminService {
         `Тема «${patch.layoutTheme}» не подходит для языков ${current.languages.join(', ')}`,
       );
     }
+    if (patch.countries) await this.assertCountries(patch.countries, current);
     const { blocks, samples, ...rest } = patch;
     await this.prisma.$transaction(async (tx) => {
       const row = await tx.bookTemplate.update({
@@ -359,6 +362,25 @@ export class AdminService {
       throw new BadRequestException(`Эта книга уже образец для «${other}»`);
   }
 
+  /**
+   * A catalog book is listed only in countries the site offers (reference.countries); one it has
+   * already may stay after the owner takes it off the list.
+   */
+  private async assertCountries(
+    codes: string[],
+    current: AdminTemplate,
+  ): Promise<void> {
+    const offered = new Set([
+      ...(await this.reference.countries()).map((c) => c.code),
+      ...current.countries,
+    ]);
+    const unknown = codes.filter((code) => !offered.has(code));
+    if (unknown.length)
+      throw new BadRequestException(
+        `Страны ${unknown.join(', ')} нет в справочнике стран`,
+      );
+  }
+
   setPaused(paused: boolean) {
     return this.settings.setPaused(paused);
   }
@@ -384,6 +406,7 @@ export class AdminService {
       stylePrompt: row.stylePrompt,
       layoutTheme: row.layoutTheme,
       blocks: TemplateBlocksSchema.safeParse(row.blocks).data ?? null,
+      countries: row.countries,
       samples: Object.fromEntries(
         row.samples.map((s) => [s.language, s.bookId]),
       ),
