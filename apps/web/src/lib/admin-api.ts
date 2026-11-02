@@ -51,7 +51,25 @@ import {
   type Prices,
   type UpdateMethodology,
   type UpdateTemplate,
+  AdminMeSchema,
+  AdminSeoPageSchema,
+  PublishSeoResultSchema,
+  RedirectSchema,
+  SeoHistoryEntrySchema,
+  SeoImageResultSchema,
+  SeoSettingsSchema,
+  type AdminMe,
+  type AdminSeoPage,
+  type Language,
+  type PublishSeoResult,
+  type Redirect,
+  type RedirectInput,
+  type SaveSeoPage,
+  type SeoHistoryEntry,
+  type SeoImageResult,
+  type SeoSettings,
 } from "@fabulka/shared";
+import { z } from "zod";
 import { request } from "./api";
 
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
@@ -63,7 +81,10 @@ export async function adminLoginOptions(): Promise<AdminLoginOptions> {
   return AdminLoginOptionsSchema.parse(await request("/api/admin/login-options"));
 }
 export const adminLogout = () => request("/api/admin/logout", { method: "POST" });
-export const adminMe = () => request("/api/admin/me");
+/** Who is signed in and which sections their roles open. */
+export async function adminMe(): Promise<AdminMe> {
+  return AdminMeSchema.parse(await request("/api/admin/me"));
+}
 
 export async function adminStats(): Promise<AdminStats> {
   return AdminStatsSchema.parse(await request("/api/admin/stats"));
@@ -210,4 +231,63 @@ export async function saveFaq(faq: FaqItem[]): Promise<FaqItem[]> {
 /** Refused with 400 country_policy_blocked for a code on Meta's list. */
 export async function saveBlocked(extra: string[]): Promise<BlockedCountries> {
   return BlockedCountriesSchema.parse(await request("/api/admin/reference/blocked", json("PUT", { extra })));
+}
+
+// ---- SEO (admin «SEO») ----------------------------------------------------------------------
+
+export async function seoPages(language: Language): Promise<AdminSeoPage[]> {
+  return AdminSeoPageSchema.array().parse(await request(`/api/admin/seo/pages?lang=${language}`));
+}
+
+export async function seoPage(key: string, language: Language): Promise<AdminSeoPage> {
+  return AdminSeoPageSchema.parse(await request(`/api/admin/seo/page?${new URLSearchParams({ key, lang: language })}`));
+}
+
+export async function seoPending(): Promise<Record<string, number>> {
+  return z.record(z.string(), z.number()).parse(await request("/api/admin/seo/pending"));
+}
+
+export async function saveSeoPage(body: SaveSeoPage): Promise<AdminSeoPage> {
+  return AdminSeoPageSchema.parse(await request("/api/admin/seo/page", json("PUT", body)));
+}
+
+/** One page in one language, or (nothing) every page with unpublished changes. */
+export async function publishSeo(target?: { key: string; language: Language }): Promise<PublishSeoResult> {
+  return PublishSeoResultSchema.parse(await request("/api/admin/seo/publish", json("POST", target ?? {})));
+}
+
+export async function seoHistory(query: { key: string; language: Language } | { kind: "redirect" | "settings" }): Promise<SeoHistoryEntry[]> {
+  const params = "kind" in query ? new URLSearchParams({ kind: query.kind }) : new URLSearchParams({ key: query.key, lang: query.language });
+  return SeoHistoryEntrySchema.array().parse(await request(`/api/admin/seo/history?${params}`));
+}
+
+export async function revertSeo(id: string): Promise<AdminSeoPage> {
+  return AdminSeoPageSchema.parse(await request(`/api/admin/seo/history/${encodeURIComponent(id)}/revert`, { method: "POST" }));
+}
+
+export async function uploadSeoImage(image: string): Promise<SeoImageResult> {
+  return SeoImageResultSchema.parse(await request("/api/admin/seo/og-image", json("POST", { image })));
+}
+
+export async function seoRedirects(): Promise<Redirect[]> {
+  return RedirectSchema.array().parse(await request("/api/admin/seo/redirects"));
+}
+
+export async function createRedirect(input: RedirectInput): Promise<Redirect> {
+  return RedirectSchema.parse(await request("/api/admin/seo/redirects", json("POST", input)));
+}
+
+export async function updateRedirect(id: string, input: RedirectInput): Promise<Redirect> {
+  return RedirectSchema.parse(await request(`/api/admin/seo/redirects/${encodeURIComponent(id)}`, json("PUT", input)));
+}
+
+export const deleteRedirect = (id: string) => request(`/api/admin/seo/redirects/${encodeURIComponent(id)}`, { method: "DELETE" });
+
+export async function adminSeoSettings(): Promise<SeoSettings> {
+  return SeoSettingsSchema.parse(await request("/api/admin/seo/settings"));
+}
+
+export async function saveSeoSettings(settings: SeoSettings): Promise<SeoSettings & { revalidated: boolean }> {
+  const saved = (await request("/api/admin/seo/settings", json("PUT", settings))) as { revalidated?: unknown };
+  return { ...SeoSettingsSchema.parse(saved), revalidated: saved.revalidated === true };
 }

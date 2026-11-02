@@ -14,8 +14,8 @@ import { Input } from "@/components/ui/input";
 import { ErrorText } from "@/components/ui/notice";
 
 /**
- * The way in: Keycloak (realm role `admin`, 2FA there) and, only when ADMIN_PASSWORD_LOGIN is on, the
- * emergency email and password. An older API without the options gets the password form.
+ * The way in: Keycloak (realm role `admin`, or `seo` for the SEO section only; 2FA there) and, only
+ * when ADMIN_PASSWORD_LOGIN is on, the emergency email and password. An older API without the options gets the password form.
  */
 export function LoginForm() {
   const { t } = useAdminI18n();

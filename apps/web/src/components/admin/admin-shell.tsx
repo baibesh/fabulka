@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, GraduationCap, LayoutDashboard, Library, ListChecks, LogOut, Package, ScrollText, Palette } from "lucide-react";
+import type { AdminPermission } from "@fabulka/shared";
+import { BookOpen, GraduationCap, LayoutDashboard, Library, ListChecks, LogOut, Package, ScrollText, Palette, Search, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
@@ -12,18 +13,29 @@ import { ApiError } from "@/lib/api";
 import { LanguagePicker } from "@/components/layout/locale-pickers";
 import { useAdminI18n } from "./ui";
 
-const NAV: { href: string; label: MessageKey; icon: typeof BookOpen }[] = [
-  { href: "/admin", label: "admin.nav.dashboard", icon: LayoutDashboard },
-  { href: "/admin/books", label: "admin.nav.books", icon: BookOpen },
-  { href: "/admin/orders", label: "admin.nav.orders", icon: Package },
-  { href: "/admin/catalog", label: "admin.nav.catalog", icon: Library },
-  { href: "/admin/methodologies", label: "admin.nav.methodologies", icon: GraduationCap },
-  { href: "/admin/themes", label: "admin.nav.themes", icon: Palette },
-  { href: "/admin/reference", label: "admin.nav.reference", icon: ListChecks },
-  { href: "/admin/journal", label: "admin.nav.journal", icon: ScrollText },
+/** The admin's sections; each is a permission (ROLE_PERMISSIONS in @fabulka/shared says who opens it). */
+const NAV: { href: string; label: MessageKey; icon: typeof BookOpen; permission: AdminPermission }[] = [
+  { href: "/admin", label: "admin.nav.dashboard", icon: LayoutDashboard, permission: "dashboard" },
+  { href: "/admin/books", label: "admin.nav.books", icon: BookOpen, permission: "books" },
+  { href: "/admin/orders", label: "admin.nav.orders", icon: Package, permission: "orders" },
+  { href: "/admin/catalog", label: "admin.nav.catalog", icon: Library, permission: "catalog" },
+  { href: "/admin/methodologies", label: "admin.nav.methodologies", icon: GraduationCap, permission: "methodologies" },
+  { href: "/admin/themes", label: "admin.nav.themes", icon: Palette, permission: "themes" },
+  { href: "/admin/reference", label: "admin.nav.reference", icon: ListChecks, permission: "reference" },
+  { href: "/admin/journal", label: "admin.nav.journal", icon: ScrollText, permission: "journal" },
+  { href: "/admin/seo", label: "admin.nav.seo", icon: Search, permission: "seo" },
 ];
 
-/** The admin frame: checks the session, then shows the sidebar and the page. */
+/** The section a path belongs to: the nav entry whose address it is or is under. */
+export function sectionOf(pathname: string): AdminPermission {
+  const found = NAV.filter(({ href }) => href !== "/admin").find(({ href }) => pathname === href || pathname.startsWith(`${href}/`));
+  return found?.permission ?? "dashboard";
+}
+
+/**
+ * The admin frame: checks the session, then shows the sidebar with the sections the roles open and
+ * the page, or a 403 view for a section they do not (the API refuses it too).
+ */
 export function AdminShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -31,9 +43,19 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const me = useQuery({ queryKey: ["admin", "me"], queryFn: adminMe, retry: false });
   const signedOut = me.error instanceof ApiError && me.error.status === 401;
 
+  const permissions = me.data?.permissions;
+  const nav = NAV.filter(({ permission }) => permissions?.includes(permission));
+  const section = sectionOf(pathname);
+  const allowed = permissions?.includes(section) ?? false;
+  // The dashboard is someone else's first page: a role without it starts on its first section.
+  const start = section === "dashboard" && pathname === "/admin" && permissions && !allowed ? nav[0]?.href : undefined;
+
   useEffect(() => {
     if (signedOut) router.replace("/admin/login");
   }, [signedOut, router]);
+  useEffect(() => {
+    if (start) router.replace(start);
+  }, [start, router]);
 
   if (!me.isSuccess) return <p className="p-8 text-muted">{me.isError && !signedOut ? me.error.message : t("admin.loading")}</p>;
 
@@ -48,7 +70,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <aside className="flex shrink-0 gap-1 border-b border-border bg-card p-3 md:sticky md:top-0 md:h-screen md:w-56 md:flex-col md:overflow-y-auto md:border-r md:border-b-0 md:p-4">
         <p className="hidden px-3 pb-4 text-sm font-extrabold uppercase tracking-widest text-accent md:block">{t("admin.title")}</p>
         <nav className="flex flex-1 gap-1 overflow-x-auto md:flex-col">
-          {NAV.map(({ href, label, icon: Icon }) => {
+          {nav.map(({ href, label, icon: Icon }) => {
             const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
             return (
               <Link
@@ -77,7 +99,27 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <span className="hidden md:inline">{t("admin.logout")}</span>
         </button>
       </aside>
-      <main data-density="compact" className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-8">{children}</main>
+      <main data-density="compact" className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-8">
+        {allowed ? children : start ? <p className="text-muted">{t("admin.loading")}</p> : <Forbidden home={nav[0]?.href} />}
+      </main>
+    </div>
+  );
+}
+
+/** A section the signed-in roles do not open: 403, with the way to one they do. */
+function Forbidden({ home }: { home?: string }) {
+  const { t } = useAdminI18n();
+  return (
+    <div data-testid="admin-forbidden" className="flex max-w-lg flex-col items-start gap-3 py-12">
+      <ShieldAlert className="size-10 text-warning" />
+      <p className="text-sm font-bold uppercase tracking-widest text-muted">403</p>
+      <h1 className="text-2xl font-extrabold">{t("admin.forbidden.title")}</h1>
+      <p className="text-muted">{t("admin.forbidden.text")}</p>
+      {home && (
+        <Link href={home} data-testid="admin-forbidden-home" className="font-semibold text-accent hover:underline">
+          {t("admin.forbidden.back")}
+        </Link>
+      )}
     </div>
   );
 }
