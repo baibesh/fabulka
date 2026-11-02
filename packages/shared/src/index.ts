@@ -20,6 +20,8 @@ export * from "./reference";
 export * from "./labels";
 export * from "./layout";
 export * from "./locale-path";
+export * from "./seo";
+export * from "./admin-access";
 
 /** What the parent tells us about the child. */
 export const ChildProfileSchema = z.object({
@@ -278,7 +280,15 @@ export type ExampleBook = z.infer<typeof ExampleBookSchema>;
  */
 export const SitemapEntriesSchema = z.object({
   templates: z.array(z.object({ slug: z.string(), updatedAt: z.string() })),
-  examples: z.array(z.object({ id: z.string(), updatedAt: z.string() })),
+  examples: z.array(
+    z.object({
+      id: z.string(),
+      updatedAt: z.string(),
+      /** For the book page's title and OG image (older APIs leave them out). */
+      title: z.string().nullable().optional(),
+      heroImageUrl: z.string().nullable().optional(),
+    }),
+  ),
 });
 export type SitemapEntries = z.infer<typeof SitemapEntriesSchema>;
 
@@ -858,6 +868,8 @@ export const AuthUserSchema = z.object({
   name: z.string().nullable(),
   /** Has the Keycloak realm role `admin`: the admin session cookie is set too. */
   admin: z.boolean(),
+  /** Has the Keycloak realm role `seo` (and not `admin`): the admin opens on its SEO section only. */
+  seo: z.boolean().default(false),
 });
 export type AuthUser = z.infer<typeof AuthUserSchema>;
 
