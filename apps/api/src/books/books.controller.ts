@@ -80,7 +80,8 @@ export class BooksController {
 
   /**
    * Books for every visitor to open; declared before :id so "examples" is not taken for an id.
-   * ?country= as for GET /templates: a book from a catalog book is shown where that one is listed.
+   * ?country= as for GET /templates: a book is shown in its own countries if staff set any, else
+   * where its catalog book is listed, else everywhere (exampleShownIn).
    */
   @Get('examples')
   examples(@Query('country') country?: string): Promise<ExampleBook[]> {

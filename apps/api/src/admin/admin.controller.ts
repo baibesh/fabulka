@@ -150,7 +150,7 @@ export class AdminController {
     @Param('id') id: string,
     @Body(new ZodPipe(UpdateBookSchema)) body: UpdateBook,
   ) {
-    return this.admin.setFeatured(id, body.featured);
+    return this.admin.updateBook(id, body);
   }
 
   /** Staff pin a page's layout or change the theme; the book is re-rendered and re-checked. */

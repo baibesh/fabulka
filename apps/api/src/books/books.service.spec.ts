@@ -182,6 +182,22 @@ describe('BooksService', () => {
     });
   });
 
+  /** A featured example row: its own countries and its catalog book's (null: a story of its own). */
+  function exampleRow(
+    id: string,
+    countries: string[],
+    template: string[] | null,
+  ) {
+    return {
+      id,
+      title: `Книга ${id}`,
+      language: 'ru',
+      heroImagePath: null,
+      countries,
+      template: template && { countries: template },
+    };
+  }
+
   it('lists finished featured books as examples, newest first', async () => {
     const findMany = jest.fn().mockResolvedValue([
       {
@@ -189,6 +205,8 @@ describe('BooksService', () => {
         title: 'Арман и снежный барс',
         language: 'kk',
         heroImagePath: null,
+        countries: [],
+        template: null,
       },
     ]);
 
@@ -196,26 +214,10 @@ describe('BooksService', () => {
       'KZ',
     );
 
-    // Books of a story of their own, and from catalog books listed everywhere or in Kazakhstan.
     expect(findMany).toHaveBeenCalledWith({
-      where: {
-        featured: true,
-        status: 'done',
-        title: { not: null },
-        OR: [
-          { templateId: null },
-          {
-            template: {
-              OR: [
-                { countries: { isEmpty: true } },
-                { countries: { has: 'KZ' } },
-              ],
-            },
-          },
-        ],
-      },
+      where: { featured: true, status: 'done', title: { not: null } },
       orderBy: { createdAt: 'desc' },
-      take: 12,
+      include: { template: { select: { countries: true } } },
     });
     expect(examples).toEqual([
       {
@@ -227,19 +229,48 @@ describe('BooksService', () => {
     ]);
   });
 
-  it('shows "other" visitors only examples listed everywhere', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    await makeService({ book: { findMany } }).listExamples(null);
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          OR: [
-            { templateId: null },
-            { template: { OR: [{ countries: { isEmpty: true } }] } },
-          ],
-        }) as unknown,
-      }),
+  it("shows each example by its own countries, else its catalog book's", async () => {
+    const rows = [
+      exampleRow('own-kz', ['KZ'], null),
+      exampleRow('own-de-over-kz-template', ['DE'], ['KZ']),
+      exampleRow('template-kz', [], ['KZ']),
+      exampleRow('template-everywhere', [], []),
+      exampleRow('own-story', [], null),
+    ];
+    const findMany = jest.fn().mockResolvedValue(rows);
+    const ids = async (country: string | null) =>
+      (await makeService({ book: { findMany } }).listExamples(country)).map(
+        (b) => b.id,
+      );
+
+    expect(await ids('KZ')).toEqual([
+      'own-kz',
+      'template-kz',
+      'template-everywhere',
+      'own-story',
+    ]);
+    expect(await ids('DE')).toEqual([
+      'own-de-over-kz-template',
+      'template-everywhere',
+      'own-story',
+    ]);
+    // "other", none and unknown codes: only the books shown everywhere.
+    expect(await ids(null)).toEqual(['template-everywhere', 'own-story']);
+  });
+
+  it('keeps at most 12 examples after leaving out the hidden ones', async () => {
+    const rows = [
+      ...Array.from({ length: 5 }, (_, i) =>
+        exampleRow(`kz${i}`, ['KZ'], null),
+      ),
+      ...Array.from({ length: 14 }, (_, i) => exampleRow(`all${i}`, [], null)),
+    ];
+    const findMany = jest.fn().mockResolvedValue(rows);
+    const examples = await makeService({ book: { findMany } }).listExamples(
+      'DE',
     );
+    expect(examples).toHaveLength(12);
+    expect(examples[0].id).toBe('all0');
   });
 
   describe('a book of your own', () => {

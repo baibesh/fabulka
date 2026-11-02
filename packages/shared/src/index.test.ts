@@ -14,7 +14,10 @@ import {
   localizedTextSchema,
   pickLanguage,
   UpdateTemplateSchema,
+  UpdateBookSchema,
   catalogCountry,
+  exampleShownIn,
+  showcaseCountries,
   methodologyText,
   cityId,
   cityName,
@@ -545,6 +548,56 @@ describe("template countries", () => {
     expect(catalogCountry(undefined)).toBeNull();
     expect(catalogCountry("")).toBeNull();
     expect(catalogCountry("XX")).toBeNull();
+  });
+});
+
+describe("example countries", () => {
+  it("takes the book's own countries first, then its catalog book's, else none", () => {
+    expect(showcaseCountries(["KZ"], ["DE"])).toEqual(["KZ"]);
+    expect(showcaseCountries([], ["DE"])).toEqual(["DE"]);
+    expect(showcaseCountries([], [])).toEqual([]);
+    expect(showcaseCountries([], null)).toEqual([]);
+  });
+
+  it("shows a story of its own limited to Kazakhstan there only", () => {
+    expect(exampleShownIn(["KZ"], null, "KZ")).toBe(true);
+    expect(exampleShownIn(["KZ"], null, "DE")).toBe(false);
+    // "other", none and unknown codes reach here as null.
+    expect(exampleShownIn(["KZ"], null, catalogCountry("other"))).toBe(false);
+    expect(exampleShownIn(["KZ"], null, catalogCountry(undefined))).toBe(false);
+    expect(exampleShownIn(["KZ"], null, catalogCountry("XX"))).toBe(false);
+  });
+
+  it("follows the catalog book when the book has no countries of its own", () => {
+    expect(exampleShownIn([], ["KZ"], "KZ")).toBe(true);
+    expect(exampleShownIn([], ["KZ"], "DE")).toBe(false);
+    expect(exampleShownIn([], ["KZ"], null)).toBe(false);
+  });
+
+  it("lets the book's own countries override its catalog book's", () => {
+    expect(exampleShownIn(["DE"], ["KZ"], "DE")).toBe(true);
+    expect(exampleShownIn(["DE"], ["KZ"], "KZ")).toBe(false);
+    expect(exampleShownIn(["DE", "KZ"], [], "KZ")).toBe(true);
+    expect(exampleShownIn(["DE"], [], null)).toBe(false);
+  });
+
+  it("shows a book limited nowhere to everyone, \"other\" included", () => {
+    expect(exampleShownIn([], null, "DE")).toBe(true);
+    expect(exampleShownIn([], null, null)).toBe(true);
+    expect(exampleShownIn([], [], null)).toBe(true);
+  });
+
+  it("patches a book's featured flag or countries, validated like a template's", () => {
+    expect(UpdateBookSchema.parse({ countries: [" kz"] })).toEqual({ countries: ["KZ"] });
+    expect(UpdateBookSchema.parse({ countries: [] })).toEqual({ countries: [] });
+    expect(UpdateBookSchema.parse({ featured: true })).toEqual({ featured: true });
+    expect(UpdateBookSchema.parse({ featured: false, countries: ["DE"] })).toEqual({ featured: false, countries: ["DE"] });
+    expect(UpdateBookSchema.safeParse({}).success).toBe(false);
+    expect(UpdateBookSchema.safeParse({ countries: ["other"] }).success).toBe(false);
+    expect(UpdateBookSchema.safeParse({ countries: ["XX"] }).success).toBe(false);
+    expect(UpdateBookSchema.safeParse({ countries: ["KZ", "kz"] }).success).toBe(false);
+    expect(UpdateBookSchema.safeParse({ countries: "KZ" }).success).toBe(false);
+    expect(UpdateBookSchema.safeParse({ featured: "yes" }).success).toBe(false);
   });
 });
 

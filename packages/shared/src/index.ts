@@ -593,13 +593,30 @@ export const AdminBookSchema = BookSchema.extend({
   demo: z.boolean(),
   /** Shown on the home page among the example books. */
   featured: z.boolean(),
+  /**
+   * Where it is shown as an example (reference.countries codes); empty: as `templateCountries`
+   * say (showcaseCountries).
+   */
+  countries: z.array(z.string()),
+  /** Its catalog book's countries (empty: everywhere); null for a story of its own. */
+  templateCountries: z.array(z.string()).nullable(),
   costUsd: z.number(),
   clientKey: z.string(),
 });
 export type AdminBook = z.infer<typeof AdminBookSchema>;
 
-/** Body of PATCH /admin/books/:id. */
-export const UpdateBookSchema = z.object({ featured: z.boolean() });
+/** Body of PATCH /admin/books/:id: what to change, at least one of them. */
+export const UpdateBookSchema = z
+  .object({
+    featured: z.boolean(),
+    /**
+     * Where it is shown as an example: codes from reference.countries (the API refuses others), or
+     * empty to follow its catalog book's countries (everywhere for a story of its own).
+     */
+    countries: TemplateCountriesSchema,
+  })
+  .partial()
+  .refine((patch) => patch.featured !== undefined || patch.countries !== undefined, "Nothing to change");
 export type UpdateBook = z.infer<typeof UpdateBookSchema>;
 
 export const AdminOrderSchema = OrderSchema.extend({

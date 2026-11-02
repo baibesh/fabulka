@@ -30,7 +30,12 @@ function makeService(prisma: unknown) {
 }
 
 /** A book row with what AdminService.book reads besides the DTO. */
-const row = (status: string, featured: boolean) => ({
+const row = (
+  status: string,
+  featured: boolean,
+  countries: string[] = [],
+  template: string[] | null = null,
+) => ({
   id: 'b1',
   status,
   featured,
@@ -39,52 +44,95 @@ const row = (status: string, featured: boolean) => ({
   answers: null,
   country: null,
   demo: false,
+  countries,
+  template: template && { slug: 'nauryz-new-friend', countries: template },
   costUsd: 0,
   clientKey: 'k',
 });
 
-describe('AdminService.setFeatured', () => {
+describe('AdminService.updateBook', () => {
   it('puts a finished book among the examples', async () => {
     const update = jest.fn().mockResolvedValue({});
     const findUnique = jest
       .fn()
-      .mockResolvedValueOnce({ status: 'done' })
+      .mockResolvedValueOnce({ status: 'done', countries: [] })
       .mockResolvedValueOnce(row('done', true));
     const service = makeService({ book: { findUnique, update } });
 
-    const book = await service.setFeatured('b1', true);
+    const book = await service.updateBook('b1', { featured: true });
 
     expect(update).toHaveBeenCalledWith({
       where: { id: 'b1' },
       data: { featured: true },
     });
     expect(book.featured).toBe(true);
+    expect(book.countries).toEqual([]);
+    expect(book.templateCountries).toBeNull();
   });
 
   it('refuses a book that is not finished, but lets one be taken off', async () => {
     const update = jest.fn().mockResolvedValue({});
     const findUnique = jest
       .fn()
-      .mockResolvedValueOnce({ status: 'failed' })
-      .mockResolvedValueOnce({ status: 'failed' })
+      .mockResolvedValueOnce({ status: 'failed', countries: [] })
+      .mockResolvedValueOnce({ status: 'failed', countries: [] })
       .mockResolvedValueOnce(row('failed', false));
     const service = makeService({ book: { findUnique, update } });
 
-    await expect(service.setFeatured('b1', true)).rejects.toThrow(
+    await expect(service.updateBook('b1', { featured: true })).rejects.toThrow(
       'только готовую книгу',
     );
     expect(update).not.toHaveBeenCalled();
-    await service.setFeatured('b1', false);
+    await service.updateBook('b1', { featured: false });
     expect(update).toHaveBeenCalledWith({
       where: { id: 'b1' },
       data: { featured: false },
     });
   });
 
+  it("sets the countries it is shown in and reads back its catalog book's", async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const findUnique = jest
+      .fn()
+      .mockResolvedValueOnce({ status: 'done', countries: [] })
+      .mockResolvedValueOnce(row('done', true, ['KZ'], ['KZ', 'DE']));
+    const service = makeService({ book: { findUnique, update } });
+
+    const book = await service.updateBook('b1', { countries: ['KZ'] });
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'b1' },
+      data: { countries: ['KZ'] },
+    });
+    expect(book.countries).toEqual(['KZ']);
+    expect(book.templateCountries).toEqual(['KZ', 'DE']);
+  });
+
+  it('refuses a country the site does not offer, but keeps one the book has', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const findUnique = jest
+      .fn()
+      .mockResolvedValueOnce({ status: 'done', countries: ['XK'] })
+      .mockResolvedValueOnce({ status: 'done', countries: ['XK'] })
+      .mockResolvedValueOnce(row('done', true, ['XK']));
+    const service = makeService({ book: { findUnique, update } });
+
+    // FR is a real code, but not in reference.countries.
+    await expect(
+      service.updateBook('b1', { countries: ['KZ', 'FR'] }),
+    ).rejects.toThrow('FR');
+    expect(update).not.toHaveBeenCalled();
+    // XK is no longer offered, but the book already had it.
+    await service.updateBook('b1', { countries: ['XK', 'KZ'] });
+    expect(update).toHaveBeenCalled();
+  });
+
   it('says when the book does not exist', async () => {
     const findUnique = jest.fn().mockResolvedValue(null);
     await expect(
-      makeService({ book: { findUnique } }).setFeatured('nope', true),
+      makeService({ book: { findUnique } }).updateBook('nope', {
+        featured: true,
+      }),
     ).rejects.toThrow('book nope not found');
   });
 });

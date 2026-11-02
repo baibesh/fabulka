@@ -5,7 +5,10 @@ import { Download, ExternalLink, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { adminBook, bookCalls, deleteBook, pinLayout, setFeatured } from "@/lib/admin-api";
+import { adminBook, bookCalls, deleteBook, pinLayout, updateBook } from "@/lib/admin-api";
+import { useCountryName } from "@/hooks/use-country-name";
+import { Flag } from "@/components/ui/flag";
+import { CountriesField } from "./countries-field";
 import { CallDetail } from "./journal/call-detail";
 import { CallStatus } from "./journal/call-status";
 import { BOOK_STATUS_TONE, Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
@@ -17,7 +20,7 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { BackLink } from "@/components/ui/page";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { BookReader } from "@/components/book/book-reader";
-import { PAGE_VARIANTS, type AdminBook, type LayoutQa, type PageVariant } from "@fabulka/shared";
+import { PAGE_VARIANTS, showcaseCountries, type AdminBook, type LayoutQa, type PageVariant } from "@fabulka/shared";
 import { themeName } from "@/lib/themes";
 import { Select } from "@/components/ui/input";
 
@@ -110,6 +113,52 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
   );
 }
 
+/**
+ * Where a featured book shows among the home page's examples. Saved on every change; an empty list
+ * follows the template's countries (shown as the inherited value), or every country without one.
+ */
+function BookCountries({ book }: { book: AdminBook }) {
+  const { t } = useAdminI18n();
+  const countryName = useCountryName("admin");
+  const queryClient = useQueryClient();
+  const save = useMutation({
+    mutationFn: (countries: string[]) => updateBook(book.id, { countries }),
+    onSuccess: (updated) => queryClient.setQueryData(["admin", "book", book.id], updated),
+  });
+  const inherited = showcaseCountries([], book.templateCountries);
+  return (
+    <Card>
+      <CountriesField
+        testId="book-countries"
+        chipTestId="book-country"
+        label={t("admin.book.countries")}
+        hint={t("admin.book.countries.hint")}
+        empty={
+          <span data-testid="book-countries-inherited" data-value={inherited.join(" ")} className="flex flex-wrap items-center gap-2 text-sm text-muted">
+            {inherited.length === 0 ? (
+              t("admin.book.countries.all")
+            ) : (
+              <>
+                {t("admin.book.countries.inherited")}
+                {inherited.map((code) => (
+                  <span key={code} data-testid={`book-country-inherited-${code}`} className="flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1">
+                    <Flag code={code} />
+                    {countryName(code)}
+                  </span>
+                ))}
+              </>
+            )}
+          </span>
+        }
+        value={save.isPending && save.variables ? save.variables : book.countries}
+        onChange={(countries) => save.mutate(countries)}
+      />
+      {save.isPending && <span className="text-sm text-muted">{t("admin.book.layout.saving")}</span>}
+      {save.isError && <ErrorText>{save.error.message}</ErrorText>}
+    </Card>
+  );
+}
+
 /** The book's model calls in order, timed from the first: where generation spent its time and money. */
 function BookCalls({ id, generating }: { id: string; generating: boolean }) {
   const { t, ms, seconds } = useAdminI18n();
@@ -152,7 +201,7 @@ export function BookDetail() {
   const remove = useMutation({ mutationFn: () => deleteBook(id), onSuccess: () => router.replace("/admin/books"), onSettled: () => setConfirming(false) });
   const queryClient = useQueryClient();
   const feature = useMutation({
-    mutationFn: (featured: boolean) => setFeatured(id, featured),
+    mutationFn: (featured: boolean) => updateBook(id, { featured }),
     onSuccess: (updated) => queryClient.setQueryData(["admin", "book", id], updated),
   });
 
@@ -223,6 +272,7 @@ export function BookDetail() {
         {b.featured && <span className="ml-2 text-sm text-muted">{t("admin.book.featured")}</span>}
       </div>
       {feature.isError && <ErrorText>{feature.error.message}</ErrorText>}
+      {b.featured && <BookCountries book={b} />}
       {b.error && (
         <Notice as="p" role="alert" tone="danger">
           {b.error}

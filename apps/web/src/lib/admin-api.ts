@@ -24,6 +24,7 @@ import {
   ModelCallSchema,
   type AdminBook,
   type AdminBookRow,
+  type UpdateBook,
   type AdminLogin,
   type AdminLoginOptions,
   type AdminMethodology,
@@ -79,8 +80,9 @@ export async function adminBook(id: string): Promise<AdminBook> {
   return AdminBookSchema.parse(await request(`/api/admin/books/${id}`));
 }
 
-export async function setFeatured(id: string, featured: boolean): Promise<AdminBook> {
-  return AdminBookSchema.parse(await request(`/api/admin/books/${id}`, json("PATCH", { featured })));
+/** Puts a book among the home page's examples or takes it off, and sets the countries it shows in there. */
+export async function updateBook(id: string, patch: UpdateBook): Promise<AdminBook> {
+  return AdminBookSchema.parse(await request(`/api/admin/books/${id}`, json("PATCH", patch)));
 }
 
 /** Staff pin page layouts (null unpins) or change the theme; the API re-renders the book. */

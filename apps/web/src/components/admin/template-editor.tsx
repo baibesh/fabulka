@@ -32,10 +32,8 @@ import { themeName } from "@/lib/themes";
 import { ArrowDown, ArrowUp, ExternalLink, Plus, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { adminBook, adminReference, adminTemplate, adminThemes, updateTemplate } from "@/lib/admin-api";
-import { useCountryName } from "@/hooks/use-country-name";
-import { FlagChips } from "./chips";
-import { QUERY as REFERENCE_QUERY } from "./reference/shared";
+import { adminBook, adminTemplate, adminThemes, updateTemplate } from "@/lib/admin-api";
+import { CountriesField } from "./countries-field";
 import { Card, PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
 import { ErrorText } from "@/components/ui/notice";
@@ -142,7 +140,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
             <Checkbox checked={draft.published} onChange={(e) => set("published", e.target.checked)} />
             {t("admin.template.published")}
           </ChoiceLabel>
-          <CountriesField value={draft.countries} onChange={(countries) => set("countries", countries)} />
+          <TemplateCountries value={draft.countries} onChange={(countries) => set("countries", countries)} />
         </Card>
 
         <Card title={t("admin.template.story")}>
@@ -255,45 +253,23 @@ function Editor({ initial }: { initial: AdminTemplate }) {
   );
 }
 
-/**
- * Where the catalog lists the book: chips of countries the site offers (reference.countries, less
- * the blocked ones), with their flags as the site's country picker shows them; none means everywhere.
- */
-function CountriesField({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+/** Where the catalog lists the book; none means everywhere. */
+function TemplateCountries({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
   const { t } = useAdminI18n();
-  const countryName = useCountryName("admin");
-  const reference = useQuery({ queryKey: REFERENCE_QUERY, queryFn: adminReference });
-  const blocked = new Set([...(reference.data?.blocked.meta.map((c) => c.code) ?? []), ...(reference.data?.blocked.extra ?? [])]);
-  const offered = reference.data?.countries.map((c) => c.code).filter((code) => !blocked.has(code)) ?? [];
   return (
-    <fieldset
-      data-testid="template-countries"
-      data-value={value.join(" ")}
-      data-loaded={reference.data ? "true" : "false"}
-      className="flex flex-col gap-1.5"
-    >
-      <legend className="mb-1.5 text-sm font-semibold">{t("admin.template.countries")}</legend>
-      <div className="flex flex-wrap items-center gap-2">
-        {value.length === 0 && (
-          <span data-testid="template-countries-all" className="text-sm text-muted">
-            {t("admin.template.countries.all")}
-          </span>
-        )}
-        <FlagChips
-          testId="template-country"
-          values={value}
-          options={offered}
-          name={(code) => countryName(code)}
-          flag={(code) => code}
-          addLabel={t("admin.template.countries.add")}
-          removeLabel={(country) => t("admin.template.countries.remove", { country })}
-          onAdd={(code) => onChange([...value, code])}
-          onRemove={(code) => onChange(value.filter((c) => c !== code))}
-          menuClassName="max-h-72 w-64 overflow-y-auto"
-        />
-      </div>
-      <p className="text-xs text-muted">{t("admin.template.countries.hint")}</p>
-    </fieldset>
+    <CountriesField
+      testId="template-countries"
+      chipTestId="template-country"
+      label={t("admin.template.countries")}
+      hint={t("admin.template.countries.hint")}
+      empty={
+        <span data-testid="template-countries-all" className="text-sm text-muted">
+          {t("admin.template.countries.all")}
+        </span>
+      }
+      value={value}
+      onChange={onChange}
+    />
   );
 }
 

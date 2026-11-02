@@ -21,6 +21,7 @@ import {
   blankPage,
   bookFormatOf,
   calmSpace,
+  exampleShownIn,
   defaultThemeId,
   newLayout,
   planBook,
@@ -55,7 +56,6 @@ import {
   questions,
   questionsInAnyLanguage,
   TemplatesService,
-  listedWhere,
 } from '../templates/templates.service';
 import { toyUploadPath } from '../toy/toys.controller';
 import { layoutOf, withHeadingCheck } from '../layout/layout';
@@ -281,20 +281,21 @@ export class BooksService implements OnModuleInit {
   }
 
   /**
-   * Finished books the admin picked as examples, newest first: those from a catalog book listed in
-   * `country` (see listedWhere), and every one of a story of its own.
+   * Finished books the admin picked as examples, newest first: those shown in `country` by the
+   * book's own countries, else its catalog book's (exampleShownIn). Staff feature only a handful,
+   * so all are read and filtered here, where the rule lives.
    */
   async listExamples(country: string | null = null): Promise<ExampleBook[]> {
-    const rows = await this.prisma.book.findMany({
-      where: {
-        featured: true,
-        status: 'done',
-        title: { not: null },
-        OR: [{ templateId: null }, { template: listedWhere(country) }],
-      },
+    const featured = await this.prisma.book.findMany({
+      where: { featured: true, status: 'done', title: { not: null } },
       orderBy: { createdAt: 'desc' },
-      take: EXAMPLE_COUNT,
+      include: { template: { select: { countries: true } } },
     });
+    const rows = featured
+      .filter((row) =>
+        exampleShownIn(row.countries, row.template?.countries, country),
+      )
+      .slice(0, EXAMPLE_COUNT);
     return rows.map((row) => ({
       id: row.id,
       title: row.title!,

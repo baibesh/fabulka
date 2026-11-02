@@ -13,6 +13,7 @@ import {
   type ChildProfile,
   type Language,
   type SampleOption,
+  type UpdateBook,
   type UpdateTemplate,
   TemplateBlocksSchema,
 } from '@fabulka/shared';
@@ -184,7 +185,7 @@ export class AdminService {
   async book(id: string): Promise<AdminBook> {
     const row = await this.prisma.book.findUnique({
       where: { id },
-      include: withTemplate,
+      include: { template: { select: { slug: true, countries: true } } },
     });
     if (!row) throw new NotFoundException(`book ${id} not found`);
     return {
@@ -195,24 +196,34 @@ export class AdminService {
       country: row.country,
       demo: row.demo,
       featured: row.featured,
+      countries: row.countries,
+      templateCountries: row.template?.countries ?? null,
       costUsd: row.costUsd,
       clientKey: row.clientKey,
     };
   }
 
-  /** Shows a book on the home page as an example, or takes it off; only a finished one goes on. */
-  async setFeatured(id: string, featured: boolean): Promise<AdminBook> {
+  /**
+   * Shows a book on the home page as an example, or takes it off (only a finished one goes on), and
+   * sets the countries it is shown in there (empty: as its catalog book's say).
+   */
+  async updateBook(id: string, patch: UpdateBook): Promise<AdminBook> {
     const row = await this.prisma.book.findUnique({
       where: { id },
-      select: { status: true },
+      select: { status: true, countries: true },
     });
     if (!row) throw new NotFoundException(`book ${id} not found`);
-    if (featured && row.status !== 'done') {
+    if (patch.featured && row.status !== 'done') {
       throw new BadRequestException(
         'В примеры можно поставить только готовую книгу',
       );
     }
-    await this.prisma.book.update({ where: { id }, data: { featured } });
+    if (patch.countries)
+      await this.assertCountries(patch.countries, row.countries);
+    await this.prisma.book.update({
+      where: { id },
+      data: { featured: patch.featured, countries: patch.countries },
+    });
     return this.book(id);
   }
 
@@ -300,7 +311,8 @@ export class AdminService {
         `Тема «${patch.layoutTheme}» не подходит для языков ${current.languages.join(', ')}`,
       );
     }
-    if (patch.countries) await this.assertCountries(patch.countries, current);
+    if (patch.countries)
+      await this.assertCountries(patch.countries, current.countries);
     const { blocks, samples, ...rest } = patch;
     await this.prisma.$transaction(async (tx) => {
       const row = await tx.bookTemplate.update({
@@ -363,16 +375,16 @@ export class AdminService {
   }
 
   /**
-   * A catalog book is listed only in countries the site offers (reference.countries); one it has
-   * already may stay after the owner takes it off the list.
+   * A catalog book or an example is listed only in countries the site offers (reference.countries);
+   * one it has already (`current`) may stay after the owner takes it off the list.
    */
   private async assertCountries(
     codes: string[],
-    current: AdminTemplate,
+    current: readonly string[],
   ): Promise<void> {
     const offered = new Set([
       ...(await this.reference.countries()).map((c) => c.code),
-      ...current.countries,
+      ...current,
     ]);
     const unknown = codes.filter((code) => !offered.has(code));
     if (unknown.length)

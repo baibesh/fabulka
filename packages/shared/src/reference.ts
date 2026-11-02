@@ -339,7 +339,25 @@ export function catalogCountry(param: string | null | undefined): string | null 
   return parsed.success ? parsed.data : null;
 }
 
-/** A catalog book's countries as staff set them: distinct ISO codes; empty means everywhere. */
+/**
+ * The countries a featured example is shown in: its own if staff set any, else its catalog book's
+ * (none for a story of its own). Empty means everywhere.
+ */
+export function showcaseCountries(own: readonly string[], template: readonly string[] | null | undefined): readonly string[] {
+  return own.length > 0 ? own : (template ?? []);
+}
+
+/**
+ * Whether a featured example goes on the home page for a visitor from `country` (catalogCountry:
+ * null for "other", a missing or an unknown one): everywhere when showcaseCountries is empty, else
+ * only in the countries it names.
+ */
+export function exampleShownIn(own: readonly string[], template: readonly string[] | null | undefined, country: string | null): boolean {
+  const countries = showcaseCountries(own, template);
+  return countries.length === 0 || (country !== null && countries.includes(country));
+}
+
+/** A catalog book's (or an example's) countries as staff set them: distinct ISO codes; empty means everywhere. */
 export const TemplateCountriesSchema = z
   .array(CountryCodeSchema)
   .max(ISO_COUNTRY_CODES.length)

@@ -67,6 +67,9 @@ model Book {
   country         String?
   /// Picked in the admin to show every visitor on the home page as an example (done books only).
   featured        Boolean         @default(false)
+  /// Country codes (reference.countries) where it is shown as an example; empty: as its catalog
+  /// book's countries say, or everywhere for a story of its own (showcaseCountries in shared).
+  countries       String[]        @default([])
   orders          Order[]
   printInterest   PrintInterest[]
   /// Every request to the models made for this book (the journal in the admin).
