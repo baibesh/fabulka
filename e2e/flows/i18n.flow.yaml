@@ -12,7 +12,7 @@ env:
   childName: "Lang ${Date.now()}"
 commands:
   - launchApp: { appId: "${WEB}", clearState: true }
-  - openLink: "${WEB}/?lang=ru"
+  - openLink: "${WEB}/"
   # The hero's covers render only after hydration, when the switches start working.
   - waitForVisible: { testId: hero-covers }
   - assertVisible: "Книга, где ваш ребёнок — главный герой"
@@ -21,6 +21,8 @@ commands:
   - waitForVisible: { testId: ui-language-option-kk }
   - tapOn: { testId: ui-language-option-kk }
   - waitForVisible: "Балаңыз басты кейіпкер болатын кітап"
+  # Each language has its own address.
+  - assertUrl: { equals: "${WEB}/kk" }
   - assertNotVisible: { testId: ui-language-option-kk }
   - assertVisible: { testId: ui-language, contains: "ҚАЗ" }
   - tapOn: { testId: nav-catalog }
@@ -107,7 +109,7 @@ commands:
   - waitForVisible: { contains: "Die Sprache des Buches wählst du im Formular: Deutsch, English" }
 
   # Spain: Spanish and English; a German interface gives way to Spanish.
-  - openLink: "${WEB}/catalog"
+  - openLink: "${WEB}/de/catalog"
   - waitForVisible: "Buchkatalog"
   - tapOn: { testId: ui-country }
   - waitForVisible: { testId: ui-country-search }
@@ -151,9 +153,9 @@ commands:
       readOnly: true
       assert:
         first: { language: es }
-  # A book page opened straight in a language other than the server's Russian (a shared link, a
-  # reload): it used to stay on «Загружаем…» because the params promise never resolved on the client.
-  - openLink: "${WEB}/catalog/first-day-kindergarten"
+  # A book page opened straight in a language other than Russian (a shared link, a reload): it used
+  # to stay on «Загружаем…» because the params promise never resolved on the client.
+  - openLink: "${WEB}/es/catalog/first-day-kindergarten"
   - waitForVisible: { testId: template-title, timeout: 15000 }
   - assertNotVisible: { text: "Загружаем…" }
 after:

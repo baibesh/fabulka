@@ -82,7 +82,7 @@ commands:
       retryUntil: { status: 200, json: { "$[0].subject": { contains: "тапсырыс қабылданды" } } }
       extract: { mailText: "$[0].text" }
       timeout: 5000
-  - assertTrue: { contains: ["${mailText}", "/orders/${orderId}?lang=kk"] }
+  - assertTrue: { contains: ["${mailText}", "/kk/orders/${orderId}"] }
   # A German-speaking parent gets the confirmation in German.
   - request:
       method: POST
@@ -98,4 +98,4 @@ commands:
       extract: { germanMail: "$[0].text" }
       timeout: 5000
   - assertTrue: { contains: ["${germanMail}", "2 Exemplare"] }
-  - assertTrue: { contains: ["${germanMail}", "/orders/${germanOrderId}?lang=de"] }
+  - assertTrue: { contains: ["${germanMail}", "/de/orders/${germanOrderId}"] }

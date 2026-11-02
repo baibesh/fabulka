@@ -153,8 +153,8 @@ commands:
   - waitForVisible: { testId: hero-covers }
   - assertNotVisible: { testId: "example-${bookId}" }
 
-  # The book's page still opens by a direct link.
-  - openLink: "${WEB}/catalog/${slug}"
+  # The book's page still opens by a direct link (here the German one).
+  - openLink: "${WEB}/de/catalog/${slug}"
   - waitForVisible: { testId: template-title }
   - assertVisible: { contains: "Plitsch-platsch" }
 

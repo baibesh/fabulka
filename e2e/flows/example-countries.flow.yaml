@@ -173,8 +173,8 @@ commands:
   - assertVisible: "Beispielbücher"
   - assertNotVisible: { testId: "example-${plainId}" }
 
-  # Another country: neither.
-  - openLink: "${WEB}/catalog"
+  # Another country: neither (picked on the German page, which the address keeps German).
+  - openLink: "${WEB}/de/catalog"
   - waitForVisible: { testId: template-first-day-kindergarten }
   - tapOn: { testId: ui-country }
   - waitForVisible: { testId: ui-country-search }

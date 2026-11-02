@@ -1,0 +1,126 @@
+# Language in the address: Russian unprefixed, the other languages under /kk, /en, /es, /de; /ru and
+# old ?lang= links redirect; an unknown language is a 404. The language picker keeps the page, the
+# preference only offers (never redirects); canonical and hreflang tags, the sitemap and robots.txt;
+# the country cookie gives the right prices in the very first HTML and survives a reload; sign-in
+# and sign-out come back to the page with its prefix.
+appId: ${WEB}
+tags: [smoke, i18n, seo]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  SITE: https://fabulka.com
+  email: "routing+${Date.now()}@e2e.test"
+commands:
+  # The server renders each language at its own address, with canonical and hreflang links.
+  - request: { url: "${WEB}/en/catalog", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "<html lang=\"en\""] }
+  - assertTrue: { contains: ["${response.body}", "Book catalog"] }
+  - assertTrue: { contains: ["${response.body}", "<link rel=\"canonical\" href=\"${SITE}/en/catalog\"/>"] }
+  - assertTrue: { contains: ["${response.body}", "hrefLang=\"ru\" href=\"${SITE}/catalog\""] }
+  - assertTrue: { contains: ["${response.body}", "hrefLang=\"kk\" href=\"${SITE}/kk/catalog\""] }
+  - assertTrue: { contains: ["${response.body}", "hrefLang=\"es\" href=\"${SITE}/es/catalog\""] }
+  - assertTrue: { contains: ["${response.body}", "hrefLang=\"de\" href=\"${SITE}/de/catalog\""] }
+  - assertTrue: { contains: ["${response.body}", "hrefLang=\"x-default\" href=\"${SITE}/catalog\""] }
+  - request: { url: "${WEB}/catalog/bath-time", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "<html lang=\"ru\""] }
+  - assertTrue: { contains: ["${response.body}", "<link rel=\"canonical\" href=\"${SITE}/catalog/bath-time\"/>"] }
+  - assertTrue: { contains: ["${response.body}", "hrefLang=\"en\" href=\"${SITE}/en/catalog/bath-time\""] }
+  # The catalog book itself is in the first HTML, in the address's language.
+  - request: { url: "${WEB}/es/catalog/bath-time", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "¡Chap, chap, a la bañera!"] }
+  # Family pages stay out of search.
+  - request: { url: "${WEB}/en/my", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "<meta name=\"robots\" content=\"noindex, nofollow\"/>"] }
+
+  # The country cookie: the very first HTML has Germany's prices and Germany's catalog.
+  - request: { url: "${WEB}/de/catalog", headers: { Cookie: "fabulka_country=DE" }, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">$5.90<"] }
+  - assertTrue: { contains: ["${response.body}", "Der erste Tag in der Kita"] }
+  # The language in the address wins even where the country does not offer it.
+  - request: { url: "${WEB}/kk/catalog", headers: { Cookie: "fabulka_country=DE" }, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "Кітаптар каталогы"] }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">$5.90<"] }
+
+  # The sitemap: every public page in every language, with hreflang alternates.
+  - request: { url: "${WEB}/sitemap.xml", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "<loc>${SITE}/kk/catalog/bath-time</loc>"] }
+  - assertTrue: { contains: ["${response.body}", "<loc>${SITE}/catalog/bath-time</loc>"] }
+  - assertTrue: { contains: ["${response.body}", "<loc>${SITE}/de/privacy</loc>"] }
+  - assertTrue: { contains: ["${response.body}", "hreflang=\"x-default\" href=\"${SITE}/catalog/bath-time\""] }
+  - assertTrue: { contains: ["${response.body}", "hreflang=\"es\" href=\"${SITE}/es/catalog/bath-time\""] }
+  # robots.txt: the admin and family pages are off limits, the sitemap is named.
+  - request: { url: "${WEB}/robots.txt", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "Disallow: /admin"] }
+  - assertTrue: { contains: ["${response.body}", "Disallow: /en/my"] }
+  - assertTrue: { contains: ["${response.body}", "Disallow: /kk/orders/"] }
+  - assertTrue: { contains: ["${response.body}", "Sitemap: ${SITE}/sitemap.xml"] }
+
+  # Redirects: /ru goes to the unprefixed address, an old ?lang= link to its language's address.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/ru/catalog"
+  - waitForVisible: "Каталог книг"
+  - assertUrl: { equals: "${WEB}/catalog" }
+  - openLink: "${WEB}/catalog?lang=kk"
+  - waitForVisible: "Кітаптар каталогы"
+  - assertUrl: { equals: "${WEB}/kk/catalog" }
+  # An unknown language is not a prefix: a 404.
+  - openLink: "${WEB}/fr/catalog"
+  - waitForVisible: "Такой страницы нет. Может, она ещё не написана?"
+
+  # The picker goes to the same page in the other language, and back to the unprefixed Russian one.
+  - openLink: "${WEB}/kk/catalog/bath-time"
+  - waitForVisible: { testId: template-title }
+  - tapOn: { testId: ui-language }
+  - tapOn: { testId: ui-language-option-en }
+  - waitForVisible: { testId: template-title, text: "Splish-Splash, Bath Time!" }
+  - assertUrl: { equals: "${WEB}/en/catalog/bath-time" }
+  - assertVisible: { testId: nav-catalog }
+  # The preference never redirects: the Russian address stays Russian, with an offer of English.
+  - openLink: "${WEB}/catalog"
+  - waitForVisible: { testId: locale-suggest }
+  - assertUrl: { equals: "${WEB}/catalog" }
+  - assertVisible: "Каталог книг"
+  - assertVisible: { testId: locale-suggest-open, contains: "Open in English" }
+  - tapOn: { testId: locale-suggest-open }
+  - waitForVisible: "Book catalog"
+  - assertUrl: { equals: "${WEB}/en/catalog" }
+  - tapOn: { testId: ui-language }
+  - tapOn: { testId: ui-language-option-ru }
+  - waitForVisible: "Каталог книг"
+  - assertUrl: { equals: "${WEB}/catalog" }
+  - assertNotVisible: { testId: locale-suggest }
+
+  # The country lives in a cookie: picked once, it is there after a reload, prices included.
+  - openLink: "${WEB}/de/catalog"
+  - waitForVisible: "Buchkatalog"
+  - tapOn: { testId: ui-country }
+  - waitForVisible: { testId: ui-country-search }
+  - tapOn: { testId: ui-country-search }
+  - inputText: "Deutschland"
+  - tapOn: { testId: ui-country-option-DE }
+  - waitForVisible: { testId: ui-country, contains: "Deutschland" }
+  - openLink: "${WEB}/de/catalog"
+  - waitForVisible: { testId: custom-price, text: "$5.90" }
+  - assertVisible: { testId: ui-country, contains: "Deutschland" }
+  - assertVisible: "Der erste Tag in der Kita"
+  - assertNotVisible: "Das Geheimnis des Schneeleoparden"
+  # Sign-in and sign-out come back to the page, prefix included.
+  - openLink: "${WEB}/en/catalog"
+  - waitForVisible: { testId: auth-login }
+  - tapOn: { testId: auth-login }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${email}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { testId: auth-account, timeout: 15000 }
+  - assertUrl: { equals: "${WEB}/en/catalog" }
+  - assertVisible: "Book catalog"
+  - tapOn: { testId: auth-account }
+  - tapOn: { testId: auth-logout }
+  - waitForVisible: { testId: auth-login, timeout: 15000 }
+  - assertUrl: { equals: "${WEB}/en/catalog" }
+after:
+  - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${email}"] }

@@ -100,7 +100,8 @@ commands:
   - assertVisible: { testId: ui-country, contains: "Узбекистан" }
   - assertVisible: { testId: custom-price, text: "$5.90" }
   - assertVisible: { testId: template-price, text: "$3.90", index: 0 }
-  # The language dialog now offers Russian and English only, and a Kazakh link opens in Russian.
+  # The language dialog now offers Russian and English only; a Kazakh address still opens in Kazakh
+  # (the address decides the language), with the country's prices.
   - tapOn: { testId: ui-language }
   - waitForVisible: { testId: ui-language-option-en }
   - assertNotVisible: { testId: ui-language-option-kk }
@@ -111,9 +112,10 @@ commands:
   - waitForVisible: "Каталог книг"
   - openLink: "${WEB}/catalog?lang=kk"
   - waitForVisible: { testId: template-first-day-kindergarten }
-  - assertVisible: "Каталог книг"
-  - assertNotVisible: "Кітаптар каталогы"
-  - tapOn: { testId: nav-home }
+  - assertUrl: { equals: "${WEB}/kk/catalog" }
+  - assertVisible: "Кітаптар каталогы"
+  - assertVisible: { testId: custom-price, text: "$5.90" }
+  - openLink: "${WEB}/"
   - waitForVisible: { testId: hero-covers }
   - assertVisible: { contains: "Первые книги — бесплатно, дальше — от $3.90" }
   - assertVisible: "В вашей стране печати пока нет — мы планируем её открыть. А PDF легко распечатать самим."
@@ -144,7 +146,7 @@ commands:
   - assertVisible: { contains: "Ready in a few minutes: read it on screen or download the PDF." }
   - assertVisible: { contains: "Your first books are free, then from $3.90" }
   # From the top of the page again (the country dialog was opened from the footer).
-  - openLink: "${WEB}/"
+  - openLink: "${WEB}/en"
   - waitForVisible: { testId: hero-covers }
   - assertVisible: { testId: trust, containsDescendants: { text: "Books in English" } }
   - assertVisible: { testId: trust, containsDescendants: { text: "A PDF in minutes, ready to print at home" } }
@@ -156,15 +158,16 @@ commands:
   - assertNotVisible: { testId: faq-item-print-kz }
   - tapOn: "Can I get a printed book?"
   - waitForVisible: { contains: "printed books aren't available in your country yet" }
-  # The book page keeps the PDF and turns print into a request; a Russian link opens in English.
-  - openLink: "${WEB}/books/${bookId}?lang=ru"
+  # The book page keeps the PDF and turns print into a request (an old ?lang= link lands on the
+  # English address).
+  - openLink: "${WEB}/books/${bookId}?lang=en"
   - waitForVisible: { testId: want-print }
   - assertNotVisible: { testId: order-print }
   - assertVisible: { contains: "Printed books aren't available in your country yet" }
   - assertVisible: { testId: download-pdf }
   - assertNotVisible: { contains: "₸" }
   # The order form is not offered there either.
-  - openLink: "${WEB}/books/${bookId}/order"
+  - openLink: "${WEB}/en/books/${bookId}/order"
   - waitForVisible: { testId: order-unavailable }
   - assertNotVisible: { testId: order-form }
 after:

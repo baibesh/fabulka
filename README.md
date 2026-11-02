@@ -74,9 +74,13 @@ and Luhansk regions, so those are not blocked by IP.
 - The schema ships as Prisma migrations; CI applies them to a fresh database, runs the E2E flows and
   only then builds the images, so a red commit never reaches `:latest`.
 
-Known limitations: generation is an in-process queue, not a durable job table; the interface
-language is chosen in the browser, so a Kazakh or English page first renders in Russian; Kazakh
-and English catalog text is not yet editable in the admin.
+Languages live in the address: Russian unprefixed (`/catalog`), the others under `/kk`, `/en`, `/es`,
+`/de` (`apps/web/src/proxy.ts`; `/ru/…` and old `?lang=` links redirect, nobody is redirected by
+browser language). The visitor's country is a cookie (`fabulka_country`) the server reads, so the
+first HTML already has that country's prices, catalog and FAQ.
+
+Known limitations: generation is an in-process queue, not a durable job table; Kazakh and English
+catalog text is not yet editable in the admin.
 
 ## Stack
 
