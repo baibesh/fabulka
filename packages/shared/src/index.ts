@@ -19,6 +19,7 @@ export * from "./methodologies";
 export * from "./reference";
 export * from "./labels";
 export * from "./layout";
+export * from "./locale-path";
 
 /** What the parent tells us about the child. */
 export const ChildProfileSchema = z.object({
@@ -270,6 +271,16 @@ export const ExampleBookSchema = z.object({
   heroImageUrl: z.string().nullable(),
 });
 export type ExampleBook = z.infer<typeof ExampleBookSchema>;
+
+/**
+ * GET /sitemap: what the site's sitemap lists besides its fixed pages: every published catalog book
+ * and every example book staff picked, wherever they are shown, with when each last changed (ISO).
+ */
+export const SitemapEntriesSchema = z.object({
+  templates: z.array(z.object({ slug: z.string(), updatedAt: z.string() })),
+  examples: z.array(z.object({ id: z.string(), updatedAt: z.string() })),
+});
+export type SitemapEntries = z.infer<typeof SitemapEntriesSchema>;
 
 /** GET /status: what visitors are told before they fill in the form. */
 export const ServiceStatusSchema = z.object({
