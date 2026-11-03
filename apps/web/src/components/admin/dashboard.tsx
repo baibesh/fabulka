@@ -2,12 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdminStats } from "@fabulka/shared";
-import { Pause, Play } from "lucide-react";
-import { adminStats, setPaused } from "@/lib/admin-api";
+import { Grid3x3, Pause, Play } from "lucide-react";
+import Link from "next/link";
+import { adminMe, adminStats, setPaused } from "@/lib/admin-api";
 import { intlLocale } from "@/i18n/format";
 import { Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
 import { QueryState } from "@/components/ui/query-state";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
 import { Stat } from "@/components/ui/stat";
 
 function Meter({ label, used, limit, format }: { label: string; used: number; limit: number; format?: (n: number) => string }) {
@@ -51,6 +52,7 @@ export function Dashboard() {
   const { t, locale, number, kzt, percent } = useAdminI18n();
   const queryClient = useQueryClient();
   const stats = useQuery({ queryKey: ["admin", "stats"], queryFn: adminStats, refetchInterval: 10_000 });
+  const me = useQuery({ queryKey: ["admin", "me"], queryFn: adminMe, retry: false });
   const pause = useMutation({
     mutationFn: setPaused,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin", "stats"] }),
@@ -65,7 +67,18 @@ export function Dashboard() {
 
   return (
     <>
-      <PageTitle>{t("admin.dashboard.title")}</PageTitle>
+      <PageTitle
+        aside={
+          me.data?.permissions.includes("examples") && (
+            <Link href="/admin/examples/matrix" data-testid="dashboard-matrix-link" className={buttonClass({ variant: "secondary", size: "sm" })}>
+              <Grid3x3 className="size-4" />
+              {t("admin.matrix.title")}
+            </Link>
+          )
+        }
+      >
+        {t("admin.dashboard.title")}
+      </PageTitle>
 
       <section
         data-testid="pause-card"

@@ -52,7 +52,18 @@ import {
   type UpdateTemplate,
   AdminMeSchema,
   AdminExampleSchema,
+  ExampleCandidateSchema,
+  VisitorMatrixSchema,
+  CountryLandingSchema,
+  CountryDeliverySchema,
+  CountryFormatOverridesSchema,
+  type CountryDelivery,
+  type CountryFormatOverrides,
   type AdminExample,
+  type CountriesMode,
+  type CountryLanding,
+  type ExampleCandidate,
+  type VisitorMatrix,
   AdminSeoPageSchema,
   PublishSeoResultSchema,
   RedirectSchema,
@@ -126,9 +137,20 @@ export async function adminExamples(): Promise<AdminExample[]> {
   return AdminExampleSchema.array().parse(await request("/api/admin/examples"));
 }
 
-/** A new example with this finished book as its first version. */
-export async function createExample(bookId: string): Promise<AdminExample> {
-  return AdminExampleSchema.parse(await request("/api/admin/examples", json("POST", { bookId })));
+/** A new example with this finished book as its first version, shown in `countries` (none: as the API decides for the session). */
+export async function createExample(bookId: string, countries?: string[]): Promise<AdminExample> {
+  return AdminExampleSchema.parse(await request("/api/admin/examples", json("POST", countries ? { bookId, countries } : { bookId })));
+}
+
+/** Finished books a new example may be made from, in the working country (none: every country of the session). */
+export async function exampleCandidates(country: string | null): Promise<ExampleCandidate[]> {
+  const query = country ? `?country=${encodeURIComponent(country)}` : "";
+  return ExampleCandidateSchema.array().parse(await request(`/api/admin/examples/candidates${query}`));
+}
+
+/** What a visitor sees per country × language: the site's own selection. */
+export async function visitorMatrix(): Promise<VisitorMatrix> {
+  return VisitorMatrixSchema.parse(await request("/api/admin/examples/matrix"));
 }
 
 /** A finished book as the example's version in the book's language. */
@@ -143,9 +165,9 @@ export const removeExampleVersion = (id: string, language: Language) =>
 /** Takes the example off the home page (its books stay). */
 export const removeExample = (id: string) => request(`/api/admin/examples/${id}`, { method: "DELETE" });
 
-/** Where the example shows; empty follows its catalog book. */
-export async function updateExample(id: string, countries: string[]): Promise<AdminExample> {
-  return AdminExampleSchema.parse(await request(`/api/admin/examples/${id}`, json("PATCH", { countries })));
+/** Where the example shows (include) or does not (exclude); an empty list follows its catalog book. */
+export async function updateExample(id: string, countries: string[], mode: CountriesMode = "include"): Promise<AdminExample> {
+  return AdminExampleSchema.parse(await request(`/api/admin/examples/${id}`, json("PATCH", { countries, mode })));
 }
 
 /** The home page's order: every example's id. */
@@ -158,8 +180,10 @@ export async function translateExample(id: string, languages: Language[]): Promi
   return AdminExampleSchema.parse(await request(`/api/admin/examples/${id}/translate`, json("POST", { languages })));
 }
 
-export async function adminOrders(): Promise<AdminOrder[]> {
-  return AdminOrderSchema.array().parse(await request("/api/admin/orders"));
+/** The session's orders, in the working country when one is picked. */
+export async function adminOrders(country: string | null = null): Promise<AdminOrder[]> {
+  const query = country ? `?country=${encodeURIComponent(country)}` : "";
+  return AdminOrderSchema.array().parse(await request(`/api/admin/orders${query}`));
 }
 
 /** Moves an order to `status`; a `note` (up to 200 characters) is shown to the parent on that step. */
@@ -177,6 +201,16 @@ export async function adminTemplate(slug: string): Promise<AdminTemplate> {
 
 export async function updateTemplate(slug: string, patch: UpdateTemplate): Promise<AdminTemplate> {
   return AdminTemplateSchema.parse(await request(`/api/admin/templates/${slug}`, json("PATCH", patch)));
+}
+
+/** Shows or hides the catalog book in one country; every other country stays as it is. */
+export async function setTemplateVisibility(slug: string, country: string, visible: boolean): Promise<AdminTemplate> {
+  return AdminTemplateSchema.parse(await request(`/api/admin/templates/${slug}/visibility`, json("PUT", { country, visible })));
+}
+
+/** Sets (or clears, with null) a sample in one language: global (country null) or one country's. */
+export async function setTemplateSample(slug: string, country: string | null, language: Language, bookId: string | null): Promise<AdminTemplate> {
+  return AdminTemplateSchema.parse(await request(`/api/admin/templates/${slug}/samples`, json("PUT", { country, language, bookId })));
 }
 
 export async function adminMethodologies(): Promise<AdminMethodology[]> {
@@ -230,6 +264,50 @@ export async function bookCalls(id: string): Promise<ModelCall[]> {
 export async function adminReference(): Promise<AdminReference> {
   return AdminReferenceSchema.parse(await request("/api/admin/reference"));
 }
+
+/** One country's delivery cities, in order (replacing the ones it had). */
+export async function saveCountryCities(country: string, cities: City[]): Promise<City[]> {
+  return CitySchema.array().parse(await request(`/api/admin/reference/cities?country=${encodeURIComponent(country)}`, json("PUT", cities)));
+}
+
+/** A country's own delivery fee and rule, or (country null) the global fee. */
+export async function saveDelivery(country: string | null, delivery: CountryDelivery): Promise<CountryDelivery> {
+  const query = country ? `?country=${encodeURIComponent(country)}` : "";
+  return CountryDeliverySchema.parse(await request(`/api/admin/reference/delivery${query}`, json("PUT", delivery)));
+}
+
+/** The country pays the global delivery fee again. */
+export const clearDelivery = (country: string) =>
+  request(`/api/admin/reference/delivery?country=${encodeURIComponent(country)}`, { method: "DELETE" });
+
+/** A country's own format offer and cover prices, by format id. */
+export async function saveCountryFormats(country: string, overrides: CountryFormatOverrides): Promise<CountryFormatOverrides> {
+  return CountryFormatOverridesSchema.parse(
+    await request(`/api/admin/reference/country-formats?country=${encodeURIComponent(country)}`, json("PUT", overrides)),
+  );
+}
+
+/** The country offers and prices formats as globally again. */
+export const clearCountryFormats = (country: string) =>
+  request(`/api/admin/reference/country-formats?country=${encodeURIComponent(country)}`, { method: "DELETE" });
+
+/** One country's own prices (its visitors are priced from them instead of the global list). */
+export async function saveCountryPrices(country: string, prices: Prices): Promise<Prices> {
+  return PricesSchema.parse(await request(`/api/admin/reference/prices?country=${encodeURIComponent(country)}`, json("PUT", prices)));
+}
+
+/** The country is priced from the global list again. */
+export const clearCountryPrices = (country: string) =>
+  request(`/api/admin/reference/prices?country=${encodeURIComponent(country)}`, { method: "DELETE" });
+
+/** One country's landing overrides. */
+export async function saveLanding(country: string, landing: CountryLanding): Promise<CountryLanding> {
+  return CountryLandingSchema.parse(await request(`/api/admin/reference/landing?country=${encodeURIComponent(country)}`, json("PUT", landing)));
+}
+
+/** The country's landing shows the defaults again. */
+export const clearLanding = (country: string) =>
+  request(`/api/admin/reference/landing?country=${encodeURIComponent(country)}`, { method: "DELETE" });
 
 export async function savePrices(prices: Prices): Promise<Prices> {
   return PricesSchema.parse(await request("/api/admin/reference/prices", json("PUT", prices)));

@@ -11,6 +11,8 @@ import { Table, TableEmpty, TableFrame } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
+import { Flag } from "@/components/ui/flag";
+import { useWorkingCountry } from "./working-country";
 
 export function OrdersTable() {
   const { t, date, kzt, orderStatus } = useAdminI18n();
@@ -19,7 +21,10 @@ export function OrdersTable() {
   const [open, setOpen] = useState<string | null>(null);
   // A status picked but not saved yet, with the note for the parent typed under it.
   const [change, setChange] = useState<{ id: string; status: OrderStatus; note: string } | null>(null);
-  const orders = useQuery({ queryKey: ["admin", "orders"], queryFn: adminOrders, refetchInterval: 10_000 });
+  // The working country's orders (a manager's countries' only: the API limits them anyway).
+  const { country, me } = useWorkingCountry();
+  const books = me.permissions.includes("books");
+  const orders = useQuery({ queryKey: ["admin", "orders", country], queryFn: () => adminOrders(country), refetchInterval: 10_000 });
   const update = useMutation({
     mutationFn: ({ id, status, note }: { id: string; status: OrderStatus; note: string }) => setOrderStatus(id, status, note.trim() || undefined),
     onSuccess: () => {
@@ -61,18 +66,22 @@ export function OrdersTable() {
           <tbody>
             {orders.data?.filter((o) => !filter || o.status === filter).map((order) => (
               <Fragment key={order.id}>
-                <tr data-testid="order-row">
+                <tr data-testid="order-row" data-country={order.country ?? ""}>
                   <td>
-                    <Link href={`/admin/books/${order.bookId}`} className="font-semibold hover:text-accent">
-                      {order.bookTitle ?? t("admin.untitled")}
-                    </Link>
+                    {books ? (
+                      <Link href={`/admin/books/${order.bookId}`} className="font-semibold hover:text-accent">
+                        {order.bookTitle ?? t("admin.untitled")}
+                      </Link>
+                    ) : (
+                      <span className="font-semibold">{order.bookTitle ?? t("admin.untitled")}</span>
+                    )}
                   </td>
                   <td>
                     {order.recipientName}
                     <div className="text-xs text-muted">{order.phone}</div>
                   </td>
                   <td className="min-w-48">
-                    {order.city}
+                    {order.country && <Flag code={order.country} />} {order.city}
                     <div className="text-xs text-muted">{order.address}</div>
                   </td>
                   <td className="whitespace-nowrap">

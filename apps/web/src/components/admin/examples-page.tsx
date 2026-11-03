@@ -4,21 +4,35 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LANGUAGES,
   LANGUAGE_NAMES,
+  SCOPE_FORBIDDEN,
+  allowedFor,
   displayVersion,
+  ruleShows,
   isExampleError,
-  showcaseCountries,
+  showcaseRule,
   type AdminExample,
   type AdminExampleVersion,
+  type CountriesMode,
   type Language,
 } from "@fabulka/shared";
-import { ArrowDown, ArrowUp, Languages, RotateCw, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Grid3x3, Languages, Lock, Plus, RotateCw, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { adminExamples, removeExample, removeExampleVersion, reorderExamples, translateExample, updateExample } from "@/lib/admin-api";
+import {
+  adminExamples,
+  createExample,
+  exampleCandidates,
+  removeExample,
+  removeExampleVersion,
+  reorderExamples,
+  translateExample,
+  updateExample,
+} from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
 import { useCountryName } from "@/hooks/use-country-name";
 import { Flag } from "@/components/ui/flag";
-import { Button, IconButton } from "@/components/ui/button";
+import { Button, IconButton, buttonClass } from "@/components/ui/button";
+import { Select } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { ErrorText } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
@@ -26,6 +40,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { cx } from "@/components/ui/cx";
 import { CountriesField } from "./countries-field";
 import { Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
+import { useWorkingCountry } from "./working-country";
 
 /** The admin's examples list (also read by a book's page, which offers to add the book to one). */
 export const EXAMPLES_QUERY = ["admin", "examples"] as const;
@@ -36,20 +51,31 @@ export function useExampleError() {
   return (error: Error | null) => {
     if (!error) return null;
     if (error instanceof ApiError && isExampleError(error.code)) return t(`admin.examples.error.${error.code}`);
+    if (error instanceof ApiError && error.code === SCOPE_FORBIDDEN) return t("admin.scope.forbidden");
     return error.message;
   };
 }
 
+/** Where an example shows: its own rule, else its catalog book's (the same rule as the site's). */
+export function exampleRule(example: AdminExample) {
+  return showcaseRule(
+    { mode: example.countriesMode, countries: example.countries },
+    example.templateCountries ? { mode: example.templateCountriesMode, countries: example.templateCountries } : null,
+  );
+}
+
 /**
- * «Examples»: the stories on the home page, in its order. Each shows its version in the admin's
- * language (else the first finished one), a chip per language — finished, being translated, failed
- * or missing, with «Translate» for the missing ones —, the countries it shows in, and ways to move
- * or remove it. While a translation runs the list refreshes itself.
+ * «Examples»: the stories on the home page, in its order, those shown in the working country. Each
+ * shows its version in the admin's language (else the first finished one), a chip per language —
+ * finished, being translated, failed or missing, with «Translate» for the missing ones —, the
+ * countries it shows in, and ways to move or remove it. An example shown outside the session's
+ * countries is read-only for a country manager. While a translation runs the list refreshes itself.
  */
 export function ExamplesPage() {
   const { t } = useAdminI18n();
   const queryClient = useQueryClient();
   const errorText = useExampleError();
+  const { country } = useWorkingCountry();
   const examples = useQuery({
     queryKey: EXAMPLES_QUERY,
     queryFn: adminExamples,
@@ -60,18 +86,32 @@ export function ExamplesPage() {
     onSuccess: (list) => queryClient.setQueryData(EXAMPLES_QUERY, list),
   });
 
-  const list = examples.data;
-  const move = (index: number, by: -1 | 1) => {
-    if (!list) return;
-    const ids = list.map((e) => e.id);
+  const all = examples.data;
+  const list = all && country ? all.filter((e) => ruleShows(exampleRule(e), country)) : all;
+  // Moves happen among the examples the session may change (all of them for global staff): the API
+  // keeps everyone else's where they are.
+  const movable = all?.filter((e) => e.editable).map((e) => e.id) ?? [];
+  const move = (id: string, by: -1 | 1) => {
+    const ids = [...movable];
+    const index = ids.indexOf(id);
     [ids[index], ids[index + by]] = [ids[index + by], ids[index]];
     reorder.mutate(ids);
   };
 
   return (
     <>
-      <PageTitle>{t("admin.examples.title")}</PageTitle>
+      <PageTitle
+        aside={
+          <Link href="/admin/examples/matrix" data-testid="examples-matrix-link" className={buttonClass({ variant: "secondary", size: "sm" })}>
+            <Grid3x3 className="size-4" />
+            {t("admin.matrix.title")}
+          </Link>
+        }
+      >
+        {t("admin.examples.title")}
+      </PageTitle>
       <p className="max-w-3xl text-sm text-muted">{t("admin.examples.lead")}</p>
+      <NewExample />
       {!list && <QueryState error={examples.error} scope="admin" />}
       {reorder.isError && <ErrorText>{errorText(reorder.error)}</ErrorText>}
       {list?.length === 0 && (
@@ -80,19 +120,68 @@ export function ExamplesPage() {
         </p>
       )}
       <ol data-testid="examples-list" className="flex flex-col gap-4">
-        {list?.map((example, index) => (
+        {list?.map((example) => (
           <li key={example.id}>
             <ExampleCard
               example={example}
-              first={index === 0}
-              last={index === list.length - 1}
+              first={movable[0] === example.id}
+              last={movable.at(-1) === example.id}
               moving={reorder.isPending}
-              onMove={(by) => move(index, by)}
+              onMove={(by) => move(example.id, by)}
             />
           </li>
         ))}
       </ol>
     </>
+  );
+}
+
+/**
+ * A new example from a finished book made in the working country (any country of the session's
+ * without one), shown in that country; global staff with "All countries" make one shown everywhere.
+ */
+function NewExample() {
+  const { t, date } = useAdminI18n();
+  const queryClient = useQueryClient();
+  const errorText = useExampleError();
+  const countryName = useCountryName("admin");
+  const { country } = useWorkingCountry();
+  const [bookId, setBookId] = useState("");
+  const candidates = useQuery({ queryKey: ["admin", "example-candidates", country], queryFn: () => exampleCandidates(country) });
+  const create = useMutation({
+    mutationFn: () => createExample(bookId, country ? [country] : undefined),
+    onSuccess: () => {
+      setBookId("");
+      void queryClient.invalidateQueries({ queryKey: EXAMPLES_QUERY });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "example-candidates"] });
+    },
+  });
+  const options = candidates.data ?? [];
+  return (
+    <Card data-testid="example-new" data-loaded={candidates.data ? "true" : "false"} title={t("admin.examples.new")}>
+      <p className="-mt-2 text-sm text-muted">{country ? t("admin.examples.new.hint", { country: countryName(country) }) : t("admin.examples.new.hintAll")}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          data-testid="example-new-book"
+          aria-label={t("admin.examples.new.book")}
+          className="min-w-64 flex-1"
+          value={bookId}
+          disabled={!options.length}
+          onChange={(e) => setBookId(e.target.value)}
+        >
+          <option value="">{options.length ? t("admin.examples.new.pick") : t("admin.examples.new.none")}</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {t("admin.template.samples.option", { title: o.title ?? o.id, name: o.childName, date: date(o.createdAt) })} · {o.language.toUpperCase()}
+            </option>
+          ))}
+        </Select>
+        <Button data-testid="example-new-create" disabled={!bookId} loading={create.isPending} icon={<Plus className="size-4" />} onClick={() => create.mutate()}>
+          {t("admin.examples.new.create")}
+        </Button>
+      </div>
+      {create.isError && <ErrorText data-testid="example-new-error">{errorText(create.error)}</ErrorText>}
+    </Card>
   );
 }
 
@@ -118,7 +207,13 @@ function ExampleCard({
     queryClient.setQueryData<AdminExample[]>(EXAMPLES_QUERY, (list) => list?.map((e) => (e.id === updated.id ? updated : e)));
 
   const translate = useMutation({ mutationFn: (languages: Language[]) => translateExample(example.id, languages), onSuccess: replace });
-  const countries = useMutation({ mutationFn: (codes: string[]) => updateExample(example.id, codes), onSuccess: replace });
+  const countries = useMutation({
+    mutationFn: ({ codes, mode }: { codes: string[]; mode: CountriesMode }) => updateExample(example.id, codes, mode),
+    onSuccess: replace,
+  });
+  const locked = !example.editable;
+  // A book's own admin page is the Books section's (a country manager has none).
+  const books = useWorkingCountry().me.permissions.includes("books");
   const remove = useMutation({
     mutationFn: () => (confirming === "example" || confirming === null ? removeExample(example.id) : removeExampleVersion(example.id, confirming)),
     onSuccess: refresh,
@@ -127,12 +222,12 @@ function ExampleCard({
 
   const shown = displayVersion(example.versions, locale);
   const byLanguage = new Map(example.versions.map((v) => [v.language, v]));
-  const canTranslate = example.versions.some((v) => v.state === "done");
+  const canTranslate = !locked && example.versions.some((v) => v.state === "done");
   const missing = LANGUAGES.filter((l) => !byLanguage.has(l));
   const failure = translate.error ?? countries.error ?? remove.error;
 
   return (
-    <Card data-testid={`example-${example.id}`} data-example-id={example.id}>
+    <Card data-testid={`example-${example.id}`} data-example-id={example.id} data-editable={locked ? "false" : "true"}>
       <div className="flex flex-wrap items-start gap-4">
         {shown?.heroImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
@@ -141,10 +236,14 @@ function ExampleCard({
           <div className="size-16 shrink-0 rounded-xl bg-border" />
         )}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          {shown ? (
+          {shown && books ? (
             <Link href={`/admin/books/${shown.bookId}`} data-testid={`example-${example.id}-title`} className="font-bold hover:text-accent">
               {shown.title ?? t("admin.untitled")}
             </Link>
+          ) : shown ? (
+            <span data-testid={`example-${example.id}-title`} className="font-bold">
+              {shown.title ?? t("admin.untitled")}
+            </span>
           ) : (
             <span className="font-bold">{t("admin.untitled")}</span>
           )}
@@ -153,15 +252,27 @@ function ExampleCard({
               {shown.childName} · {shown.language.toUpperCase()}
             </span>
           )}
+          {locked && (
+            <span data-testid={`example-${example.id}-readonly`} className="flex items-center gap-1 text-xs text-muted">
+              <Lock className="size-3.5" />
+              {t("admin.examples.readonly")}
+            </span>
+          )}
         </div>
         <div className="flex shrink-0 gap-1">
-          <IconButton data-testid={`example-${example.id}-up`} label={t("admin.examples.up")} disabled={first || moving} onClick={() => onMove(-1)}>
+          <IconButton data-testid={`example-${example.id}-up`} label={t("admin.examples.up")} disabled={locked || first || moving} onClick={() => onMove(-1)}>
             <ArrowUp className="size-4" />
           </IconButton>
-          <IconButton data-testid={`example-${example.id}-down`} label={t("admin.examples.down")} disabled={last || moving} onClick={() => onMove(1)}>
+          <IconButton data-testid={`example-${example.id}-down`} label={t("admin.examples.down")} disabled={locked || last || moving} onClick={() => onMove(1)}>
             <ArrowDown className="size-4" />
           </IconButton>
-          <IconButton variant="danger" data-testid={`example-${example.id}-remove`} label={t("admin.examples.remove")} onClick={() => setConfirming("example")}>
+          <IconButton
+            variant="danger"
+            data-testid={`example-${example.id}-remove`}
+            label={t("admin.examples.remove")}
+            disabled={locked}
+            onClick={() => setConfirming("example")}
+          >
             <Trash2 className="size-4" />
           </IconButton>
         </div>
@@ -177,6 +288,8 @@ function ExampleCard({
               language={language}
               version={byLanguage.get(language)}
               canTranslate={canTranslate}
+              locked={locked}
+              linked={books}
               busy={translate.isPending}
               onTranslate={() => translate.mutate([language])}
               onRemove={() => setConfirming(language)}
@@ -198,7 +311,11 @@ function ExampleCard({
         )}
       </div>
 
-      <ExampleCountries example={example} saving={countries.isPending ? countries.variables : undefined} onChange={(codes) => countries.mutate(codes)} />
+      <ExampleCountries
+        example={example}
+        saving={countries.isPending ? countries.variables : undefined}
+        onChange={(codes, mode) => countries.mutate({ codes, mode })}
+      />
       {failure && <ErrorText data-testid={`example-${example.id}-error`}>{errorText(failure)}</ErrorText>}
 
       <ConfirmDialog
@@ -228,6 +345,8 @@ function LanguageChip({
   language,
   version,
   canTranslate,
+  locked,
+  linked,
   busy,
   onTranslate,
   onRemove,
@@ -236,6 +355,9 @@ function LanguageChip({
   language: Language;
   version: AdminExampleVersion | undefined;
   canTranslate: boolean;
+  locked: boolean;
+  /** The version's book opens its admin page (the Books section). */
+  linked: boolean;
   busy: boolean;
   onTranslate: () => void;
   onRemove: () => void;
@@ -252,7 +374,7 @@ function LanguageChip({
   }[state];
   return (
     <li data-testid={testId} data-state={state} title={version?.error ?? name} className={cx("flex items-center gap-1.5 rounded-full border py-1 pr-1 pl-3 text-sm", tone)}>
-      {version && state === "done" ? (
+      {version && state === "done" && linked ? (
         <Link href={`/admin/books/${version.bookId}`} className="font-bold hover:text-accent" title={version.title ?? name}>
           {language.toUpperCase()}
         </Link>
@@ -277,7 +399,7 @@ function LanguageChip({
           {state === "failed" ? t("admin.examples.retry") : t("admin.examples.translate")}
         </Button>
       )}
-      {version && state !== "translating" && (
+      {version && state !== "translating" && !locked && (
         <button
           type="button"
           data-testid={`example-${exampleId}-remove-${language}`}
@@ -293,29 +415,49 @@ function LanguageChip({
   );
 }
 
-/** Where the example shows; an empty list follows its catalog book (shown as the inherited value), or everywhere. */
-function ExampleCountries({ example, saving, onChange }: { example: AdminExample; saving: string[] | undefined; onChange: (codes: string[]) => void }) {
+/**
+ * Where the example shows: only in its countries, or (global staff) everywhere except them; an empty
+ * list follows its catalog book (shown as the inherited value), or everywhere. A country manager
+ * picks among their own countries only.
+ */
+function ExampleCountries({
+  example,
+  saving,
+  onChange,
+}: {
+  example: AdminExample;
+  saving: { codes: string[]; mode: CountriesMode } | undefined;
+  onChange: (codes: string[], mode: CountriesMode) => void;
+}) {
   const { t } = useAdminI18n();
   const countryName = useCountryName("admin");
-  const inherited = showcaseCountries([], example.templateCountries);
+  const { access, options } = useWorkingCountry();
+  const global = allowedFor(access, "examples", null);
+  const inherited = example.templateCountries ? { mode: example.templateCountriesMode, countries: example.templateCountries } : null;
+  const value = saving?.codes ?? example.countries;
+  const mode = saving?.mode ?? example.countriesMode;
   return (
     <CountriesField
       testId={`example-${example.id}-countries`}
       chipTestId={`example-${example.id}-country`}
       label={t("admin.examples.countries")}
       hint={t("admin.examples.countries.hint")}
+      disabled={!example.editable}
+      allowed={global ? undefined : options}
+      mode={mode}
+      onModeChange={global ? (next) => onChange(value, next) : undefined}
       empty={
         <span
           data-testid={`example-${example.id}-countries-inherited`}
-          data-value={inherited.join(" ")}
+          data-value={inherited?.countries.join(" ") ?? ""}
           className="flex flex-wrap items-center gap-2 text-sm text-muted"
         >
-          {inherited.length === 0 ? (
+          {!inherited || inherited.countries.length === 0 ? (
             t("admin.examples.countries.all")
           ) : (
             <>
-              {t("admin.examples.countries.inherited")}
-              {inherited.map((code) => (
+              {t(inherited.mode === "exclude" ? "admin.examples.countries.inheritedExcept" : "admin.examples.countries.inherited")}
+              {inherited.countries.map((code) => (
                 <span key={code} className="flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1">
                   <Flag code={code} />
                   {countryName(code)}
@@ -325,8 +467,8 @@ function ExampleCountries({ example, saving, onChange }: { example: AdminExample
           )}
         </span>
       }
-      value={saving ?? example.countries}
-      onChange={onChange}
+      value={value}
+      onChange={(codes) => onChange(codes, mode)}
     />
   );
 }

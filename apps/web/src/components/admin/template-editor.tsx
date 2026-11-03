@@ -14,6 +14,7 @@ import {
   LANGUAGE_NAMES,
   SAMPLE_BOOKS,
   TemplateBlocksSchema,
+  allowedFor,
   defaultThemeId,
   inLanguageOrder,
   methodologyText,
@@ -24,6 +25,7 @@ import {
   type AdminBook,
   type AdminTemplate,
   type BookTheme,
+  type CountriesMode,
   type Language,
   type TemplateBlocks,
   type TemplateSamples,
@@ -34,9 +36,13 @@ import { themeName } from "@/lib/themes";
 import { ArrowDown, ArrowUp, ExternalLink, Plus, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { adminBook, adminTemplate, adminThemes, updateTemplate } from "@/lib/admin-api";
+import { adminBook, adminTemplate, adminThemes, setTemplateSample, setTemplateVisibility, updateTemplate } from "@/lib/admin-api";
+import { useCountryName } from "@/hooks/use-country-name";
+import { Notice } from "@/components/ui/notice";
+import { useCatalogError } from "./catalog-table";
 import { CountriesField } from "./countries-field";
 import { Card, PageTitle, useAdminI18n } from "./ui";
+import { useWorkingCountry } from "./working-country";
 import { useAdminMethodologies } from "./use-methodologies";
 import { ErrorText } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
@@ -57,6 +63,10 @@ export function TemplateEditor() {
 function Editor({ initial }: { initial: AdminTemplate }) {
   const { t, locale } = useAdminI18n();
   const queryClient = useQueryClient();
+  const { access } = useWorkingCountry();
+  // Content, countries and global samples are the same everywhere: only global staff change them.
+  // A country manager sees them read-only and changes their countries' visibility and samples.
+  const global = allowedFor(access, "catalog", null);
   const [draft, setDraft] = useState(initial);
   const methods = useAdminMethodologies();
   const [plot, setPlot] = useState(initial.plot.join("\n"));
@@ -90,6 +100,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
         layoutTheme: draft.layoutTheme ?? null,
         samples: Object.fromEntries(LANGUAGES.map((l) => [l, draft.samples[l] ?? null])),
         countries: draft.countries,
+        countriesMode: draft.countriesMode,
         published: draft.published,
       }),
     onSuccess: (saved) => {
@@ -112,151 +123,176 @@ function Editor({ initial }: { initial: AdminTemplate }) {
         aside={
           <div className="flex items-center gap-3">
             {save.isSuccess && <span data-testid="template-saved" className="text-sm text-success">{t("admin.saved")}</span>}
-            <Button type="submit" data-testid="template-save" loading={save.isPending} disabled={!blocksOk} icon={<Save className="size-4" />}>
-              {t("admin.save")}
-            </Button>
+            {global && (
+              <Button type="submit" data-testid="template-save" loading={save.isPending} disabled={!blocksOk} icon={<Save className="size-4" />}>
+                {t("admin.save")}
+              </Button>
+            )}
           </div>
         }
       >
         {initial.title}
       </PageTitle>
       {save.isError && <ErrorText>{save.error.message}</ErrorText>}
+      {!global && <Notice data-testid="template-readonly">{t("admin.template.readonly")}</Notice>}
+      {!global && <CountryVisibility template={initial} />}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title={t("admin.template.card")}>
-          <Field label={t("admin.template.title")}>
-            <Input data-testid="template-title-input" value={draft.title} onChange={(e) => set("title", e.target.value)} />
-          </Field>
-          <Field label={t("admin.template.summary")}>
-            <Textarea className="min-h-20" value={draft.summary} onChange={(e) => set("summary", e.target.value)} />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t("admin.template.ageMin")}>
-              <Input type="number" min={2} max={10} value={draft.ageMin} onChange={(e) => set("ageMin", Number(e.target.value))} />
+      <fieldset disabled={!global} className="contents">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card title={t("admin.template.card")}>
+            <Field label={t("admin.template.title")}>
+              <Input data-testid="template-title-input" value={draft.title} onChange={(e) => set("title", e.target.value)} />
             </Field>
-            <Field label={t("admin.template.ageMax")}>
-              <Input type="number" min={2} max={10} value={draft.ageMax} onChange={(e) => set("ageMax", Number(e.target.value))} />
+            <Field label={t("admin.template.summary")}>
+              <Textarea className="min-h-20" value={draft.summary} onChange={(e) => set("summary", e.target.value)} />
             </Field>
-          </div>
-          <ChoiceLabel strong>
-            <Checkbox checked={draft.published} onChange={(e) => set("published", e.target.checked)} />
-            {t("admin.template.published")}
-          </ChoiceLabel>
-          <TemplateCountries value={draft.countries} onChange={(countries) => set("countries", countries)} />
-        </Card>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t("admin.template.ageMin")}>
+                <Input type="number" min={2} max={10} value={draft.ageMin} onChange={(e) => set("ageMin", Number(e.target.value))} />
+              </Field>
+              <Field label={t("admin.template.ageMax")}>
+                <Input type="number" min={2} max={10} value={draft.ageMax} onChange={(e) => set("ageMax", Number(e.target.value))} />
+              </Field>
+            </div>
+            <ChoiceLabel strong>
+              <Checkbox checked={draft.published} onChange={(e) => set("published", e.target.checked)} />
+              {t("admin.template.published")}
+            </ChoiceLabel>
+            {global && (
+              <TemplateCountries
+                value={draft.countries}
+                mode={draft.countriesMode}
+                onChange={(countries) => set("countries", countries)}
+                onModeChange={(mode) => set("countriesMode", mode)}
+              />
+            )}
+          </Card>
 
-        <Card title={t("admin.template.story")}>
-          <Field label={t("admin.template.method")}>
-            <Select value={draft.methodology} onChange={(e) => set("methodology", e.target.value)}>
-              {/* The saved slug stays selectable while the list loads. */}
-              {!methods.data?.some((m) => m.slug === draft.methodology) && <option value={draft.methodology}>{draft.methodology}</option>}
-              {methods.data?.map((m) => (
-                <option key={m.slug} value={m.slug}>
-                  {t(m.published ? "admin.template.method.option" : "admin.template.method.draft", {
-                    name: methodologyText(m.texts, locale).name,
-                    min: m.ageMin,
-                    max: m.ageMax,
-                  })}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label={t("admin.template.theme")}>
-            <Input value={draft.theme} onChange={(e) => set("theme", e.target.value)} />
-          </Field>
-          <Field label={t("admin.template.plot")}>
-            <Textarea code className="min-h-40" value={plot} onChange={(e) => setPlot(e.target.value)} />
-          </Field>
-          <Field label={t("admin.template.layoutTheme")} hint={t("admin.template.layoutTheme.hint")}>
-            <Select
-              data-testid="template-layout-theme"
-              data-options={themes.map((theme) => theme.id).join(" ")}
-              data-loaded={allThemes.data ? "true" : "false"}
-              value={draft.layoutTheme ?? ""}
-              onChange={(e) => set("layoutTheme", e.target.value || null)}
-            >
-              <option value="">{t("admin.template.layoutTheme.auto")}</option>
-              {themes.map((theme) => (
-                <option key={theme.id} value={theme.id}>
-                  {themeName(theme, t, locale)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label={t("admin.template.style")}>
-            <Textarea code className="min-h-16" value={draft.stylePrompt ?? ""} onChange={(e) => set("stylePrompt", e.target.value)} />
-          </Field>
-        </Card>
-      </div>
+          <Card title={t("admin.template.story")}>
+            <Field label={t("admin.template.method")}>
+              <Select value={draft.methodology} onChange={(e) => set("methodology", e.target.value)}>
+                {/* The saved slug stays selectable while the list loads. */}
+                {!methods.data?.some((m) => m.slug === draft.methodology) && <option value={draft.methodology}>{draft.methodology}</option>}
+                {methods.data?.map((m) => (
+                  <option key={m.slug} value={m.slug}>
+                    {t(m.published ? "admin.template.method.option" : "admin.template.method.draft", {
+                      name: methodologyText(m.texts, locale).name,
+                      min: m.ageMin,
+                      max: m.ageMax,
+                    })}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={t("admin.template.theme")}>
+              <Input value={draft.theme} onChange={(e) => set("theme", e.target.value)} />
+            </Field>
+            <Field label={t("admin.template.plot")}>
+              <Textarea code className="min-h-40" value={plot} onChange={(e) => setPlot(e.target.value)} />
+            </Field>
+            <Field label={t("admin.template.layoutTheme")} hint={t("admin.template.layoutTheme.hint")}>
+              <Select
+                data-testid="template-layout-theme"
+                data-options={themes.map((theme) => theme.id).join(" ")}
+                data-loaded={allThemes.data ? "true" : "false"}
+                value={draft.layoutTheme ?? ""}
+                onChange={(e) => set("layoutTheme", e.target.value || null)}
+              >
+                <option value="">{t("admin.template.layoutTheme.auto")}</option>
+                {themes.map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {themeName(theme, t, locale)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={t("admin.template.style")}>
+              <Textarea code className="min-h-16" value={draft.stylePrompt ?? ""} onChange={(e) => set("stylePrompt", e.target.value)} />
+            </Field>
+          </Card>
+        </div>
 
-      <BlocksCard blocks={blocks} onChange={setBlocks} valid={blocksOk} />
+        <BlocksCard blocks={blocks} onChange={setBlocks} valid={blocksOk} />
+      </fieldset>
 
-      <SamplesCard template={draft} onChange={(samples) => set("samples", samples)} />
+      <SamplesCard template={draft} countrySamples={initial.countrySamples} global={global} onChange={(samples) => set("samples", samples)} />
 
       <TemplatePreview template={draft} blocks={blocksOk ? blocks : null} theme={themes.find((x) => x.id === draft.layoutTheme) ?? null} />
 
-      <Card
-        title={t("admin.template.questions")}
-        action={
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Plus className="size-4" />}
-            onClick={() =>
-              set("questions", [...draft.questions, { key: `q${draft.questions.length + 1}`, label: "", kind: "text", required: false }])
-            }
-          >
-            {t("admin.template.question.add")}
-          </Button>
-        }
-      >
-        {draft.questions.map((q, i) => (
-          <div key={i} className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[8rem_1fr_8rem_auto]">
-            <Input
-              code
-              aria-label={t("admin.template.question.key")}
-              value={q.key}
-              placeholder={t("admin.template.question.key")}
-              onChange={(e) => setQuestion(i, { key: e.target.value })}
-            />
-            <Input aria-label={t("admin.template.question.label")} value={q.label} placeholder={t("admin.template.question.label")} onChange={(e) => setQuestion(i, { label: e.target.value })} />
-            <Select value={q.kind} onChange={(e) => setQuestion(i, { kind: e.target.value as TemplateQuestion["kind"] })}>
-              <option value="text">{t("admin.template.question.text")}</option>
-              <option value="choice">{t("admin.template.question.choice")}</option>
-            </Select>
-            <IconButton variant="ghost" label={t("admin.template.question.remove")} onClick={() => set("questions", draft.questions.filter((_, j) => j !== i))}>
-              <Trash2 className="size-4" />
-            </IconButton>
-            {q.kind === "choice" ? (
+      <fieldset disabled={!global} className="contents">
+        <Card
+          title={t("admin.template.questions")}
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Plus className="size-4" />}
+              onClick={() =>
+                set("questions", [...draft.questions, { key: `q${draft.questions.length + 1}`, label: "", kind: "text", required: false }])
+              }
+            >
+              {t("admin.template.question.add")}
+            </Button>
+          }
+        >
+          {draft.questions.map((q, i) => (
+            <div key={i} className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[8rem_1fr_8rem_auto]">
               <Input
-                className="md:col-span-3"
-                aria-label={t("admin.template.question.options")}
-                defaultValue={q.options?.join(", ") ?? ""}
-                placeholder={t("admin.template.question.options")}
-                onBlur={(e) => setQuestion(i, { options: e.target.value.split(",").map((o) => o.trim()).filter(Boolean) })}
+                code
+                aria-label={t("admin.template.question.key")}
+                value={q.key}
+                placeholder={t("admin.template.question.key")}
+                onChange={(e) => setQuestion(i, { key: e.target.value })}
               />
-            ) : (
-              <Input
-                className="md:col-span-3"
-                aria-label={t("admin.template.question.placeholder")}
-                value={q.placeholder ?? ""}
-                placeholder={t("admin.template.question.placeholder")}
-                onChange={(e) => setQuestion(i, { placeholder: e.target.value || undefined })}
-              />
-            )}
-            <ChoiceLabel>
-              <Checkbox checked={q.required} onChange={(e) => setQuestion(i, { required: e.target.checked })} />
-              {t("admin.template.question.required")}
-            </ChoiceLabel>
-          </div>
-        ))}
-      </Card>
+              <Input aria-label={t("admin.template.question.label")} value={q.label} placeholder={t("admin.template.question.label")} onChange={(e) => setQuestion(i, { label: e.target.value })} />
+              <Select value={q.kind} onChange={(e) => setQuestion(i, { kind: e.target.value as TemplateQuestion["kind"] })}>
+                <option value="text">{t("admin.template.question.text")}</option>
+                <option value="choice">{t("admin.template.question.choice")}</option>
+              </Select>
+              <IconButton variant="ghost" label={t("admin.template.question.remove")} onClick={() => set("questions", draft.questions.filter((_, j) => j !== i))}>
+                <Trash2 className="size-4" />
+              </IconButton>
+              {q.kind === "choice" ? (
+                <Input
+                  className="md:col-span-3"
+                  aria-label={t("admin.template.question.options")}
+                  defaultValue={q.options?.join(", ") ?? ""}
+                  placeholder={t("admin.template.question.options")}
+                  onBlur={(e) => setQuestion(i, { options: e.target.value.split(",").map((o) => o.trim()).filter(Boolean) })}
+                />
+              ) : (
+                <Input
+                  className="md:col-span-3"
+                  aria-label={t("admin.template.question.placeholder")}
+                  value={q.placeholder ?? ""}
+                  placeholder={t("admin.template.question.placeholder")}
+                  onChange={(e) => setQuestion(i, { placeholder: e.target.value || undefined })}
+                />
+              )}
+              <ChoiceLabel>
+                <Checkbox checked={q.required} onChange={(e) => setQuestion(i, { required: e.target.checked })} />
+                {t("admin.template.question.required")}
+              </ChoiceLabel>
+            </div>
+          ))}
+        </Card>
+      </fieldset>
     </form>
   );
 }
 
-/** Where the catalog lists the book; none means everywhere. */
-function TemplateCountries({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+/** Where the catalog lists the book (or, "everywhere except…", where it does not); none means everywhere. */
+function TemplateCountries({
+  value,
+  mode,
+  onChange,
+  onModeChange,
+}: {
+  value: string[];
+  mode: CountriesMode;
+  onChange: (next: string[]) => void;
+  onModeChange: (mode: CountriesMode) => void;
+}) {
   const { t } = useAdminI18n();
   return (
     <CountriesField
@@ -270,8 +306,53 @@ function TemplateCountries({ value, onChange }: { value: string[]; onChange: (ne
         </span>
       }
       value={value}
+      mode={mode}
+      onModeChange={onModeChange}
       onChange={onChange}
     />
+  );
+}
+
+/**
+ * A country manager's one change to a catalog book's listing: shown or hidden in each of their
+ * countries (the others stay as they are).
+ */
+function CountryVisibility({ template }: { template: AdminTemplate }) {
+  const { t } = useAdminI18n();
+  const queryClient = useQueryClient();
+  const countryName = useCountryName("admin");
+  const errorText = useCatalogError();
+  const { options } = useWorkingCountry();
+  const toggle = useMutation({
+    mutationFn: ({ country, visible }: { country: string; visible: boolean }) => setTemplateVisibility(template.slug, country, visible),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(["admin", "template", template.slug], saved);
+      void queryClient.invalidateQueries({ queryKey: ["admin", "templates"] });
+    },
+  });
+  const rule = { mode: template.countriesMode, countries: template.countries };
+  return (
+    <Card title={t("admin.template.visibility")} data-testid="template-visibility">
+      <ul className="flex flex-wrap gap-3">
+        {options.map((country) => {
+          const visible = rule.countries.length === 0 || rule.countries.includes(country) === (rule.mode === "include");
+          return (
+            <li key={country}>
+              <ChoiceLabel>
+                <Checkbox
+                  data-testid={`template-visible-${country}`}
+                  checked={visible}
+                  disabled={toggle.isPending}
+                  onChange={(e) => toggle.mutate({ country, visible: e.target.checked })}
+                />
+                {countryName(country)}
+              </ChoiceLabel>
+            </li>
+          );
+        })}
+      </ul>
+      {toggle.isError && <ErrorText>{errorText(toggle.error)}</ErrorText>}
+    </Card>
   );
 }
 
@@ -372,18 +453,58 @@ function BlocksCard({ blocks, onChange, valid }: { blocks: TemplateBlocks; onCha
 }
 
 /**
- * The sample book per language: a finished book from this template in that language, picked from
- * the ones made so far. Visitors see the one in their language, else in its fallback.
+ * The sample book per language, globally or for one country: a finished book from this template in
+ * that language, picked from the ones made so far (a country's from the books made there). Visitors
+ * see their country's sample, else the global one, else one in the language they read next. Global
+ * samples are saved with the form (global staff only); a country's are saved at once.
  */
-function SamplesCard({ template, onChange }: { template: AdminTemplate; onChange: (samples: TemplateSamples) => void }) {
+function SamplesCard({
+  template,
+  countrySamples,
+  global,
+  onChange,
+}: {
+  template: AdminTemplate;
+  /** The countries' samples as saved (they are saved at once, not with the form). */
+  countrySamples: AdminTemplate["countrySamples"];
+  global: boolean;
+  onChange: (samples: TemplateSamples) => void;
+}) {
   const { t, date } = useAdminI18n();
+  const queryClient = useQueryClient();
+  const countryName = useCountryName("admin");
+  const errorText = useCatalogError();
+  const { country: working, options: countries, me } = useWorkingCountry();
+  const books = me.permissions.includes("books");
+  const [scope, setScope] = useState<string>(working ?? (global ? "" : (countries[0] ?? "")));
+  const country = scope || null;
+  const save = useMutation({
+    mutationFn: ({ language, bookId }: { language: Language; bookId: string | null }) => setTemplateSample(template.slug, country, language, bookId),
+    onSuccess: (saved) => queryClient.setQueryData(["admin", "template", template.slug], saved),
+  });
+  const own = country ? (countrySamples[country] ?? {}) : template.samples;
   return (
-    <Card title={t("admin.template.samples")} data-testid="template-samples">
-      <p className="-mt-2 text-sm text-muted">{t("admin.template.samples.hint")}</p>
+    <Card
+      title={t("admin.template.samples")}
+      data-testid="template-samples"
+      data-country={country ?? ""}
+      action={
+        <Select data-testid="template-samples-country" aria-label={t("admin.template.samples.country")} value={scope} onChange={(e) => setScope(e.target.value)}>
+          {global && <option value="">{t("admin.template.samples.global")}</option>}
+          {countries.map((code) => (
+            <option key={code} value={code}>
+              {countryName(code)}
+            </option>
+          ))}
+        </Select>
+      }
+    >
+      <p className="-mt-2 text-sm text-muted">{country ? t("admin.template.samples.countryHint") : t("admin.template.samples.hint")}</p>
       <ul className="flex flex-col gap-2">
         {LANGUAGES.map((language) => {
-          const options = template.sampleOptions.filter((o) => o.language === language);
-          const current = template.samples[language] ?? "";
+          const options = template.sampleOptions.filter((o) => o.language === language && (!country || o.country === country));
+          const current = own[language] ?? "";
+          const fallback = country ? template.samples[language] : undefined;
           return (
             <li key={language} className="grid items-center gap-2 sm:grid-cols-[8rem_1fr_auto]">
               <span className="text-sm font-medium">{LANGUAGE_NAMES[language]}</span>
@@ -392,10 +513,14 @@ function SamplesCard({ template, onChange }: { template: AdminTemplate; onChange
                 data-value={current}
                 aria-label={`${t("admin.template.samples")}: ${LANGUAGE_NAMES[language]}`}
                 value={current}
-                disabled={!options.length && !current}
-                onChange={(e) => onChange({ ...template.samples, [language]: e.target.value || undefined })}
+                disabled={(!options.length && !current) || save.isPending || (!country && !global)}
+                onChange={(e) =>
+                  country ? save.mutate({ language, bookId: e.target.value || null }) : onChange({ ...template.samples, [language]: e.target.value || undefined })
+                }
               >
-                <option value="">{options.length ? t("admin.template.samples.none") : t("admin.template.samples.empty")}</option>
+                <option value="">
+                  {country && fallback ? t("admin.template.samples.usesGlobal") : options.length ? t("admin.template.samples.none") : t("admin.template.samples.empty")}
+                </option>
                 {/* A sample that is not among the options (an older book) stays selectable. */}
                 {current && !options.some((o) => o.id === current) && <option value={current}>{current}</option>}
                 {options.map((o) => (
@@ -404,7 +529,7 @@ function SamplesCard({ template, onChange }: { template: AdminTemplate; onChange
                   </option>
                 ))}
               </Select>
-              {current ? (
+              {current && books ? (
                 <Link href={`/admin/books/${current}`} className="flex items-center gap-1 text-sm font-semibold text-accent">
                   <ExternalLink className="size-4" />
                   {t("admin.template.samples.open")}
@@ -416,6 +541,12 @@ function SamplesCard({ template, onChange }: { template: AdminTemplate; onChange
           );
         })}
       </ul>
+      {save.isSuccess && (
+        <span data-testid="template-sample-saved" className="text-sm text-success">
+          {t("admin.saved")}
+        </span>
+      )}
+      {save.isError && <ErrorText>{errorText(save.error)}</ErrorText>}
     </Card>
   );
 }

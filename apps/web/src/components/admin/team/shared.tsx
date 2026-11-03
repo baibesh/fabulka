@@ -1,6 +1,6 @@
 "use client";
 
-import { ASSIGNABLE_RIGHTS, TEAM_ERRORS, sectionOfRight, type AdminRight, type StaffRole, type TeamError } from "@fabulka/shared";
+import { ADMIN_SECTION_PARTS, ASSIGNABLE_RIGHTS, TEAM_ERRORS, sectionOfRight, type AdminRight, type StaffRole, type TeamError } from "@fabulka/shared";
 import type { MessageKey } from "@/i18n/messages";
 import { Checkbox } from "@/components/ui/choice";
 import { ApiError } from "@/lib/api";
@@ -28,7 +28,7 @@ export function useRoleName() {
 /** A right's label: the section's nav name, or "Reference: prices" for a part. */
 export function useRightName() {
   const { t } = useAdminI18n();
-  return (right: AdminRight) => (right.includes(".") ? t(`admin.team.right.${right as "reference.prices" | "reference.landing"}`) : t(`admin.nav.${sectionOfRight(right)}`));
+  return (right: AdminRight) => (right.includes(".") ? t(`admin.team.right.${right as (typeof ADMIN_SECTION_PARTS)[number]}`) : t(`admin.nav.${sectionOfRight(right)}`));
 }
 
 /** A Team refusal in the admin's words (admin.team.error.<code>), else its message. */
