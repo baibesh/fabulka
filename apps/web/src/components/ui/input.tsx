@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import type { AriaAttributes, ComponentProps } from "react";
 import { cx } from "./cx";
 import { useFieldControl } from "./field";
@@ -31,8 +32,23 @@ export function Textarea({ invalid, code, className, ...props }: ComponentProps<
   return <textarea className={cx(control(code, className), "py-2")} {...wired} />;
 }
 
-/** A native select with the inputs' height and border. */
+/**
+ * A native select with the inputs' height and border. The browser's own arrow sits on the very edge
+ * and differs by system, so it is hidden and our chevron drawn inside the padding instead; `className`
+ * sizes the wrapper (w-48), the select fills it.
+ */
 export function Select({ invalid, code, small, className, ...props }: ComponentProps<"select"> & Invalid) {
   const wired = useFieldControl({ ...props, "aria-invalid": invalidProp(invalid, props) });
-  return <select className={cx(control(code, className), small ? "h-control-sm" : "h-control")} {...wired} />;
+  return (
+    <span className={cx("relative block", !/(^|\s)w-/.test(className ?? "") && "w-full", className)}>
+      <select
+        className={cx(control(code, "w-full"), "appearance-none pr-10", small ? "h-control-sm" : "h-control")}
+        {...wired}
+      />
+      <ChevronDown
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted"
+      />
+    </span>
+  );
 }
