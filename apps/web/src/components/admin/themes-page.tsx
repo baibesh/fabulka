@@ -15,6 +15,7 @@ import { ApiError } from "@/lib/api";
 import { StaffBudgetNote, useCapError, useRefreshBudget } from "./staff-budget";
 import { themeName } from "@/lib/themes";
 import { Card, PageTitle, useAdminI18n } from "./ui";
+import { useCan } from "./working-country";
 
 const QUERY = ["admin", "themes"];
 
@@ -27,17 +28,19 @@ const QUERY = ["admin", "themes"];
 export function ThemesPage() {
   const { t } = useAdminI18n();
   const themes = useQuery({ queryKey: QUERY, queryFn: adminThemes });
+  // An illustrator reads the themes (what style references are for); only the themes right changes them.
+  const canEdit = useCan("themes");
   return (
     <>
       <PageTitle>{t("admin.themes.title")}</PageTitle>
       <p className="-mt-4 text-sm text-muted">{t("admin.themes.lead")}</p>
-      <ProposeCard />
+      {canEdit && <ProposeCard />}
       {!themes.data ? (
         <QueryState error={themes.error} scope="admin" />
       ) : (
         <ul data-testid="themes-list" className="flex flex-col gap-4">
           {themes.data.map((theme) => (
-            <ThemeCard key={theme.theme.id} entry={theme} />
+            <ThemeCard key={theme.theme.id} entry={theme} canEdit={canEdit} />
           ))}
         </ul>
       )}
@@ -125,7 +128,7 @@ function Checks({ checks }: { checks: ThemeCheck[] }) {
   );
 }
 
-function ThemeCard({ entry }: { entry: AdminTheme }) {
+function ThemeCard({ entry, canEdit }: { entry: AdminTheme; canEdit: boolean }) {
   const { t, locale, date } = useAdminI18n();
   const queryClient = useQueryClient();
   const { theme } = entry;
@@ -146,12 +149,12 @@ function ThemeCard({ entry }: { entry: AdminTheme }) {
             <Badge tone={entry.status === "published" ? "success" : "warning"}>
               {ai ? t(`admin.themes.status.${entry.status}`) : t("admin.themes.curated")}
             </Badge>
-            {ai && entry.status === "draft" && (
+            {canEdit && ai && entry.status === "draft" && (
               <Button size="sm" data-testid="theme-publish" loading={publish.isPending} onClick={() => publish.mutate()}>
                 {t("admin.themes.publish")}
               </Button>
             )}
-            {ai && entry.status === "published" && (
+            {canEdit && ai && entry.status === "published" && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -164,7 +167,8 @@ function ThemeCard({ entry }: { entry: AdminTheme }) {
                 {t("admin.themes.unpublish")}
               </Button>
             )}
-            {ai &&
+            {canEdit &&
+              ai &&
               (confirm ? (
                 <Button size="sm" variant="danger" data-testid="theme-delete-confirm" loading={remove.isPending} onClick={() => remove.mutate()}>
                   {t("admin.themes.delete.confirm")}

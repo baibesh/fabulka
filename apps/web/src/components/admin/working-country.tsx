@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { accessFromMe, type AdminAccess, type AdminMe, type AdminRight } from "@fabulka/shared";
+import { accessFromMe, allowed, type AdminAccess, type AdminMe, type AdminRight } from "@fabulka/shared";
 import { usePathname, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -197,4 +197,9 @@ export function WorkingCountryNotice() {
 /** Keeps the working country on an admin link or navigation: `/admin/books/1` → `/admin/books/1?country=DE`. */
 export function useAdminHref(): (path: string) => string {
   return useWorkingCountry().href;
+}
+
+/** Whether the session holds any of `rights` in some scope (the API checks again): writes hide without it. */
+export function useCan(...rights: AdminRight[]): boolean {
+  return allowed(useWorkingCountry().access, rights);
 }

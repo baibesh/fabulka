@@ -103,6 +103,13 @@ import {
   type StaffBudget,
   type StaffCapDefaults,
   type StaffCapOverride,
+  IllustratorReferenceSchema,
+  PageFlagSchema,
+  type CreatePageFlag,
+  type CreateReference,
+  type IllustratorReference,
+  type PageFlag,
+  type UpdateReference,
 } from "@fabulka/shared";
 import { z } from "zod";
 import { request } from "./api";
@@ -533,4 +540,41 @@ export async function saveStaffCapDefaults(defaults: StaffCapDefaults): Promise<
 /** Someone's own daily cap (null: the default), or none at all. */
 export async function setStaffCap(id: string, cap: StaffCapOverride): Promise<StaffMember> {
   return StaffMemberSchema.parse(await request(`/api/admin/team/${encodeURIComponent(id)}/cap`, json("PUT", cap)));
+}
+
+// ---- Illustrator references and review ---------------------------------------------------------
+
+export async function adminReferences(): Promise<IllustratorReference[]> {
+  return IllustratorReferenceSchema.array().parse(await request("/api/admin/references"));
+}
+
+export async function uploadReference(input: CreateReference): Promise<IllustratorReference> {
+  return IllustratorReferenceSchema.parse(await request("/api/admin/references", json("POST", input)));
+}
+
+export async function updateReference(id: string, patch: UpdateReference): Promise<IllustratorReference> {
+  return IllustratorReferenceSchema.parse(await request(`/api/admin/references/${id}`, json("PATCH", patch)));
+}
+
+/** One slot's pictures in their new order. */
+export async function reorderReferences(ids: string[]): Promise<IllustratorReference[]> {
+  return IllustratorReferenceSchema.array().parse(await request("/api/admin/references/order", json("PUT", { ids })));
+}
+
+export const deleteReference = (id: string) => request(`/api/admin/references/${id}`, { method: "DELETE" });
+
+export async function pageFlags(): Promise<PageFlag[]> {
+  return PageFlagSchema.array().parse(await request("/api/admin/flags"));
+}
+
+export async function bookFlags(id: string): Promise<PageFlag[]> {
+  return PageFlagSchema.array().parse(await request(`/api/admin/books/${id}/flags`));
+}
+
+export async function flagPage(id: string, flag: CreatePageFlag): Promise<PageFlag> {
+  return PageFlagSchema.parse(await request(`/api/admin/books/${id}/flags`, json("POST", flag)));
+}
+
+export async function resolveFlag(id: string, resolved: boolean): Promise<PageFlag> {
+  return PageFlagSchema.parse(await request(`/api/admin/flags/${id}`, json("PATCH", { resolved })));
 }

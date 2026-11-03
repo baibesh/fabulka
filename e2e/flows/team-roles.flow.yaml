@@ -48,8 +48,9 @@ commands:
       readOnly: true
       assert: { rows: 1, first: { rights: orders, scoped: false, locked: false } }
 
-  # Invite someone with it (Team's role picker lists the roles from the database).
-  - tapOn: { testId: team-tab-people }
+  # Invite someone with it (Team's role picker lists the roles from the database). The new role's
+  # card is at the foot of a long list, too far down to scroll back to the tabs: Team opens anew on People.
+  - openLink: "${WEB}/admin/team"
   - waitForVisible: { testId: team-invite-form }
   - tapOn: { testId: team-invite-email }
   - inputText: "${ordersEmail}"

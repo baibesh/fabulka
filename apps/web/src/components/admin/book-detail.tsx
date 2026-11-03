@@ -1,11 +1,11 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, ExternalLink, Sparkles, Trash2 } from "lucide-react";
+import { Download, ExternalLink, Flag, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { addExampleVersion, adminBook, adminExamples, bookCalls, createExample, deleteBook, pinLayout } from "@/lib/admin-api";
+import { addExampleVersion, adminBook, adminExamples, bookCalls, bookFlags, createExample, deleteBook, flagPage, pinLayout } from "@/lib/admin-api";
 import { Menu, MenuItem } from "@/components/ui/menu";
 import { EXAMPLES_QUERY, useExampleError } from "./examples-page";
 import { CallDetail } from "./journal/call-detail";
@@ -21,8 +21,9 @@ import { ConfirmDialog } from "@/components/ui/dialog";
 import { BookReader } from "@/components/book/book-reader";
 import { LANGUAGE_NAMES, PAGE_VARIANTS, displayVersion, type AdminBook, type LayoutQa, type PageVariant } from "@fabulka/shared";
 import { themeName } from "@/lib/themes";
-import { Select } from "@/components/ui/input";
-import { useAdminHref } from "./working-country";
+import { Select, Textarea } from "@/components/ui/input";
+import { pageLabel } from "./references-page";
+import { useAdminHref, useCan } from "./working-country";
 
 const QA_TONE: Record<LayoutQa["status"], "success" | "warning" | "danger" | "neutral"> = {
   ok: "success",
@@ -34,6 +35,7 @@ const QA_TONE: Record<LayoutQa["status"], "success" | "warning" | "danger" | "ne
 /** The book's theme and what render QA found: shrunk pages, and what blocks printing. */
 function BookLayoutCard({ book }: { book: AdminBook }) {
   const { t, locale } = useAdminI18n();
+  const canPin = useCan("books");
   const queryClient = useQueryClient();
   const pin = useMutation({
     mutationFn: (pins: Record<string, PageVariant | null>) => pinLayout(book.id, { pins }),
@@ -53,6 +55,24 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
         <dd data-testid="layout-format" data-format={layout.format.id}>
           {layout.format.id} · {layout.format.widthMm}×{layout.format.heightMm} {t("admin.orders.mm")}
         </dd>
+        {book.print && (
+          <>
+            <dt className="text-muted">{t("admin.book.print")}</dt>
+            <dd
+              data-testid="print-spec"
+              data-interior={book.print.interiorPages}
+              data-spine-soft={book.print.soft.spineMm}
+              data-spine-hard={book.print.hard.spineMm}
+            >
+              {t("admin.book.print.value", {
+                pages: book.print.interiorPages,
+                soft: book.print.soft.spineMm,
+                hard: book.print.hard.spineMm,
+              })}
+              {!book.print.soft.spineText && <span className="block text-xs text-muted">{t("admin.book.print.thin")}</span>}
+            </dd>
+          </>
+        )}
         <dt className="text-muted">{t("admin.book.layout.qa")}</dt>
         <dd>
           <Badge data-testid="render-qa" data-status={layout.qa.status} tone={QA_TONE[layout.qa.status]}>
@@ -82,7 +102,7 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
         </ul>
       )}
       {/* Staff may pin any layout; a two-page one only takes effect where it can start on a left page. */}
-      <div className="flex flex-col gap-2 text-sm">
+      <div className={`flex flex-col gap-2 text-sm ${canPin ? "" : "hidden"}`}>
         <p className="font-semibold">{t("admin.book.layout.pins")}</p>
         {book.pages.map(({ page }) => {
           const state = layout.pages[String(page)];
@@ -201,6 +221,12 @@ function BookCalls({ id, generating }: { id: string; generating: boolean }) {
               <span className="min-w-0">
                 <span className="font-semibold">{t(`admin.journal.kind.${call.kind}`)}</span>
                 {call.attempt > 1 && <span className="text-muted"> · {t("admin.attempt", { n: call.attempt })}</span>}
+                {call.references.length > 0 && (
+                  <span data-testid="call-references" data-references={call.references.join(" ")} className="text-muted">
+                    {" "}
+                    · {t("admin.journal.references", { n: call.references.length })}
+                  </span>
+                )}
                 {call.errorMessage && <span className="block truncate text-xs text-danger">{call.errorMessage}</span>}
               </span>
               <CallStatus status={call.status} />
@@ -216,6 +242,72 @@ function BookCalls({ id, generating }: { id: string; generating: boolean }) {
   );
 }
 
+/** An illustrator flags a page with a note (admin «References» lists the flags). */
+function FlagButton({ bookId, page }: { bookId: string; page: string }) {
+  const { t } = useAdminI18n();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const save = useMutation({
+    mutationFn: () => flagPage(bookId, { page, note: note.trim() }),
+    onSuccess: () => {
+      setOpen(false);
+      setNote("");
+      void queryClient.invalidateQueries({ queryKey: ["admin", "book", bookId, "flags"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "flags"] });
+    },
+  });
+  if (!open)
+    return (
+      <Button size="sm" variant="ghost" data-testid={`flag-${page}`} icon={<Flag className="size-4" />} onClick={() => setOpen(true)}>
+        {t("admin.flag.add")}
+      </Button>
+    );
+  return (
+    <form
+      className="flex flex-col gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <Textarea data-testid="flag-note" className="min-h-16" maxLength={500} placeholder={t("admin.flag.note")} value={note} onChange={(e) => setNote(e.target.value)} />
+      <div className="flex gap-2">
+        <Button size="sm" type="submit" data-testid="flag-save" loading={save.isPending} disabled={!note.trim()}>
+          {t("admin.flag.save")}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          {t("admin.team.cancel")}
+        </Button>
+      </div>
+      {save.isError && <ErrorText>{save.error.message}</ErrorText>}
+    </form>
+  );
+}
+
+/** The book's flagged pages, newest first. */
+function BookFlags({ id }: { id: string }) {
+  const { t, date } = useAdminI18n();
+  const flags = useQuery({ queryKey: ["admin", "book", id, "flags"], queryFn: () => bookFlags(id) });
+  if (!flags.data?.length) return null;
+  return (
+    <Card title={t("admin.flag.title")}>
+      <ul data-testid="book-flags" className="flex flex-col gap-2 text-sm">
+        {flags.data.map((flag) => (
+          <li key={flag.id} data-testid="book-flag" data-page={flag.page} className={flag.resolved ? "opacity-60" : ""}>
+            <Badge tone={flag.resolved ? "success" : "warning"}>{pageLabel(flag.page, t)}</Badge>{" "}
+            <span className="text-muted">
+              {date(flag.createdAt)}
+              {flag.createdBy ? ` · ${flag.createdBy}` : ""}
+            </span>
+            <p className="whitespace-pre-line">{flag.note}</p>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 export function BookDetail() {
   const adminHref = useAdminHref();
   const { id } = useParams<{ id: string }>();
@@ -223,6 +315,9 @@ export function BookDetail() {
   const { t, date, bookStatus } = useAdminI18n();
   const book = useQuery({ queryKey: ["admin", "book", id], queryFn: () => adminBook(id) });
   const methodName = useMethodologyName();
+  const canManage = useCan("books");
+  const canExamples = useCan("examples");
+  const canFlag = useCan("books.review");
   const [confirming, setConfirming] = useState(false);
   const remove = useMutation({ mutationFn: () => deleteBook(id), onSuccess: () => router.replace(adminHref("/admin/books")), onSettled: () => setConfirming(false) });
   if (!book.data) return <QueryState error={book.error} scope="admin" />;
@@ -258,16 +353,18 @@ export function BookDetail() {
               <ExternalLink className="size-4" />
               {t("admin.book.open")}
             </Link>
-            <ExampleActions book={b} />
+            {canExamples && <ExampleActions book={b} />}
             {b.pdfUrl && (
               <a href={b.pdfUrl} download className={buttonClass({ variant: "secondary" })}>
                 <Download className="size-4" />
                 {t("admin.book.pdf")}
               </a>
             )}
-            <Button variant="danger-outline" data-testid="delete-book" loading={remove.isPending} icon={<Trash2 className="size-4" />} onClick={() => setConfirming(true)}>
-              {t("admin.delete")}
-            </Button>
+            {canManage && (
+              <Button variant="danger-outline" data-testid="delete-book" loading={remove.isPending} icon={<Trash2 className="size-4" />} onClick={() => setConfirming(true)}>
+                {t("admin.delete")}
+              </Button>
+            )}
           </div>
         }
       >
@@ -306,15 +403,29 @@ export function BookDetail() {
         </Card>
         <Card title={t("admin.book.pages")}>
           <ol className="grid gap-4 sm:grid-cols-2">
+            {b.coverImageUrl && (
+              <li data-testid="admin-cover" className="overflow-hidden rounded-xl border border-border">
+                {/* eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API */}
+                <img src={b.coverImageUrl} alt="" className="aspect-square w-full object-cover" />
+                <div className="flex flex-col gap-2 p-3 text-sm">
+                  <p className="font-semibold">{t("admin.flag.page.cover")}</p>
+                  {b.blurb && <p className="text-muted">{b.blurb}</p>}
+                  {canFlag && <FlagButton bookId={b.id} page="cover" />}
+                </div>
+              </li>
+            )}
             {b.pages.map((page) => (
-              <li key={page.page} className="overflow-hidden rounded-xl border border-border">
+              <li key={page.page} data-testid="admin-page" className="overflow-hidden rounded-xl border border-border">
                 {page.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
                   <img src={page.imageUrl} alt="" className="aspect-[3/2] w-full object-cover" />
                 ) : (
                   <div className="aspect-[3/2] w-full bg-border" />
                 )}
-                <p className="whitespace-pre-line p-3 text-sm">{page.text}</p>
+                <div className="flex flex-col gap-2 p-3 text-sm">
+                  <p className="whitespace-pre-line">{page.text}</p>
+                  {canFlag && <FlagButton bookId={b.id} page={`story-${page.page}`} />}
+                </div>
               </li>
             ))}
           </ol>
@@ -328,6 +439,7 @@ export function BookDetail() {
           </Card>
         </div>
       )}
+      {canFlag && <BookFlags id={b.id} />}
       <BookCalls id={b.id} generating={b.status !== "done" && b.status !== "failed"} />
       <ConfirmDialog
         open={confirming}

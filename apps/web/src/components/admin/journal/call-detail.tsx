@@ -42,6 +42,7 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
                 [t("admin.journal.usage"), usage(c)],
                 [t("admin.journal.cost"), formatSpendUsd(c.costUsd)],
                 [t("admin.journal.response"), c.responseId ?? "—"],
+                [t("admin.journal.referenceIds"), c.references.length ? c.references.join(", ") : "—"],
               ] as const
             ).map(([label, value]) => (
               <div key={label} className="contents">

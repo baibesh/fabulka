@@ -34,7 +34,7 @@ import { Field } from "@/components/ui/field";
 import { Input, Textarea } from "@/components/ui/input";
 import { BackLink, PageHeader } from "@/components/ui/page";
 import { tabPanelProps, Tabs, useTabsId } from "@/components/ui/tabs";
-import { useAdminHref } from "./working-country";
+import { useAdminHref, useCan } from "./working-country";
 
 /** Languages a method must have to be published; the others are optional. */
 const isBase = (language: Language) => (BASE_LANGUAGES as readonly Language[]).includes(language);
@@ -105,6 +105,8 @@ function inUseCounts(error: Error): { templates: number; books: number } {
 /** Edits a method, or with no `initial` creates one. */
 export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
   const adminHref = useAdminHref();
+  // An illustrator reads the method (its beats are what composition sketches are for), never saves it.
+  const canEdit = useCan("methodologies");
   const router = useRouter();
   const { t, locale } = useAdminI18n();
   const queryClient = useQueryClient();
@@ -217,6 +219,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       }}
       className="flex flex-col gap-6"
     >
+      <fieldset disabled={!canEdit} data-testid="methodology-fieldset" className="contents">
       <BackLink href={adminHref("/admin/methodologies")}>{t("admin.method.back")}</BackLink>
       <PageHeader
         size="sm"
@@ -224,7 +227,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
         aside={
           <div className="flex flex-wrap items-center gap-3">
             {savedNow && <span data-testid="methodology-saved" className="text-sm text-success">{t("admin.saved")}</span>}
-            {initial && (
+            {initial && canEdit && (
               <Button
                 variant="danger-outline"
                 data-testid="methodology-delete"
@@ -237,9 +240,11 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
                 {t("admin.delete")}
               </Button>
             )}
-            <Button type="submit" data-testid="methodology-save" loading={save.isPending} icon={<Save className="size-4" />}>
-              {t("admin.save")}
-            </Button>
+            {canEdit && (
+              <Button type="submit" data-testid="methodology-save" loading={save.isPending} icon={<Save className="size-4" />}>
+                {t("admin.save")}
+              </Button>
+            )}
           </div>
         }
       />
@@ -441,6 +446,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
           </div>
         )}
       </Card>
+      </fieldset>
     </form>
   );
 }

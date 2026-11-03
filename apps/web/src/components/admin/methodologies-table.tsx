@@ -9,21 +9,24 @@ import { Badge } from "@/components/ui/badge";
 import { ErrorText } from "@/components/ui/notice";
 import { buttonClass } from "@/components/ui/button";
 import { Table, TableEmpty, TableFrame } from "@/components/ui/table";
-import { useAdminHref } from "./working-country";
+import { useAdminHref, useCan } from "./working-country";
 
 export function MethodologiesTable() {
   const adminHref = useAdminHref();
   const { t, locale } = useAdminI18n();
   const methods = useAdminMethodologies();
+  const canEdit = useCan("methodologies");
 
   return (
     <>
       <PageTitle
         aside={
-          <Link href={adminHref("/admin/methodologies/new")} data-testid="methodology-new" className={buttonClass()}>
-            <Plus className="size-4" />
-            {t("admin.methods.create")}
-          </Link>
+          canEdit && (
+            <Link href={adminHref("/admin/methodologies/new")} data-testid="methodology-new" className={buttonClass()}>
+              <Plus className="size-4" />
+              {t("admin.methods.create")}
+            </Link>
+          )
         }
       >
         {t("admin.methods.title")}

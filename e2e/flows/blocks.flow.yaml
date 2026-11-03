@@ -35,22 +35,23 @@ commands:
       extract: { bookId: "$[0].id", browserKey: "$[0].key" }
       assert: { rows: 1 }
 
-  # Cover, dedication, 4 story pages, «поговорим», a drawing page, the end: 3 drawing pages pad it to 12.
+  # Between the covers: dedication, 4 story pages, «поговорим», a drawing page, the end — 8 pages,
+  # no padding; with the front and back covers the book has 10.
   - waitForVisible: { testId: book-blocks }
-  - assertVisible: { css: "[data-testid=page-count][data-count='12'][data-fillers='3']" }
-  - assertVisible: { testId: padding-note }
+  - assertVisible: { css: "[data-testid=page-count][data-count='10'][data-fillers='0']" }
+  - assertNotVisible: { testId: padding-note }
   - assertNotVisible: { css: "[data-testid=block-row][data-kind=story] [data-testid^=block-remove]" }
   - assertNotVisible: { css: "[data-testid=block-row][data-kind=cover] [data-testid^=block-up]" }
 
-  # Without «поговорим» the book is exactly 8 pages: no padding.
+  # Without «поговорим» 7 pages are left between the covers: one drawing page pads them to 8.
   - tapOn: { css: "[data-testid=block-row][data-kind=talk] [data-testid^=block-remove]" }
-  - waitForVisible: { css: "[data-testid=page-count][data-count='8'][data-fillers='0']", timeout: 20000 }
+  - waitForVisible: { css: "[data-testid=page-count][data-count='10'][data-fillers='1']", timeout: 20000 }
   - assertNotVisible: { css: "[data-testid=block-row][data-kind=talk]" }
-  - assertNotVisible: { testId: padding-note }
+  - assertVisible: { testId: padding-note }
 
-  # One more drawing page: 9 pages, padded to 12 again.
+  # One more drawing page of the parent's own: 8 again, no padding.
   - tapOn: { testId: block-add-drawing }
-  - waitForVisible: { css: "[data-testid=page-count][data-count='12'][data-fillers='3']", timeout: 20000 }
+  - waitForVisible: { css: "[data-testid=page-count][data-count='10'][data-fillers='0']", timeout: 20000 }
 
   # The dedication goes after the story.
   - tapOn: { css: "[data-testid=block-row][data-kind=dedication] [data-testid^=block-down]" }
@@ -73,13 +74,17 @@ commands:
       assert: { rows: 1, first: { blocks: "cover,story,dedication,drawing,drawing,end", qa: ok } }
   - assertTrue: { equals: ["${saved}", "${dedication}"] }
 
-  # The reader shows the padding pages as added for print: the spread before the back cover.
+  # One drawing page less: 7 pages between the covers, padded to 8 with a drawing page.
+  - tapOn: { css: "[data-testid=block-row][data-kind=drawing] [data-testid^=block-remove]" }
+  - waitForVisible: { css: "[data-testid=page-count][data-count='10'][data-fillers='1']", timeout: 20000 }
+
+  # The reader shows the padding page as added for print: in the spread before the back cover.
   - tapOn: { testId: reader-next }
   - tapOn: { testId: reader-next }
   - tapOn: { testId: reader-next }
   - tapOn: { testId: reader-next }
   - waitForVisible: { css: "[data-page-key=pad-1] [data-testid=filler-badge]" }
-  - assertVisible: { css: "[data-testid=book-reader][data-pages='12']" }
+  - assertVisible: { css: "[data-testid=book-reader][data-pages='10']" }
 
   # The story cannot move, a block the template does not offer cannot be added, markup is refused.
   - request:

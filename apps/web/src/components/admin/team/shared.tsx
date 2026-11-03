@@ -14,6 +14,7 @@ const BUILTIN_NAMES: Record<string, MessageKey> = {
   admin: "admin.team.role.admin",
   seo: "admin.team.role.seo",
   country_manager: "admin.team.role.country_manager",
+  illustrator: "admin.team.role.illustrator",
 };
 
 export function useRoleName() {

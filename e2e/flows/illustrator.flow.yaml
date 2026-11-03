@@ -1,0 +1,128 @@
+# The illustrator role (seeded): references, books to review, themes and methods to read — nothing
+# else. An illustrator uploads a style picture for the fairy theme; the next mock book in that theme
+# sends it with its hero sheet, pages and cover, and the journal records it. They flag the cover.
+appId: ${WEB}
+tags: [admin, references, auth]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  stamp: "${Date.now()}"
+  email: "illustrator+${Date.now()}@e2e.test"
+  clientKey: "e2e-illustrator-${Date.now()}"
+commands:
+  - sql:
+      exec: "insert into \"StaffMember\" (id, email, name, roles, \"updatedAt\") values ($1, $2, 'Ilya', ARRAY['illustrator'], now())"
+      params: ["ill-${stamp}", "${email}"]
+
+  # Through the API: the sections and what they allow.
+  - request:
+      url: ${API}/auth/login
+      query: { return: /api/admin/me }
+      headers: { Accept: application/json }
+      extract: { state: "$.state" }
+      assert: { status: 200 }
+  - request:
+      url: ${API}/auth/mock/authorize
+      query: { state: "${state}", email: "${email}" }
+      assert: { status: 200, json: { "$.superadmin": false } }
+  - assertTrue: { contains: ["${response.body}", "\"permissions\":[\"books\",\"methodologies\",\"themes\",\"references\"]"] }
+  - request: { url: "${API}/admin/references", assert: { status: 200 } }
+  - request: { url: "${API}/admin/themes", assert: { status: 200 } }
+  - request: { url: "${API}/admin/methodologies", assert: { status: 200 } }
+  - request: { url: "${API}/admin/books", assert: { status: 200 } }
+  - request: { url: "${API}/admin/orders", assert: { status: 403 } }
+  - request: { url: "${API}/admin/journal/stats", assert: { status: 403 } }
+  - request: { method: POST, url: "${API}/admin/themes", json: { brief: "pale pastel forest" }, assert: { status: 403 } }
+  - request: { method: PUT, url: "${API}/admin/methodologies/adventure-quest", json: {}, assert: { status: 403 } }
+
+  # In the browser: only those four sections; themes read-only.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin?lang=en"
+  - waitForVisible: { testId: admin-login-keycloak }
+  - tapOn: { testId: admin-login-keycloak }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${email}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { testId: admin-nav-references, timeout: 15000 }
+  - assertVisible: { testId: admin-nav-books }
+  - assertVisible: { testId: admin-nav-methodologies }
+  - assertVisible: { testId: admin-nav-themes }
+  - assertNotVisible: { testId: admin-nav-dashboard }
+  - assertNotVisible: { testId: admin-nav-orders }
+  - assertNotVisible: { testId: admin-nav-catalog }
+  - assertNotVisible: { testId: admin-nav-journal }
+  - assertNotVisible: { testId: admin-nav-team }
+  - tapOn: { testId: admin-nav-themes }
+  - waitForVisible: { testId: themes-list, timeout: 15000 }
+  - assertNotVisible: { testId: theme-brief }
+
+  # A style picture for the fairy theme.
+  - tapOn: { testId: admin-nav-references }
+  - waitForVisible: { testId: ref-upload, timeout: 15000 }
+  - selectOption: { testId: ref-kind, optionValue: style }
+  - selectOption: { testId: ref-theme, optionValue: fairy }
+  - tapOn: { testId: ref-note }
+  - inputText: "Gouache, teal and coral"
+  - uploadFile: { css: "[data-testid=ref-file]", files: "${PWD}/e2e/fixtures/child.jpg" }
+  - tapOn: { testId: ref-upload }
+  - waitForVisible: { css: "[data-testid=ref-slot][data-kind=style] [data-testid=ref-item][data-enabled=true]", timeout: 20000 }
+  - sql:
+      query: "select id, kind, theme, enabled from \"IllustratorReference\" where \"createdBy\" = $1"
+      params: ["${email}"]
+      readOnly: true
+      extract: { refId: "$[0].id" }
+      assert: { rows: 1, first: { kind: style, theme: fairy, enabled: true } }
+  - sql:
+      query: "select count(*)::int as n from \"AuditEvent\" where \"actorEmail\" = $1 and action = 'reference.upload' and section = 'references'"
+      params: ["${email}"]
+      readOnly: true
+      assert: { first: { n: 1 } }
+
+  # The next mock book in the fairy theme (age 6) sends it with the hero sheet, every page and the cover.
+  - request:
+      method: POST
+      url: ${API}/books
+      headers: { X-Client-Key: "${clientKey}" }
+      json:
+        child: { name: "Ilyas", age: 6, gender: boy, interests: [кони], city: Алматы, language: ru }
+      extract: { bookId: "$.id" }
+      assert: { status: 201 }
+  - request:
+      url: ${API}/books/${bookId}
+      headers: { X-Client-Key: "${clientKey}" }
+      retryUntil: { status: 200, json: { "$.status": done } }
+      timeout: 40000
+  - sql:
+      query: "select count(*) filter (where kind = 'hero')::int as hero, count(*) filter (where kind = 'page')::int as page, count(*) filter (where kind = 'cover')::int as cover, count(*) filter (where kind = 'story')::int as story from \"ModelCall\" where \"bookId\" = $1 and $2 = any(\"references\")"
+      params: ["${bookId}", "${refId}"]
+      readOnly: true
+      assert: { first: { hero: 1, page: 4, cover: 1, story: 0 } }
+  - request:
+      url: ${API}/admin/books/${bookId}/calls
+      assert: { status: 200 }
+  - assertTrue: { contains: ["${response.body}", "\"references\":[\"${refId}\"]"] }
+
+  # Review: the illustrator flags the cover; it shows in the book and in the flags list.
+  - openLink: "${WEB}/admin/books/${bookId}?lang=en"
+  - waitForVisible: { testId: admin-cover, timeout: 20000 }
+  - assertNotVisible: { testId: delete-book }
+  - tapOn: { testId: flag-cover }
+  - tapOn: { testId: flag-note }
+  - inputText: "The hero's helmet is the wrong colour"
+  - tapOn: { testId: flag-save }
+  - waitForVisible: { css: "[data-testid=book-flag][data-page=cover]", timeout: 10000 }
+  - tapOn: { testId: admin-nav-references }
+  - waitForVisible: { testId: references-tab-flags, timeout: 15000 }
+  - tapOn: { testId: references-tab-flags }
+  - waitForVisible: { css: "[data-testid=flag-item][data-resolved=false]", timeout: 10000 }
+  - tapOn: { testId: flag-resolve }
+  - waitForVisible: { css: "[data-testid=flag-item][data-resolved=true]", timeout: 10000 }
+after:
+  - sql: { exec: "delete from \"IllustratorReference\" where \"createdBy\" = $1", params: ["${email}"] }
+  - sql: { exec: "delete from \"Book\" where \"clientKey\" = $1", params: ["${clientKey}"] }
+  - sql: { exec: "delete from \"StaffMember\" where email = $1", params: ["${email}"] }
+  - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${email}"] }

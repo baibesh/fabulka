@@ -1,0 +1,81 @@
+# The real cover: a mock book gets its own cover illustration with the child's name lettered on it,
+# a back cover with the blurb, and — in a hardcover order's print file — the cover wrap with a
+# lettered spine as wide as the book is thick.
+appId: ${WEB}
+tags: [book, cover, print]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  stamp: "${Date.now()}"
+  childName: "Aisha"
+  clientKey: "e2e-cover-${Date.now()}"
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+  headers:
+    X-Client-Key: "${clientKey}"
+commands:
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${childName}", age: 6, gender: girl, interests: [bicycles], city: Almaty, language: en }
+      extract: { bookId: "$.id" }
+      assert: { status: 201 }
+  - request: { url: "/books/${bookId}", retryUntil: { status: 200, json: { "$.status": done } }, timeout: 40000 }
+  # The cover illustration, SAM's placement of the lettering, and the back cover's blurb.
+  - request:
+      url: /books/${bookId}
+      extract: { coverUrl: "$.coverImageUrl", coverMode: "$.layout.cover.mode", blurb: "$.blurb" }
+      assert:
+        json: { "$.coverImageUrl": { contains: "/cover." }, "$.blurb": { contains: "Aisha" }, "$.layout.qa.status": ok }
+  - assertTrue: ${coverMode === 'overlay' || coverMode === 'banner'}
+  - request: { url: "${WEB}${coverUrl}", assert: { status: 200 } }
+  - request:
+      url: "${WEB}/files/books/${bookId}/book.html"
+      assert: { status: 200 }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"cover-name\""] }
+  - assertTrue: { contains: ["${response.body}", "data-key=\"back\""] }
+  - assertTrue: { contains: ["${response.body}", "A Fabulka story"] }
+  - sql:
+      query: "select \"coverImagePath\" is not null as cover, \"coverSubject\" is not null as mask, \"coverTone\" is not null as tone from \"Book\" where id = $1"
+      params: ["${bookId}"]
+      readOnly: true
+      assert: { first: { cover: true, mask: true, tone: true } }
+
+  # The reader opens on the designed cover with the name lettered.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/books/${bookId}?lang=en"
+  - waitForVisible: { testId: book-reader, timeout: 20000 }
+  - assertVisible: { testId: cover-name, contains: "Aisha" }
+
+  # Staff see how it prints; a hardcover order's print file starts with the wrap and its spine.
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      url: /admin/books/${bookId}
+      extract: { inside: "$.print.interiorPages", soft: "$.print.soft.spineMm", hard: "$.print.hard.spineMm" }
+      assert:
+        json: { "$.print.hard.spineText": true, "$.print.soft.spineText": false }
+  - assertTrue: ${Number(inside) % 4 === 0 && Number(hard) > Number(soft) && Number(soft) > 0}
+  - sql:
+      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, currency, \"itemsAmount\", \"deliveryAmount\", \"totalAmount\", \"clientKey\", country) values ($1, $2, 'Aisha', '+77010000000', 'a@e2e.test', 'Алматы', 'ул. Абая, 1', 'hard', 1, 'KZT', 1490000, 0, 1490000, $3, 'KZ')"
+      params: ["cover-${stamp}", "${bookId}", "${clientKey}"]
+  - request:
+      url: /admin/orders/cover-${stamp}/print.pdf
+      assert: { status: 200, headers: { content-type: application/pdf } }
+  - request:
+      url: "${WEB}/files/books/${bookId}/print.html"
+      assert: { status: 200 }
+  - assertTrue: { contains: ["${response.body}", "data-key=\"wrap\""] }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"spine-text\""] }
+  - assertTrue: { contains: ["${response.body}", "cover wrap, hard, spine ${hard} mm"] }
+after:
+  - sql: { exec: "delete from \"Book\" where \"clientKey\" = $1", params: ["${clientKey}"] }

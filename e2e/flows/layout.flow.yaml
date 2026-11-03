@@ -38,8 +38,8 @@ commands:
   - tapOn: { testId: create-book }
   - waitForVisible: { text: "Книга готова", timeout: 30000 }
   - waitForVisible: { css: "[data-testid=book-reader][data-theme=fairy]" }
-  # «Сказка» puts the first picture on the cover with the title on a plate.
-  - assertVisible: { css: "[data-page-key=cover] .fb-cover-scene" }
+  # The cover is its own illustration with the child's name lettered on it, in every theme.
+  - assertVisible: { css: "[data-page-key=cover] .fb-cover-designed [data-testid=cover-name]" }
   - sql:
       query: >-
         select id, layout->'theme'->>'id' as theme, layout->'qa'->>'status' as qa
@@ -53,7 +53,7 @@ commands:
   - assertVisible: { testId: book-design }
   - tapOn: { testId: theme-little }
   - waitForVisible: { css: "[data-testid=book-reader][data-theme=little]", timeout: 20000 }
-  - assertVisible: { css: "[data-page-key=cover] .fb-cover-framed" }
+  - assertVisible: { css: "[data-page-key=cover] .fb-cover-designed" }
   - assertVisible: { css: "[data-testid=theme-little][aria-pressed=true]" }
   - sql:
       query: >-
