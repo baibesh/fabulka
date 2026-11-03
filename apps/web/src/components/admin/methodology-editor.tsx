@@ -34,6 +34,7 @@ import { Field } from "@/components/ui/field";
 import { Input, Textarea } from "@/components/ui/input";
 import { BackLink, PageHeader } from "@/components/ui/page";
 import { tabPanelProps, Tabs, useTabsId } from "@/components/ui/tabs";
+import { useAdminHref } from "./working-country";
 
 /** Languages a method must have to be published; the others are optional. */
 const isBase = (language: Language) => (BASE_LANGUAGES as readonly Language[]).includes(language);
@@ -103,6 +104,7 @@ function inUseCounts(error: Error): { templates: number; books: number } {
 
 /** Edits a method, or with no `initial` creates one. */
 export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
+  const adminHref = useAdminHref();
   const router = useRouter();
   const { t, locale } = useAdminI18n();
   const queryClient = useQueryClient();
@@ -171,7 +173,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
     onSuccess: (saved) => {
       if (!saved) return;
       refresh(saved);
-      if (!initial) router.replace(`/admin/methodologies/${saved.slug}`);
+      if (!initial) router.replace(adminHref(`/admin/methodologies/${saved.slug}`));
     },
   });
 
@@ -195,7 +197,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "methodologies"] });
       void queryClient.invalidateQueries({ queryKey: ["methodologies"] });
-      router.push("/admin/methodologies");
+      router.push(adminHref("/admin/methodologies"));
     },
     onSettled: () => setConfirming(false),
   });
@@ -215,7 +217,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       }}
       className="flex flex-col gap-6"
     >
-      <BackLink href="/admin/methodologies">{t("admin.method.back")}</BackLink>
+      <BackLink href={adminHref("/admin/methodologies")}>{t("admin.method.back")}</BackLink>
       <PageHeader
         size="sm"
         title={initial ? methodologyText(initial.texts, locale).name || initial.slug : t("admin.method.newTitle")}

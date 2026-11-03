@@ -44,7 +44,7 @@ import { Notice } from "@/components/ui/notice";
 import { useCatalogError } from "./catalog-table";
 import { CountriesField } from "./countries-field";
 import { Card, PageTitle, useAdminI18n } from "./ui";
-import { useWorkingCountry } from "./working-country";
+import { useAdminHref, useWorkingCountry } from "./working-country";
 import { useAdminMethodologies } from "./use-methodologies";
 import { ErrorText } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
@@ -63,6 +63,7 @@ export function TemplateEditor() {
 }
 
 function Editor({ initial }: { initial: AdminTemplate }) {
+  const adminHref = useAdminHref();
   const { t, locale } = useAdminI18n();
   const queryClient = useQueryClient();
   const { access } = useWorkingCountry();
@@ -120,7 +121,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
       }}
       className="flex flex-col gap-6"
     >
-      <BackLink href="/admin/catalog">{t("admin.template.back")}</BackLink>
+      <BackLink href={adminHref("/admin/catalog")}>{t("admin.template.back")}</BackLink>
       <PageTitle
         aside={
           <div className="flex items-center gap-3">
@@ -472,6 +473,7 @@ function SamplesCard({
   global: boolean;
   onChange: (samples: TemplateSamples) => void;
 }) {
+  const adminHref = useAdminHref();
   const { t, date } = useAdminI18n();
   const queryClient = useQueryClient();
   const countryName = useCountryName("admin");
@@ -532,7 +534,7 @@ function SamplesCard({
                 ))}
               </Select>
               {current && books ? (
-                <Link href={`/admin/books/${current}`} className="flex items-center gap-1 text-sm font-semibold text-accent">
+                <Link href={adminHref(`/admin/books/${current}`)} className="flex items-center gap-1 text-sm font-semibold text-accent">
                   <ExternalLink className="size-4" />
                   {t("admin.template.samples.open")}
                 </Link>
