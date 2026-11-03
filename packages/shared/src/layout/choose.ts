@@ -35,6 +35,8 @@ export interface PageAnalysis {
   words: number;
   subject: PageSubject | null;
   tone: PageTone | null;
+  /** False: the page has no picture (it was refused), so it becomes a vignette page. */
+  art?: boolean;
 }
 
 /** Most of a text box that may lie over the hero. */
@@ -181,6 +183,19 @@ export function judgePage(layout: BookLayout, page: PageAnalysis): Partial<PageL
   let plateBand: PageLayout["plateBand"] = "bottom";
   const fits = (variant: PageVariant, state?: Pick<PageLayout, "plateBand">) =>
     page.words <= capacity(textRect(variant, format, state), theme, layout) * SHRINK_ROOM;
+  if (page.art === false) {
+    // No picture: nothing to judge; the vignette page's text sits on paper where the plate would.
+    return {
+      options: ["plate"],
+      focus,
+      aspect,
+      ink: { plate: "dark" },
+      spreadSide,
+      plateBand,
+      noArt: true,
+      verdicts: { plate: { ok: true, ink: "dark" } },
+    };
+  }
 
   for (const variant of [...theme.variants, "plate" as const]) {
     const art = artRect(variant, format);
@@ -219,7 +234,7 @@ export function judgePage(layout: BookLayout, page: PageAnalysis): Partial<PageL
     ink[variant] = verdict.ink;
   }
   const options = [...theme.variants, "plate" as const].filter((v, i, all) => all.indexOf(v) === i && (v === "plate" || verdicts[v]?.ok));
-  return { options, focus, aspect, ink, spreadSide, plateBand, verdicts };
+  return { options, focus, aspect, ink, spreadSide, plateBand, noArt: false, verdicts };
 }
 
 /** The layout with every story page judged; staff pins, the parent's still valid picks and QA's findings stay. */

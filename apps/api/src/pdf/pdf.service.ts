@@ -165,17 +165,29 @@ export class PdfService {
     let current: BookLayout = { ...layout, fits: {} };
     const notes: LayoutQa['notes'] = [];
     if (pictures.length) {
-      const analyses = pictures.map((p) => ({
-        page: p.page,
-        subject: p.subject,
-        tone: tones[p.page],
-        words: countWords(
-          book.pages.find((b) => b.page === p.page)?.text ?? '',
-        ),
-      }));
+      const analyses = pictures.map((p) => {
+        const page = book.pages.find((b) => b.page === p.page);
+        return {
+          page: p.page,
+          subject: p.subject,
+          tone: tones[p.page],
+          words: countWords(page?.text ?? ''),
+          // A page whose picture was refused has none: it becomes a vignette page.
+          art: Boolean(page?.image),
+        };
+      });
       current = chooseLayout(current, analyses);
-      // Layouts the format crops the picture too much for are left out; staff see which.
       for (const analysis of analyses) {
+        if (!analysis.art) {
+          notes.push({
+            page: `story-${analysis.page}`,
+            kind: 'no-art',
+            detail:
+              "Muse Image refused every version of this page's scene: the hero's sheet stands in as a vignette",
+          });
+          continue;
+        }
+        // Layouts the format crops the picture too much for are left out; staff see which.
         const detail = cropNote(current, analysis);
         if (detail)
           notes.push({ page: `story-${analysis.page}`, kind: 'crop', detail });

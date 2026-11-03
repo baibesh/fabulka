@@ -99,44 +99,16 @@ describe('MetaGateway pictures drawn after an earlier one', () => {
 });
 
 describe('MetaGateway pages the safety filter refused', () => {
-  const ANGRY =
-    'close-up of the hero hugging the toy tightly, showing hot red cheeks and clenched fists, a grey storm cloud growing over her chest';
-
-  /** The text the image model was asked to draw in call `n` (0-based). */
-  const prompt = (create: jest.Mock, n: number) =>
-    (create.mock.calls as [{ input: string }][])[n][0].input;
-
-  it('draws the page once more in a gentler form', async () => {
-    const create = jest
-      .fn()
-      .mockRejectedValueOnce(refused())
-      .mockResolvedValueOnce(picture('page-1'));
-
-    const page = await gatewayWith(create).drawPage(ANGRY, 'toy-1', {
-      pet: false,
-      toy: true,
-    });
-
-    expect(page.ref).toBe('page-1');
-    expect(create).toHaveBeenCalledTimes(2);
-    expect(prompt(create, 0)).toContain('clenched fists');
-    expect(prompt(create, 1)).not.toMatch(/close-up|clenched|red cheeks/);
-    expect(prompt(create, 1)).toContain('a grey storm cloud');
-    expect(prompt(create, 1)).toContain(
-      'The toy is the same toy as in the toy character sheet',
-    );
-    expect(create).toHaveBeenLastCalledWith(
-      expect.objectContaining({ previous_response_id: 'toy-1' }),
-    );
-  });
-
-  it('gives up when the gentler page is refused too', async () => {
+  it('draws a page once and leaves a refusal to the caller (illustratePage)', async () => {
     const create = jest.fn().mockRejectedValue(refused());
 
     await expect(
-      gatewayWith(create).drawPage(ANGRY, 'hero-1', { pet: false, toy: false }),
+      gatewayWith(create).drawPage('a scene', 'hero-1', {
+        pet: false,
+        toy: false,
+      }),
     ).rejects.toThrow('content management policy');
-    expect(create).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('does not soften character sheets', async () => {
@@ -155,6 +127,51 @@ describe('MetaGateway pages the safety filter refused', () => {
       false,
     );
   });
+
+  it('has Muse Spark rewrite a refused scene from the page text and the refusal', async () => {
+    const create = jest.fn().mockResolvedValue({
+      id: 'r1',
+      output_text: JSON.stringify({
+        scene_prompt:
+          'the hero standing on his skateboard at the top of a gentle slope in the park, smiling',
+      }),
+      usage: { input_tokens: 1000, output_tokens: 100 },
+    });
+
+    const rewritten = await gatewayWith(create).rewriteScene({
+      scene: 'the hero tumbling off his skateboard in the park',
+      text: 'Тимур упал со скейта, но тут же встал.',
+      language: 'ru',
+      refusal: refused().message,
+    });
+
+    expect(rewritten.scene).toContain('standing on his skateboard');
+    expect(rewritten.costUsd).toBeCloseTo((1000 * 1.25 + 100 * 4.25) / 1e6);
+    const request = (
+      create.mock.calls as [{ input: string; instructions: string }][]
+    )[0][0];
+    expect(request.instructions).toContain('calm, safe pose');
+    expect(request.input).toContain('content management policy');
+    expect(request.input).toContain('Тимур упал со скейта');
+    expect(request.input).toContain('tumbling off his skateboard');
+    // The gentler form was refused too, and the model is told so.
+    expect(request.input).toContain('wobbling on his skateboard');
+  });
+
+  it('throws when Muse Spark returns no scene', async () => {
+    const create = jest
+      .fn()
+      .mockResolvedValue({ id: 'r2', output_text: '{"scene":""}' });
+
+    await expect(
+      gatewayWith(create).rewriteScene({
+        scene: 'a scene',
+        text: 'text',
+        language: 'en',
+        refusal: 'refused',
+      }),
+    ).rejects.toThrow('no rewritten scene');
+  });
 });
 
 describe('softenScene', () => {
@@ -167,6 +184,42 @@ describe('softenScene', () => {
     expect(soft).toContain('the pet watching');
     expect(soft).toContain("the hero's whole body is in the picture");
     expect(soft).not.toMatch(/\.\./);
+  });
+
+  it('turns a fall into a wobble, a crash into a near miss and leaves injuries out', () => {
+    const skate = softenScene(
+      'The hero tumbling off his skateboard in the park, the pet running behind.',
+    );
+    expect(skate).not.toMatch(/tumbl|fall/i);
+    expect(skate).toContain('wobbling on his skateboard in the park');
+    expect(skate).toContain('the pet running behind');
+    expect(skate).toContain('everyone is safe and well');
+
+    const trip = softenScene(
+      'The hero trips over a tree root and scrapes her knee, crying in pain.',
+    );
+    expect(trip).not.toMatch(/trips|scrape|crying|pain/i);
+    expect(trip).toContain('a tree root');
+
+    const bike = softenScene(
+      'The hero crashes his bike into a fence and falls down the hill, blood on his nose.',
+    );
+    expect(bike).not.toMatch(/crash|falls|blood/i);
+    expect(bike).toContain('just past a fence');
+
+    expect(softenScene('The hero falls into the pond')).toContain(
+      'splashing safely into the pond',
+    );
+    expect(softenScene('The hero gets hurt on the slide')).not.toMatch(/hurt/);
+    expect(softenScene('The hero slips.')).not.toMatch(/slips|,\./);
+  });
+
+  it('leaves falling snow and falling asleep alone', () => {
+    const calm = softenScene(
+      'The hero falls asleep by the window while snow falls outside.',
+    );
+    expect(calm).toContain('falls asleep by the window while snow falls');
+    expect(calm).not.toContain('everyone is safe and well');
   });
 
   it('keeps the child in a bath under the foam', () => {

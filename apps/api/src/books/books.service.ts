@@ -47,7 +47,12 @@ import {
 import { randomBytes } from 'node:crypto';
 import { basename } from 'node:path';
 import { JournalService } from '../journal/journal.service';
-import { MODEL_GATEWAY, type ModelGateway } from '../meta/model-gateway';
+import {
+  MODEL_GATEWAY,
+  type GeneratedImage,
+  type ModelGateway,
+} from '../meta/model-gateway';
+import { type ArtOutcome, illustratePage } from './illustrate';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import type { StoryBrief } from '../meta/prompts';
 import {
@@ -84,6 +89,12 @@ export interface StoredPage {
   subject?: PageSubject | null;
   /** How light the picture is where, measured when the book was first rendered. */
   tone?: PageTone | null;
+  /**
+   * How the picture came about (illustratePage); "refused": every version of the scene was refused
+   * and the page has no picture (imagePath null), laid out as a vignette page. Missing for books
+   * made before.
+   */
+  art?: ArtOutcome;
 }
 
 /** The row with the catalog book slug the DTO needs. */
@@ -702,32 +713,38 @@ export class BooksService implements OnModuleInit {
     });
     let done = 0;
     await eachLimit(pages, PAGE_CONCURRENCY, async (page) => {
-      const image = await this.models.drawPage(
-        page.scenePrompt,
+      // A refused scene is softened, then rewritten; a page refused every time keeps no picture.
+      const drawn = await illustratePage(this.models, {
+        page: page.page,
+        text: page.text,
+        scenePrompt: page.scenePrompt,
+        language: child.language,
         anchorRef,
-        {
-          pet: withPet && petInScene(page.scenePrompt),
-          toy: toyReference !== null && toyInScene(page.scenePrompt),
-        },
+        companions: (scene) => ({
+          pet: withPet && petInScene(scene),
+          toy: toyReference !== null && toyInScene(scene),
+        }),
         style,
         textSpace,
-      );
-      spent.usd += image.costUsd;
-      page.imagePath = await this.storage.save(
-        `books/${id}/page-${page.page}.${image.ext}`,
-        image.data,
-      );
-      // SAM finds the hero once, for the page layout; a failure only costs the page its overlays.
-      try {
-        const found = await this.models.findSubject(image.data, image.ext);
-        spent.usd += found.costUsd;
-        page.subject = found.subject;
-      } catch (error) {
-        this.logger.warn(
-          `book ${id} page ${page.page}: no hero mask (${error instanceof Error ? error.message : String(error)})`,
-        );
+      });
+      spent.usd += drawn.costUsd;
+      page.art = drawn.outcome;
+      const image = drawn.image;
+      if (!image) {
+        page.imagePath = null;
         page.subject = null;
+        this.logger.warn(
+          `book ${id} page ${page.page}: the picture was refused; a vignette page instead`,
+        );
+      } else {
+        page.imagePath = await this.storage.save(
+          `books/${id}/page-${page.page}.${image.ext}`,
+          image.data,
+        );
       }
+      // SAM finds the hero once, for the page layout; a failure only costs the page its overlays.
+      if (image)
+        page.subject = await this.findSubject(id, page.page, image, spent);
       done++;
       await this.update(id, 'pages', {
         pages: json(pages),
@@ -751,6 +768,25 @@ export class BooksService implements OnModuleInit {
     this.logger.log(
       `book ${id} done: ${pages.length} pages, $${spent.usd.toFixed(3)}`,
     );
+  }
+
+  /** SAM's mask of a page's characters; null when SAM failed (logged). */
+  private async findSubject(
+    id: string,
+    page: number,
+    image: GeneratedImage,
+    spent: Spend,
+  ): Promise<PageSubject | null> {
+    try {
+      const found = await this.models.findSubject(image.data, image.ext);
+      spent.usd += found.costUsd;
+      return found.subject;
+    } catch (error) {
+      this.logger.warn(
+        `book ${id} page ${page}: no hero mask (${error instanceof Error ? error.message : String(error)})`,
+      );
+      return null;
+    }
   }
 
   private stage(id: string, status: BookStatus) {

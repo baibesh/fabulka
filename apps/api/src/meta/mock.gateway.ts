@@ -18,6 +18,7 @@ import type {
 import type { BookTranslation } from '../examples/translation';
 import type {
   PrefillBrief,
+  SceneRewriteBrief,
   ShortenBrief,
   StoryBrief,
   TranslationBrief,
@@ -120,6 +121,24 @@ export const MOCK_SUBJECT: PageSubject = {
   ),
 };
 
+/**
+ * An interest that makes the mock's story put a fall on page 2 (page 1 of a one-page book) that the
+ * mock's image model refuses in every version, gentler and rewritten: for the E2E flow and tests of
+ * a page left without its picture.
+ */
+export const MOCK_REFUSE_INTEREST = 'mock-refuse';
+const REFUSE_MARK = '[mock-refuse]';
+
+/** Muse Image's safety refusal, as the SDK throws it. */
+export function mockRefusal(): Error {
+  return Object.assign(
+    new Error(
+      '400 The response was filtered due to the prompt triggering our content management policy.',
+    ),
+    { status: 400 },
+  );
+}
+
 /** What the mock "hears" in any recording, and the fields it pulls out of it. */
 export const MOCK_TRANSCRIPT =
   'Нашу дочку зовут Алия, ей пять лет, мы живём в Алматы, она любит динозавров и рисование, ' +
@@ -216,6 +235,11 @@ export class MockGateway implements ModelGateway {
   }: StoryBrief): Promise<GeneratedStory> {
     await this.pretend('story');
     const text = MOCK_TEXT[child.language];
+    const refused = child.interests.some(
+      (i) => i.trim().toLowerCase() === MOCK_REFUSE_INTEREST,
+    )
+      ? Math.min(2, pageCount)
+      : 0;
     const story: Story = {
       title: template
         ? `${child.name}: ${template.title}`
@@ -225,7 +249,10 @@ export class MockGateway implements ModelGateway {
       pages: Array.from({ length: pageCount }, (_, i) => ({
         page: i + 1,
         text: text.page(i + 1, child.name, child.city),
-        scene_prompt: `the hero${toy ? ' and the toy' : ''} exploring ${child.city}, scene ${i + 1}`,
+        scene_prompt:
+          i + 1 === refused
+            ? `the hero tumbling off a skateboard in ${child.city}, scene ${i + 1} ${REFUSE_MARK}`
+            : `the hero${toy ? ' and the toy' : ''} exploring ${child.city}, scene ${i + 1}`,
       })),
       talk_questions: text.questions,
     };
@@ -389,7 +416,24 @@ export class MockGateway implements ModelGateway {
     return { subject: MOCK_SUBJECT, costUsd: 0 };
   }
 
+  /** The mock's safe version keeps the refused mark: a refused page stays refused. */
+  async rewriteScene({ scene }: SceneRewriteBrief) {
+    await this.pretend('scene-rewrite');
+    return { scene: `the hero standing calmly, ${scene}`, costUsd: 0 };
+  }
+
   async drawPage(scenePrompt: string): Promise<GeneratedImage> {
+    if (scenePrompt.includes(REFUSE_MARK)) {
+      const call = this.journal.start({
+        kind: 'page',
+        model: 'mock',
+        prompt: scenePrompt,
+      });
+      await sleep(this.delayMs);
+      const error = mockRefusal();
+      call.fail(error);
+      throw error;
+    }
     await this.pretend('page', 1);
     const n = Number(/scene (\d+)/.exec(scenePrompt)?.[1] ?? 1);
     return {

@@ -77,6 +77,8 @@ export const isLeft = (index: number) => index % 2 === 1;
 
 /** What the variant of a story page is when it starts at `index`; skips what cannot go there. */
 export function pickVariant(theme: BookTheme, state: PageLayout | undefined, index: number): PageVariant {
+  // A page without its picture is a vignette page, whatever was pinned or picked.
+  if (state?.noArt) return "plate";
   const fits = (variant: PageVariant) => !isTwoPage(variant) || isLeft(index);
   if (state?.pin && fits(state.pin)) return state.pin;
   return availableVariants(theme, state, index, Infinity)[0] ?? "plate";
@@ -87,6 +89,7 @@ export function pickVariant(theme: BookTheme, state: PageLayout | undefined, ind
  * picture, fit there and whose text fits, best first, at most `limit`; the parent's pick first.
  */
 export function availableVariants(theme: BookTheme, state: PageLayout | undefined, index: number, limit = 3): PageVariant[] {
+  if (state?.noArt) return ["plate"];
   const full = new Set(state?.tooFull ?? []);
   const options: PageVariant[] = state?.options.length ? state.options : [...theme.variants, "plate"];
   const usable = options.filter((v) => (!isTwoPage(v) || isLeft(index)) && !full.has(v));

@@ -137,7 +137,12 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
       case "story": {
         const page = byPage.get(planned.story!)!;
         const state = layout.pages[String(planned.story)];
-        inner = story(planned, page, state, layout, body, bleedArt, ornament);
+        if (state?.noArt) {
+          inner = vignette(page, layout, book.heroImage, body, ornament);
+          classes.push("fb-no-art");
+        } else {
+          inner = story(planned, page, state, layout, body, bleedArt, ornament);
+        }
         classes.push(`fb-v-${planned.variant}`);
         break;
       }
@@ -242,6 +247,29 @@ function cover(
   return `<div class="fb-hero-frame">${image(book.heroImage, "fb-hero")}</div>${heading}`;
 }
 
+/**
+ * A story page whose picture Muse Image refused in every version (PageLayout.noArt): a vignette page
+ * in the theme's colors. The hero's character sheet (drawn on white for every book) stands small on
+ * the paper, its white multiplied away as on the scene cover, and the text sits below it where a
+ * plate would — so the book still has a picture on every page and keeps its rhythm. Without a sheet
+ * the theme's ornament stands in.
+ */
+function vignette(
+  page: RenderableBook["pages"][number],
+  layout: BookLayout,
+  heroImage: string | null,
+  body: (t: string) => string,
+  ornament: () => string,
+): string {
+  const { safeMm: s } = layout.format;
+  const rect = textRect("plate", layout.format, { plateBand: "bottom" });
+  const art: Rect = { x: rect.x, y: s + 6, w: rect.w, h: rect.y - s - 12 };
+  const picture = heroImage
+    ? image(heroImage, "fb-vignette", undefined, `${place(art)};`)
+    : `<div class="fb-ornament fb-vignette-ornament" style="${place(art)}">${ornament()}</div>`;
+  return `${picture}<div class="fb-box fb-text fb-on-paper fb-center fb-top" data-fit-box style="${place(rect)}"><div class="fb-flow"><p data-qa-text>${body(page.text)}</p></div></div>`;
+}
+
 function story(
   planned: PlannedPage,
   page: RenderableBook["pages"][number],
@@ -344,6 +372,8 @@ export const BOOK_CSS = `
 .fb-center { text-align: center; align-items: stretch; }
 .fb-flow { width: 100%; }
 .fb-text p { font-size: calc(var(--body-size) * var(--fit)); line-height: var(--line); }
+.fb-vignette { position: absolute; object-fit: contain; mix-blend-mode: multiply; }
+.fb-vignette-ornament { position: absolute; display: flex; align-items: center; justify-content: center; margin: 0; }
 .fb-ink-dark { color: var(--ink); text-shadow: 0 0 1.2mm rgba(255,255,255,.85), 0 0 .4mm rgba(255,255,255,.9); }
 .fb-ink-light { color: #fff; text-shadow: 0 0 1.4mm rgba(0,0,0,.6), 0 0 .4mm rgba(0,0,0,.5); }
 .fb-on-paper { color: var(--ink); text-shadow: none; }

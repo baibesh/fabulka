@@ -74,6 +74,7 @@ export function sourceRow(patch: Partial<BookRow> = {}): BookRow {
           pin: 'split',
           choice: null,
           tooFull: ['overlay-bottom'],
+          noArt: false,
           focus: { x: 0.5, y: 0.5 },
           aspect: 1.5,
           ink: {},

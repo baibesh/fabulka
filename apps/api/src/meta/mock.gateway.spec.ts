@@ -13,6 +13,7 @@ import {
   pagePrompt,
   prefillPrompt,
   reviewPrompt,
+  STORY_INSTRUCTIONS,
   storyPrompt,
   toyPrompt,
 } from './prompts';
@@ -118,6 +119,13 @@ describe('prompts', () => {
     expect(tight).toContain('keep every page within 60 words');
     expect(storyPrompt({ ...brief({ age: 3 }), wordsPerPage: 90 })).toContain(
       'at most 25 words',
+    );
+  });
+
+  it('tells the story to show mishaps safely in scene prompts', () => {
+    expect(STORY_INSTRUCTIONS).toContain('Show a mishap safely');
+    expect(STORY_INSTRUCTIONS).toContain(
+      'Never depict a fall, a crash, an injury',
     );
   });
 

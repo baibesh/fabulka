@@ -10,6 +10,7 @@ import type { Prisma } from '@prisma/client';
 import type { ClientErrorReport, ModelCallKind } from '@fabulka/shared';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { PrismaService } from '../prisma/prisma.service';
+import { CONTENT_POLICY, isSafetyRefusal } from '../meta/refusal';
 
 /** Error messages are cut to this many characters. */
 const MESSAGE_LIMIT = 1000;
@@ -227,6 +228,7 @@ export class ModelCallTimer {
 
 /** A short machine-readable reason: the HTTP status, a timeout, a dropped connection. */
 export function errorCode(error: unknown): string {
+  if (isSafetyRefusal(error)) return CONTENT_POLICY;
   const status = (error as { status?: unknown } | null)?.status;
   if (typeof status === 'number') return `http_${status}`;
   if (error instanceof SyntaxError) return 'invalid_output';

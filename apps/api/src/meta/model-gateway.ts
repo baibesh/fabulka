@@ -8,6 +8,7 @@ import type { BookTranslation } from '../examples/translation';
 import type {
   Companions,
   PrefillBrief,
+  SceneRewriteBrief,
   ShortenBrief,
   StoryBrief,
   TextSpace,
@@ -69,6 +70,8 @@ export interface ModelGateway {
   /**
    * One page illustration, chained from the last character sheet (`anchorRef`) so the
    * child, the pet and the toy stay on-model. `style` replaces the default art style (catalog books).
+   * One try: a scene the safety filter refuses throws (isSafetyRefusal), and illustratePage takes
+   * it from there (a gentler scene, then a rewritten one, then a page without its picture).
    */
   drawPage(
     scenePrompt: string,
@@ -114,6 +117,13 @@ export interface ModelGateway {
   translateBook(
     brief: TranslationBrief,
   ): Promise<{ translation: BookTranslation; costUsd: number }>;
+  /**
+   * Muse Spark rewrites the scene of a page Muse Image refused twice, keeping the story beat, the
+   * characters and the place in a calm, safe pose. Throws when the model returns no scene.
+   */
+  rewriteScene(
+    brief: SceneRewriteBrief,
+  ): Promise<{ scene: string; costUsd: number }>;
   /** Muse Spark shortens one translated page whose text did not fit its layout. */
   shortenPage(brief: ShortenBrief): Promise<{ text: string; costUsd: number }>;
 }

@@ -23,6 +23,7 @@ import {
   wordsPerPage,
   type BookLayout,
   type RenderableBook,
+  chooseLayout,
 } from "./index";
 
 const book = (pages = 4): RenderableBook => ({
@@ -174,6 +175,37 @@ describe("planBook", () => {
       expect(r.x + r.w).toBeLessThanOrEqual(format.widthMm - format.safeMm + 0.01);
       expect(r.y + r.h).toBeLessThanOrEqual(format.heightMm - format.safeMm + 0.01);
     }
+  });
+});
+
+describe("a page without its picture", () => {
+  const layout = newLayout("fairy");
+  const analysis = (page: number, art: boolean) => ({ page, words: 6, subject: null, tone: null, art });
+
+  it("is judged a vignette page: the plate, flagged, whatever was pinned or picked", () => {
+    const chosen = chooseLayout(layout, [analysis(1, true), analysis(2, false)]);
+    expect(chosen.pages["2"]).toMatchObject({ noArt: true, options: ["plate"] });
+    expect(chosen.pages["1"].noArt).toBe(false);
+    const pinned = { ...chosen.pages["2"], pin: "facing" as const, choice: "split" as const };
+    expect(pickVariant(layout.theme, pinned, 3)).toBe("plate");
+    expect(availableVariants(layout.theme, pinned, 3)).toEqual(["plate"]);
+  });
+
+  it("shows the hero's character sheet as a vignette with the text below it", () => {
+    const pages = book().pages.map((p) => (p.page === 2 ? { ...p, image: null } : p));
+    const chosen = chooseLayout(layout, [analysis(2, false)]);
+    const html = renderBook({ ...book(), pages }, chosen).pages.find((p) => p.key === "story-2")!.html;
+    expect(html).toContain("fb-no-art");
+    expect(html).toContain('class="fb-vignette" src="hero.png"');
+    expect(html).toContain("fb-on-paper");
+    expect(html).not.toContain("fb-empty");
+    // Without a character sheet the theme's ornament stands in.
+    const bare = renderBook({ ...book(), heroImage: null, pages }, chosen).pages.find((p) => p.key === "story-2")!.html;
+    expect(bare).toContain("fb-vignette-ornament");
+  });
+
+  it("is an old layout's page with no flag: unchanged", () => {
+    expect(BookLayoutSchema.parse(JSON.parse(JSON.stringify({ ...layout, pages: { "1": { options: ["split"] } } }))).pages["1"].noArt).toBe(false);
   });
 });
 

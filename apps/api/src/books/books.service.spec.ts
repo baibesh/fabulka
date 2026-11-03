@@ -182,6 +182,85 @@ describe('BooksService', () => {
     });
   });
 
+  it('finishes the book when every version of one page is refused, that page without its picture', async () => {
+    const models = new MockGateway(0);
+    const rewriteScene = jest.spyOn(models, 'rewriteScene');
+    const row: Record<string, unknown> = {
+      id: 'b9',
+      status: 'queued',
+      child: { ...child, interests: ['скейт', 'mock-refuse'] },
+      language: 'ru',
+      pages: [],
+      layout: null,
+      createdAt: new Date(),
+    };
+    const statuses: string[] = [];
+    const update = jest.fn(
+      ({ data }: { data: Record<string, unknown> & { status: string } }) => {
+        statuses.push(data.status);
+        Object.assign(row, data);
+        return Promise.resolve({ ...row });
+      },
+    );
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const render = jest.fn((_id: string, _book: unknown, layout: BookLayout) =>
+      Promise.resolve({ pdfPath: 'books/b9/book.pdf', layout, tones: {} }),
+    );
+    const saved: string[] = [];
+    const service = makeService(
+      {
+        book: {
+          create: jest.fn().mockImplementation(({ data }: { data: object }) => {
+            Object.assign(row, data);
+            return Promise.resolve({ ...row });
+          }),
+          update,
+          updateMany,
+        },
+        modelCall: { create: jest.fn().mockResolvedValue({}) },
+      },
+      models,
+      methodRows(),
+      {},
+      {
+        storage: {
+          url: () => null,
+          save: (path: string) => {
+            saved.push(path);
+            return Promise.resolve(path);
+          },
+        },
+        pdf: { render },
+      },
+    );
+
+    await service.create(
+      { child: { ...child, interests: ['скейт', 'mock-refuse'] } },
+      'k',
+      false,
+    );
+    for (let i = 0; i < 50 && row.status !== 'done'; i++)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(statuses.at(-1)).toBe('done');
+    expect(rewriteScene).toHaveBeenCalledTimes(1);
+    const pages = row.pages as {
+      page: number;
+      imagePath: string | null;
+      art: string;
+    }[];
+    expect(pages.map((p) => p.art)).toEqual(['drawn', 'refused']);
+    expect(pages[1].imagePath).toBeNull();
+    expect(saved).toContain('books/b9/page-1.svg');
+    expect(saved).not.toContain('books/b9/page-2.svg');
+    // Render QA gets the page with no picture, and lays it out as a vignette page.
+    const book = render.mock.calls[0][1] as {
+      pages: { image: string | null }[];
+    };
+    expect(book.pages.map((p) => p.image)).toEqual(['page-1.svg', null]);
+  });
+
   describe('a book of your own', () => {
     /** Creates the book and returns what the story was written by; the story itself is skipped. */
     async function briefFor(

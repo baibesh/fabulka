@@ -1,0 +1,87 @@
+# A page whose picture the image model refuses in every version (gentler, then rewritten by Muse
+# Spark) does not fail the book: it finishes, that page becomes a vignette page with the hero's sheet,
+# render QA notes it, and the admin sees the refusals and the rewrite in the book's journal (mock
+# models: the interest "mock-refuse" puts a skateboard fall on page 2 that the mock always refuses).
+appId: ${WEB}
+tags: [book, layout, admin]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Отказ ${Date.now()}"
+commands:
+  - request:
+      method: POST
+      url: ${API}/books
+      headers: { X-Client-Key: "e2e-${childName}", X-Demo-Code: E2E-DEMO }
+      json: { child: { name: "${childName}", age: 8, gender: boy, interests: [скейт, mock-refuse], city: Алматы } }
+      extract: { bookId: "$.id" }
+      assert: { status: 201 }
+  - request:
+      url: ${API}/books/${bookId}
+      retryUntil:
+        status: 200
+        json: { "$.status": done }
+      timeout: 30000
+  - request:
+      url: ${API}/books/${bookId}
+      assert:
+        status: 200
+        json:
+          "$.pages[0].imageUrl": { contains: "page-1" }
+          "$.pages[1].imageUrl": null
+          "$.layout.pages['2'].noArt": true
+          "$.layout.pages['2'].options[0]": plate
+          "$.layout.qa.status": ok
+          "$.layout.qa.notes[0].kind": no-art
+          "$.layout.qa.notes[0].page": story-2
+  - sql:
+      query: >-
+        select status::text as status, pages->1->>'art' as art, pages->1->>'imagePath' is null as "noImage",
+        pages->0->>'art' as first, "pdfPath" is not null as pdf
+        from "Book" where id = $1
+      params: ["${bookId}"]
+      readOnly: true
+      assert:
+        rows: 1
+        first: { status: done, art: refused, noImage: true, first: drawn, pdf: true }
+  # Every try is in the journal: three refused pictures and one rewrite.
+  - sql:
+      query: >-
+        select count(*) filter (where kind = 'page' and status = 'error' and "errorCode" = 'content_policy')::int as refused,
+        count(*) filter (where kind = 'scene-rewrite' and status = 'ok')::int as rewrites,
+        count(*) filter (where kind = 'page' and status = 'ok')::int as drawn
+        from "ModelCall" where "bookId" = $1
+      params: ["${bookId}"]
+      readOnly: true
+      assert:
+        first: { refused: 3, rewrites: 1, drawn: 3 }
+
+  # The parent's reader: the second story page is the vignette page with the hero's sheet.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/ru/books/${bookId}"
+  - waitForVisible: { testId: book-reader, timeout: 20000 }
+  - tapOn: { testId: reader-next }
+  - tapOn: { testId: reader-next }
+  - waitForVisible: { css: "[data-page-key=story-2] .fb-no-art .fb-vignette" }
+  - assertVisible: { testId: download-pdf }
+
+  # The admin: the render note on the book and the refusals and the rewrite in its journal.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "admin@e2e.test"
+  - tapOn: { testId: admin-password }
+  - inputText: "e2e-admin-password"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - openLink: "${WEB}/admin/books/${bookId}"
+  - waitForVisible: { css: "[data-testid=render-notes] [data-kind=no-art]" }
+  - assertVisible: { contains: "Muse Image refused every version of the scene" }
+  - waitForVisible: { testId: book-calls, containsDescendants: { text: "Scene rewrite" } }
+  - assertVisible: { contains: "content management policy" }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

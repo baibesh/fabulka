@@ -152,12 +152,21 @@ export const PageLayoutSchema = z.object({
   plateBand: z.enum(["top", "bottom"]).default("bottom"),
   /** Which half of a spread carries the text. */
   spreadSide: z.enum(["left", "right"]).default("right"),
+  /**
+   * The page has no picture of its own: Muse Image refused every version of its scene. It is always
+   * a one-page "plate" page, drawn as a vignette page: the hero's character sheet small on paper in
+   * the theme's colors, the text below it (render QA notes it as "no-art").
+   */
+  noArt: z.boolean().default(false),
 });
 export type PageLayout = z.infer<typeof PageLayoutSchema>;
 
 export const RENDER_ISSUE_KINDS = ["overflow", "fallback-font"] as const;
-/** Things render QA tells staff without blocking print: "crop" — a picture too narrow for the format's layouts. */
-export const RENDER_NOTE_KINDS = ["crop"] as const;
+/**
+ * Things render QA tells staff without blocking print: "crop" — a picture too narrow for the
+ * format's layouts; "no-art" — a page whose picture was refused, laid out as a vignette page.
+ */
+export const RENDER_NOTE_KINDS = ["crop", "no-art"] as const;
 export const RenderIssueSchema = z.object({
   /** The rendered page's key: "cover", "story-3", "talk"… */
   page: z.string(),

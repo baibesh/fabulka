@@ -857,6 +857,8 @@ export const MODEL_CALL_KINDS = [
   "translate",
   /** Muse Spark shortens a translated page whose text does not fit the layout. */
   "shorten",
+  /** Muse Spark rewrites a page's scene that Muse Image refused twice, so it can be drawn safely. */
+  "scene-rewrite",
 ] as const;
 export const ModelCallKindSchema = z.enum(MODEL_CALL_KINDS);
 export type ModelCallKind = z.infer<typeof ModelCallKindSchema>;

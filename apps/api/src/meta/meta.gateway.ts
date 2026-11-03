@@ -56,7 +56,9 @@ import {
   toyPrompt,
   pagePrompt,
   petPrompt,
-  softenScene,
+  SCENE_REWRITE_INSTRUCTIONS,
+  type SceneRewriteBrief,
+  sceneRewritePrompt,
   storyPrompt,
 } from './prompts';
 
@@ -106,16 +108,7 @@ export function isMissingReference(error: unknown): boolean {
   );
 }
 
-/**
- * Muse Image's 400 for a prompt its safety filter refused: "The response was filtered due to the
- * prompt triggering our content management policy." The SDK error carries only the status and
- * this message.
- */
-export function isSafetyRefusal(error: unknown): boolean {
-  const status = (error as { status?: unknown } | null)?.status;
-  const message = error instanceof Error ? error.message : String(error);
-  return status === 400 && /content (?:management )?policy/i.test(message);
-}
+export { isSafetyRefusal } from './refusal';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -470,27 +463,54 @@ export class MetaGateway implements ModelGateway {
     );
   }
 
-  /** A scene the safety filter refused is drawn once more in a gentler form (softenScene). */
-  async drawPage(
+  /** One try; a safety refusal is the caller's to handle (illustratePage softens and rewrites). */
+  drawPage(
     scenePrompt: string,
     anchorRef: string,
     companions: Companions,
     style?: string,
     textSpace?: TextSpace,
   ): Promise<GeneratedImage> {
-    const draw = (scene: string) =>
-      this.draw(
-        'page',
-        pagePrompt(scene, companions, style, textSpace),
-        '1536x1024',
-        anchorRef,
-      );
-    try {
-      return await draw(scenePrompt);
-    } catch (error) {
-      if (!isSafetyRefusal(error)) throw error;
-      return draw(softenScene(scenePrompt));
+    return this.draw(
+      'page',
+      pagePrompt(scenePrompt, companions, style, textSpace),
+      '1536x1024',
+      anchorRef,
+    );
+  }
+
+  async rewriteScene(
+    brief: SceneRewriteBrief,
+  ): Promise<{ scene: string; costUsd: number }> {
+    const input = sceneRewritePrompt(brief);
+    const call = this.journal.start({
+      kind: 'scene-rewrite',
+      model: this.options.storyModel,
+      prompt: input,
+    });
+    const response = await call.request(
+      this.client.responses.create({
+        model: this.options.storyModel,
+        instructions: SCENE_REWRITE_INSTRUCTIONS,
+        input,
+        text: { format: { type: 'json_object' } },
+        reasoning: { effort: 'low' },
+      }),
+    );
+    const parsed = SceneSchema.safeParse(
+      safeJson(response.output_text || '{}'),
+    );
+    if (!parsed.success) {
+      const problem = new Error('Muse Spark returned no rewritten scene');
+      call.fail(problem, {
+        ...spend(response),
+        code: 'invalid_output',
+        output: response.output_text,
+      });
+      throw problem;
     }
+    call.ok(spend(response));
+    return { scene: parsed.data.scene_prompt, costUsd: tokenCost(response) };
   }
 
   /** POST /asr/transcribe is not part of the OpenAI SDK: a multipart request of its own. */
@@ -798,6 +818,9 @@ function spend(response: Response): CallOutcome {
 
 const ReviewSchema = z.object({ safe: z.boolean(), reason: z.string() });
 const ShortenSchema = z.object({ text: z.string().trim().min(1) });
+const SceneSchema = z.object({
+  scene_prompt: z.string().trim().min(1).max(1500),
+});
 
 function safeJson(text: string): unknown {
   try {

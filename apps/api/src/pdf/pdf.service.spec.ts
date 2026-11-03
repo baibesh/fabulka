@@ -1,5 +1,6 @@
 import {
   BOOK_FORMATS,
+  blankPage,
   newLayout,
   printPageSize,
   withFormat,
@@ -252,6 +253,47 @@ describe('PdfService (Chromium), choosing layouts from the pictures', () => {
     const html = await readFile(join(root, 'books/c/book.html'), 'utf8');
     expect(html).toContain('data-key="story-1" data-variant="overlay-bottom"');
     expect(html).toContain('data-key="story-2" data-variant="facing"');
+  });
+
+  it("lays out a page whose picture was refused as a vignette page with the hero's sheet", async () => {
+    const short = book(() => 'Айгерим жұлдыздарды көрді.');
+    const refused: RenderableBook = {
+      ...short,
+      pages: short.pages.map((p) => (p.page === 2 ? { ...p, image: null } : p)),
+    };
+    // Staff once pinned a picture layout on that page: it cannot hold without a picture.
+    const base = newLayout('fairy');
+    const result = await pdf.render(
+      'c',
+      refused,
+      {
+        ...base,
+        pages: { '2': { ...blankPage(), pin: 'overlay-top' } },
+      },
+      [
+        { page: 1, subject: MOCK_SUBJECT, tone: null },
+        { page: 2, subject: null, tone: null },
+        { page: 3, subject: MOCK_SUBJECT, tone: null },
+      ],
+    );
+    expect(result.layout.pages['2']).toMatchObject({
+      noArt: true,
+      options: ['plate'],
+    });
+    expect(result.layout.pages['1'].noArt).toBe(false);
+    // Printable, with a note for staff.
+    expect(result.layout.qa.status).toBe('ok');
+    expect(result.layout.qa.notes).toContainEqual(
+      expect.objectContaining({ page: 'story-2', kind: 'no-art' }),
+    );
+    const html = await readFile(join(root, 'books/c/book.html'), 'utf8');
+    const page2 = /<section[^>]*data-key="story-2"[\s\S]*?<\/section>/.exec(
+      html,
+    )![0];
+    expect(page2).toContain('fb-no-art');
+    expect(page2).toContain('data-variant="plate"');
+    expect(page2).toContain('class="fb-vignette" src="hero.svg"');
+    expect(page2).not.toContain('fb-empty');
   });
 });
 
