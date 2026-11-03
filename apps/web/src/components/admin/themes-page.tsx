@@ -12,6 +12,7 @@ import { ErrorText } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
 import { adminThemes, deleteTheme, proposeTheme, publishTheme, unpublishTheme } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
+import { StaffBudgetNote, useCapError, useRefreshBudget } from "./staff-budget";
 import { themeName } from "@/lib/themes";
 import { Card, PageTitle, useAdminI18n } from "./ui";
 
@@ -48,12 +49,15 @@ function ProposeCard() {
   const { t } = useAdminI18n();
   const queryClient = useQueryClient();
   const [brief, setBrief] = useState("");
+  const refreshBudget = useRefreshBudget();
+  const capError = useCapError();
   const propose = useMutation({
     mutationFn: () => proposeTheme(brief.trim()),
     onSuccess: () => {
       setBrief("");
       void queryClient.invalidateQueries({ queryKey: QUERY });
     },
+    onSettled: refreshBudget,
   });
   const refusal =
     propose.error instanceof ApiError && propose.error.code === THEME_REFUSED ? ThemeRefusalSchema.safeParse(propose.error.body).data : undefined;
@@ -69,6 +73,7 @@ function ProposeCard() {
         <Field label={t("admin.themes.brief")} hint={t("admin.themes.brief.hint")}>
           <Textarea data-testid="theme-brief" className="min-h-20" maxLength={300} value={brief} onChange={(e) => setBrief(e.target.value)} />
         </Field>
+        <StaffBudgetNote country={null} />
         <div className="flex flex-wrap items-center gap-3">
           <Button
             type="submit"
@@ -93,7 +98,7 @@ function ProposeCard() {
           <Checks checks={refusal.checks.filter((c) => !c.ok)} />
         </div>
       ) : (
-        propose.isError && <ErrorText>{propose.error.message}</ErrorText>
+        propose.isError && <ErrorText data-testid="theme-error">{capError(propose.error) ?? propose.error.message}</ErrorText>
       )}
     </Card>
   );

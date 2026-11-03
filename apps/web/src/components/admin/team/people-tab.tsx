@@ -15,9 +15,10 @@ import { ErrorText, Notice } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
 import { Table, TableEmpty, TableFrame } from "@/components/ui/table";
 import { useCountryName } from "@/hooks/use-country-name";
-import { inviteStaff, resendInvite, setStaffEnabled, staffRoles, teamMembers, updateStaff } from "@/lib/admin-api";
+import { inviteStaff, resendInvite, setStaffCap, setStaffEnabled, staffRoles, teamMembers, updateStaff } from "@/lib/admin-api";
 import { CountriesField } from "../countries-field";
-import { Card, useAdminI18n } from "../ui";
+import { Card, formatSpendUsd, useAdminI18n } from "../ui";
+import { usdOrNull } from "./caps-tab";
 import { MEMBERS_QUERY, ROLES_QUERY, useRoleName, useTeamError } from "./shared";
 
 const STATUS_TONE: Record<StaffMember["status"], BadgeTone> = { invited: "warning", active: "success", disabled: "neutral" };
@@ -145,12 +146,13 @@ export function PeopleTab({ me }: { me: string | null }) {
                 <th>{t("admin.team.field.roles")}</th>
                 <th>{t("admin.team.field.countries")}</th>
                 <th>{t("admin.team.field.status")}</th>
+                <th>{t("admin.team.field.today")}</th>
                 <th>{t("admin.team.field.lastLogin")}</th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {members.data.length === 0 && <TableEmpty colSpan={6}>{t("admin.team.empty")}</TableEmpty>}
+              {members.data.length === 0 && <TableEmpty colSpan={7}>{t("admin.team.empty")}</TableEmpty>}
               {members.data.map((m) => {
                 const realmAdmin = m.realmRoles.includes(SUPER_ROLE);
                 return (
@@ -191,6 +193,12 @@ export function PeopleTab({ me }: { me: string | null }) {
                       <Badge tone={STATUS_TONE[m.status]} data-testid="team-status">
                         {t(`admin.team.status.${m.status}`)}
                       </Badge>
+                    </td>
+                    <td className="text-sm whitespace-nowrap" data-testid="team-spend" data-usd={m.spentTodayUsd} data-cap={m.effectiveCapUsd ?? "none"}>
+                      <span className="tabular-nums">{formatSpendUsd(m.spentTodayUsd)}</span>
+                      <span className="block text-xs text-muted">
+                        {m.effectiveCapUsd === null ? t("admin.team.cap.none") : t("admin.team.cap.of", { cap: formatSpendUsd(m.effectiveCapUsd) })}
+                      </span>
                     </td>
                     <td className="text-sm whitespace-nowrap text-muted">{m.lastLoginAt ? date(m.lastLoginAt) : t("admin.team.never")}</td>
                     <td>
@@ -304,9 +312,17 @@ function EditForm({ member, roles, onClose, onSaved }: { member: StaffMember; ro
   const [name, setName] = useState(member.name);
   const [picked, setPicked] = useState(member.roles);
   const [countries, setCountries] = useState(member.countries);
+  const [cap, setCap] = useState(member.capUsd?.toString() ?? "");
+  const [uncapped, setUncapped] = useState(member.uncapped);
+  const capValid = cap.trim() === "" || (Number.isFinite(usdOrNull(cap)) && (usdOrNull(cap) ?? 0) >= 0);
   const scoped = needsCountries(picked, roles);
   const save = useMutation({
-    mutationFn: () => updateStaff(member.id, { name, roles: picked, countries: scoped ? countries : [] }),
+    mutationFn: async () => {
+      const saved = await updateStaff(member.id, { name, roles: picked, countries: scoped ? countries : [] });
+      const capUsd = usdOrNull(cap);
+      if (capUsd !== member.capUsd || uncapped !== member.uncapped) return setStaffCap(member.id, { capUsd, uncapped });
+      return saved;
+    },
     onSuccess: () => {
       onSaved();
       onClose();
@@ -335,12 +351,22 @@ function EditForm({ member, roles, onClose, onSaved }: { member: StaffMember; ro
           onChange={setCountries}
         />
       )}
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1.5 text-sm font-semibold">{t("admin.team.cap")}</legend>
+        <Field label={t("admin.team.cap.own")} hint={t("admin.team.cap.hint")} className="max-w-xs">
+          <Input data-testid="team-edit-cap" inputMode="decimal" value={cap} disabled={uncapped} invalid={!capValid} onChange={(e) => setCap(e.target.value)} />
+        </Field>
+        <ChoiceLabel>
+          <Checkbox data-testid="team-edit-uncapped" checked={uncapped} onChange={(e) => setUncapped(e.target.checked)} />
+          {t("admin.team.cap.uncapped")}
+        </ChoiceLabel>
+      </fieldset>
       {save.isError && <ErrorText data-testid="team-edit-error">{teamError(save.error)}</ErrorText>}
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
           {t("admin.team.cancel")}
         </Button>
-        <Button type="submit" data-testid="team-edit-save" loading={save.isPending} disabled={picked.length === 0 || (scoped && countries.length === 0)}>
+        <Button type="submit" data-testid="team-edit-save" loading={save.isPending} disabled={picked.length === 0 || (scoped && countries.length === 0) || !capValid}>
           {t("admin.team.save")}
         </Button>
       </div>

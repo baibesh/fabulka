@@ -90,6 +90,16 @@ import {
   type StaffRole,
   type UpdateStaff,
   type UpdateStaffRole,
+  AuditPageSchema,
+  CountryStatsSchema,
+  StaffBudgetSchema,
+  StaffCapDefaultsSchema,
+  type AuditPage,
+  type AuditQuery,
+  type CountryStats,
+  type StaffBudget,
+  type StaffCapDefaults,
+  type StaffCapOverride,
 } from "@fabulka/shared";
 import { z } from "zod";
 import { request } from "./api";
@@ -113,6 +123,41 @@ export async function adminStats(): Promise<AdminStats> {
 }
 
 export const setPaused = (paused: boolean) => request("/api/admin/pause", json("POST", { paused }));
+
+/** A country manager's dashboard: their countries (the working one when picked) only. */
+export async function adminCountryStats(country: string | null): Promise<CountryStats> {
+  const query = country ? `?country=${encodeURIComponent(country)}` : "";
+  return CountryStatsSchema.parse(await request(`/api/admin/stats/countries${query}`));
+}
+
+/** What the signed-in person may still spend today on staff generation, for an action in `country`. */
+export async function myBudget(country: string | null): Promise<StaffBudget> {
+  const query = country ? `?country=${encodeURIComponent(country)}` : "";
+  return StaffBudgetSchema.parse(await request(`/api/admin/caps/me${query}`));
+}
+
+// ---- Activity --------------------------------------------------------------------------------------
+
+/** The filters as a query string (empty ones left out). */
+export function activityQuery(query: AuditQuery): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+  }
+  const text = params.toString();
+  return text ? `?${text}` : "";
+}
+
+export async function activity(query: AuditQuery): Promise<AuditPage> {
+  return AuditPageSchema.parse(await request(`/api/admin/activity${activityQuery(query)}`));
+}
+
+export async function activityActors(): Promise<string[]> {
+  return z.array(z.string()).parse(await request("/api/admin/activity/actors"));
+}
+
+/** The CSV of the filtered list (a download link: the browser sends the admin cookie). */
+export const activityCsvUrl = (query: AuditQuery) => `/api/admin/activity/export.csv${activityQuery({ ...query, cursor: undefined, limit: undefined })}`;
 
 export async function adminBooks(status?: string): Promise<AdminBookRow[]> {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
@@ -176,8 +221,9 @@ export async function reorderExamples(ids: string[]): Promise<AdminExample[]> {
 }
 
 /** Starts translating the story into these languages (background jobs; the versions show "translating"). */
-export async function translateExample(id: string, languages: Language[]): Promise<AdminExample> {
-  return AdminExampleSchema.parse(await request(`/api/admin/examples/${id}/translate`, json("POST", { languages })));
+export async function translateExample(id: string, languages: Language[], country: string | null = null): Promise<AdminExample> {
+  const query = country ? `?country=${encodeURIComponent(country)}` : "";
+  return AdminExampleSchema.parse(await request(`/api/admin/examples/${id}/translate${query}`, json("POST", { languages })));
 }
 
 /** The session's orders, in the working country when one is picked. */
@@ -450,3 +496,17 @@ export async function updateStaffRole(key: string, role: UpdateStaffRole): Promi
 }
 
 export const deleteStaffRole = (key: string) => request(`/api/admin/team/roles/${encodeURIComponent(key)}`, { method: "DELETE" });
+
+/** The default daily caps on staff generation (each person, each country); null is no cap. */
+export async function staffCapDefaults(): Promise<StaffCapDefaults> {
+  return StaffCapDefaultsSchema.parse(await request("/api/admin/team/caps"));
+}
+
+export async function saveStaffCapDefaults(defaults: StaffCapDefaults): Promise<StaffCapDefaults> {
+  return StaffCapDefaultsSchema.parse(await request("/api/admin/team/caps", json("PUT", defaults)));
+}
+
+/** Someone's own daily cap (null: the default), or none at all. */
+export async function setStaffCap(id: string, cap: StaffCapOverride): Promise<StaffMember> {
+  return StaffMemberSchema.parse(await request(`/api/admin/team/${encodeURIComponent(id)}/cap`, json("PUT", cap)));
+}

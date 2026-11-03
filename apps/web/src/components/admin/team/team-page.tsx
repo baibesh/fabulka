@@ -6,15 +6,17 @@ import { PageHeader } from "@/components/ui/page";
 import { tabPanelProps, Tabs, useTabsId } from "@/components/ui/tabs";
 import { adminMe } from "@/lib/admin-api";
 import { useAdminI18n } from "../ui";
+import { CapsTab } from "./caps-tab";
 import { PeopleTab } from "./people-tab";
 import { RolesTab } from "./roles-tab";
 
-const TABS = ["people", "roles"] as const;
+const TABS = ["people", "roles", "caps"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
  * /admin/team (superadmin only): who may open the admin — invite by email (Fabulka ID sends the
- * set-up email), edit roles and countries, disable — and the roles themselves.
+ * set-up email), edit roles, countries and daily caps, disable — the roles themselves, and the
+ * default daily caps on staff generation.
  */
 export function TeamPage() {
   const { t } = useAdminI18n();
@@ -33,7 +35,7 @@ export function TeamPage() {
         items={TABS.map((id) => ({ id, label: t(`admin.team.tab.${id}`), testId: `team-tab-${id}` }))}
       />
       <div {...tabPanelProps(tabs, tab)} className="flex flex-col gap-6 outline-none">
-        {tab === "people" ? <PeopleTab me={me.data?.who ?? null} /> : <RolesTab />}
+        {tab === "people" ? <PeopleTab me={me.data?.who ?? null} /> : tab === "roles" ? <RolesTab /> : <CapsTab />}
       </div>
     </>
   );

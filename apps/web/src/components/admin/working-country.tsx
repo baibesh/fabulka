@@ -16,7 +16,7 @@ const STORAGE_KEY = "fabulka.admin.country";
 const ALL = "all";
 
 /** The rights whose lists follow the working country. */
-const COUNTRY_RIGHTS: readonly AdminRight[] = ["orders", "examples", "catalog", "reference", "reference.prices", "reference.landing"];
+const COUNTRY_RIGHTS: readonly AdminRight[] = ["orders", "examples", "catalog", "reference", "reference.prices", "reference.landing", "audit", "dashboard"];
 
 export interface WorkingCountry {
   /** The country the admin works in now; null for "All countries" (only offered to global staff). */

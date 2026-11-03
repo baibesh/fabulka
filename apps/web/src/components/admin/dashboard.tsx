@@ -1,15 +1,17 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminStats } from "@fabulka/shared";
+import { covers, isSuperAdmin, type AdminStats, type CountrySpend } from "@fabulka/shared";
 import { Grid3x3, Pause, Play } from "lucide-react";
 import Link from "next/link";
-import { adminMe, adminStats, setPaused } from "@/lib/admin-api";
+import { adminCountryStats, adminMe, adminStats, setPaused } from "@/lib/admin-api";
 import { intlLocale } from "@/i18n/format";
 import { Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
 import { QueryState } from "@/components/ui/query-state";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Stat } from "@/components/ui/stat";
+import { useCountryName } from "@/hooks/use-country-name";
+import { useWorkingCountry } from "./working-country";
 
 function Meter({ label, used, limit, format }: { label: string; used: number; limit: number; format?: (n: number) => string }) {
   const { t, number } = useAdminI18n();
@@ -48,7 +50,74 @@ function Bars({ rows }: { rows: { label: string; value: number }[] }) {
   );
 }
 
+/** Staff generation today per country, against each country's cap. */
+function StaffSpend({ rows }: { rows: CountrySpend[] }) {
+  const { t } = useAdminI18n();
+  const countryName = useCountryName("admin");
+  return (
+    <Card title={t("admin.dashboard.staffSpend")} data-testid="staff-spend">
+      {rows.length === 0 && <p className="text-sm text-muted">{t("admin.dashboard.staffSpend.none")}</p>}
+      {rows.map((row) => {
+        const label = row.country ? countryName(row.country) : t("admin.dashboard.staffSpend.noCountry");
+        return (
+          <div key={row.country ?? "none"} data-testid={`staff-spend-${row.country ?? "none"}`} data-usd={row.usd}>
+            {row.capUsd !== null ? (
+              <Meter label={label} used={row.usd} limit={row.capUsd} format={formatSpendUsd} />
+            ) : (
+              <div className="flex justify-between text-sm">
+                <span>{label}</span>
+                <span className="tabular-nums text-muted">{formatSpendUsd(row.usd)}</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </Card>
+  );
+}
+
+/**
+ * The dashboard: the whole service's for global staff (the superadmin), else a country manager's,
+ * of their countries only (the working one when picked), with no service-wide numbers.
+ */
 export function Dashboard() {
+  const { access } = useWorkingCountry();
+  const global = isSuperAdmin(access) || covers(access.global, "dashboard");
+  return global ? <GlobalDashboard /> : <CountryDashboard />;
+}
+
+/** A country manager's dashboard: their countries' books, orders and spend today. */
+function CountryDashboard() {
+  const { t, number, kzt, bookStatus } = useAdminI18n();
+  const countryName = useCountryName("admin");
+  const { country, options } = useWorkingCountry();
+  const stats = useQuery({ queryKey: ["admin", "stats", "countries", country], queryFn: () => adminCountryStats(country), refetchInterval: 10_000 });
+  if (!stats.data) return <QueryState error={stats.error} scope="admin" />;
+  const s = stats.data;
+  const names = (country ? [country] : options).map((code) => countryName(code)).join(", ");
+  return (
+    <>
+      <PageTitle>{t("admin.dashboard.title")}</PageTitle>
+      <p data-testid="country-dashboard" data-countries={s.countries.join(" ")} className="text-sm text-muted">
+        {t("admin.dashboard.scoped", { countries: names })}
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label={t("admin.dashboard.booksToday")} value={number(s.books.today)} hint={t("admin.dashboard.total", { count: number(s.books.total) })} testId="country-books-today" />
+        <Stat label={t("admin.dashboard.ordersToday")} value={number(s.orders.today)} hint={t("admin.dashboard.total", { count: number(s.orders.total) })} testId="country-orders-today" />
+        <Stat label={t("admin.dashboard.sales.orders")} value={kzt(s.orders.totalKzt)} testId="country-orders-kzt" />
+        <Stat label={t("admin.dashboard.booksSpend")} value={formatSpendUsd(s.spend.booksTodayUsd)} testId="country-spend-today" />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title={t("admin.dashboard.byStatus")}>
+          <Bars rows={Object.entries(s.books.byStatus).map(([status, n]) => ({ label: bookStatus(status as never), value: n }))} />
+        </Card>
+        <StaffSpend rows={s.spend.staff} />
+      </div>
+    </>
+  );
+}
+
+function GlobalDashboard() {
   const { t, locale, number, kzt, percent } = useAdminI18n();
   const queryClient = useQueryClient();
   const stats = useQuery({ queryKey: ["admin", "stats"], queryFn: adminStats, refetchInterval: 10_000 });
@@ -145,6 +214,7 @@ export function Dashboard() {
         <Card title={t("admin.dashboard.templates")}>
           <Bars rows={s.templates.map((t) => ({ label: t.title, value: t.books }))} />
         </Card>
+        <StaffSpend rows={s.staffSpend} />
         <Card title={t("admin.dashboard.printInterest")}>
           <Bars
             rows={s.printInterest.map((p) => ({

@@ -40,6 +40,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { cx } from "@/components/ui/cx";
 import { CountriesField } from "./countries-field";
 import { Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
+import { StaffBudgetNote, useCapError, useRefreshBudget } from "./staff-budget";
 import { useWorkingCountry } from "./working-country";
 
 /** The admin's examples list (also read by a book's page, which offers to add the book to one). */
@@ -48,8 +49,11 @@ export const EXAMPLES_QUERY = ["admin", "examples"] as const;
 /** An API refusal in the admin's words (admin.examples.error.<code>), else its message. */
 export function useExampleError() {
   const { t } = useAdminI18n();
+  const capError = useCapError();
   return (error: Error | null) => {
     if (!error) return null;
+    const cap = capError(error);
+    if (cap) return cap;
     if (error instanceof ApiError && isExampleError(error.code)) return t(`admin.examples.error.${error.code}`);
     if (error instanceof ApiError && error.code === SCOPE_FORBIDDEN) return t("admin.scope.forbidden");
     return error.message;
@@ -111,6 +115,8 @@ export function ExamplesPage() {
         {t("admin.examples.title")}
       </PageTitle>
       <p className="max-w-3xl text-sm text-muted">{t("admin.examples.lead")}</p>
+      {/* Translations call paid models: the person's (and the working country's) budget today. */}
+      <StaffBudgetNote country={country} />
       <NewExample />
       {!list && <QueryState error={examples.error} scope="admin" />}
       {reorder.isError && <ErrorText>{errorText(reorder.error)}</ErrorText>}
@@ -206,7 +212,13 @@ function ExampleCard({
   const replace = (updated: AdminExample) =>
     queryClient.setQueryData<AdminExample[]>(EXAMPLES_QUERY, (list) => list?.map((e) => (e.id === updated.id ? updated : e)));
 
-  const translate = useMutation({ mutationFn: (languages: Language[]) => translateExample(example.id, languages), onSuccess: replace });
+  const { country: working } = useWorkingCountry();
+  const refreshBudget = useRefreshBudget();
+  const translate = useMutation({
+    mutationFn: (languages: Language[]) => translateExample(example.id, languages, working),
+    onSuccess: replace,
+    onSettled: refreshBudget,
+  });
   const countries = useMutation({
     mutationFn: ({ codes, mode }: { codes: string[]; mode: CountriesMode }) => updateExample(example.id, codes, mode),
     onSuccess: replace,
