@@ -31,6 +31,7 @@ export * from "./examples";
 export * from "./country-rules";
 export * from "./generation";
 export * from "./audit";
+export * from "./references";
 
 /** Ages a book is written for (the form's picker, catalog books' ranges, the voice prefill). */
 export const CHILD_AGE_MIN = 2;
@@ -155,6 +156,8 @@ export type CreateBookInput = z.infer<typeof CreateBookSchema>;
 /** One page of the story as Muse Spark returns it. */
 export const StoryPageSchema = z.object({
   page: z.number().int().min(1),
+  /** The method beat the page tells (1 = the first of the method's structure), as Muse Spark tagged it. */
+  beat: z.number().int().optional().catch(undefined),
   text: z.string().min(1),
   scene_prompt: z.string().min(1),
 });
@@ -168,6 +171,10 @@ export const StorySchema = z.object({
   pages: z.array(StoryPageSchema).min(1),
   /** Questions for the parent to ask while reading together, in the book's language. */
   talk_questions: z.array(z.string().min(1)).min(3).max(5),
+  /** The front cover's picture (English): the hero in the story's most joyful moment; null: none given. */
+  cover_scene: z.string().trim().min(1).max(600).nullable().default(null).catch(null),
+  /** Two short sentences for the back cover, in the book's language; null: none given. */
+  blurb: z.string().trim().min(1).max(400).nullable().default(null).catch(null),
 });
 export type Story = z.infer<typeof StorySchema>;
 
@@ -199,6 +206,10 @@ export const BookSchema = z.object({
   template: z.string().nullable(),
   talkQuestions: z.array(z.string()),
   heroImageUrl: z.string().nullable(),
+  /** The front cover's own illustration (the hero in a scene from the story); null for books made before it. */
+  coverImageUrl: z.string().nullable().default(null),
+  /** The back cover's two sentences, in the book's language; null for books made before it. */
+  blurb: z.string().nullable().default(null),
   /** The toy photo the parent sent, the toy SAM cut out of it, and its character sheet. */
   toy: z
     .object({
@@ -713,6 +724,14 @@ export const AdminBookRowSchema = z.object({
 });
 export type AdminBookRow = z.infer<typeof AdminBookRowSchema>;
 
+/** One binding's cover wrap as the admin shows it: the spine's width and the wrap's finished size. */
+export const PrintWrapSchema = z.object({
+  spineMm: z.number(),
+  spineText: z.boolean(),
+  widthMm: z.number(),
+  heightMm: z.number(),
+});
+
 export const AdminBookSchema = BookSchema.extend({
   child: ChildProfileSchema,
   theme: z.string().nullable(),
@@ -723,6 +742,14 @@ export const AdminBookSchema = BookSchema.extend({
   example: z.object({ id: z.string(), language: LanguageSchema }).nullable(),
   costUsd: z.number(),
   clientKey: z.string(),
+  /** How it prints: the pages between the covers and the cover wrap of each binding (older APIs leave it out). */
+  print: z
+    .object({
+      interiorPages: z.number().int(),
+      soft: PrintWrapSchema,
+      hard: PrintWrapSchema,
+    })
+    .optional(),
 });
 export type AdminBook = z.infer<typeof AdminBookSchema>;
 
@@ -869,6 +896,10 @@ export const MODEL_CALL_KINDS = [
   "shorten",
   /** Muse Spark rewrites a page's scene that Muse Image refused twice, so it can be drawn safely. */
   "scene-rewrite",
+  /** Muse Image draws the front cover's illustration, chained from the character sheets. */
+  "cover",
+  /** SAM finds the characters on the cover illustration, so the lettering keeps off them. */
+  "cover-mask",
 ] as const;
 export const ModelCallKindSchema = z.enum(MODEL_CALL_KINDS);
 export type ModelCallKind = z.infer<typeof ModelCallKindSchema>;
@@ -898,6 +929,8 @@ export const ModelCallSchema = z.object({
   responseId: z.string().nullable(),
   errorCode: z.string().nullable(),
   errorMessage: z.string().nullable(),
+  /** Illustrator references (their ids) sent with the call as pictures. */
+  references: z.array(z.string()).default([]),
   createdAt: z.string(),
 });
 export type ModelCall = z.infer<typeof ModelCallSchema>;

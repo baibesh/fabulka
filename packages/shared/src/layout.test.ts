@@ -16,6 +16,7 @@ import {
   newLayout,
   pickVariant,
   planBook,
+  interiorPages,
   renderBook,
   textRect,
   themesFor,
@@ -136,13 +137,14 @@ function page(): BookLayout["pages"][string] {
 }
 
 describe("planBook", () => {
-  it("fills with drawing pages to a multiple of 4 and leaves the back cover alone on a left page", () => {
+  it("fills the pages between the covers to a multiple of 4 and leaves the back cover alone on a left page", () => {
     for (const id of Object.keys(BOOK_THEMES)) {
       for (const pages of [1, 4, 7, 10]) {
         const plan = planBook(book(pages), newLayout(id));
-        expect(plan.length % 4).toBe(0);
+        expect(interiorPages(plan).length % 4).toBe(0);
         expect(plan[0].key).toBe("cover");
-        expect(plan.at(-1)!.key).toBe("end");
+        expect(plan.at(-2)!.key).toBe("end");
+        expect(plan.at(-1)!.key).toBe("back");
         expect(isLeft(plan.at(-1)!.index)).toBe(true);
       }
     }

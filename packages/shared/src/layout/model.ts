@@ -161,7 +161,8 @@ export const PageLayoutSchema = z.object({
 });
 export type PageLayout = z.infer<typeof PageLayoutSchema>;
 
-export const RENDER_ISSUE_KINDS = ["overflow", "fallback-font"] as const;
+/** "cover-overlap": the cover's lettering, as rendered, lies over the hero SAM found on the cover art. */
+export const RENDER_ISSUE_KINDS = ["overflow", "fallback-font", "cover-overlap"] as const;
 /**
  * Things render QA tells staff without blocking print: "crop" — a picture too narrow for the
  * format's layouts; "no-art" — a page whose picture was refused, laid out as a vignette page.
@@ -189,6 +190,22 @@ export const LayoutQaSchema = z.object({
 export type LayoutQa = z.infer<typeof LayoutQaSchema>;
 
 /**
+ * How the front cover's lettering sits on the cover illustration (chooseCover): "overlay" puts the
+ * child's name and the title over a calm part of the picture clear of the hero SAM found; "banner"
+ * gives them a band of the cover color and moves the picture out from under it, so no face is ever
+ * covered. `band` is where the lettering goes, `ink` its color, `focus` what the crop keeps in view.
+ */
+export const CoverLayoutSchema = z.object({
+  mode: z.enum(["overlay", "banner"]),
+  /** Left and right only on wide covers (WIDE_COVER). */
+  band: z.enum(["top", "bottom", "left", "right"]),
+  ink: z.enum(["dark", "light"]),
+  focus: FocusSchema.default({ x: 0.5, y: 0.5 }),
+  aspect: z.number().positive().default(1),
+});
+export type CoverLayout = z.infer<typeof CoverLayoutSchema>;
+
+/**
  * A book's layout: format, a snapshot of its theme, the blocks in order and each page's layout.
  * The theme is copied in, so a book keeps its look when the theme in code changes; it is frozen
  * into the order when the book is printed.
@@ -212,6 +229,8 @@ export const BookLayoutSchema = z.object({
   pages: z.record(z.string(), PageLayoutSchema).default({}),
   /** How much render QA shrank each page's text, by page key; 1 when left out. */
   fits: z.record(z.string(), z.number()).default({}),
+  /** The front cover's lettering over its own illustration; null: a book without one (the older cover). */
+  cover: CoverLayoutSchema.nullable().default(null),
   qa: LayoutQaSchema,
 });
 export type BookLayout = z.infer<typeof BookLayoutSchema>;

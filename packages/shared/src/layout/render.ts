@@ -1,9 +1,10 @@
 import type { Language } from "../language";
 import { BOOK_LABELS } from "../labels";
-import type { BookLayout, BookTheme, PageLayout, PageVariant } from "./model";
+import type { BookLayout, BookTheme, CoverLayout, PageLayout, PageVariant } from "./model";
 import { BOOK_FONTS, formatTypeScale } from "./themes";
-import { type PlannedPage, type Rect, artRect, planBook, textRect } from "./plan";
+import { type PlannedPage, type Rect, artRect, interiorPages, planBook, textRect } from "./plan";
 import { contrast, luminance, objectPosition, pageText } from "./choose";
+import { type CoverWrap, coverArtRect, coverBandRect, coverNameMm, coverTextRect, splitTitle } from "./cover";
 
 /**
  * The one book renderer. It turns a book and its layout into fixed-size HTML pages (millimetres,
@@ -20,6 +21,10 @@ export interface RenderableBook {
   childName: string;
   language: Language;
   heroImage: string | null;
+  /** The front cover's own illustration; without it the cover shows the hero's character sheet. */
+  coverImage?: string | null;
+  /** The back cover's two sentences, in the book's language. */
+  blurb?: string | null;
   pages: { page: number; text: string; image: string | null }[];
   talkQuestions: string[];
 }
@@ -126,8 +131,16 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
     let inner = "";
     switch (planned.kind) {
       case "cover":
-        inner = cover(book, layout, title, labels.madeFor(book.childName), bleedArt, ornament);
-        classes.push(`fb-cover-${layout.theme.cover}`);
+        if (book.coverImage && layout.cover) {
+          inner = designedCover(book, layout, layout.cover, title, labels.series, bleedArt);
+          classes.push("fb-cover-designed");
+        } else {
+          inner = cover(book, layout, title, labels.madeFor(book.childName), bleedArt, ornament);
+          classes.push(`fb-cover-${layout.theme.cover}`);
+        }
+        break;
+      case "back":
+        inner = backCover(book, layout, title, body, bleedArt, ornament);
         break;
       case "dedication":
         inner = `<div class="fb-box fb-center" data-fit-box style="${place(paperRect(layout))}"><div class="fb-flow">
@@ -246,6 +259,86 @@ function cover(
   }
   return `<div class="fb-hero-frame">${image(book.heroImage, "fb-hero")}</div>${heading}`;
 }
+
+/**
+ * The designed front cover: the cover's own illustration (the hero in a scene from the story), the
+ * child's name in big lettering in the theme's heading font — outlined and set at a slight tilt, like
+ * hand lettering on a picture book — the rest of the title around it and a small subtitle. Where it
+ * goes comes from the layout (chooseCover, from SAM's mask): over a calm band of the picture, or on a
+ * band of the cover color with the picture beside it.
+ */
+function designedCover(
+  book: RenderableBook,
+  layout: BookLayout,
+  cover: CoverLayout,
+  title: (t: string) => string,
+  series: string,
+  bleedArt: (r: Rect) => string,
+): string {
+  const { format } = layout;
+  const art = coverArtRect(format, cover);
+  const rect = coverTextRect(format, cover.band);
+  const position = objectPosition(cover.focus, cover.aspect, art.w / art.h);
+  const picture = image(book.coverImage, "fb-cover-art", position, bleedArt(art) || `${place(art)};`);
+  const bandRect = coverBandRect(format, cover.band);
+  // The picture melts into the band instead of a hard edge.
+  const seam: Rect = {
+    top: { x: 0, y: art.y, w: format.widthMm, h: 14 },
+    bottom: { x: 0, y: art.y + art.h - 14, w: format.widthMm, h: 14 },
+    left: { x: art.x, y: 0, w: 14, h: format.heightMm },
+    right: { x: art.x + art.w - 14, y: 0, w: 14, h: format.heightMm },
+  }[cover.band];
+  const band =
+    cover.mode === "banner"
+      ? `<div class="fb-cover-band" style="${bleedArt(bandRect) || place(bandRect)}"></div><div class="fb-cover-seam fb-${cover.band}" style="${bleedArt(seam) || place(seam)}"></div>`
+      : "";
+  const parts = splitTitle(book.title ?? "", book.childName);
+  // The name as big as the theme's title allows, but never wider than the box: about 0.56 em a letter.
+  const nameMm = coverNameMm(rect, formatTypeScale(layout.theme, layout.ageGroup, format).titlePt, parts.name);
+  const line = (text: string, cls: string) => (text ? `<p class="${cls}" data-qa-text>${title(text)}</p>` : "");
+  const ink = cover.mode === "banner" ? "band" : cover.ink;
+  return `${picture}${band}<div class="fb-cover-letters fb-${cover.band} fb-letters-${ink}" data-fit-box data-cover-text style="${place(rect)}"><div class="fb-flow">
+  ${line(parts.before, "fb-cover-line")}
+  <h1 class="fb-cover-name" data-qa-text data-testid="cover-name" style="font-size:calc(${mm(nameMm)} * var(--fit))">${title(parts.name)}</h1>
+  ${line(parts.after, "fb-cover-line")}
+  <p class="fb-cover-sub" data-qa-text>${escapeHtml(series)}</p></div></div>`;
+}
+
+/**
+ * The back cover: the title, the story's two sentences (the blurb), the hero's character sheet small
+ * on the cover color, and the Fabulka mark at the foot.
+ */
+function backCover(
+  book: RenderableBook,
+  layout: BookLayout,
+  title: (t: string) => string,
+  body: (t: string) => string,
+  bleedArt: (r: Rect) => string,
+  ornament: () => string,
+): string {
+  const { widthMm: w, heightMm: h } = layout.format;
+  const rect = paperRect(layout);
+  const box = { ...rect, h: rect.h - 14 };
+  // The story's last picture in a round frame (the happy ending), else the hero's sheet, else the ornament.
+  const last = [...book.pages].reverse().find((p) => p.image);
+  const side = Math.min(rect.w, rect.h) * 0.36;
+  const hero = last
+    ? `<div class="fb-back-frame" style="width:${mm(side)};height:${mm(side)}"><img class="fb-back-art" src="${escapeHtml(last.image!)}" alt=""></div>`
+    : book.heroImage
+      ? `<img class="fb-back-hero" src="${escapeHtml(book.heroImage)}" alt="">`
+      : `<div class="fb-ornament">${ornament()}</div>`;
+  const blurb = book.blurb ? `<p class="fb-blurb" data-qa-text>${body(book.blurb)}</p>` : "";
+  return `<div class="fb-back-sky" style="${bleedArt({ x: 0, y: 0, w, h }) || "inset:0"}"></div>
+<div class="fb-box fb-center" data-fit-box style="${place(box)}"><div class="fb-flow">
+  ${hero}
+  <p class="fb-back-title" data-qa-text>${title(book.title ?? "")}</p>
+  ${blurb}</div></div>
+<div class="fb-back-mark" style="bottom:calc(var(--safe) + 2mm)">${FABULKA_MARK}<span data-qa-text>Fabulka</span></div>`;
+}
+
+/** The Fabulka mark: a little open book with a face, drawn so it never depends on a font. */
+const FABULKA_MARK =
+  '<svg viewBox="0 0 32 24" width="9mm" height="6.75mm" aria-hidden="true"><path d="M16 5C12 2 6 2 2 3v17c4-1 10-1 14 2 4-3 10-3 14-2V3c-4-1-10-1-14 2z" fill="currentColor"/><path d="M16 5v17" stroke="#fff" stroke-width="1.2"/><circle cx="10" cy="11" r="1.3" fill="#fff"/><circle cx="22" cy="11" r="1.3" fill="#fff"/><path d="M11 15c3 2 7 2 10 0" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>';
 
 /**
  * A story page whose picture Muse Image refused in every version (PageLayout.noArt): a vignette page
@@ -422,6 +515,52 @@ export const BOOK_CSS = `
 .fb-cover-scene .fb-cover-title.fb-at-bottom { top: auto; bottom: var(--safe); }
 .fb-cover-scene .fb-cover-title .fb-flow { background: color-mix(in srgb, var(--plate) 88%, transparent); border-radius: 6mm;
   padding: 5mm 6mm; box-shadow: 0 .8mm 3mm rgba(0,0,0,.15); }
+.fb-cover-designed { background: var(--cover); }
+.fb-cover-art { position: absolute; object-fit: cover; }
+.fb-cover-band { position: absolute; background: var(--cover); }
+.fb-cover-seam { position: absolute; background: linear-gradient(to bottom, var(--cover), transparent); }
+.fb-cover-seam.fb-bottom { background: linear-gradient(to top, var(--cover), transparent); }
+.fb-cover-seam.fb-left { background: linear-gradient(to right, var(--cover), transparent); }
+.fb-cover-seam.fb-right { background: linear-gradient(to left, var(--cover), transparent); }
+.fb-cover-letters { position: absolute; display: flex; flex-direction: column; justify-content: center; text-align: center; overflow: hidden;
+  --outline: var(--paper); }
+.fb-cover-letters.fb-top { justify-content: flex-start; }
+.fb-cover-letters.fb-bottom { justify-content: flex-end; }
+.fb-cover-name { font-family: var(--heading); font-weight: var(--heading-weight); line-height: 1.04; color: var(--accent);
+  margin: 1.5mm 0 2mm; transform: rotate(-2.5deg); letter-spacing: .01em; overflow-wrap: anywhere;
+  text-shadow: .55mm 0 0 var(--outline), -.55mm 0 0 var(--outline), 0 .55mm 0 var(--outline), 0 -.55mm 0 var(--outline),
+    .4mm .4mm 0 var(--outline), -.4mm .4mm 0 var(--outline), .4mm -.4mm 0 var(--outline), -.4mm -.4mm 0 var(--outline),
+    0 1.4mm 1.2mm rgba(0,0,0,.22); }
+.fb-cover-line { font-family: var(--heading); font-weight: var(--heading-weight); font-size: calc(var(--title-size) * .72 * var(--fit));
+  line-height: 1.14; color: var(--ink); }
+.fb-cover-sub { margin-top: 2.5mm; font-size: calc(9.5pt * var(--fit)); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--ink); }
+/* Over the picture the lines sit in a soft halo of the paper color: readable on leaves and sky alike. */
+.fb-letters-dark .fb-cover-line, .fb-letters-dark .fb-cover-sub { text-shadow: 0 0 .4mm var(--paper), 0 0 1mm var(--paper), 0 0 2mm var(--paper),
+  0 0 3.2mm var(--paper), 0 0 4.5mm color-mix(in srgb, var(--paper) 80%, transparent); }
+.fb-letters-light { --outline: var(--ink); }
+.fb-letters-light .fb-cover-name { color: var(--paper); }
+.fb-letters-light .fb-cover-line, .fb-letters-light .fb-cover-sub { color: #fff; text-shadow: 0 0 .4mm rgba(0,0,0,.6), 0 0 1.2mm rgba(0,0,0,.55),
+  0 0 2.6mm rgba(0,0,0,.45), 0 0 4mm rgba(0,0,0,.3); }
+.fb-letters-band .fb-cover-line, .fb-letters-band .fb-cover-sub { color: var(--cover-ink); }
+.fb-back { background: var(--cover); }
+.fb-back-sky { position: absolute; background: radial-gradient(ellipse 80% 70% at 50% 40%, var(--paper) 0%, var(--cover) 75%); }
+.fb-back-frame { display: inline-block; border-radius: 50%; overflow: hidden; border: 1.2mm solid var(--paper);
+  box-shadow: 0 0 0 .6mm var(--accent), 0 1mm 3mm rgba(0,0,0,.18); margin-bottom: 6mm; }
+.fb-back-art { width: 100%; height: 100%; object-fit: cover; }
+.fb-back-hero { display: inline-block; width: 38%; max-height: 42mm; object-fit: contain; mix-blend-mode: multiply; margin-bottom: 4mm; }
+.fb-back-title { font-family: var(--heading); font-weight: var(--heading-weight); font-size: calc(var(--heading-size) * var(--fit));
+  line-height: 1.15; color: var(--cover-ink); margin-bottom: 4mm; }
+.fb-blurb { font-size: calc(var(--body-size) * var(--fit)); line-height: var(--line); color: var(--cover-ink); }
+.fb-back-mark { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 2mm;
+  color: var(--accent); font-family: var(--heading); font-weight: var(--heading-weight); font-size: 12pt; line-height: 1; }
+.fb-wrap { position: relative; overflow: hidden; background: var(--cover, #fff); }
+.fb-wrap-panel { position: absolute; top: 0; }
+.fb-spine { background: var(--cover); }
+.fb-spine-band { position: absolute; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.fb-spine-text { writing-mode: vertical-rl; white-space: nowrap; font-family: var(--heading); font-weight: var(--heading-weight);
+  line-height: 1; color: var(--cover-ink); max-height: 92%; overflow: hidden; text-overflow: ellipsis; }
+.fb-spine-up { transform: rotate(180deg); }
+.fb-spine-dot { margin: 1.5mm 0; color: var(--accent); }
 .fb-photo-frame { display: inline-block; padding: 3mm; background: #fff; border: .7mm solid var(--accent); border-radius: 4mm;
   box-shadow: 0 .8mm 3mm rgba(0,0,0,.14); line-height: 0; }
 .fb-photo { display: block; border-radius: 2mm; }
@@ -477,39 +616,52 @@ export function printPageSize(format: BookLayout["format"]): { widthMm: number; 
  */
 export function printDocument(
   rendered: RenderedBook,
-  meta: { title: string; language: Language; fontCss: string; format: BookLayout["format"]; label: string },
+  meta: {
+    title: string;
+    language: Language;
+    fontCss: string;
+    format: BookLayout["format"];
+    label: string;
+    /** The cover wrap (renderCoverWrap): printed first; the covers then leave the inside pages. */
+    wrap?: { html: string; spec: CoverWrap };
+  },
 ): string {
   const { format } = meta;
   const b = format.bleedMm;
   const s = PRINT_SLUG_MM;
   const sheet = printPageSize(format);
-  const x0 = s + b;
-  const y0 = s + b;
-  const x1 = x0 + format.widthMm;
-  const y1 = y0 + format.heightMm;
-  const line = (xa: number, ya: number, xb: number, yb: number) =>
-    `<line x1="${xa}" y1="${ya}" x2="${xb}" y2="${yb}" stroke="#000" stroke-width="0.25"/>`;
-  const out = b + MARK_GAP_MM;
-  const marks = [
-    // Horizontal marks on the trim lines, left and right of the bleed.
-    line(x0 - out - MARK_MM, y0, x0 - out, y0),
-    line(x1 + out, y0, x1 + out + MARK_MM, y0),
-    line(x0 - out - MARK_MM, y1, x0 - out, y1),
-    line(x1 + out, y1, x1 + out + MARK_MM, y1),
-    // Vertical marks on the trim lines, above and below the bleed.
-    line(x0, y0 - out - MARK_MM, x0, y0 - out),
-    line(x1, y0 - out - MARK_MM, x1, y0 - out),
-    line(x0, y1 + out, x0, y1 + out + MARK_MM),
-    line(x1, y1 + out, x1, y1 + out + MARK_MM),
-  ].join("");
-  const total = rendered.pages.length;
-  const sheets = rendered.pages.map(
+  const marks = cropMarks(s + b, s + b, format.widthMm, format.heightMm, b);
+  const pages = meta.wrap ? interiorPages(rendered.pages) : rendered.pages;
+  const total = pages.length + (meta.wrap ? 1 : 0);
+  const sheets = pages.map(
     (p, i) => `<div class="fb-sheet" data-key="${p.key}">
 <div class="fb-sheet-page">${p.html}</div>
 <svg class="fb-marks" viewBox="0 0 ${sheet.widthMm} ${sheet.heightMm}" width="${sheet.widthMm}mm" height="${sheet.heightMm}mm">${marks}</svg>
-<div class="fb-slug">${escapeHtml(meta.label)} · ${i + 1}/${total} · ${p.key}</div>
+<div class="fb-slug" style="left:${s + b}mm">${escapeHtml(meta.label)} · ${i + 1 + (meta.wrap ? 1 : 0)}/${total} · ${p.key}</div>
 </div>`,
   );
+  let wrapCss = "";
+  if (meta.wrap) {
+    const { spec, html } = meta.wrap;
+    const m = spec.marginMm;
+    const size = wrapSheetSize(spec);
+    const x0 = s + m;
+    const y0 = s + m;
+    // Crop marks at the wrap's corners; fold marks above and below every line the cover bends on.
+    const folds = [spec.back.x + spec.back.w, spec.spine.x, spec.spine.x + spec.spine.w, spec.front.x]
+      .filter((x, i, all) => all.indexOf(x) === i)
+      .map((x) => x0 + x);
+    const fold = folds
+      .map((x) => markLine(x, y0 - m - MARK_GAP_MM - MARK_MM, x, y0 - m - MARK_GAP_MM) + markLine(x, y0 + spec.heightMm + m + MARK_GAP_MM, x, y0 + spec.heightMm + m + MARK_GAP_MM + MARK_MM))
+      .join("");
+    sheets.unshift(`<div class="fb-sheet fb-wrap-sheet" data-key="wrap">
+<div class="fb-sheet-page">${html}</div>
+<svg class="fb-marks" viewBox="0 0 ${size.widthMm} ${size.heightMm}" width="${size.widthMm}mm" height="${size.heightMm}mm">${cropMarks(x0, y0, spec.widthMm, spec.heightMm, m)}${fold}</svg>
+<div class="fb-slug" style="left:${x0}mm">${escapeHtml(meta.label)} · 1/${total} · cover wrap, ${spec.binding}, spine ${spec.spineMm} mm</div>
+</div>`);
+    wrapCss = `@page fbwrap { size: ${size.widthMm}mm ${size.heightMm}mm; margin: 0; }
+.fb-wrap-sheet { page: fbwrap; width: ${size.widthMm}mm; height: ${size.heightMm}mm; }`;
+  }
   return `<!doctype html>
 <html lang="${meta.language}">
 <head>
@@ -525,11 +677,67 @@ ${BOOK_CSS}
 .fb-sheet:last-child { break-after: auto; page-break-after: auto; }
 .fb-sheet-page { position: absolute; left: ${s}mm; top: ${s}mm; }
 .fb-marks { position: absolute; left: 0; top: 0; }
-.fb-slug { position: absolute; left: ${x0}mm; bottom: 2mm; font: 6pt/1 sans-serif; color: #000; }
+.fb-slug { position: absolute; bottom: 2mm; font: 6pt/1 sans-serif; color: #000; }
+${wrapCss}
 </style>
 </head>
 <body>
 ${sheets.join("\n")}
 </body>
 </html>`;
+}
+
+const markLine = (xa: number, ya: number, xb: number, yb: number) =>
+  `<line x1="${xa}" y1="${ya}" x2="${xb}" y2="${yb}" stroke="#000" stroke-width="0.25"/>`;
+
+/** Crop marks at the corners of a trim box (top left x0, y0) whose bleed is `bleed` wide. */
+function cropMarks(x0: number, y0: number, w: number, h: number, bleed: number): string {
+  const x1 = x0 + w;
+  const y1 = y0 + h;
+  const out = bleed + MARK_GAP_MM;
+  return [
+    // Horizontal marks on the trim lines, left and right of the bleed.
+    markLine(x0 - out - MARK_MM, y0, x0 - out, y0),
+    markLine(x1 + out, y0, x1 + out + MARK_MM, y0),
+    markLine(x0 - out - MARK_MM, y1, x0 - out, y1),
+    markLine(x1 + out, y1, x1 + out + MARK_MM, y1),
+    // Vertical marks on the trim lines, above and below the bleed.
+    markLine(x0, y0 - out - MARK_MM, x0, y0 - out),
+    markLine(x1, y0 - out - MARK_MM, x1, y0 - out),
+    markLine(x0, y1 + out, x0, y1 + out + MARK_MM),
+    markLine(x1, y1 + out, x1, y1 + out + MARK_MM),
+  ].join("");
+}
+
+/** The wrap's sheet in the print file: the wrap, its bleed or turn-in, and the slug for the marks. */
+export function wrapSheetSize(wrap: CoverWrap): { widthMm: number; heightMm: number } {
+  const extra = 2 * (wrap.marginMm + PRINT_SLUG_MM);
+  return { widthMm: wrap.widthMm + extra, heightMm: wrap.heightMm + extra };
+}
+
+/**
+ * The outside of the printed book on one sheet: the back and the front cover drawn at the wrap's
+ * panel size (the page, or a hardcover's board) with their bleed or turn-in, and the spine between
+ * them in the cover color, lettered with the name and title when it is wide enough (SPINE_TEXT_MIN_MM).
+ */
+export function renderCoverWrap(book: RenderableBook, layout: BookLayout, wrap: CoverWrap, options: RenderOptions = {}): string {
+  const panelLayout: BookLayout = { ...layout, format: wrap.panel };
+  const rendered = renderBook(book, panelLayout, { ...options, bleed: true });
+  const front = rendered.pages.find((p) => p.kind === "cover");
+  const back = rendered.pages.find((p) => p.kind === "back");
+  const m = wrap.marginMm;
+  const labels = BOOK_LABELS[book.language];
+  // The spine element runs from the back board to the front board (hinges included) over the panels' bleed.
+  const left = wrap.back.x + wrap.back.w;
+  const width = wrap.front.x - left;
+  const fontMm = Math.min(wrap.spineMm * 0.5, 4.2);
+  const text = wrap.spineText
+    ? `<div class="fb-spine-text${labels.spineUp ? " fb-spine-up" : ""}" data-testid="spine-text" style="font-size:${mm(fontMm)}">${escapeHtml(book.childName)}<span class="fb-spine-dot">·</span>${escapeHtml(book.title ?? "")}</div>`
+    : "";
+  return `<div class="fb-wrap" style="width:${mm(wrap.widthMm + 2 * m)};height:${mm(wrap.heightMm + 2 * m)}">
+<div class="fb-wrap-panel" style="left:${mm(wrap.back.x)}">${back?.html ?? ""}</div>
+<div class="fb-wrap-panel" style="left:${mm(wrap.front.x)}">${front?.html ?? ""}</div>
+<section class="fb-page fb-spine" data-key="spine" style="${themeStyle(panelLayout, 1, 0)};position:absolute;left:${mm(m + left)};top:0;width:${mm(width)};height:${mm(wrap.heightMm + 2 * m)}">
+<div class="fb-spine-band" style="left:${mm(wrap.spine.x - left)};width:${mm(wrap.spine.w)};top:${mm(m)};height:${mm(wrap.heightMm)}">${text}</div>
+</section></div>`;
 }

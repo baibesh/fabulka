@@ -56,9 +56,12 @@ export function textRect(
   }
 }
 
-export type PageKind = "cover" | "dedication" | "story" | "talk" | "drawing" | "photo" | "end";
+export type PageKind = "cover" | "dedication" | "story" | "talk" | "drawing" | "photo" | "end" | "back";
 
-/** One printed page, in order: index 0 is the cover; odd indexes are left pages. */
+/**
+ * One page of the book, in order: index 0 is the front cover, the last one the back cover (alone on
+ * the left, as a closed book shows it); in between, odd indexes are left pages.
+ */
 export interface PlannedPage {
   key: string;
   kind: PageKind;
@@ -106,10 +109,12 @@ export interface PlannableBook {
 }
 
 /**
- * The book's printed pages in order: the blocks as the layout orders them (a drawing block is one
- * page), each story page in its variant, then — just before the end — blank drawing pages so the
- * count is a multiple of 4 (a printed book is folded sheets). Those are marked `filler`: the reader
- * shows them as padding. The padding comes after the story, so it never moves a story page.
+ * The book's pages in order: the blocks as the layout orders them (a drawing block is one page),
+ * each story page in its variant, then — just before the end — blank drawing pages so the pages
+ * between the covers are a multiple of 4 (the inside of a printed book is folded sheets; the front
+ * and the back cover are printed apart, on the cover wrap with the spine). Those are marked
+ * `filler`: the reader shows them as padding. The padding comes after the story, so it never moves
+ * a story page. The back cover comes last, after the end.
  */
 export function planBook(book: PlannableBook, layout: BookLayout): PlannedPage[] {
   const pages: PlannedPage[] = [];
@@ -119,8 +124,9 @@ export function planBook(book: PlannableBook, layout: BookLayout): PlannedPage[]
   };
   let drawings = 0;
   let ended = false;
+  // Pages between the covers so far: all but the front cover, and the end page still to come.
   const pad = () => {
-    const extra = (4 - ((pages.length + (ended ? 0 : 1)) % 4)) % 4;
+    const extra = (4 - ((pages.length - 1 + (ended ? 0 : 1)) % 4)) % 4;
     for (let n = 1; n <= extra; n++) push({ key: `pad-${n}`, kind: "drawing", filler: true });
   };
   for (const block of layout.blocks) {
@@ -159,5 +165,11 @@ export function planBook(book: PlannableBook, layout: BookLayout): PlannedPage[]
     ended = true;
     pad();
   }
+  push({ key: "back", kind: "back" });
   return pages;
+}
+
+/** Pages between the front and the back cover: what the printer binds (a multiple of 4). */
+export function interiorPages<T extends PlannedPage>(plan: readonly T[]): T[] {
+  return plan.filter((p) => p.kind !== "cover" && p.kind !== "back");
 }

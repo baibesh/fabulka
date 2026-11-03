@@ -13,7 +13,7 @@ import { z } from "zod";
  * The admin's sections, in nav order. `team` (staff and roles) is the superadmin's alone. `audit`
  * is the Activity section: who changed what (a country-scoped role sees its countries' events).
  */
-export const ADMIN_PERMISSIONS = ["dashboard", "books", "orders", "catalog", "examples", "methodologies", "themes", "reference", "journal", "audit", "seo", "team"] as const;
+export const ADMIN_PERMISSIONS = ["dashboard", "books", "orders", "catalog", "examples", "methodologies", "themes", "references", "reference", "journal", "audit", "seo", "team"] as const;
 export const AdminPermissionSchema = z.enum(ADMIN_PERMISSIONS);
 export type AdminPermission = z.infer<typeof AdminPermissionSchema>;
 
@@ -22,9 +22,19 @@ export type AdminPermission = z.infer<typeof AdminPermissionSchema>;
  * section covers its parts. Reference's per-country data: prices, landing (with its FAQ), delivery
  * cities, the delivery fee, and which print formats are offered and at what price. The rest of
  * Reference (the countries list, blocked countries, format specs, global defaults) is the whole
- * section's alone.
+ * section's alone. The read parts open a section to look at without changing anything: books for an
+ * illustrator's review (they may flag pages), themes and methods to see what references are for.
  */
-export const ADMIN_SECTION_PARTS = ["reference.prices", "reference.landing", "reference.cities", "reference.delivery", "reference.formats_country"] as const;
+export const ADMIN_SECTION_PARTS = [
+  "books.review",
+  "methodologies.read",
+  "themes.read",
+  "reference.prices",
+  "reference.landing",
+  "reference.cities",
+  "reference.delivery",
+  "reference.formats_country",
+] as const;
 
 /** Everything a role may be given: whole sections and section parts. */
 export const ADMIN_RIGHTS = [...ADMIN_PERMISSIONS, ...ADMIN_SECTION_PARTS] as const;
@@ -72,7 +82,8 @@ export interface RoleDef {
 
 /**
  * The roles the database starts with (migration z18_staff seeds them; z20 and z21 add the country
- * manager's later rights: Reference's per-country parts, then its countries' dashboard and activity).
+ * manager's later rights: Reference's per-country parts, then its countries' dashboard and activity;
+ * z25 adds the illustrator).
  */
 export const BUILTIN_ROLES: readonly (RoleDef & { name: string; locked: boolean })[] = [
   { key: SUPER_ROLE, name: "Superadmin", rights: ADMIN_PERMISSIONS, scoped: false, locked: true },
@@ -84,6 +95,8 @@ export const BUILTIN_ROLES: readonly (RoleDef & { name: string; locked: boolean 
     scoped: true,
     locked: false,
   },
+  /** Prepares the art references generation sends to Muse Image and reviews books' pictures (z25). */
+  { key: "illustrator", name: "Illustrator", rights: ["references", "books.review", "themes.read", "methodologies.read"], scoped: false, locked: false },
 ];
 
 /** The built-in roles' rights, by key. */

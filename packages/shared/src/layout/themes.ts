@@ -236,6 +236,7 @@ export function newLayout(theme: BookTheme | string, age = 6, format?: BookForma
     headingFallback: false,
     pages: {},
     fits: {},
+    cover: null,
     qa: { status: "pending", checkedAt: null, issues: [], notes: [] },
   };
 }

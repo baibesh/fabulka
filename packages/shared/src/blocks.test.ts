@@ -12,6 +12,7 @@ import {
   cropNote,
   newLayout,
   planBook,
+  interiorPages,
   printDocument,
   printPageSize,
   renderBook,
@@ -91,7 +92,7 @@ describe("blocks", () => {
 });
 
 describe("padding", () => {
-  it("pads with drawing pages before the end to a multiple of 4, marked as fillers", () => {
+  it("pads with drawing pages before the end so the pages between the covers are a multiple of 4, marked as fillers", () => {
     for (const order of [
       ["cover", "story", "end"],
       ["cover", "dedication", "story", "talk", "drawing", "end"],
@@ -101,13 +102,14 @@ describe("padding", () => {
         const arranged = arrangeBlocks(newLayout("little"), order);
         if (!("layout" in arranged)) throw new Error("refused");
         const plan = planBook(book(pages), arranged.layout);
-        expect(plan.length % 4).toBe(0);
-        expect(plan.at(-1)?.kind).toBe("end");
+        expect(interiorPages(plan).length % 4).toBe(0);
+        expect(plan.at(-1)?.kind).toBe("back");
+        expect(plan.at(-2)?.kind).toBe("end");
         const fillers = plan.filter((p) => p.filler);
         expect(fillers.length).toBeLessThan(4);
         expect(fillers.every((p) => p.kind === "drawing")).toBe(true);
         // The padding sits right before the end: it never moves a story page.
-        if (fillers.length) expect(plan.indexOf(fillers.at(-1)!)).toBe(plan.length - 2);
+        if (fillers.length) expect(plan.indexOf(fillers.at(-1)!)).toBe(plan.length - 3);
       }
     }
   });
@@ -131,7 +133,7 @@ describe("photo page", () => {
     const layout = { ...arranged.layout, photo };
     const plan = planBook(book(4), layout);
     expect(plan.find((p) => p.kind === "photo")?.key).toBe("photo");
-    expect(plan.length % 4).toBe(0);
+    expect(interiorPages(plan).length % 4).toBe(0);
     const page = renderBook(book(4), layout, { asset: (path) => `file:///store/${path}` }).pages.find((p) => p.key === "photo")!;
     expect(page.html).toContain('class="fb-photo-frame"');
     expect(page.html).toContain('src="file:///store/books/b1/photo-abc.jpg"');
