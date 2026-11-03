@@ -42,6 +42,14 @@ commands:
         toy: { upload: "${upload}", name: Бусинка }
       extract: { bookId: "$.id" }
       assert: { status: 201 }
+  # The progress screen's steps start with the toy's cut-out, and the toy's sheet is drawn.
+  - request:
+      url: /books/${bookId}
+      assert:
+        json:
+          "$.generation.steps[1].id": toy
+          "$.generation.toy": true
+          "$.generation.steps[5].id": friends
   - request:
       url: /books/${bookId}
       retryUntil:
@@ -51,7 +59,7 @@ commands:
       url: /books/${bookId}
       extract: { cutoutUrl: "$.toy.cutoutUrl", sheetUrl: "$.toy.sheetUrl" }
       assert:
-        json: { "$.toy.name": Бусинка }
+        json: { "$.toy.name": Бусинка, "$.generation": null }
   - request:
       url: ${WEB}${cutoutUrl}
       assert: { status: 200 }

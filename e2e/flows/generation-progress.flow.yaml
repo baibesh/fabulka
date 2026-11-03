@@ -1,0 +1,62 @@
+# While a book is being made the parent sees every real step with its model, the hero and pet
+# sheets as they arrive, a thumbnail for each page as it is drawn (the refused page "redrawing"),
+# the time left, and then the finished book. The interest "mock-slow" slows the mock models down for
+# this book only (page n takes n × 1.5 s), "mock-refuse" puts a scene on page 2 they always refuse.
+appId: ${WEB}
+tags: [book]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Прогресс ${Date.now()}"
+commands:
+  - request:
+      method: POST
+      url: ${API}/books
+      headers: { X-Client-Key: "e2e-${childName}", X-Demo-Code: E2E-DEMO }
+      json: { child: { name: "${childName}", age: 6, gender: girl, interests: [космос, mock-slow, mock-refuse], city: Алматы, pet: кот Барсик } }
+      extract: { bookId: "$.id" }
+      assert:
+        status: 201
+        json:
+          "$.generation.pagesTotal": 4
+          "$.generation.pet": true
+          "$.generation.toy": false
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/ru/books/${bookId}"
+  - waitForVisible: { testId: generation-steps }
+  # The book's own steps, in order: a pet gets its sheet, no toy photo means no cut-out.
+  - assertVisible: { css: "[data-testid=generation-step][data-step=read]" }
+  - assertVisible: { css: "[data-testid=generation-step][data-step=review]" }
+  - assertVisible: { css: "[data-testid=generation-step][data-step=friends]" }
+  - assertVisible: { text: "Рисуем питомца" }
+  - assertVisible: { text: "Проверяем, что каждая страница смотрится хорошо" }
+  - assertVisible: { text: "Muse Image · SAM 3.1" }
+  - assertNotVisible: { css: "[data-testid=generation-step][data-step=toy]" }
+  - assertVisible: { testId: book-eta }
+  - assertVisible: { css: "[data-testid=book-page][data-page='4']" }
+  # The hero's sheet shows as soon as it is drawn, then the pages one by one.
+  - waitForVisible: { testId: hero-image, timeout: 15000 }
+  - waitForVisible: { css: "[data-testid=generation-step][data-step=pages][data-state=current]", timeout: 15000 }
+  - assertVisible: { css: "[data-testid=generation-step][data-step=hero][data-state=done]" }
+  - waitForVisible: { css: "[data-testid=book-page][data-state=done]", timeout: 15000 }
+  - assertVisible: { testId: pages-count }
+  # Page 2's scene is refused: it is drawn again, gently said on its placeholder.
+  - waitForVisible: { testId: page-redrawing, timeout: 15000 }
+  - assertVisible: { text: "Перерисовываем стр. 2…" }
+  - waitForVisible: { text: "Книга готова", timeout: 30000 }
+  - assertNotVisible: { testId: generation-steps }
+  - waitForVisible: { testId: book-reader }
+  - request:
+      url: ${API}/books/${bookId}
+      assert:
+        status: 200
+        json:
+          "$.status": done
+          "$.generation": null
+          "$.pages[1].vignette": true
+          "$.pages[1].imageUrl": null
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

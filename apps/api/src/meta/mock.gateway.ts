@@ -129,6 +129,19 @@ export const MOCK_SUBJECT: PageSubject = {
 export const MOCK_REFUSE_INTEREST = 'mock-refuse';
 const REFUSE_MARK = '[mock-refuse]';
 
+/**
+ * An interest that slows the mock down for one book, so an E2E flow can watch the progress screen:
+ * the story takes a moment, the hero sheet longer, and page n takes n × SLOW_PAGE_MS, so the pages
+ * finish one by one.
+ */
+export const MOCK_SLOW_INTEREST = 'mock-slow';
+const SLOW_MARK = '[mock-slow]';
+const SLOW_STORY_MS = 1500;
+const SLOW_SHEET_MS = 2500;
+const SLOW_PAGE_MS = 1500;
+const slowedBy = (prompt: string, ms: number) =>
+  prompt.includes(SLOW_MARK) ? sleep(ms) : Promise.resolve();
+
 /** Muse Image's safety refusal, as the SDK throws it. */
 export function mockRefusal(): Error {
   return Object.assign(
@@ -233,26 +246,26 @@ export class MockGateway implements ModelGateway {
     template,
     toy,
   }: StoryBrief): Promise<GeneratedStory> {
+    const asked = (interest: string) =>
+      child.interests.some((i) => i.trim().toLowerCase() === interest);
+    const slow = asked(MOCK_SLOW_INTEREST) ? ` ${SLOW_MARK}` : '';
+    if (slow) await sleep(SLOW_STORY_MS);
     await this.pretend('story');
     const text = MOCK_TEXT[child.language];
-    const refused = child.interests.some(
-      (i) => i.trim().toLowerCase() === MOCK_REFUSE_INTEREST,
-    )
-      ? Math.min(2, pageCount)
-      : 0;
+    const refused = asked(MOCK_REFUSE_INTEREST) ? Math.min(2, pageCount) : 0;
     const story: Story = {
       title: template
         ? `${child.name}: ${template.title}`
         : text.title(child.name),
-      hero_description: `a ${child.age}-year-old ${child.gender} with dark hair, yellow raincoat, red boots`,
+      hero_description: `a ${child.age}-year-old ${child.gender} with dark hair, yellow raincoat, red boots${slow}`,
       pet_description: child.pet ? 'a small ginger cat with white paws' : null,
       pages: Array.from({ length: pageCount }, (_, i) => ({
         page: i + 1,
         text: text.page(i + 1, child.name, child.city),
         scene_prompt:
           i + 1 === refused
-            ? `the hero tumbling off a skateboard in ${child.city}, scene ${i + 1} ${REFUSE_MARK}`
-            : `the hero${toy ? ' and the toy' : ''} exploring ${child.city}, scene ${i + 1}`,
+            ? `the hero tumbling off a skateboard in ${child.city}, scene ${i + 1} ${REFUSE_MARK}${slow}`
+            : `the hero${toy ? ' and the toy' : ''} exploring ${child.city}, scene ${i + 1}${slow}`,
       })),
       talk_questions: text.questions,
     };
@@ -287,7 +300,8 @@ export class MockGateway implements ModelGateway {
     };
   }
 
-  async drawHero(): Promise<GeneratedImage> {
+  async drawHero(description = ''): Promise<GeneratedImage> {
+    await slowedBy(description, SLOW_SHEET_MS);
     await this.pretend('hero', 1);
     return {
       data: placeholder('hero', '#FFFFFF'),
@@ -423,6 +437,8 @@ export class MockGateway implements ModelGateway {
   }
 
   async drawPage(scenePrompt: string): Promise<GeneratedImage> {
+    const n = Number(/scene (\d+)/.exec(scenePrompt)?.[1] ?? 1);
+    await slowedBy(scenePrompt, n * SLOW_PAGE_MS);
     if (scenePrompt.includes(REFUSE_MARK)) {
       const call = this.journal.start({
         kind: 'page',
@@ -435,7 +451,6 @@ export class MockGateway implements ModelGateway {
       throw error;
     }
     await this.pretend('page', 1);
-    const n = Number(/scene (\d+)/.exec(scenePrompt)?.[1] ?? 1);
     return {
       data: placeholder(`page ${n}`, COLORS[(n - 1) % COLORS.length]),
       ext: 'svg',
