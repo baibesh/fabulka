@@ -13,6 +13,7 @@ import { getBook, wantPrint } from "@/lib/api";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { useCoverPrice } from "@/lib/use-price";
 import { BookDesign } from "./book-design";
+import { GenerationBoard, GenerationHeader } from "./generation-progress";
 import { BookReader } from "./book-reader";
 import { PriceSkeleton } from "./price-skeleton";
 import { SavePrompt } from "../account/save-prompt";
@@ -31,27 +32,28 @@ export function BookView() {
   const { data: book, error } = useQuery({
     queryKey: ["book", id],
     queryFn: () => getBook(id),
-    refetchInterval: (query) => (finished(query.state.data?.status) ? false : 1000),
+    // Every 1.5 s while it is being made; the API's ETag answers an unchanged book with a 304.
+    refetchInterval: (query) => (finished(query.state.data?.status) ? false : 1500),
   });
   const printPrice = useCoverPrice("soft", book?.layout.format.id);
   const { data: methods } = useMethodologies();
 
   if (!book) return <QueryState error={error} />;
   const done = book.status === "done";
+  // Being made: the steps, the time left and the artwork as it arrives (a failed book shows its error).
+  const making = !finished(book.status);
   // An unpublished method is no longer listed: the line is left out rather than showing a slug.
   const method = methods?.find((m) => m.slug === book.methodology);
 
   return (
     <div className="flex flex-col gap-8">
-      <section data-testid="book-status" data-status={book.status} className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 text-lg font-bold">
-          {book.status === "failed" ? <AlertTriangle className="size-5 text-danger" /> : <Sparkles className="size-5 text-accent" />}
-          <span data-testid="book-stage">{t(`book.stage.${book.status}`)}</span>
-          {!done && <span className="text-muted">{book.progress}%</span>}
-        </div>
-        {!done && (
-          <div className="h-3 overflow-hidden rounded-full bg-border">
-            <motion.div className="h-full bg-accent" animate={{ width: `${book.progress}%` }} transition={{ duration: 0.8 }} />
+      <section data-testid="book-status" data-status={book.status} aria-live="polite" className="flex flex-col gap-3">
+        {making ? (
+          <GenerationHeader book={book} />
+        ) : (
+          <div className="flex items-center gap-2 text-lg font-bold">
+            {book.status === "failed" ? <AlertTriangle className="size-5 text-danger" /> : <Sparkles className="size-5 text-accent" />}
+            <span data-testid="book-stage">{t(`book.stage.${book.status}`)}</span>
           </div>
         )}
         {book.error && <ErrorText>{book.error}</ErrorText>}
@@ -72,7 +74,8 @@ export function BookView() {
 
       {book.toy && !done && <ToyPipeline toy={book.toy} />}
 
-      {done ? <BookReader book={book} /> : <Progress book={book} />}
+      {done && <BookReader book={book} />}
+      {making && <GenerationBoard book={book} />}
 
       {book.pdfUrl && (
         <div className="flex flex-wrap justify-center gap-3">
@@ -120,53 +123,6 @@ export function BookView() {
           </ol>
         </Card>
       )}
-    </div>
-  );
-}
-
-/** While the book is being made: the hero, then each page as soon as it is drawn. */
-function Progress({ book }: { book: Book }) {
-  const { t } = useI18n();
-  return (
-    <div className="flex flex-col gap-6">
-      {book.heroImageUrl && (
-        <motion.img
-          data-testid="hero-image"
-          src={book.heroImageUrl}
-          alt={t("book.heroAlt")}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: "spring", bounce: 0.4 }}
-          className="w-48 rounded-2xl border border-border bg-white"
-        />
-      )}
-      <ol className="grid gap-6 sm:grid-cols-2">
-        {book.pages.map((page, i) => (
-          <motion.li
-            key={page.page}
-            data-testid="book-page"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.08 }}
-            className="overflow-hidden rounded-2xl border border-border bg-card"
-          >
-            {page.imageUrl ? (
-              <motion.img
-                key={page.imageUrl}
-                src={page.imageUrl}
-                alt={t("book.pageAlt", { page: page.page })}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.6 }}
-                className="aspect-[3/2] w-full object-cover"
-              />
-            ) : (
-              <Skeleton as="div" radius="none" className="aspect-[3/2] w-full" />
-            )}
-            <p className="whitespace-pre-line p-4 leading-relaxed">{page.text}</p>
-          </motion.li>
-        ))}
-      </ol>
     </div>
   );
 }
