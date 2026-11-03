@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { AdminPermission } from "@fabulka/shared";
-import { BookOpen, GraduationCap, History, LayoutDashboard, Library, ListChecks, LogOut, Package, ScrollText, Palette, Search, ShieldAlert, Sparkles, Users } from "lucide-react";
+import { BookOpen, GraduationCap, History, LayoutDashboard, Library, ListChecks, LogOut, Package, ScrollText, Palette, Search, ShieldAlert, Sparkles, TriangleAlert, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
@@ -11,6 +11,7 @@ import { adminLogout, adminMe } from "@/lib/admin-api";
 import { logout as signOut } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import { LanguagePicker } from "@/components/layout/locale-pickers";
+import { ReloadButton } from "@/components/layout/new-version";
 import { useAdminI18n } from "./ui";
 import { WorkingCountryProvider, WorkingCountrySwitcher } from "./working-country";
 
@@ -61,7 +62,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
     if (start) router.replace(start);
   }, [start, router]);
 
-  if (!me.isSuccess) return <p className="p-8 text-muted">{me.isError && !signedOut ? me.error.message : t("admin.loading")}</p>;
+  // A failed refetch (the window came back into focus) keeps the admin on the session it had.
+  if (!me.data) return me.isError && !signedOut ? <AdminFailed error={me.error} /> : <p className="p-8 text-muted">{t("admin.loading")}</p>;
 
   // Leaving the admin signs out of the site too (and of Keycloak), then lands on the home page.
   const logout = async () => {
@@ -110,6 +112,22 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </main>
       </div>
     </WorkingCountryProvider>
+  );
+}
+
+/**
+ * The session check failed (not a sign-out): what went wrong in words, never a raw zod dump (a page
+ * older than the API gets "out of date", see lib/outdated), and a reload.
+ */
+function AdminFailed({ error }: { error: Error }) {
+  const { t } = useAdminI18n();
+  return (
+    <div data-testid="admin-failed" role="alert" className="flex max-w-lg flex-col items-start gap-3 p-8">
+      <TriangleAlert className="size-10 text-danger" />
+      <h1 className="text-2xl font-extrabold">{t("admin.error.title")}</h1>
+      <p className="text-muted">{error.message || t("update.outdated")}</p>
+      <ReloadButton />
+    </div>
   );
 }
 

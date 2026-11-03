@@ -1,6 +1,7 @@
 "use client";
 
-import { ErrorNotice } from "./error-notice";
+import { isOutdatedError } from "@/lib/outdated";
+import { ErrorNotice, OutdatedNotice } from "./error-notice";
 import { useI18n } from "@/i18n/i18n";
 import { cx } from "./cx";
 import { ErrorText } from "./notice";
@@ -13,6 +14,7 @@ import { ErrorText } from "./notice";
  */
 export function QueryState({ error, scope = "site", className }: { error: Error | null; scope?: "site" | "admin"; className?: string }) {
   const { t } = useI18n(scope);
+  if (error && isOutdatedError(error)) return <OutdatedNotice error={error} className={className} />;
   if (error) return scope === "site" ? <ErrorNotice error={error} /> : <ErrorText className={className}>{error.message}</ErrorText>;
   return <p className={cx("text-muted", className)}>{t(scope === "admin" ? "admin.loading" : "common.loading")}</p>;
 }

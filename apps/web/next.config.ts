@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 
 const API_URL = process.env.API_URL ?? "http://localhost:4000";
 
+// Which build this is: the image's commit (BUILD_ID, a build argument from the Images workflow), else
+// the moment the build started. Baked into the pages and into /version.json alike, so a tab left open
+// across a deploy sees the server's id change and offers a reload (components/layout/new-version.tsx).
+// Set on process.env so every process the build starts reads the same value.
+process.env.NEXT_PUBLIC_BUILD_ID ||= process.env.BUILD_ID || Date.now().toString(36);
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
   experimental: {

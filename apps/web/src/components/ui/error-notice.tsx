@@ -4,6 +4,9 @@ import { REGION_UNAVAILABLE } from "@fabulka/shared";
 import { Globe } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import { ApiError } from "@/lib/api";
+import { isOutdatedError } from "@/lib/outdated";
+import { ReloadButton } from "../layout/new-version";
+import { cx } from "./cx";
 import { ErrorText } from "./notice";
 
 /** An API error; visitors from a restricted country get an explanation instead of a raw message. */
@@ -18,5 +21,16 @@ export function ErrorNotice({ error }: { error: Error }) {
       </section>
     );
   }
+  if (isOutdatedError(error)) return <OutdatedNotice error={error} />;
   return <ErrorText>{error.message}</ErrorText>;
+}
+
+/** A response this page could not read (it is older than the server): the sentence and a reload. */
+export function OutdatedNotice({ error, className }: { error: Error; className?: string }) {
+  return (
+    <div role="alert" data-testid="page-outdated" className={cx("flex flex-wrap items-center gap-3", className)}>
+      <span className="text-danger">{error.message}</span>
+      <ReloadButton />
+    </div>
+  );
 }

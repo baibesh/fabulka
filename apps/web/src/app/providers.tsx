@@ -1,15 +1,21 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { NewVersionBanner } from "@/components/layout/new-version";
 import { LocaleContext, isLocale, migrateSettings, setCountryList, setLocale, useI18n } from "@/i18n/i18n";
 import type { UiLocale } from "@/i18n/messages";
+import { humanizeError } from "@/lib/outdated";
 import { installErrorReporting } from "@/lib/telemetry";
 import { useReference } from "@/lib/use-price";
 
 /** `locale` is the site page's language (from its address; the global 404 passes the default one); the admin passes none. */
 export function Providers({ locale = null, children }: { locale?: UiLocale | null; children: React.ReactNode }) {
-  const [client] = useState(() => new QueryClient());
+  // A response that fails its schema check (a page older than the API) never shows its zod issues:
+  // the error's message becomes "this page is out of date, reload it" in the page's language.
+  const [client] = useState(
+    () => new QueryClient({ queryCache: new QueryCache({ onError: humanizeError }), mutationCache: new MutationCache({ onError: humanizeError }) }),
+  );
 
   // Errors visitors run into go to the admin's journal (message and page only, no form values).
   useEffect(() => installErrorReporting(), []);
@@ -32,6 +38,7 @@ export function Providers({ locale = null, children }: { locale?: UiLocale | nul
         <DocumentLanguage />
         <CountryListSync />
         {children}
+        <NewVersionBanner />
       </QueryClientProvider>
     </LocaleContext>
   );

@@ -45,6 +45,11 @@ const ru = {
   "common.back.book": "← К книге",
   "common.years": "{min}–{max, plural, one {# год} few {# года} many {# лет} other {# года}}",
   "common.optional": "(необязательно)",
+  "update.available": "Вышла новая версия сайта.",
+  "update.reload": "Обновить",
+  "update.dismiss": "Скрыть",
+  "update.outdated": "Страница устарела — обновите её, чтобы продолжить.",
+  "admin.error.title": "Не удалось открыть админку",
 
   "price.afterFree": "за книгу после бесплатных",
 
@@ -1312,6 +1317,11 @@ const kk: Messages = {
   "common.back.book": "← Кітапқа",
   "common.years": "{min}–{max} жас",
   "common.optional": "(міндетті емес)",
+  "update.available": "Сайттың жаңа нұсқасы шықты.",
+  "update.reload": "Жаңарту",
+  "update.dismiss": "Жасыру",
+  "update.outdated": "Бет ескірді — жалғастыру үшін оны жаңартыңыз.",
+  "admin.error.title": "Басқару панелін ашу мүмкін болмады",
 
   "price.afterFree": "тегін кітаптардан кейінгі бағасы",
 
@@ -2577,6 +2587,11 @@ const en: Messages = {
   "common.back.book": "← Back to the book",
   "common.years": "ages {min}–{max}",
   "common.optional": "(optional)",
+  "update.available": "A new version is available.",
+  "update.reload": "Reload",
+  "update.dismiss": "Dismiss",
+  "update.outdated": "This page is out of date — reload it to continue.",
+  "admin.error.title": "Couldn't open the admin",
 
   "price.afterFree": "per book after the free ones",
 
@@ -3843,6 +3858,11 @@ const es: Messages = {
   "common.back.book": "← Volver al libro",
   "common.years": "de {min} a {max} años",
   "common.optional": "(opcional)",
+  "update.available": "Hay una nueva versión disponible.",
+  "update.reload": "Recargar",
+  "update.dismiss": "Ocultar",
+  "update.outdated": "Esta página está desactualizada: recárgala para continuar.",
+  "admin.error.title": "No se pudo abrir el panel",
 
   "price.afterFree": "por libro después de los gratuitos",
 
@@ -5109,6 +5129,11 @@ const de: Messages = {
   "common.back.book": "← Zurück zum Buch",
   "common.years": "{min}–{max} Jahre",
   "common.optional": "(optional)",
+  "update.available": "Eine neue Version ist verfügbar.",
+  "update.reload": "Neu laden",
+  "update.dismiss": "Ausblenden",
+  "update.outdated": "Diese Seite ist veraltet – bitte neu laden, um fortzufahren.",
+  "admin.error.title": "Der Admin-Bereich konnte nicht geöffnet werden",
 
   "price.afterFree": "pro Buch nach den kostenlosen",
 

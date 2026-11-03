@@ -35,7 +35,10 @@ jobs:
           context: .
           file: apps/${{ matrix.app }}/Dockerfile
           push: true
-          build-args: API_URL=http://api:4000
+          # BUILD_ID tells open pages the web app was redeployed (apps/web/next.config.ts).
+          build-args: |
+            API_URL=http://api:4000
+            BUILD_ID=${{ github.sha }}
           tags: |
             ghcr.io/baibesh/fabulka-${{ matrix.app }}:latest
             ghcr.io/baibesh/fabulka-${{ matrix.app }}:${{ github.sha }}
