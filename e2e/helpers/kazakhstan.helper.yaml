@@ -6,7 +6,7 @@
 # `flows/**` glob would run a helper there as a flow of its own (TAPSTEP_NOTES 13).
 commands:
   - openLink: "${WEB}/create"
-  - waitForVisible: { testId: voice-manual }
+  - waitForVisible: { testId: nav-home, timeout: 15000 }
   - scrollUntilVisible: { testId: ui-country }
   - tapOn: { testId: ui-country }
   - waitForVisible: { testId: ui-country-option-KZ }

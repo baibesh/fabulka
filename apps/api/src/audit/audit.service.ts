@@ -137,6 +137,8 @@ export class AuditService implements OnModuleDestroy {
 
   /** A page of events, newest first; `nextCursor` continues it. */
   async list(session: AdminAccess, query: Query): Promise<AuditPage> {
+    // Events of writes that just answered may still be on their way to the database.
+    await this.idle();
     const where = this.where(session, query);
     const after = parseCursor(query.cursor);
     const rows = await this.prisma.auditEvent.findMany({
