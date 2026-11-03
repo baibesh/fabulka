@@ -31,6 +31,7 @@ import {
 } from '@fabulka/shared';
 import { listScope, outOfScope } from '../admin/scope';
 import { PrismaService } from '../prisma/prisma.service';
+import { StaffCapsService } from '../staff/caps.service';
 import { ReferenceService } from '../reference/reference.service';
 import { EXAMPLES_TAG, SeoWebService } from '../seo/seo-web.service';
 import { StorageService } from '../storage/storage.service';
@@ -102,6 +103,7 @@ export class ExamplesService {
     private readonly reference: ReferenceService,
     private readonly translator: TranslatorService,
     private readonly web: SeoWebService,
+    private readonly caps: StaffCapsService,
   ) {}
 
   // ---- The site ---------------------------------------------------------------------------------
@@ -479,9 +481,13 @@ export class ExamplesService {
   async translate(
     id: string,
     languages: Language[],
-    session: AdminAccess,
+    session: StaffSession,
+    working: string | null = null,
   ): Promise<AdminExample> {
     const example = await this.editable(id, session);
+    // Paid models on staff's behalf: within the person's and the country's daily caps.
+    const country = spendCountry(example, working);
+    await this.caps.assert(session, country);
     const source = example.versions.find((v) => v.book.status === 'done');
     if (!source) {
       throw refuse(
@@ -510,8 +516,9 @@ export class ExamplesService {
     const book = await this.prisma.book.findUniqueOrThrow({
       where: { id: source.bookId },
     });
+    const staff = StaffCapsService.context(session, country);
     for (const language of inLanguageOrder(languages))
-      await this.translator.start(id, book, language);
+      await this.translator.start(id, book, language, undefined, staff);
     return this.get(id, session);
   }
 
@@ -701,6 +708,30 @@ export function shownRule(row: ExampleRow): CountryRule {
     { mode: row.countriesMode, countries: row.countries },
     templateRuleOf(row.versions.map((v) => v.book)),
   );
+}
+
+/** A session as the caps need it: who, and their staff row when they have one. */
+export type StaffSession = AdminAccess & {
+  who?: string | null;
+  staffId?: string | null;
+};
+
+/**
+ * The country a translation's spend counts against: the working country when the example is shown
+ * there, else the first country it is shown only in; none for a global or "everywhere except…" one
+ * (then the working country, if any).
+ */
+export function spendCountry(
+  example: { countries: string[]; countriesMode: string },
+  working: string | null,
+): string | null {
+  const code = working?.trim().toUpperCase() || null;
+  if (example.countriesMode === 'include' && example.countries.length) {
+    return code && example.countries.includes(code)
+      ? code
+      : example.countries[0];
+  }
+  return code;
 }
 
 /** A country manager sees the examples shown in any of their countries; global staff all. */

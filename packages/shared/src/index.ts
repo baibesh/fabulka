@@ -26,6 +26,7 @@ export * from "./admin-access";
 export * from "./staff";
 export * from "./examples";
 export * from "./country-rules";
+export * from "./audit";
 
 /** What the parent tells us about the child. */
 export const ChildProfileSchema = z.object({
@@ -608,6 +609,8 @@ export const AdminStatsSchema = z.object({
   /** Requests for a printed book from countries without a print partner. */
   printInterest: z.array(z.object({ country: z.string().nullable(), requests: z.number().int() })),
   templates: z.array(z.object({ slug: z.string().nullable(), title: z.string(), books: z.number().int() })),
+  /** Staff generation today by country (null: for no country), with each one's cap. */
+  staffSpend: z.array(z.object({ country: z.string().nullable(), usd: z.number(), capUsd: z.number().nullable() })).default([]),
 });
 export type AdminStats = z.infer<typeof AdminStatsSchema>;
 

@@ -23,7 +23,7 @@ import {
 } from './admin-auth.service';
 import { StaffAccessService } from '../staff/staff-access.service';
 
-const PERMISSION_KEY = 'admin:permission';
+export const PERMISSION_KEY = 'admin:permission';
 
 /**
  * The admin section(s), or section parts ("reference.prices"), a controller or route belongs to: a

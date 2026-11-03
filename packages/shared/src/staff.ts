@@ -32,6 +32,13 @@ export const StaffMemberSchema = z.object({
   lastLoginAt: z.string().nullable(),
   createdAt: z.string(),
   createdBy: z.string().nullable(),
+  /** Their staff generation today (example translations, theme proposals), in dollars. */
+  spentTodayUsd: z.number().default(0),
+  /** Their own daily cap (null: the default) and whether they have none at all. */
+  capUsd: z.number().nullable().default(null),
+  uncapped: z.boolean().default(false),
+  /** The cap that holds for them now: theirs, none, or the default; null is no cap. */
+  effectiveCapUsd: z.number().nullable().default(null),
 });
 export type StaffMember = z.infer<typeof StaffMemberSchema>;
 

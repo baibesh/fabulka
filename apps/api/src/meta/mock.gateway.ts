@@ -187,16 +187,25 @@ const MOCK_ORNAMENT = Buffer.from(
 
 /** Canned model output: no network, no cost, same result every run. */
 export class MockGateway implements ModelGateway {
+  /**
+   * `staffCostUsd` is what the mock charges for a call staff start (a translation, a theme
+   * proposal), so E2E runs can reach a staff daily cap (MOCK_STAFF_COST_USD); everything else is free.
+   */
   constructor(
     private readonly delayMs: number,
     private readonly journal: CallJournal = NO_JOURNAL,
+    private readonly staffCostUsd = 0,
   ) {}
 
   /** Takes as long as the mock is told to and records the call, so the journal works offline too. */
-  private async pretend(kind: ModelCallKind, images = 0): Promise<void> {
+  private async pretend(
+    kind: ModelCallKind,
+    images = 0,
+    costUsd = 0,
+  ): Promise<void> {
     const call = this.journal.start({ kind, model: 'mock' });
     await sleep(this.delayMs);
-    call.ok({ costUsd: 0, images });
+    call.ok({ costUsd, images });
   }
 
   async writeStory({
@@ -312,7 +321,7 @@ export class MockGateway implements ModelGateway {
   async translateBook(
     brief: TranslationBrief,
   ): Promise<{ translation: BookTranslation; costUsd: number }> {
-    await this.pretend('translate');
+    await this.pretend('translate', 0, this.staffCostUsd);
     const text = MOCK_TEXT[brief.to];
     const name = transliterate(brief.child.name, brief.to);
     const city = transliterate(brief.child.city, brief.to);
@@ -336,7 +345,7 @@ export class MockGateway implements ModelGateway {
           ? `[${brief.to}] ${brief.photoCaption}`
           : null,
       },
-      costUsd: 0,
+      costUsd: this.staffCostUsd,
     };
   }
 
@@ -354,8 +363,8 @@ export class MockGateway implements ModelGateway {
   }
 
   async proposeTheme(brief: string) {
-    await this.pretend('theme');
-    return { proposal: mockTheme(brief), costUsd: 0 };
+    await this.pretend('theme', 0, this.staffCostUsd);
+    return { proposal: mockTheme(brief), costUsd: this.staffCostUsd };
   }
 
   async drawOrnament(): Promise<GeneratedImage> {

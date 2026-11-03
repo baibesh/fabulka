@@ -14,6 +14,7 @@ import type { SettingsService } from '../settings/settings.service';
 import type { StorageService } from '../storage/storage.service';
 import type { TemplatesService } from '../templates/templates.service';
 import { curatedThemes } from '../themes/curated.testing';
+import type { StaffCapsService } from '../staff/caps.service';
 import { AdminService, bookVisible } from './admin.service';
 
 const SUPER = accessOf([SUPER_ROLE], BUILTIN_ROLES, []);
@@ -33,9 +34,22 @@ function makeService(prisma: unknown, storage: unknown = {}) {
     {
       countries: () => Promise.resolve(DEFAULT_COUNTRIES),
     } as unknown as ReferenceService,
+    caps as unknown as StaffCapsService,
     { get: () => 150 } as unknown as ConfigService,
   );
 }
+
+const caps = {
+  spendByCountry: jest.fn((countries: string[] | null) =>
+    Promise.resolve(
+      (countries ?? ['DE']).map((country) => ({
+        country,
+        usd: country === 'DE' ? 0.25 : 0,
+        capUsd: 1,
+      })),
+    ),
+  ),
+};
 
 /** A book row with what AdminService.book reads besides the DTO. */
 const row = (exampleOf: { exampleId: string; language: string } | null) => ({
@@ -331,5 +345,43 @@ describe('AdminService.updateTemplate samples', () => {
     // XK is no longer offered, but the book already had it.
     await service.updateTemplate('bath-time', { countries: ['XK'] });
     expect(tx.bookTemplate.update).toHaveBeenCalled();
+  });
+});
+
+describe('AdminService.countryStats: a manager dashboard', () => {
+  it("counts only their countries' books, orders and spend, with no global numbers", async () => {
+    const wheres: unknown[] = [];
+    const recorded = (value: unknown) =>
+      jest.fn((args?: { where?: unknown }) => {
+        wheres.push(args?.where);
+        return Promise.resolve(value);
+      });
+    const prisma = {
+      book: {
+        count: recorded(3),
+        groupBy: recorded([{ status: 'done', _count: 2 }]),
+        aggregate: recorded({ _sum: { costUsd: 0.5 } }),
+      },
+      order: {
+        aggregate: recorded({ _count: 1, _sum: { totalKzt: 9900 } }),
+        count: recorded(1),
+        groupBy: recorded([{ status: null, _count: 1 }]),
+      },
+    };
+    const stats = await makeService(prisma).countryStats(['DE']);
+    expect(stats).toEqual({
+      countries: ['DE'],
+      books: { total: 3, today: 3, byStatus: { done: 2 } },
+      orders: { total: 1, today: 1, byStatus: { timer: 1 }, totalKzt: 9900 },
+      spend: {
+        booksTodayUsd: 0.5,
+        staff: [{ country: 'DE', usd: 0.25, capUsd: 1 }],
+      },
+    });
+    expect(wheres).toHaveLength(7);
+    for (const where of wheres) {
+      expect(where).toMatchObject({ country: { in: ['DE'] } });
+    }
+    expect(caps.spendByCountry).toHaveBeenCalledWith(['DE']);
   });
 });

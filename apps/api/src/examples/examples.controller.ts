@@ -31,8 +31,26 @@ import {
   CurrentAdmin,
   RequirePermission,
 } from '../admin/admin.guard';
+import { listScope } from '../admin/scope';
+import { Audit, AuditTrail, Trail } from '../audit/audit.interceptor';
 import { ZodPipe } from '../common/zod.pipe';
-import { ExamplesService } from './examples.service';
+import { ExamplesService, spendCountry } from './examples.service';
+
+/** The country an example's events belong to: the first it is shown only in; none for a global one. */
+function exampleCountry(example: {
+  countries: string[];
+  countriesMode: string;
+}): string | null {
+  return example.countriesMode === 'include'
+    ? (example.countries[0] ?? null)
+    : null;
+}
+
+/** The fields of an example an audit event compares. */
+const view = (example: AdminExample) => ({
+  countries: example.countries,
+  mode: example.countriesMode,
+});
 
 /**
  * The admin's «Examples»: stories on the home page with a version per language. Refusals carry a
@@ -57,20 +75,39 @@ export class ExamplesAdminController {
   /** A new example with this finished book as its first version, in these countries. */
   @Post()
   @RequirePermission('examples', 'books')
-  create(
+  @Audit('example.create', { target: 'example' })
+  async create(
     @Body(new ZodPipe(CreateExampleSchema)) body: CreateExample,
     @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<AdminExample> {
-    return this.examples.create(body.bookId, body.countries, session);
+    const example = await this.examples.create(
+      body.bookId,
+      body.countries,
+      session,
+    );
+    trail
+      .target('example', example.id)
+      .in(exampleCountry(example))
+      .diff(null, view(example))
+      .note({ bookId: body.bookId });
+    return example;
   }
 
   /** The home page's order. Declared before :id. */
   @Post('order')
   @RequirePermission('examples')
+  @Audit('example.order', { target: 'examples' })
   reorder(
     @Body(new ZodPipe(ReorderExamplesSchema)) body: ReorderExamples,
     @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<AdminExample[]> {
+    // A manager's order is of their countries' examples: theirs to see in Activity.
+    trail
+      .target('examples', null)
+      .in(listScope(session, 'examples')?.[0] ?? null)
+      .note({ ids: body.ids });
     return this.examples.reorder(body.ids, session);
   }
 
@@ -102,56 +139,100 @@ export class ExamplesAdminController {
 
   @Patch(':id')
   @RequirePermission('examples')
-  update(
+  @Audit('example.update', { target: 'example' })
+  async update(
     @Param('id') id: string,
     @Body(new ZodPipe(UpdateExampleSchema)) body: UpdateExample,
     @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<AdminExample> {
-    return this.examples.update(id, body.countries, body.mode, session);
+    const before = await this.examples.get(id, session);
+    const after = await this.examples.update(
+      id,
+      body.countries,
+      body.mode,
+      session,
+    );
+    trail
+      .in(exampleCountry(after) ?? exampleCountry(before))
+      .diff(view(before), view(after));
+    return after;
   }
 
   /** Off the home page; its books stay. */
   @Delete(':id')
   @RequirePermission('examples')
+  @Audit('example.delete', { target: 'example' })
   @HttpCode(204)
-  remove(
+  async remove(
     @Param('id') id: string,
     @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<void> {
-    return this.examples.remove(id, session);
+    const before = await this.examples.get(id, session);
+    await this.examples.remove(id, session);
+    trail.in(exampleCountry(before)).diff(view(before), null);
   }
 
   /** A finished book as the example's version in its language. */
   @Post(':id/versions')
   @RequirePermission('examples', 'books')
-  addVersion(
+  @Audit('example.version_add', { target: 'example' })
+  async addVersion(
     @Param('id') id: string,
     @Body(new ZodPipe(ExampleBookRefSchema)) body: ExampleBookRef,
     @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<AdminExample> {
-    return this.examples.addVersion(id, body.bookId, session);
+    const example = await this.examples.addVersion(id, body.bookId, session);
+    const version = example.versions.find((v) => v.bookId === body.bookId);
+    trail
+      .in(exampleCountry(example))
+      .note({ bookId: body.bookId, language: version?.language ?? null });
+    return example;
   }
 
   /** One version off the example; its book stays. */
   @Delete(':id/versions/:language')
   @RequirePermission('examples')
+  @Audit('example.version_remove', { target: 'example' })
   @HttpCode(204)
-  removeVersion(
+  async removeVersion(
     @Param('id') id: string,
     @Param('language') language: string,
     @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<void> {
-    return this.examples.removeVersion(id, language, session);
+    const before = await this.examples.get(id, session);
+    await this.examples.removeVersion(id, language, session);
+    trail.in(exampleCountry(before)).note({ language });
   }
 
-  /** Starts translating the story into these languages (background jobs). */
+  /**
+   * Starts translating the story into these languages (background jobs), within the person's and
+   * the country's daily caps (429 staff_cap_reached). ?country= is the working country the spend
+   * counts against when the example is shown there.
+   */
   @Post(':id/translate')
   @RequirePermission('examples')
-  translate(
+  @Audit('example.translate', { target: 'example' })
+  async translate(
     @Param('id') id: string,
     @Body(new ZodPipe(TranslateExampleSchema)) body: TranslateExample,
     @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
+    @Query('country') country?: string,
   ): Promise<AdminExample> {
-    return this.examples.translate(id, body.languages, session);
+    const working = country?.trim().toUpperCase() || null;
+    const example = await this.examples.translate(
+      id,
+      body.languages,
+      session,
+      working,
+    );
+    trail
+      .in(spendCountry(example, working))
+      .note({ languages: body.languages });
+    return example;
   }
 }

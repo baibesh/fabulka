@@ -15,6 +15,7 @@ import {
   type AdminBookRow,
   type AdminStats,
   type AdminTemplate,
+  type CountryStats,
   type Answers,
   type ChildProfile,
   type Language,
@@ -29,6 +30,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { QuotaService, startOfDay } from '../quota/quota.service';
 import { ReferenceService } from '../reference/reference.service';
 import { SettingsService } from '../settings/settings.service';
+import { StaffCapsService } from '../staff/caps.service';
 import { StorageService } from '../storage/storage.service';
 import { questions, TemplatesService } from '../templates/templates.service';
 import { ThemesService } from '../themes/themes.service';
@@ -58,6 +60,7 @@ export class AdminService {
     private readonly methodologies: MethodologiesService,
     private readonly themes: ThemesService,
     private readonly reference: ReferenceService,
+    private readonly caps: StaffCapsService,
     config: ConfigService,
   ) {
     this.budgetUsd = Number(config.get('MODEL_BUDGET_USD', 150));
@@ -80,6 +83,7 @@ export class AdminService {
       templateCounts,
       templateRows,
       printInterest,
+      staffSpend,
     ] = await Promise.all([
       this.settings.paused(),
       this.prisma.book.count(),
@@ -111,6 +115,7 @@ export class AdminService {
         _count: true,
         orderBy: { _count: { country: 'desc' } },
       }),
+      this.caps.spendByCountry(null),
     ]);
 
     const statusCounts = Object.fromEntries(
@@ -159,6 +164,71 @@ export class AdminService {
           };
         })
         .sort((a, b) => b.books - a.books),
+      staffSpend,
+    };
+  }
+
+  /**
+   * A dashboard of some countries only (a country manager's; null: every country): their books,
+   * orders and today's spend, with no service-wide numbers. Books and orders count by the country
+   * they were made or ordered in.
+   */
+  async countryStats(countries: string[] | null): Promise<CountryStats> {
+    const today = { gte: startOfDay() };
+    const inCountries = countries ? { country: { in: countries } } : {};
+    const [
+      books,
+      booksToday,
+      byStatus,
+      spend,
+      orders,
+      ordersToday,
+      orderRows,
+      staff,
+    ] = await Promise.all([
+      this.prisma.book.count({ where: inCountries }),
+      this.prisma.book.count({ where: { ...inCountries, createdAt: today } }),
+      this.prisma.book.groupBy({
+        by: ['status'],
+        where: inCountries,
+        _count: true,
+      }),
+      this.prisma.book.aggregate({
+        where: { ...inCountries, createdAt: today },
+        _sum: { costUsd: true },
+      }),
+      this.prisma.order.aggregate({
+        where: inCountries,
+        _count: true,
+        _sum: { totalKzt: true },
+      }),
+      this.prisma.order.count({ where: { ...inCountries, createdAt: today } }),
+      this.prisma.order.groupBy({
+        by: ['status'],
+        where: inCountries,
+        _count: true,
+      }),
+      this.caps.spendByCountry(countries),
+    ]);
+    return {
+      countries: countries ?? [],
+      books: {
+        total: books,
+        today: booksToday,
+        byStatus: Object.fromEntries(byStatus.map((s) => [s.status, s._count])),
+      },
+      orders: {
+        total: orders._count,
+        today: ordersToday,
+        byStatus: Object.fromEntries(
+          orderRows.map((s) => [s.status ?? 'timer', s._count]),
+        ),
+        totalKzt: orders._sum.totalKzt ?? 0,
+      },
+      spend: {
+        booksTodayUsd: Math.round((spend._sum.costUsd ?? 0) * 10_000) / 10_000,
+        staff,
+      },
     };
   }
 

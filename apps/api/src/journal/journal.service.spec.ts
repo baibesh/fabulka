@@ -2,6 +2,7 @@ import { DEFAULT_METHODOLOGIES } from '@fabulka/shared';
 import type { Prisma } from '@prisma/client';
 import { MetaGateway } from '../meta/meta.gateway';
 import { MockGateway } from '../meta/mock.gateway';
+import type { TranslationBrief } from '../meta/prompts';
 import type { PrismaService } from '../prisma/prisma.service';
 import { errorCode, JournalService } from './journal.service';
 
@@ -25,6 +26,19 @@ function makeJournal(create = jest.fn().mockResolvedValue({})) {
     create.mock.calls.map(([args]: [{ data: Row }]) => args.data);
   return { journal, prisma, rows };
 }
+
+const translationBrief: TranslationBrief = {
+  from: 'ru',
+  to: 'de',
+  child: { name: 'Алия', age: 5, gender: 'girl', city: 'Алматы' },
+  toyName: null,
+  title: 'Алия',
+  pages: [{ page: 1, text: 'Жила-была Алия.' }],
+  talkQuestions: ['Что случилось?'],
+  dedication: null,
+  photoCaption: null,
+  wordsPerPage: 40,
+};
 
 const brief = {
   child: {
@@ -155,6 +169,25 @@ describe('JournalService', () => {
       ['story', 'book-1', 0],
       ['hero', 'book-1', 1],
       ['voice-transcribe', null, 0],
+    ]);
+  });
+
+  it("records a staff action's calls against the staff email and country", async () => {
+    const { journal, rows } = makeJournal();
+    const models = new MockGateway(0, journal, 0.02);
+
+    await journal.run(
+      { bookId: 'book-2', staffEmail: 'cm@e2e.test', staffCountry: 'DE' },
+      () => models.translateBook(translationBrief),
+    );
+    await models.writeStory(brief);
+    await journal.idle();
+
+    expect(
+      rows().map((r) => [r.kind, r.staffEmail, r.staffCountry, r.costUsd]),
+    ).toEqual([
+      ['translate', 'cm@e2e.test', 'DE', 0.02],
+      ['story', null, null, 0],
     ]);
   });
 

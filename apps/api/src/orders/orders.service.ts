@@ -284,6 +284,17 @@ export class OrdersService implements OnModuleInit {
     return rows.map((row) => this.adminDto(row));
   }
 
+  /** The stage an order is at now and its country (for the audit's before), or null. */
+  async currentStatus(
+    id: string,
+  ): Promise<{ status: OrderStatus; country: string | null } | null> {
+    const row = await this.prisma.order.findUnique({
+      where: { id },
+      include: withBookAndEvents,
+    });
+    return row ? { status: this.statusOf(row), country: row.country } : null;
+  }
+
   /** 404 for no order; 403 scope_forbidden for one outside the session's countries. */
   private async assertOrderScope(id: string, session: AdminAccess) {
     const row = await this.prisma.order.findUnique({

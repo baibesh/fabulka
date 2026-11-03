@@ -24,6 +24,10 @@ export const RETENTION_DAYS = 90;
 /** What generation tells the journal about the calls inside it; voice prefill has no book. */
 export interface JournalContext {
   bookId?: string;
+  /** A staff action (an example translation, a theme proposal): who started it, for staff caps. */
+  staffEmail?: string | null;
+  /** The country that staff action was for. */
+  staffCountry?: string | null;
 }
 
 /** What a model call is, known before it is sent. */
@@ -75,7 +79,7 @@ export class JournalService implements OnModuleDestroy {
     return new ModelCallTimer(
       (row) => this.record(row),
       call,
-      this.context.getStore()?.bookId,
+      this.context.getStore(),
     );
   }
 
@@ -167,7 +171,7 @@ export class ModelCallTimer {
   constructor(
     private readonly record: (row: ModelCallRow) => void,
     private readonly call: CallStart,
-    private readonly bookId: string | undefined,
+    private readonly context: JournalContext | undefined,
   ) {}
 
   /** Awaits the request; when it throws, the call is recorded as failed and the error passed on. */
@@ -199,7 +203,9 @@ export class ModelCallTimer {
 
   private base(outcome: CallOutcome) {
     return {
-      bookId: this.bookId ?? null,
+      bookId: this.context?.bookId ?? null,
+      staffEmail: this.context?.staffEmail ?? null,
+      staffCountry: this.context?.staffCountry ?? null,
       kind: this.call.kind,
       model: this.call.model,
       attempt: this.call.attempt ?? 1,

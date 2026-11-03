@@ -23,6 +23,7 @@ import { MODEL_GATEWAY, type ModelGateway } from './model-gateway';
           return new MockGateway(
             Number(config.get('MOCK_DELAY_MS', 300)),
             journal,
+            Number(config.get('MOCK_STAFF_COST_USD', 0)),
           );
         if (mode !== 'meta')
           throw new Error(`MODELS must be mock or meta, got "${mode}"`);

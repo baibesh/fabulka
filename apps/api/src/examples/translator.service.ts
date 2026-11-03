@@ -16,6 +16,7 @@ import { JournalService } from '../journal/journal.service';
 import { layoutOf } from '../layout/layout';
 import { MODEL_GATEWAY, type ModelGateway } from '../meta/model-gateway';
 import { PrismaService } from '../prisma/prisma.service';
+import type { StaffSpendContext } from '../staff/caps.service';
 import { EXAMPLES_TAG, SeoWebService } from '../seo/seo-web.service';
 import { StorageService } from '../storage/storage.service';
 import { ThemesService } from '../themes/themes.service';
@@ -87,13 +88,15 @@ export class TranslatorService {
 
   /**
    * Makes the new book and its version row, then translates in the background; returns at once.
-   * `retryMs` is the pause before the one retry (tests use 0).
+   * `retryMs` is the pause before the one retry (tests use 0). `staff` is who started it and for
+   * which country: its model calls count against their daily caps.
    */
   async start(
     exampleId: string,
     source: BookRow,
     language: Language,
     retryMs = 3000,
+    staff: StaffSpendContext = { staffEmail: null, staffCountry: null },
   ): Promise<string> {
     const row = await this.prisma.book.create({
       data: translationRow(source, language),
@@ -104,7 +107,7 @@ export class TranslatorService {
     const spent: Spend = { usd: 0 };
     void this.slots
       .run(() =>
-        this.journal.run({ bookId: row.id }, async () => {
+        this.journal.run({ bookId: row.id, ...staff }, async () => {
           try {
             await this.translate(row.id, source.id, language, spent);
           } catch (error) {

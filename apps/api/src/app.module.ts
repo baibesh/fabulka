@@ -6,14 +6,18 @@ import {
   type NestModule,
 } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { resolve } from 'node:path';
 import { AdminAuthService } from './admin/admin-auth.service';
 import { AdminAuthController, AdminController } from './admin/admin.controller';
 import { AdminService } from './admin/admin.service';
+import { AuditController } from './audit/audit.controller';
+import { AuditInterceptor } from './audit/audit.interceptor';
+import { AuditCleaner, AuditService } from './audit/audit.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
+import { StaffCapsService } from './staff/caps.service';
 import { KeycloakAdminService } from './staff/keycloak-admin.service';
 import { StaffAccessService } from './staff/staff-access.service';
 import { TeamController } from './staff/team.controller';
@@ -100,6 +104,7 @@ class HealthController {
     AdminController,
     ExamplesAdminController,
     TeamController,
+    AuditController,
     AuthController,
     TestMailsController,
     VoiceController,
@@ -134,6 +139,10 @@ class HealthController {
     SeoWebService,
     ExamplesService,
     TranslatorService,
+    StaffCapsService,
+    AuditService,
+    AuditCleaner,
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
 })
 export class AppModule implements NestModule {

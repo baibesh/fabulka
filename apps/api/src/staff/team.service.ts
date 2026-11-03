@@ -7,7 +7,11 @@ import {
 } from '@nestjs/common';
 import {
   ADMIN_RIGHTS,
+  NO_STAFF_CAPS,
   SUPER_ROLE,
+  personCap,
+  type StaffCapDefaults,
+  type StaffCapOverride,
   UNDELETABLE_ROLES,
   type AdminRight,
   type CreateStaffRoleSchema,
@@ -23,6 +27,7 @@ import type { StaffMember, StaffRole } from '@prisma/client';
 import type { z } from 'zod';
 import type { AdminSession } from '../admin/admin-auth.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { StaffCapsService } from './caps.service';
 import { KeycloakAdminService } from './keycloak-admin.service';
 import { StaffAccessService } from './staff-access.service';
 
@@ -40,7 +45,18 @@ function refuse(
   throw new Kind({ code, message });
 }
 
-export function staffDto(row: StaffMember): StaffMemberDto {
+/** What their row says of their cap and today's spend (Team's list fills it in; 0 and the row's own elsewhere). */
+export interface SpendView {
+  spentTodayUsd: number;
+  defaults: StaffCapDefaults;
+}
+
+export function staffDto(
+  row: StaffMember,
+  spend: SpendView = { spentTodayUsd: 0, defaults: NO_STAFF_CAPS },
+): StaffMemberDto {
+  const superadmin =
+    row.roles.includes(SUPER_ROLE) || row.realmRoles.includes(SUPER_ROLE);
   return {
     id: row.id,
     email: row.email,
@@ -53,7 +69,31 @@ export function staffDto(row: StaffMember): StaffMemberDto {
     lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     createdBy: row.createdBy,
+    spentTodayUsd: spend.spentTodayUsd,
+    capUsd: row.capUsd,
+    uncapped: row.uncapped,
+    effectiveCapUsd: personCap(row, superadmin, spend.defaults),
   };
+}
+
+/** The fields of a person an audit event compares (no ids, no timestamps). */
+export function staffAuditView(member: StaffMemberDto) {
+  return {
+    email: member.email,
+    name: member.name,
+    roles: member.roles,
+    countries: member.countries,
+    status: member.status,
+    capUsd: member.capUsd,
+    uncapped: member.uncapped,
+  };
+}
+
+/** The fields of a role an audit event compares. */
+export function roleAuditView(role: StaffRoleDto | null) {
+  return role
+    ? { name: role.name, rights: role.rights, scoped: role.scoped }
+    : null;
 }
 
 /**
@@ -67,13 +107,48 @@ export class TeamService {
     private readonly prisma: PrismaService,
     private readonly access: StaffAccessService,
     private readonly keycloak: KeycloakAdminService,
+    private readonly caps: StaffCapsService,
   ) {}
 
+  /** Everyone, with today's staff spend and the cap that holds for each. */
   async list(): Promise<StaffMemberDto[]> {
-    const rows = await this.prisma.staffMember.findMany({
-      orderBy: [{ status: 'asc' }, { email: 'asc' }],
+    const [rows, spend, defaults] = await Promise.all([
+      this.prisma.staffMember.findMany({
+        orderBy: [{ status: 'asc' }, { email: 'asc' }],
+      }),
+      this.caps.spendByPerson(),
+      this.caps.defaults(),
+    ]);
+    return rows.map((row) =>
+      staffDto(row, { spentTodayUsd: spend.get(row.email) ?? 0, defaults }),
+    );
+  }
+
+  /** One person as Team shows them. */
+  async member(id: string): Promise<StaffMemberDto> {
+    const [row, defaults] = await Promise.all([
+      this.find(id),
+      this.caps.defaults(),
+    ]);
+    return staffDto(row, {
+      spentTodayUsd: await this.caps.spentToday(row.email),
+      defaults,
     });
-    return rows.map(staffDto);
+  }
+
+  /** Their own daily cap on staff generation (null: the default), or none at all. */
+  async setCap(id: string, body: StaffCapOverride): Promise<StaffMemberDto> {
+    await this.find(id);
+    await this.prisma.staffMember.update({
+      where: { id },
+      data: { capUsd: body.capUsd, uncapped: body.uncapped ?? false },
+    });
+    return this.member(id);
+  }
+
+  /** One role as the Roles tab shows it, or null. */
+  async role(key: string): Promise<StaffRoleDto | null> {
+    return (await this.roles()).find((r) => r.key === key) ?? null;
   }
 
   /** Adds someone and has Keycloak send them the set-up email (the row is kept if it fails). */

@@ -36,6 +36,7 @@ describe("built-in roles", () => {
     const role = BUILTIN_ROLES.find((r) => r.key === "country_manager")!;
     expect(role.scoped).toBe(true);
     expect(role.rights).toEqual([
+      "dashboard",
       "examples",
       "catalog",
       "orders",
@@ -44,6 +45,7 @@ describe("built-in roles", () => {
       "reference.cities",
       "reference.delivery",
       "reference.formats_country",
+      "audit",
     ]);
     expect(role.rights).not.toContain("reference");
   });
@@ -55,7 +57,7 @@ describe("accessOf and permissionsOf", () => {
     expect(permissionsOf(superadmin)).toEqual([...ADMIN_PERMISSIONS]);
     expect(permissionsOf(accessOf(["admin", "seo"], DEFS, []))).toEqual([...ADMIN_PERMISSIONS]);
     expect(permissionsOf(NO_ACCESS)).toEqual([]);
-    expect(permissionsOf(de)).toEqual(["orders", "catalog", "examples", "reference"]);
+    expect(permissionsOf(de)).toEqual(["dashboard", "orders", "catalog", "examples", "reference", "audit"]);
   });
 
   it("keeps the superadmin a superadmin even when the roles table is empty", () => {
@@ -87,9 +89,11 @@ describe("accessOf and permissionsOf", () => {
 
   it("lists every right including parts", () => {
     expect(rightsOf(de)).toEqual([
+      "dashboard",
       "orders",
       "catalog",
       "examples",
+      "audit",
       "reference.prices",
       "reference.landing",
       "reference.cities",

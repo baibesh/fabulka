@@ -93,6 +93,8 @@ export function staffRow(data: Partial<StaffMember> = {}): StaffMember {
     realmRoles: [],
     lastLoginAt: null,
     createdBy: null,
+    capUsd: null,
+    uncapped: false,
     createdAt: new Date('2026-11-01T00:00:00Z'),
     updatedAt: new Date('2026-11-01T00:00:00Z'),
     ...data,

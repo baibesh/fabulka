@@ -41,10 +41,12 @@ describe('StaffAccessService.signIn', () => {
     expect(session?.roles).toEqual(['country_manager']);
     expect(session?.countries).toEqual(['DE']);
     expect(permissionsOf(session!)).toEqual([
+      'dashboard',
       'orders',
       'catalog',
       'examples',
       'reference',
+      'audit',
     ]);
   });
 

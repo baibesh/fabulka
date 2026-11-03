@@ -8,8 +8,9 @@ import type { PrismaService } from '../prisma/prisma.service';
 import type { ReferenceService } from '../reference/reference.service';
 import type { SeoWebService } from '../seo/seo-web.service';
 import type { StorageService } from '../storage/storage.service';
-import { ExamplesService } from './examples.service';
+import { ExamplesService, spendCountry } from './examples.service';
 import { TRANSLATION_CLIENT_KEY } from './translation';
+import type { StaffCapsService } from '../staff/caps.service';
 import type { TranslatorService } from './translator.service';
 
 /** The superadmin, and a country manager for Germany (examples in DE only). */
@@ -61,6 +62,7 @@ function makeService(prisma: Record<string, unknown>) {
   const translator = { start: jest.fn().mockResolvedValue('new') };
   const revalidate = jest.fn().mockResolvedValue(true);
   const removeDir = jest.fn().mockResolvedValue(undefined);
+  const caps = { assert: jest.fn().mockResolvedValue(undefined) };
   const service = new ExamplesService(
     prisma as unknown as PrismaService,
     {
@@ -72,8 +74,9 @@ function makeService(prisma: Record<string, unknown>) {
     } as unknown as ReferenceService,
     translator as unknown as TranslatorService,
     { revalidate } as unknown as SeoWebService,
+    caps as unknown as StaffCapsService,
   );
-  return { service, translator, revalidate, removeDir };
+  return { service, translator, revalidate, removeDir, caps };
 }
 
 describe('ExamplesService.forSite', () => {
@@ -261,7 +264,16 @@ describe('ExamplesService in the admin', () => {
     expect(
       translator.start.mock.calls.map((call: unknown[]) => call[2]),
     ).toEqual(['es', 'de']);
-    expect(translator.start).toHaveBeenCalledWith('ex1', source, 'es');
+    expect(translator.start).toHaveBeenCalledWith(
+      'ex1',
+      source,
+      'es',
+      undefined,
+      {
+        staffEmail: null,
+        staffCountry: null,
+      },
+    );
   });
 
   it('refuses to translate an example with nothing finished', async () => {
@@ -512,5 +524,53 @@ describe('ExamplesService: country scope', () => {
     expect(full.at(-1)!.country).toBe('other');
     const kzRow = full.find((row) => row.country === 'KZ')!;
     expect(kzRow.cells.find((c) => c.language === 'ru')!.kind).toBe('empty');
+  });
+});
+
+describe('ExamplesService.translate: staff caps', () => {
+  const manager = { ...DE, who: 'cm@e2e.test', staffId: 'cm' };
+
+  it("checks the caps for the example's country and records who started it", async () => {
+    const rows = exampleRow('ex1', [version('ru')], ['DE']);
+    const source = { id: 'ru-book' };
+    const { service, translator, caps } = makeService({
+      example: { findUnique: jest.fn().mockResolvedValue(rows) },
+      book: { findUniqueOrThrow: jest.fn().mockResolvedValue(source) },
+    });
+    await service.translate('ex1', ['de'], manager, 'DE');
+    expect(caps.assert).toHaveBeenCalledWith(manager, 'DE');
+    expect(translator.start).toHaveBeenCalledWith(
+      'ex1',
+      source,
+      'de',
+      undefined,
+      { staffEmail: 'cm@e2e.test', staffCountry: 'DE' },
+    );
+  });
+
+  it('starts nothing once a cap is reached', async () => {
+    const rows = exampleRow('ex1', [version('ru')], ['DE']);
+    const { service, translator, caps } = makeService({
+      example: { findUnique: jest.fn().mockResolvedValue(rows) },
+      book: { findUniqueOrThrow: jest.fn() },
+    });
+    caps.assert.mockRejectedValueOnce(new Error('staff_cap_reached'));
+    await expect(service.translate('ex1', ['de'], manager)).rejects.toThrow(
+      'staff_cap_reached',
+    );
+    expect(translator.start).not.toHaveBeenCalled();
+  });
+
+  it('counts the spend against the working country when the example shows there', () => {
+    const de_at = { countries: ['DE', 'AT'], countriesMode: 'include' };
+    expect(spendCountry(de_at, 'at')).toBe('AT');
+    expect(spendCountry(de_at, 'KZ')).toBe('DE');
+    expect(spendCountry(de_at, null)).toBe('DE');
+    expect(
+      spendCountry({ countries: [], countriesMode: 'include' }, null),
+    ).toBe(null);
+    expect(
+      spendCountry({ countries: ['KZ'], countriesMode: 'exclude' }, 'DE'),
+    ).toBe('DE');
   });
 });

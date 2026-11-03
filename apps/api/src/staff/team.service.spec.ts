@@ -1,5 +1,10 @@
-import { NO_ACCESS, type InviteEmailStatus } from '@fabulka/shared';
+import {
+  NO_ACCESS,
+  NO_STAFF_CAPS,
+  type InviteEmailStatus,
+} from '@fabulka/shared';
 import type { AdminSession } from '../admin/admin-auth.service';
+import type { StaffCapsService } from './caps.service';
 import type { KeycloakAdminService } from './keycloak-admin.service';
 import { StaffAccessService } from './staff-access.service';
 import { fakeStaffPrisma, staffRow } from './staff.testing';
@@ -20,10 +25,16 @@ function setup(
   const access = new StaffAccessService(service);
   const invalidate = jest.spyOn(access, 'invalidate');
   const keycloak = { invite: jest.fn().mockResolvedValue(email) };
+  const caps = {
+    spendByPerson: jest.fn().mockResolvedValue(new Map()),
+    spentToday: jest.fn().mockResolvedValue(0),
+    defaults: jest.fn().mockResolvedValue(NO_STAFF_CAPS),
+  };
   const team = new TeamService(
     service,
     access,
     keycloak as unknown as KeycloakAdminService,
+    caps as unknown as StaffCapsService,
   );
   return { prisma, team, keycloak, invalidate };
 }

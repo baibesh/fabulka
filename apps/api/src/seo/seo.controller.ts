@@ -42,6 +42,7 @@ import {
   RequirePermission,
 } from '../admin/admin.guard';
 import { AuthService } from '../auth/auth.service';
+import { Audit, AuditTrail, Trail } from '../audit/audit.interceptor';
 import { ZodPipe } from '../common/zod.pipe';
 import { SeoWebService } from './seo-web.service';
 import { SeoService } from './seo.service';
@@ -94,7 +95,11 @@ export class SeoController {
   }
 }
 
-/** The admin's «SEO» section: open to every role with the `seo` permission (admin included). */
+/**
+ * The admin's «SEO» section: open to every role with the `seo` permission (admin included). SEO
+ * keeps its own history with values and revert (SeoHistory); its Activity events only say what was
+ * done and point at that history.
+ */
 @Controller('admin/seo')
 @UseGuards(AdminGuard)
 @RequirePermission('seo')
@@ -122,25 +127,46 @@ export class SeoAdminController {
 
   /** Saves the draft; the site keeps the published version until a publish. */
   @Put('page')
+  @Audit('seo.save', { target: 'seo_page' })
   save(
     @Body(new ZodPipe(SaveSeoPageSchema)) body: SaveSeoPage,
     @CurrentAdmin() admin: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<AdminSeoPage> {
+    trail
+      .target('seo_page', seoPageTarget(body.key, body.language))
+      .in(null)
+      .note({ history: 'page', key: body.key, language: body.language });
     return this.seo.save(body.key, body.language, body.fields, admin.who);
   }
 
   /** { key, language } publishes one page; {} every page with unpublished changes. */
   @Post('publish')
+  @Audit('seo.publish', { target: 'seo_page' })
   @HttpCode(200)
-  publish(
+  async publish(
     @Body(new ZodPipe(PublishSeoSchema)) body: PublishSeo,
     @CurrentAdmin() admin: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<PublishSeoResult> {
     const target =
       'key' in body && typeof body.key === 'string'
         ? { key: body.key, language: body.language }
         : null;
-    return this.seo.publish(target, admin.who);
+    const result = await this.seo.publish(target, admin.who);
+    trail
+      .target(
+        'seo_page',
+        target ? seoPageTarget(target.key, target.language) : null,
+      )
+      .in(null)
+      .note({
+        history: 'page',
+        ...(target ? { key: target.key, language: target.language } : {}),
+        published: result.published,
+        urls: result.urls.slice(0, 20),
+      });
+    return result;
   }
 
   /** ?key=&lang= a page's changes; ?kind=redirect|settings the others. */
@@ -161,15 +187,20 @@ export class SeoAdminController {
 
   /** Puts the page's values from before that change back into its draft. */
   @Post('history/:id/revert')
+  @Audit('seo.revert', { target: 'seo_history' })
   @HttpCode(200)
-  revert(
+  async revert(
     @Param('id') id: string,
     @CurrentAdmin() admin: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<AdminSeoPage> {
-    return this.seo.revert(id, admin.who);
+    const page = await this.seo.revert(id, admin.who);
+    trail.in(null).note({ history: 'page', entry: id, key: page.key });
+    return page;
   }
 
   @Post('og-image')
+  @Audit('seo.image', { target: 'seo_image' })
   uploadImage(
     @Body(new ZodPipe(SeoImageUploadSchema))
     body: z.infer<typeof SeoImageUploadSchema>,
@@ -183,28 +214,41 @@ export class SeoAdminController {
   }
 
   @Post('redirects')
-  createRedirect(
+  @Audit('seo.redirect_create', { target: 'redirect' })
+  async createRedirect(
     @Body(new ZodPipe(RedirectInputSchema)) body: RedirectInput,
     @CurrentAdmin() admin: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<Redirect> {
-    return this.seo.createRedirect(body, admin.who);
+    const redirect = await this.seo.createRedirect(body, admin.who);
+    trail
+      .target('redirect', redirect.id)
+      .in(null)
+      .note({ history: 'redirect' });
+    return redirect;
   }
 
   @Put('redirects/:id')
+  @Audit('seo.redirect_update', { target: 'redirect' })
   updateRedirect(
     @Param('id') id: string,
     @Body(new ZodPipe(RedirectInputSchema)) body: RedirectInput,
     @CurrentAdmin() admin: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<Redirect> {
+    trail.in(null).note({ history: 'redirect' });
     return this.seo.updateRedirect(id, body, admin.who);
   }
 
   @Delete('redirects/:id')
+  @Audit('seo.redirect_delete', { target: 'redirect' })
   @HttpCode(204)
   deleteRedirect(
     @Param('id') id: string,
     @CurrentAdmin() admin: AdminSession,
+    @Trail() trail: AuditTrail,
   ): Promise<void> {
+    trail.in(null).note({ history: 'redirect' });
     return this.seo.deleteRedirect(id, admin.who);
   }
 
@@ -214,10 +258,13 @@ export class SeoAdminController {
   }
 
   @Put('settings')
+  @Audit('seo.settings', { target: 'seo_settings' })
   saveSettings(
     @Body(new ZodPipe(SeoSettingsSchema)) body: SeoSettings,
     @CurrentAdmin() admin: AdminSession,
+    @Trail() trail: AuditTrail,
   ) {
+    trail.in(null).note({ history: 'settings' });
     return this.seo.saveSettings(body, admin.who);
   }
 }

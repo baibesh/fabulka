@@ -1,3 +1,4 @@
+import type { StaffSpendContext } from '../staff/caps.service';
 import {
   Inject,
   Injectable,
@@ -120,10 +121,14 @@ export class ThemesService {
 
   /**
    * Asks Muse Spark for a theme and checks it. Refused (422 theme_refused, with the checks) when a
-   * check fails; otherwise stored as a draft with its previews.
+   * check fails; otherwise stored as a draft with its previews. `staff` is who asked: the model
+   * calls count against their daily cap.
    */
-  async propose(brief: string): Promise<AdminTheme> {
-    return this.journal.run({}, async () => {
+  async propose(
+    brief: string,
+    staff: StaffSpendContext = { staffEmail: null, staffCountry: null },
+  ): Promise<AdminTheme> {
+    return this.journal.run({ ...staff }, async () => {
       const id = `ai-${randomBytes(4).toString('hex')}`;
       const { proposal } = await this.models.proposeTheme(brief);
       const parsed = ProposedThemeSchema.safeParse(proposal);

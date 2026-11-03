@@ -327,11 +327,17 @@ model ModelCall {
   errorMessage String?
   prompt       String?
   output       String?
+  /// A staff action's call (an example translation, a theme proposal): who started it (their
+  /// email) and the country it was for; staff daily caps sum these.
+  staffEmail   String?
+  staffCountry String?
   createdAt    DateTime @default(now())
 
   @@index([bookId])
   @@index([createdAt])
   @@index([kind, status, createdAt])
+  @@index([staffEmail, createdAt])
+  @@index([staffCountry, createdAt])
 }
 
 /// An error a visitor saw in the browser (POST /telemetry/error). No client key, IP, names or
@@ -450,8 +456,40 @@ model StaffMember {
   lastLoginAt DateTime?
   /// Who invited them (an email), or "keycloak" for a row made from a realm role at sign-in.
   createdBy   String?
+  /// Their own daily cap on staff generation in dollars; null: the default (none for a superadmin).
+  capUsd      Float?
+  /// No cap at all, whatever the defaults.
+  uncapped    Boolean     @default(false)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+}
+
+/// One admin write (the admin's «Activity»): who, which section and action, on what, in which
+/// country, and a short summary of the change (AuditSummary in @fabulka/shared; never secrets or a
+/// book's contents). Kept for AUDIT_RETENTION_DAYS.
+model AuditEvent {
+  id           String   @id @default(cuid(2))
+  at           DateTime @default(now())
+  actorStaffId String?
+  actorEmail   String?
+  /// Their roles at the time.
+  actorRoles   String[] @default([])
+  /// A permission key (ADMIN_PERMISSIONS).
+  section      String
+  /// AUDIT_ACTIONS in @fabulka/shared.
+  action       String
+  targetType   String?
+  targetId     String?
+  /// The country the change belongs to; null for global data.
+  country      String?
+  summary      Json     @default("{}")
+  ip           String?
+  userAgent    String?
+
+  @@index([at])
+  @@index([country, at])
+  @@index([actorEmail, at])
+  @@index([section, at])
 }
 
 /// A role of the admin: the rights it gives (ADMIN_RIGHTS in @fabulka/shared) and whether they hold

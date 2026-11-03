@@ -9,8 +9,11 @@ import { z } from "zod";
 //
 // A later step asks "may this session act on country X in section Y?" with allowedFor().
 
-/** The admin's sections, in nav order. `team` (staff and roles) is the superadmin's alone. */
-export const ADMIN_PERMISSIONS = ["dashboard", "books", "orders", "catalog", "examples", "methodologies", "themes", "reference", "journal", "seo", "team"] as const;
+/**
+ * The admin's sections, in nav order. `team` (staff and roles) is the superadmin's alone. `audit`
+ * is the Activity section: who changed what (a country-scoped role sees its countries' events).
+ */
+export const ADMIN_PERMISSIONS = ["dashboard", "books", "orders", "catalog", "examples", "methodologies", "themes", "reference", "journal", "audit", "seo", "team"] as const;
 export const AdminPermissionSchema = z.enum(ADMIN_PERMISSIONS);
 export type AdminPermission = z.infer<typeof AdminPermissionSchema>;
 
@@ -67,14 +70,17 @@ export interface RoleDef {
   scoped: boolean;
 }
 
-/** The roles the database starts with (migration z18_staff seeds them). */
+/**
+ * The roles the database starts with (migration z18_staff seeds them; z20 and z21 add the country
+ * manager's later rights: Reference's per-country parts, then its countries' dashboard and activity).
+ */
 export const BUILTIN_ROLES: readonly (RoleDef & { name: string; locked: boolean })[] = [
   { key: SUPER_ROLE, name: "Superadmin", rights: ADMIN_PERMISSIONS, scoped: false, locked: true },
   { key: "seo", name: "SEO", rights: ["seo"], scoped: false, locked: false },
   {
     key: "country_manager",
     name: "Country manager",
-    rights: ["examples", "catalog", "orders", "reference.prices", "reference.landing", "reference.cities", "reference.delivery", "reference.formats_country"],
+    rights: ["dashboard", "examples", "catalog", "orders", "reference.prices", "reference.landing", "reference.cities", "reference.delivery", "reference.formats_country", "audit"],
     scoped: true,
     locked: false,
   },
