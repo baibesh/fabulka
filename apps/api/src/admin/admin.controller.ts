@@ -27,7 +27,11 @@ import {
   MethodologyPreviewSchema,
   PauseSchema,
   PinLayoutSchema,
-  PricesSchema,
+  BookPricesSchema,
+  CurrencySchema,
+  ManualRateSchema,
+  type BookPrices,
+  type ManualRate,
   UpdateBlockedSchema,
   UpdateMethodologySchema,
   UpdateOrderStatusSchema,
@@ -56,7 +60,6 @@ import {
   type JournalCallsQuery,
   type MethodologyPreview,
   type PinLayout,
-  type Prices,
   type PrintFormat,
   type UpdateBlocked,
   type UpdateMethodology,
@@ -68,6 +71,7 @@ import { Audit, AuditTrail, NoAudit, Trail } from '../audit/audit.interceptor';
 import { AuthService } from '../auth/auth.service';
 import { BooksService } from '../books/books.service';
 import { CurrentClient, type Client } from '../common/client';
+import { FxService } from '../fx/fx.service';
 import { ZodPipe } from '../common/zod.pipe';
 import { JournalAdminService } from '../journal/journal-admin.service';
 import { MethodologiesService } from '../methodologies/methodologies.service';
@@ -141,6 +145,7 @@ export class AdminController {
     private readonly storage: StorageService,
     private readonly themes: ThemesService,
     private readonly caps: StaffCapsService,
+    private readonly fx: FxService,
   ) {}
 
   /** Who is signed in, their roles and the sections they may open: any admin role may ask. */
@@ -530,14 +535,15 @@ export class AdminController {
   }
 
   /**
-   * The global prices (no ?country=: global staff only), or one country's own list (?country=XX:
-   * reference.prices in that country), which its visitors are priced from instead.
+   * Book prices in one currency: that currency's default (no ?country=: global staff only), which
+   * every country charging in it without its own pays, or one country's own (?country=XX:
+   * reference.prices in that country; 400 currency_mismatch unless in the country's currency).
    */
   @Put('reference/prices')
   @RequirePermission('reference.prices')
   @Audit('prices.set', { target: 'prices' })
   async setPrices(
-    @Body(new ZodPipe(PricesSchema)) body: Prices,
+    @Body(new ZodPipe(BookPricesSchema)) body: BookPrices,
     @CurrentAdmin() session: AdminSession,
     @Trail() trail: AuditTrail,
     @Query('country') country?: string,
@@ -552,11 +558,20 @@ export class AdminController {
         : 'The global prices are not yours to change',
     );
     const before = await this.reference.admin();
-    trail.target('prices', code ?? 'global').in(code);
+    trail
+      .target('prices', code ?? body.currency)
+      .in(code)
+      .note({ currency: body.currency });
     if (!code) {
-      const after = await this.reference.setPrices(body);
-      trail.diff(before.prices, after);
-      return after;
+      const after = await this.reference.setDefaultBookPrices(body);
+      trail.diff(
+        {
+          currency: body.currency,
+          books: before.prices[body.currency]?.books ?? null,
+        },
+        { currency: body.currency, books: after[body.currency]?.books },
+      );
+      return { currency: body.currency, books: after[body.currency]!.books };
     }
     const after = (await this.reference.setCountryPrices(code, body))[code];
     trail.diff(before.countryPrices[code] ?? null, after);
@@ -584,6 +599,7 @@ export class AdminController {
     const before = (await this.reference.admin()).countryPrices[code] ?? null;
     await this.reference.setCountryPrices(code, null);
     trail.target('prices', code).in(code).diff(before, null);
+    if (before) trail.note({ currency: before.currency });
   }
 
   /** One country's landing overrides (hero, FAQ, sections): reference.landing in that country. */
@@ -692,14 +708,27 @@ export class AdminController {
         : 'The global delivery fee is not yours to change',
     );
     const before = await this.reference.admin();
-    trail.target('delivery', code ?? 'global').in(code);
+    trail
+      .target('delivery', code ?? body.currency)
+      .in(code)
+      .note({ currency: body.currency });
     if (!code) {
-      const prices = await this.reference.setDeliveryFee(body.feeKzt);
-      trail.diff(
-        { feeKzt: before.prices.deliveryKzt },
-        { feeKzt: prices.deliveryKzt },
+      const prices = await this.reference.setDeliveryFee(
+        body.currency,
+        body.fee,
       );
-      return { feeKzt: prices.deliveryKzt, freeEverywhere: false };
+      trail.diff(
+        {
+          currency: body.currency,
+          fee: before.prices[body.currency]?.delivery ?? null,
+        },
+        { currency: body.currency, fee: prices[body.currency]?.delivery },
+      );
+      return {
+        currency: body.currency,
+        fee: prices[body.currency]!.delivery,
+        freeEverywhere: false,
+      };
     }
     const after = (await this.reference.setCountryDelivery(code, body))[code];
     trail.diff(before.countryDelivery[code] ?? null, after);
@@ -811,7 +840,7 @@ export class AdminController {
     return after;
   }
 
-  /** Print formats in the order form's order: sizes, bleed, safe zone and prices by cover (tenge). */
+  /** Print formats in the order form's order: sizes, bleed, safe zone and default cover prices by currency. */
   @Put('reference/formats')
   @RequirePermission('reference')
   @Audit('formats.set', { target: 'formats' })
@@ -823,6 +852,77 @@ export class AdminController {
     const after = await this.reference.setFormats(body);
     trail.in(null).diff(before, after);
     return after;
+  }
+
+  /** Exchange rates to USD (reports only): the rate in use, the last fetched one and overrides. */
+  @Get('fx')
+  @RequirePermission('reference')
+  fxRates(@CurrentAdmin() session: AdminSession) {
+    assertScope(session, 'reference', null, 'Exchange rates are global');
+    return this.fx.admin();
+  }
+
+  /** A superadmin's rate for one currency, used instead of fetched ones until cleared. */
+  @Put('fx')
+  @RequirePermission('reference')
+  @Audit('fx.set', { target: 'fx' })
+  async setFxRate(
+    @Body(new ZodPipe(ManualRateSchema)) body: ManualRate,
+    @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
+  ) {
+    assertScope(session, 'reference', null, 'Exchange rates are global');
+    const before = (await this.fx.overrides())[body.currency] ?? null;
+    const after = await this.fx.setManual(
+      body.currency,
+      body.rate,
+      session.who,
+    );
+    trail
+      .target('fx', body.currency)
+      .in(null)
+      .note({ currency: body.currency })
+      .diff(
+        { currency: body.currency, rate: before },
+        { currency: body.currency, rate: body.rate },
+      );
+    return after;
+  }
+
+  /** Back to the fetched rate for ?currency=. */
+  @Delete('fx')
+  @RequirePermission('reference')
+  @Audit('fx.clear', { target: 'fx' })
+  async clearFxRate(
+    @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
+    @Query('currency') currency?: string,
+  ) {
+    assertScope(session, 'reference', null, 'Exchange rates are global');
+    const code = CurrencySchema.safeParse(currency?.toUpperCase()).data;
+    if (!code) throw new BadRequestException('?currency= is required');
+    const before = (await this.fx.overrides())[code] ?? null;
+    const after = await this.fx.clearManual(code);
+    trail
+      .target('fx', code)
+      .in(null)
+      .note({ currency: code })
+      .diff({ currency: code, rate: before }, { currency: code, rate: null });
+    return after;
+  }
+
+  /** Fetches today's rates now (they are fetched every few hours anyway). */
+  @Post('fx/refresh')
+  @RequirePermission('reference')
+  @Audit('fx.refresh', { target: 'fx' })
+  async refreshFx(
+    @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
+  ) {
+    assertScope(session, 'reference', null, 'Exchange rates are global');
+    const result = await this.fx.refresh();
+    trail.in(null).note({ ok: result.ok, stored: result.stored });
+    return this.fx.admin();
   }
 
   /** 400 country_policy_blocked for a code on Meta's list: that list cannot be edited here. */

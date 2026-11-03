@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import type {
   Book as BookRow,
   Order as OrderRow,
+  OrderLine as LineRow,
   OrderStatusEvent as EventRow,
   Prisma,
 } from '@prisma/client';
@@ -17,11 +18,16 @@ import {
   DEFAULT_LANGUAGE,
   LanguageSchema,
   CITY_UNKNOWN,
+  CurrencySchema,
+  PaymentProviderSchema,
+  PaymentStatusSchema,
+  PRICE_UNSET,
   PRINT_BLOCKED,
   PRINT_UNAVAILABLE,
   ORDER_STATUSES,
   cityName,
   maskPhone,
+  money,
   orderStatusAt,
   OTHER_COUNTRY,
   type AdminAccess,
@@ -31,10 +37,13 @@ import {
   type CreateOrderInput,
   type Language,
   type Order,
+  type OrderLine,
   type OrderStatus,
   type OrderStatusEvent,
 } from '@fabulka/shared';
 import { BooksService, ownsBook, storedBook } from '../books/books.service';
+import { decimalString, FxService } from '../fx/fx.service';
+import { PaymentsService } from '../payments/payments.service';
 import { PdfService } from '../pdf/pdf.service';
 import { layoutOf } from '../layout/layout';
 import { MailService } from '../mail/mail.service';
@@ -44,7 +53,11 @@ import { ReferenceService } from '../reference/reference.service';
 import { StorageService } from '../storage/storage.service';
 import { assertScope, listCountries, listScope } from '../admin/scope';
 
-type OrderWith = OrderRow & { book: BookRow; events: EventRow[] };
+type OrderWith = OrderRow & {
+  book: BookRow;
+  events: EventRow[];
+  lines: LineRow[];
+};
 
 /** The printed size from an order's frozen layout; null for orders made before layouts. */
 function formatOf(stored: unknown): Order['format'] {
@@ -56,7 +69,29 @@ function formatOf(stored: unknown): Order['format'] {
 const withBookAndEvents = {
   book: true,
   events: { orderBy: { createdAt: 'asc' } },
+  lines: { orderBy: { position: 'asc' } },
 } as const satisfies Prisma.OrderInclude;
+
+/** The currency an order row is in (stored as its ISO code). */
+function currencyOf(row: { currency: string }) {
+  return CurrencySchema.parse(row.currency);
+}
+
+/** An order's lines as Money, as they were priced when ordered. */
+export function linesOf(row: {
+  currency: string;
+  lines: LineRow[];
+}): OrderLine[] {
+  const currency = currencyOf(row);
+  return row.lines.map((l) => ({
+    bookId: l.bookId,
+    format: l.format,
+    cover: l.cover,
+    quantity: l.quantity,
+    unit: money(l.unitAmount, currency),
+    total: money(l.lineAmount, currency),
+  }));
+}
 
 /**
  * Orders placed in this browser before anyone signed in to it: they move to whoever signs in
@@ -121,6 +156,8 @@ export class OrdersService implements OnModuleInit {
     private readonly storage: StorageService,
     private readonly books: BooksService,
     private readonly pdf: PdfService,
+    private readonly fx: FxService,
+    private readonly payments: PaymentsService,
   ) {
     this.stageMs = Number(config.get('ORDER_STAGE_MS', 20_000));
   }
@@ -171,8 +208,11 @@ export class OrdersService implements OnModuleInit {
     if (book.status !== 'done') {
       throw new ConflictException('The book is still being made');
     }
-    // The format the parent picked (published only); the book is laid out at it before it is frozen.
-    const format = await this.reference.publishedFormat(
+    // Paid through the country's provider: refused up front when it is not wired in yet.
+    await this.payments.assertAvailable(country);
+    // The format the parent picked (offered and priced in the country); the book is laid out at it
+    // before it is frozen.
+    const format = await this.reference.offeredFormat(
       input.format ?? layoutOf(book.layout).format.id,
       country,
     );
@@ -194,15 +234,39 @@ export class OrdersService implements OnModuleInit {
         message: `We do not deliver to ${input.cityId}`,
       });
     }
-    // Priced here from the owner's prices; the body carries no amounts (the schema drops them).
-    const price = await this.reference.orderPrice(
+    // Priced here from the owner's prices in the country's currency; the body carries no amounts
+    // (the schema drops them). Everything is snapshotted: later price or rate changes never touch it.
+    const quote = await this.reference.quote(
+      book.id,
       format,
       input.cover,
       input.quantity,
       city.id,
       country,
     );
-    const row = await this.prisma.order.create({
+    if (!quote) {
+      throw new ConflictException({
+        code: PRICE_UNSET,
+        message: 'Delivery is not priced in your country yet',
+      });
+    }
+    const rate = (currency: string | undefined) =>
+      currency ? this.fx.decimalToUsd(CurrencySchema.parse(currency)) : null;
+    const lines = await Promise.all(
+      quote.lines.map(async (line, position) => ({
+        position,
+        bookId: line.bookId,
+        format: line.format,
+        cover: line.cover,
+        quantity: line.quantity,
+        unitAmount: line.unit.amount,
+        lineAmount: line.total.amount,
+        unitCost: line.unitCost?.amount ?? null,
+        costCurrency: line.unitCost?.currency ?? null,
+        costFxToUsd: await rate(line.unitCost?.currency),
+      })),
+    );
+    const created = await this.prisma.order.create({
       data: {
         bookId: input.bookId,
         recipientName: input.recipientName,
@@ -216,13 +280,43 @@ export class OrdersService implements OnModuleInit {
         layout: layout,
         quantity: input.quantity,
         locale: input.locale,
-        booksKzt: price.books,
-        deliveryKzt: price.delivery,
-        totalKzt: price.total,
+        currency: quote.currency,
+        itemsAmount: quote.subtotal.amount,
+        deliveryAmount: quote.delivery.amount,
+        totalAmount: quote.total.amount,
+        fxToUsd: await rate(quote.currency),
+        deliveryCost: quote.deliveryCost?.amount ?? null,
+        deliveryCostCurrency: quote.deliveryCost?.currency ?? null,
+        deliveryCostFxToUsd: await rate(quote.deliveryCost?.currency),
+        paymentStatus: 'pending',
+        lines: { create: lines },
         clientKey,
         userId: userId ?? null,
         country: country === OTHER_COUNTRY ? null : country,
-        events: { create: { status: ORDER_STATUSES[0] } },
+      },
+    });
+    // Exactly the total, in the order's currency, through the country's provider.
+    const payment = await this.payments
+      .pay(country, {
+        purpose: 'order',
+        reference: created.id,
+        amount: quote.total,
+        description: `Fabulka order ${created.id}`,
+      })
+      .catch(async (error: unknown) => {
+        await this.prisma.order.delete({ where: { id: created.id } });
+        throw error;
+      });
+    const row = await this.prisma.order.update({
+      where: { id: created.id },
+      data: {
+        paymentProvider: payment.provider,
+        paymentId: payment.id,
+        paymentStatus: payment.status,
+        // The first stage once paid (a manual payment is paid at once; a provider's webhook later).
+        ...(payment.status === 'paid' && {
+          events: { create: { status: ORDER_STATUSES[0] } },
+        }),
       },
       include: withBookAndEvents,
     });
@@ -420,7 +514,7 @@ export class OrdersService implements OnModuleInit {
       address: row.address,
       cover: row.cover,
       quantity: row.quantity,
-      totalKzt: row.totalKzt,
+      total: money(row.totalAmount, currencyOf(row)),
     };
   }
 
@@ -459,6 +553,7 @@ export class OrdersService implements OnModuleInit {
       phone: row.phone,
       country: row.country,
       manual: row.status !== null,
+      fxToUsd: row.fxToUsd ? decimalString(row.fxToUsd) : null,
     };
   }
 
@@ -479,9 +574,17 @@ export class OrdersService implements OnModuleInit {
       cover: row.cover,
       format: formatOf(row.layout),
       quantity: row.quantity,
-      booksKzt: row.booksKzt,
-      deliveryKzt: row.deliveryKzt,
-      totalKzt: row.totalKzt,
+      currency: currencyOf(row),
+      lines: linesOf(row),
+      subtotal: money(row.itemsAmount, currencyOf(row)),
+      delivery: money(row.deliveryAmount, currencyOf(row)),
+      total: money(row.totalAmount, currencyOf(row)),
+      payment: {
+        provider: PaymentProviderSchema.catch('manual').parse(
+          row.paymentProvider,
+        ),
+        status: PaymentStatusSchema.catch('paid').parse(row.paymentStatus),
+      },
       createdAt: row.createdAt.toISOString(),
     };
   }

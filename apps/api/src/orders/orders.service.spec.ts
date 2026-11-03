@@ -21,6 +21,9 @@ import type { MailService } from '../mail/mail.service';
 import type { PdfService } from '../pdf/pdf.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { ReferenceService } from '../reference/reference.service';
+import type { FxService } from '../fx/fx.service';
+import { PaymentsService } from '../payments/payments.service';
+import { Prisma } from '@prisma/client';
 import { StorageService } from '../storage/storage.service';
 import { backfilledCountry } from './orders.service';
 
@@ -38,24 +41,46 @@ const book = {
 };
 
 /** An order service over a done book, with the owner's prices and cities stored. */
-function makeService(stored: Record<string, unknown>) {
-  const create = jest.fn(({ data }: { data: Record<string, unknown> }) =>
-    Promise.resolve({
-      id: 'o1',
-      status: null,
-      createdAt: new Date(),
-      ...data,
-      book,
-      events: [{ status: 'paid', note: null, createdAt: new Date() }],
-    }),
-  );
+function makeService(
+  stored: Record<string, unknown>,
+  rates: Record<string, string> = { KZT: '0.002' },
+) {
+  let created: Record<string, unknown> = {};
+  const create = jest.fn(({ data }: { data: Record<string, unknown> }) => {
+    created = { id: 'o1', status: null, createdAt: new Date(), ...data };
+    return Promise.resolve(created);
+  });
   const prisma = {
     book: { findUnique: jest.fn().mockResolvedValue(book) },
     order: {
       create,
+      delete: jest.fn().mockResolvedValue({}),
       findUnique: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
-      update: jest.fn(),
+      // After the payment: the created row with the payment, its book, stages and lines.
+      update: jest.fn(
+        ({
+          data,
+        }: {
+          data: Record<string, unknown>;
+        }): Promise<Record<string, unknown>> => {
+          const { lines, events, ...rest } = { ...created, ...data } as Record<
+            string,
+            unknown
+          > & {
+            lines?: { create: unknown[] };
+            events?: { create: { status: string } };
+          };
+          return Promise.resolve({
+            ...rest,
+            book,
+            events: events
+              ? [{ ...events.create, note: null, createdAt: new Date() }]
+              : [],
+            lines: lines?.create ?? [],
+          });
+        },
+      ),
     },
     setting: {
       findMany: () =>
@@ -71,19 +96,34 @@ function makeService(stored: Record<string, unknown>) {
       Promise.resolve({ ...legacyLayout(), format: BOOK_FORMATS[format] }),
     ),
   };
+  const reference = new ReferenceService(prisma as unknown as PrismaService);
+  const fx = {
+    decimalToUsd: (currency: string) =>
+      Promise.resolve(
+        currency === 'USD'
+          ? new Prisma.Decimal(1)
+          : rates[currency]
+            ? new Prisma.Decimal(rates[currency])
+            : null,
+      ),
+  } as unknown as FxService;
   const service = new OrdersService(
     prisma as unknown as PrismaService,
     mail as unknown as MailService,
     { get: (_: string, fallback: unknown) => fallback } as ConfigService,
-    new ReferenceService(prisma as unknown as PrismaService),
+    reference,
     new StorageService({
       get: (_: string, fallback: unknown) => fallback,
     } as ConfigService),
     books as unknown as BooksService,
     {} as PdfService,
+    fx,
+    new PaymentsService(prisma as unknown as PrismaService, reference),
   );
   return { service, create, prisma, mail, books };
 }
+
+const kzt = (amount: number) => ({ amount, currency: 'KZT' });
 
 const body = {
   bookId: 'b1',
@@ -99,10 +139,16 @@ const body = {
 describe('OrdersService.create', () => {
   it('totals the order with the owner’s prices, ignoring amounts the client sends', async () => {
     const { service, create } = makeService({
-      [REFERENCE_KEYS.prices]: { ...DEFAULT_PRICES, deliveryKzt: 700 },
+      [REFERENCE_KEYS.prices]: {
+        ...DEFAULT_PRICES,
+        KZT: { ...DEFAULT_PRICES.KZT, delivery: 700_00 },
+      },
       [REFERENCE_KEYS.formats]: DEFAULT_FORMATS.map((f) =>
         f.id === 'square-210'
-          ? { ...f, prices: { soft: 5000, hard: 8000 } }
+          ? {
+              ...f,
+              prices: { ...f.prices, KZT: { soft: 5_000_00, hard: 8_000_00 } },
+            }
           : f,
       ),
       [REFERENCE_KEYS.cities]: DEFAULT_CITIES,
@@ -116,14 +162,114 @@ describe('OrdersService.create', () => {
     const order = await service.create(input, 'k');
 
     expect(order).toMatchObject({
-      booksKzt: 16000,
-      deliveryKzt: 700,
-      totalKzt: 16700,
+      currency: 'KZT',
+      subtotal: kzt(16_000_00),
+      delivery: kzt(700_00),
+      total: kzt(16_700_00),
+      lines: [
+        {
+          bookId: 'b1',
+          format: 'square-210',
+          cover: 'hard',
+          quantity: 2,
+          unit: kzt(8_000_00),
+          total: kzt(16_000_00),
+        },
+      ],
+      payment: { provider: 'manual', status: 'paid' },
     });
     expect(create.mock.calls[0][0].data).toMatchObject({
-      booksKzt: 16000,
-      deliveryKzt: 700,
-      totalKzt: 16700,
+      currency: 'KZT',
+      itemsAmount: 16_000_00,
+      deliveryAmount: 700_00,
+      totalAmount: 16_700_00,
+      fxToUsd: new Prisma.Decimal('0.002'),
+      paymentStatus: 'pending',
+      lines: {
+        create: [
+          {
+            position: 0,
+            bookId: 'b1',
+            format: 'square-210',
+            cover: 'hard',
+            quantity: 2,
+            unitAmount: 8_000_00,
+            lineAmount: 16_000_00,
+            unitCost: null,
+          },
+        ],
+      },
+    });
+  });
+
+  it('snapshots a euro order in euros with its rate and the print partner’s costs', async () => {
+    const countries = DEFAULT_COUNTRIES.map((c) =>
+      c.code === 'DE' ? { ...c, currency: 'EUR' as const, print: true } : c,
+    );
+    const { service, create } = makeService(
+      {
+        [REFERENCE_KEYS.countries]: countries,
+        [REFERENCE_KEYS.cities]: [
+          ...DEFAULT_CITIES,
+          {
+            id: 'berlin',
+            country: 'DE',
+            name: { ru: 'Берлин', en: 'Berlin' },
+            freeDelivery: false,
+          },
+        ],
+        [REFERENCE_KEYS.countryFormats]: {
+          DE: {
+            'square-210': { cost: { currency: 'EUR', soft: 6_00, hard: 9_50 } },
+          },
+        },
+        [REFERENCE_KEYS.countryDelivery]: {
+          DE: {
+            currency: 'EUR',
+            fee: 4_90,
+            freeEverywhere: false,
+            cost: { amount: 3_00, currency: 'EUR' },
+          },
+        },
+      },
+      { EUR: '1.12' },
+    );
+    const order = await service.create(
+      CreateOrderSchema.parse({
+        ...body,
+        phone: '+49 151 2345 6789',
+        cityId: 'berlin',
+        locale: 'de',
+      }),
+      'k',
+      null,
+      'DE',
+    );
+    expect(order).toMatchObject({
+      currency: 'EUR',
+      lines: [
+        {
+          unit: { amount: 27_90, currency: 'EUR' },
+          total: { amount: 55_80, currency: 'EUR' },
+        },
+      ],
+      delivery: { amount: 4_90, currency: 'EUR' },
+      total: { amount: 60_70, currency: 'EUR' },
+    });
+    expect(create.mock.calls[0][0].data).toMatchObject({
+      country: 'DE',
+      fxToUsd: new Prisma.Decimal('1.12'),
+      deliveryCost: 3_00,
+      deliveryCostCurrency: 'EUR',
+      lines: {
+        create: [
+          {
+            unitCost: 9_50,
+            costCurrency: 'EUR',
+            costFxToUsd: new Prisma.Decimal('1.12'),
+          },
+        ],
+      },
     });
   });
 
@@ -138,9 +284,9 @@ describe('OrdersService.create', () => {
     const order = await service.create(CreateOrderSchema.parse(body), 'k');
 
     expect(order).toMatchObject({
-      booksKzt: 29800,
-      deliveryKzt: 0,
-      totalKzt: 29800,
+      subtotal: kzt(29_800_00),
+      delivery: kzt(0),
+      total: kzt(29_800_00),
     });
   });
 
@@ -195,7 +341,7 @@ describe('OrdersService.create', () => {
     );
     expect(books.ensureFormat).toHaveBeenCalledWith('b1', 'a4-landscape');
     expect(order).toMatchObject({
-      booksKzt: 13900,
+      subtotal: kzt(13_900_00),
       format: { id: 'a4-landscape', widthMm: 297 },
     });
     expect(create.mock.calls[0][0].data.layout).toMatchObject({
@@ -225,13 +371,28 @@ describe('OrdersService.create', () => {
       CreateOrderSchema.parse({ ...body, cover: 'soft', quantity: 1 }),
       'k',
     );
-    expect(order).toMatchObject({ booksKzt: 9900, deliveryKzt: 1500 });
+    expect(order).toMatchObject({
+      subtotal: kzt(9_900_00),
+      delivery: kzt(1_500_00),
+    });
+  });
+
+  it('refuses up front where the payment provider is not wired in yet', async () => {
+    const { service, create } = makeService({
+      [REFERENCE_KEYS.countries]: DEFAULT_COUNTRIES.map((c) =>
+        c.code === 'KZ' ? { ...c, payment: 'kaspi' } : c,
+      ),
+    });
+    await expect(
+      service.create(CreateOrderSchema.parse(body), 'k'),
+    ).rejects.toMatchObject({ response: { code: 'payment_unavailable' } });
+    expect(create).not.toHaveBeenCalled();
   });
 });
 
 describe('OrdersService.create (owner and history)', () => {
   it('keeps the visitor key, the account and the first stage', async () => {
-    const { service, create } = makeService({});
+    const { service, create, prisma } = makeService({});
     const order = await service.create(
       CreateOrderSchema.parse(body),
       'k',
@@ -240,6 +401,12 @@ describe('OrdersService.create (owner and history)', () => {
     expect(create.mock.calls[0][0].data).toMatchObject({
       clientKey: 'k',
       userId: 'user-1',
+    });
+    // Paid by hand at once: the first stage comes with the payment.
+    expect(callArg(prisma.order.update, 0).data).toMatchObject({
+      paymentProvider: 'manual',
+      paymentId: 'manual_o1',
+      paymentStatus: 'paid',
       events: { create: { status: 'paid' } },
     });
     expect(order.history.map((e) => e.status)).toEqual(['paid']);
@@ -439,9 +606,14 @@ function orderRow(over: Record<string, unknown> = {}) {
     address: 'ул. Абая, 1',
     cover: 'soft',
     quantity: 1,
-    booksKzt: 9900,
-    deliveryKzt: 1500,
-    totalKzt: 11400,
+    currency: 'KZT',
+    itemsAmount: 9_900_00,
+    deliveryAmount: 1_500_00,
+    totalAmount: 11_400_00,
+    fxToUsd: null,
+    paymentProvider: 'manual',
+    paymentStatus: 'paid',
+    lines: [],
     status: 'paid',
     clientKey: 'k',
     userId: null,

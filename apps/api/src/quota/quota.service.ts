@@ -1,14 +1,22 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   BUDGET_REACHED,
   DAILY_CAP_REACHED,
   LIMIT_REACHED,
+  PRICE_UNSET,
   type BookKind,
   type Country,
-  type Currency,
+  type Money,
   type Quota,
 } from '@fabulka/shared';
+import { FxService } from '../fx/fx.service';
+import { PaymentsService } from '../payments/payments.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReferenceService } from '../reference/reference.service';
 
@@ -29,6 +37,8 @@ export class QuotaService {
     private readonly prisma: PrismaService,
     config: ConfigService,
     private readonly reference: ReferenceService,
+    private readonly fx: FxService,
+    private readonly payments: PaymentsService,
   ) {
     this.freeBooks = Number(config.get('FREE_BOOKS', 3));
     this.dailyCap = Number(config.get('DAILY_BOOK_CAP', 100));
@@ -52,8 +62,9 @@ export class QuotaService {
       this.prisma.book.count({
         where: { clientKey, demo: false, status: { not: 'failed' } },
       }),
+      // Only paid purchases add books (a manual one is paid at once).
       this.prisma.credit.aggregate({
-        where: { clientKey },
+        where: { clientKey, paymentStatus: 'paid' },
         _sum: { books: true },
       }),
     ]);
@@ -127,22 +138,54 @@ export class QuotaService {
   }
 
   /**
-   * Demo payment: records one more book for the visitor without charging anything, at the price
-   * of its kind the owner set in the admin (never one the client sends), in the currency of the
-   * visitor's country. A credit is good for either kind, like the free books.
+   * One more book for the visitor at the price of its kind the owner set in the admin (never one the
+   * client sends), in the currency of the visitor's country, paid through the country's provider (by
+   * hand: nothing is charged and it is paid at once). The purchase snapshots its currency, price and
+   * the rate to USD. A credit is good for either kind, like the free books. 409 price_unset when the
+   * currency has no price; 503 payment_unavailable when the provider is not wired in yet.
    */
   async buyBook(
     clientKey: string,
     kind: BookKind,
     country: Country,
-  ): Promise<{ quota: Quota; price: { amount: number; currency: Currency } }> {
+  ): Promise<{ quota: Quota; price: Money }> {
+    await this.payments.assertAvailable(country);
     const price = await this.reference.bookPrice(kind, country);
-    await this.prisma.credit.create({
+    if (!price) {
+      throw new ConflictException({
+        code: PRICE_UNSET,
+        message: 'Books are not priced in your country yet',
+      });
+    }
+    const credit = await this.prisma.credit.create({
       data: {
         clientKey,
         books: 1,
-        priceKzt: price.currency === 'KZT' ? price.amount : 0,
-        priceUsd: price.currency === 'USD' ? price.amount : 0,
+        kind,
+        currency: price.currency,
+        unitAmount: price.amount,
+        amount: price.amount,
+        fxToUsd: await this.fx.decimalToUsd(price.currency),
+        paymentStatus: 'pending',
+      },
+    });
+    const payment = await this.payments
+      .pay(country, {
+        purpose: 'credit',
+        reference: credit.id,
+        amount: price,
+        description: `Fabulka: one more ${kind} book`,
+      })
+      .catch(async (error: unknown) => {
+        await this.prisma.credit.delete({ where: { id: credit.id } });
+        throw error;
+      });
+    await this.prisma.credit.update({
+      where: { id: credit.id },
+      data: {
+        paymentProvider: payment.provider,
+        paymentId: payment.id,
+        paymentStatus: payment.status,
       },
     });
     return { quota: await this.quota(clientKey), price };

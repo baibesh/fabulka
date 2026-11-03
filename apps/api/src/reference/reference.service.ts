@@ -19,6 +19,8 @@ import {
   CountryFormatsSchema,
   CountryLandingSchema,
   CountryPricesSchema,
+  BookPricesSchema,
+  DefaultPricesSchema,
   LandingOverridesSchema,
   DEFAULT_CITIES,
   DEFAULT_COUNTRIES,
@@ -28,8 +30,6 @@ import {
   FORMAT_UNKNOWN,
   FaqSchema,
   FormatsSchema,
-  PRINT_CURRENCY,
-  PricesSchema,
   REFERENCE_KEYS,
   UpdateBlockedSchema,
   bookPrice,
@@ -38,12 +38,18 @@ import {
   citiesOf,
   deliveryFor,
   formatsFor,
-  orderPrice,
+  quoteOrder,
   upgradeCities,
   type AdminReference,
   type BlockedCountries,
   type BookKind,
+  type BookPrices,
   type City,
+  type Currency,
+  type DefaultPrices,
+  type LocalFormat,
+  type Money,
+  type OrderQuote,
   type Country,
   type CountryEntry,
   type CountryDeliveries,
@@ -55,7 +61,6 @@ import {
   type LandingOverrides,
   type Cover,
   type FaqItem,
-  type Prices,
   type PrintFormat,
   type Reference,
 } from '@fabulka/shared';
@@ -63,6 +68,7 @@ import type { ZodType } from 'zod';
 import { sameJson } from '../common/same-json';
 import { GEO_POLICY_URL, RESTRICTED_COUNTRIES } from '../geo/restricted';
 import { PrismaService } from '../prisma/prisma.service';
+import { upgradeMoneySettings } from './money-upgrade';
 import {
   SEEDED_COUNTRIES_V1,
   SEEDED_COUNTRIES_V2,
@@ -71,13 +77,15 @@ import {
   SEEDED_FAQ_V3,
   SEEDED_FAQ_V4,
   SEEDED_FAQ_V5,
+  SEEDED_FAQ_V6,
 } from './seeded';
 
 /** How long the reference data is kept in memory; an edit in the admin drops it at once. */
 export const CACHE_MS = 60_000;
 
 interface Snapshot {
-  prices: Prices;
+  /** Each currency's default book prices and delivery fee. */
+  prices: DefaultPrices;
   cities: City[];
   /** Countries the owner blocks on top of Meta's list. */
   extraBlocked: string[];
@@ -111,7 +119,7 @@ const DEFAULTS: Snapshot = {
 };
 
 const SCHEMAS: { [K in keyof Snapshot]: ZodType<Snapshot[K]> } = {
-  prices: PricesSchema,
+  prices: DefaultPricesSchema,
   cities: CitiesSchema,
   extraBlocked: UpdateBlockedSchema.shape.extra,
   countries: CountriesSchema,
@@ -137,30 +145,25 @@ const SEEDED: Partial<Record<keyof Snapshot, unknown[]>> = {
     SEEDED_FAQ_V3,
     SEEDED_FAQ_V4,
     SEEDED_FAQ_V5,
+    SEEDED_FAQ_V6,
   ],
 };
 
 /**
  * What start-up changes in a stored value, or null to leave it: an untouched older seed becomes
- * today's default; cities stored before ids get ids from their Russian names (upgradeCities); a
- * country with print priced in anything but tenge (allowed before print was tied to the currency)
- * loses print rather than make the whole list unreadable.
+ * today's default; cities stored before ids get ids from their Russian names (upgradeCities). Money
+ * stored before minor units is upgraded across fields (upgradeMoneySettings).
  */
 export function upgradeStored(field: keyof Snapshot, stored: unknown): unknown {
   if (SEEDED[field]?.some((seed) => sameJson(seed, stored))) {
     return DEFAULTS[field];
   }
   if (field === 'cities') return upgradeCities(stored);
-  if (field === 'countries' && Array.isArray(stored)) {
-    const list = stored as Partial<CountryEntry>[];
-    if (list.some((c) => c?.print && c.currency !== PRINT_CURRENCY)) {
-      return list.map((c) =>
-        c?.print && c.currency !== PRINT_CURRENCY ? { ...c, print: false } : c,
-      );
-    }
-  }
   return null;
 }
+
+/** A 400 when a price is saved in another currency than the country charges in. */
+export const CURRENCY_MISMATCH = 'currency_mismatch';
 
 /**
  * Reference data the owner edits in the admin (prices, delivery cities, the countries the site
@@ -195,7 +198,7 @@ export class ReferenceService implements OnModuleInit {
 
   /**
    * The formats to seed: today's defaults, with the square book at the cover prices the owner set
-   * before prices moved to formats (reference.prices.covers), if they had set any.
+   * before prices moved to formats (reference.prices.covers, whole tenge), if they had set any.
    */
   private async seedFormats(): Promise<PrintFormat[]> {
     const [row] = await this.prisma.setting.findMany({
@@ -208,7 +211,18 @@ export class ReferenceService implements OnModuleInit {
     const hard = Number(covers?.hard);
     if (!(soft > 0 && hard > 0)) return DEFAULT_FORMATS;
     return DEFAULT_FORMATS.map((f) =>
-      f.id === 'square-210' ? { ...f, prices: { soft, hard } } : f,
+      f.id === 'square-210'
+        ? {
+            ...f,
+            prices: {
+              ...f.prices,
+              KZT: {
+                soft: Math.round(soft) * 100,
+                hard: Math.round(hard) * 100,
+              },
+            },
+          }
+        : f,
     );
   }
 
@@ -216,11 +230,33 @@ export class ReferenceService implements OnModuleInit {
     const rows = await this.prisma.setting.findMany({
       where: { key: { in: FIELDS.map((field) => REFERENCE_KEYS[field]) } },
     });
+    const values = new Map<keyof Snapshot, unknown>();
     for (const field of FIELDS) {
+      const row = rows.find((r) => r.key === REFERENCE_KEYS[field]);
+      if (row) values.set(field, row.value);
+    }
+    const changed = new Map<keyof Snapshot, unknown>();
+    for (const [field, value] of values) {
+      const next = upgradeStored(field, value);
+      if (next !== null) {
+        changed.set(field, next);
+        values.set(field, next);
+      }
+    }
+    // Money stored before minor units and currencies (see money-upgrade.ts).
+    const money = upgradeMoneySettings({
+      prices: values.get('prices'),
+      formats: values.get('formats'),
+      countries: values.get('countries'),
+      countryPrices: values.get('countryPrices'),
+      countryDelivery: values.get('countryDelivery'),
+      countryFormats: values.get('countryFormats'),
+    });
+    for (const [field, value] of Object.entries(money)) {
+      changed.set(field as keyof Snapshot, value);
+    }
+    for (const [field, next] of changed) {
       const key = REFERENCE_KEYS[field];
-      const row = rows.find((r) => r.key === key);
-      const next = row ? upgradeStored(field, row.value) : null;
-      if (next === null) continue;
       const json = next as Prisma.InputJsonValue;
       await this.prisma.setting.upsert({
         where: { key },
@@ -261,7 +297,8 @@ export class ReferenceService implements OnModuleInit {
       return DEFAULTS[field];
     };
     return {
-      prices: pick('prices'),
+      // A currency the stored list has no entry for gets today's default for it (a currency added in code).
+      prices: { ...DEFAULT_PRICES, ...pick('prices') },
       cities: pick('cities'),
       extraBlocked: pick('extraBlocked'),
       countries: pick('countries'),
@@ -280,29 +317,37 @@ export class ReferenceService implements OnModuleInit {
   }
 
   /**
-   * The format with this id as offered in `country` (its offer and cover prices: formatsFor); with
-   * no country, one offered anywhere (globally or by some country), for its sizes. 400
-   * format_unknown otherwise.
+   * The format with this id offered anywhere (globally, or switched on by some country), for its
+   * sizes. 400 format_unknown otherwise.
    */
-  async publishedFormat(id: string, country?: Country): Promise<PrintFormat> {
+  async publishedFormat(id: string): Promise<PrintFormat> {
     const { formats, countryFormats } = await this.snapshot();
-    const format = country
-      ? formatsFor(country, formats, countryFormats).find(
-          (f) => f.id === id && f.published,
-        )
-      : formats.find(
-          (f) =>
-            f.id === id &&
-            (f.published ||
-              Object.values(countryFormats).some((o) => o[id]?.published)),
-        );
-    if (!format) {
-      throw new BadRequestException({
-        code: FORMAT_UNKNOWN,
-        message: `No print format ${id}`,
-      });
-    }
+    const format = formats.find(
+      (f) =>
+        f.id === id &&
+        (f.published ||
+          Object.values(countryFormats).some((o) => o[id]?.published)),
+    );
+    if (!format) throw formatUnknown(id);
     return format;
+  }
+
+  /**
+   * The format with this id as `country` offers it: switched on there and priced in its currency
+   * (formatsFor). 400 format_unknown otherwise.
+   */
+  async offeredFormat(id: string, country: Country): Promise<LocalFormat> {
+    const format = formatsFor(country, await this.pricing()).find(
+      (f) => f.id === id && f.published && f.prices,
+    );
+    if (!format) throw formatUnknown(id);
+    return format;
+  }
+
+  /** What the pricing helpers read (prices, formats, the countries' own, the offered countries). */
+  private async pricing() {
+    const snapshot = await this.snapshot();
+    return { ...snapshot, countries: await this.countries() };
   }
 
   /** The format new books are laid out in: the first published one. */
@@ -315,7 +360,7 @@ export class ReferenceService implements OnModuleInit {
     return (await this.save('formats', FormatsSchema.parse(formats))).formats;
   }
 
-  async prices(): Promise<Prices> {
+  async prices(): Promise<DefaultPrices> {
     return (await this.snapshot()).prices;
   }
 
@@ -424,40 +469,54 @@ export class ReferenceService implements OnModuleInit {
   }
 
   /**
-   * What one more book of this kind costs, at the country's own prices if it has them (else the
-   * global ones), in the country's currency.
+   * What one more book of this kind costs in `country`, in its currency: its own book prices when it
+   * has them in that currency, else the currency's default. Null when the currency has no price.
    */
-  async bookPrice(kind: BookKind, country: Country = 'KZ') {
-    const { prices, countryPrices } = await this.snapshot();
-    return bookPrice(
-      kind,
-      country,
-      prices,
-      await this.countries(),
-      countryPrices,
-    );
+  async bookPrice(
+    kind: BookKind,
+    country: Country = 'KZ',
+  ): Promise<Money | null> {
+    return bookPrice(kind, country, await this.pricing());
   }
 
   /**
-   * What a printed order from `country` in this format to the city with this id costs, at the
-   * country's prices (its own list, else the global one) and the stored cities.
+   * What a printed order of this book from `country` in this format to the city with this id costs,
+   * in the country's currency, at its prices (its own, else its currency's default) and the stored
+   * cities. Null when the currency has no delivery fee to charge.
    */
-  async orderPrice(
-    format: PrintFormat,
+  async quote(
+    bookId: string,
+    format: LocalFormat,
     cover: Cover,
     quantity: number,
     cityId: string,
     country: Country = 'KZ',
-  ) {
-    const { prices, cities, countryDelivery } = await this.snapshot();
-    return orderPrice(
-      format,
-      cover,
-      quantity,
-      cityId,
-      deliveryFor(country, prices, countryDelivery),
-      citiesOf(country, cities),
-    );
+  ): Promise<OrderQuote | null> {
+    const pricing = await this.pricing();
+    try {
+      return quoteOrder({
+        bookId,
+        format,
+        cover,
+        quantity,
+        cityId,
+        delivery: deliveryFor(country, pricing),
+        cities: citiesOf(country, pricing.cities),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /** 400 currency_mismatch unless `currency` is what `country` charges in. */
+  async assertCurrency(country: string, currency: Currency): Promise<void> {
+    const expected = (await this.infoFor(country)).currency;
+    if (expected === currency) return;
+    throw new BadRequestException({
+      code: CURRENCY_MISMATCH,
+      expected,
+      message: `${country} charges in ${expected}, not ${currency}`,
+    });
   }
 
   /**
@@ -485,7 +544,10 @@ export class ReferenceService implements OnModuleInit {
     return citiesOf(country, (await this.save('cities', next)).cities);
   }
 
-  /** The country's own delivery fee and rule, or null for the global fee again. */
+  /**
+   * The country's own delivery fee and rule (in its currency; the partner's cost in any), or null for
+   * its currency's default fee again. 400 currency_mismatch for a fee in another currency.
+   */
   async setCountryDelivery(
     country: string,
     delivery: CountryDelivery | null,
@@ -493,15 +555,39 @@ export class ReferenceService implements OnModuleInit {
     await this.assertOffered(country);
     const { countryDelivery } = await this.snapshot();
     const next = { ...countryDelivery };
-    if (delivery) next[country] = CountryDeliverySchema.parse(delivery);
-    else delete next[country];
+    if (delivery) {
+      const parsed = CountryDeliverySchema.parse(delivery);
+      await this.assertCurrency(country, parsed.currency);
+      next[country] = parsed;
+    } else delete next[country];
     return (await this.save('countryDelivery', next)).countryDelivery;
   }
 
-  /** The global delivery fee (reference.prices.deliveryKzt): countries without their own pay it. */
-  async setDeliveryFee(feeKzt: number): Promise<Prices> {
+  /** One currency's default delivery fee: countries charging in it without their own pay it. */
+  async setDeliveryFee(
+    currency: Currency,
+    fee: number,
+  ): Promise<DefaultPrices> {
     const { prices } = await this.snapshot();
-    return this.setPrices({ ...prices, deliveryKzt: feeKzt });
+    const list = prices[currency] ?? DEFAULT_PRICES[currency];
+    if (!list)
+      throw new BadRequestException(`No default prices in ${currency} yet`);
+    return this.setPrices({
+      ...prices,
+      [currency]: { ...list, delivery: fee },
+    });
+  }
+
+  /** One currency's default book prices: countries charging in it without their own pay them. */
+  async setDefaultBookPrices(prices: BookPrices): Promise<DefaultPrices> {
+    const parsed = BookPricesSchema.parse(prices);
+    const { prices: all } = await this.snapshot();
+    const list = all[parsed.currency] ?? DEFAULT_PRICES[parsed.currency];
+    const delivery = list?.delivery ?? 0;
+    return this.setPrices({
+      ...all,
+      [parsed.currency]: { books: parsed.books, delivery },
+    });
   }
 
   /**
@@ -517,30 +603,35 @@ export class ReferenceService implements OnModuleInit {
     const next = { ...countryFormats };
     if (overrides) {
       const parsed = CountryFormatOverridesSchema.parse(overrides);
+      for (const o of Object.values(parsed)) {
+        if (o.prices) await this.assertCurrency(country, o.prices.currency);
+      }
       const unknown = Object.keys(parsed).filter(
         (id) => !formats.some((f) => f.id === id),
       );
-      if (unknown.length) {
-        throw new BadRequestException({
-          code: FORMAT_UNKNOWN,
-          message: `No print format ${unknown.join(', ')}`,
-        });
-      }
+      if (unknown.length) throw formatUnknown(unknown.join(', '));
       next[country] = parsed;
     } else delete next[country];
     return (await this.save('countryFormats', next)).countryFormats;
   }
 
-  /** The country's own prices, or null to price it from the global list again. 400 country_unknown for a country the site does not offer. */
+  /**
+   * The country's own book prices (in its currency), or null to price it from its currency's default
+   * again. 400 country_unknown for a country the site does not offer, currency_mismatch for prices
+   * in another currency than it charges in.
+   */
   async setCountryPrices(
     country: string,
-    prices: Prices | null,
+    prices: BookPrices | null,
   ): Promise<CountryPrices> {
     await this.assertOffered(country);
     const { countryPrices } = await this.snapshot();
     const next = { ...countryPrices };
-    if (prices) next[country] = PricesSchema.parse(prices);
-    else delete next[country];
+    if (prices) {
+      const parsed = BookPricesSchema.parse(prices);
+      await this.assertCurrency(country, parsed.currency);
+      next[country] = parsed;
+    } else delete next[country];
     return (await this.save('countryPrices', next)).countryPrices;
   }
 
@@ -575,8 +666,10 @@ export class ReferenceService implements OnModuleInit {
     return (await this.snapshot()).extraBlocked.includes(country);
   }
 
-  async setPrices(prices: Prices): Promise<Prices> {
-    return (await this.save('prices', PricesSchema.parse(prices))).prices;
+  /** Every currency's default prices at once. */
+  async setPrices(prices: DefaultPrices): Promise<DefaultPrices> {
+    return (await this.save('prices', DefaultPricesSchema.parse(prices)))
+      .prices;
   }
 
   async setCities(cities: City[]): Promise<City[]> {
@@ -646,6 +739,13 @@ export class ReferenceService implements OnModuleInit {
     this.invalidate();
     return this.snapshot();
   }
+}
+
+function formatUnknown(id: string) {
+  return new BadRequestException({
+    code: FORMAT_UNKNOWN,
+    message: `No print format ${id}`,
+  });
 }
 
 function blocked(extra: string[]): BlockedCountries {

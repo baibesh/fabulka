@@ -1,9 +1,10 @@
 import {
+  formatMoney,
   localePath,
   type BookKind,
   type Cover,
-  type Currency,
   type Language,
+  type Money,
   type OrderStatus,
 } from '@fabulka/shared';
 
@@ -29,7 +30,8 @@ export interface OrderMailData {
   address: string;
   cover: Cover;
   quantity: number;
-  totalKzt: number;
+  /** What was charged, in the order's currency. */
+  total: Money;
 }
 
 /** Order number as the parent sees it: the last characters of the id, upper-cased. */
@@ -37,20 +39,21 @@ export function orderNumber(id: string): string {
   return id.slice(-8).toUpperCase();
 }
 
-/** "1 900 ₸" or "$3.90": a price in its own currency. */
-export function money({
-  amount,
-  currency,
-}: {
-  amount: number;
-  currency: Currency;
-}): string {
-  return currency === 'KZT' ? kzt(amount) : `$${amount.toFixed(2)}`;
-}
+/** The locale Intl formats a mail's prices with, by its language. */
+const INTL: Record<Language, string> = {
+  ru: 'ru-RU',
+  kk: 'kk-KZ',
+  en: 'en-US',
+  es: 'es-ES',
+  de: 'de-DE',
+};
 
-/** 12 900 ₸ (plain spaces, so every mail client shows it the same). */
-export function kzt(amount: number): string {
-  return `${String(Math.round(amount)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ₸`;
+/**
+ * A price as the mail's language writes it, from Money: "1 900 ₸", "₸1,900", "18,90 €", "$3.90"
+ * (plain spaces, so every mail client shows it the same).
+ */
+export function price(amount: Money, locale: Language): string {
+  return formatMoney(amount, INTL[locale]).replace(/[\u00a0\u202f]/g, ' ');
 }
 
 const STATUS: Record<Language, Record<OrderStatus, string>> = {
@@ -263,7 +266,7 @@ export function orderConfirmation(
       [t.number, number],
       [title, `${COVER[locale][order.cover]}, ${t.copies(order.quantity)}`],
       [t.delivery, `${order.city}, ${order.address}`],
-      [t.total, kzt(order.totalKzt)],
+      [t.total, price(order.total, locale)],
     ]),
     links([
       [t.track, siteLink(publicUrl, locale, `/orders/${order.id}`)],
@@ -290,7 +293,7 @@ export function orderStatusChanged(
     paragraph(t.statusIntro(title, label)),
     table(t.details, [
       [t.number, number],
-      [t.total, kzt(order.totalKzt)],
+      [t.total, price(order.total, locale)],
     ]),
     links([
       [t.track, siteLink(publicUrl, locale, `/orders/${order.id}`)],
@@ -302,14 +305,14 @@ export function orderStatusChanged(
 
 /** Sent after the paywall's demo checkout for one more book. */
 export function purchaseReceipt(
-  purchase: { kind: BookKind; price: { amount: number; currency: Currency } },
+  purchase: { kind: BookKind; price: Money },
   locale: Language,
   publicUrl: string,
 ): MailContent {
   const t = TEXT[locale];
   return layout(t.receiptSubject, [
     paragraph(t.receiptIntro(KIND[locale][purchase.kind])),
-    table(t.details, [[t.amount, money(purchase.price)]]),
+    table(t.details, [[t.amount, price(purchase.price, locale)]]),
     note(t.receiptDemo),
     links([[t.create, siteLink(publicUrl, locale, '/catalog')]]),
     paragraph(t.signature),

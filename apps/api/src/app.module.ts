@@ -49,6 +49,9 @@ import {
 import { SeoWebService } from './seo/seo-web.service';
 import { SeoService } from './seo/seo.service';
 import { OrdersService } from './orders/orders.service';
+import { FxService } from './fx/fx.service';
+import { PaymentsController } from './payments/payments.controller';
+import { PaymentsService } from './payments/payments.service';
 import { PdfModule } from './pdf/pdf.service';
 import { PrismaModule } from './prisma/prisma.service';
 import { QuotaController } from './quota/quota.controller';
@@ -93,6 +96,7 @@ class HealthController {
     BooksController,
     QuotaController,
     OrdersController,
+    PaymentsController,
     TemplatesController,
     ThemesController,
     MethodologiesController,
@@ -121,6 +125,8 @@ class HealthController {
     BooksService,
     QuotaService,
     OrdersService,
+    FxService,
+    PaymentsService,
     TemplatesService,
     ThemesService,
     MethodologiesService,

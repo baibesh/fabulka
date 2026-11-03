@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type { ConfigService } from '@nestjs/config';
 import {
   BUILTIN_ROLES,
@@ -363,22 +364,86 @@ describe('AdminService.countryStats: a manager dashboard', () => {
         aggregate: recorded({ _sum: { costUsd: 0.5 } }),
       },
       order: {
-        aggregate: recorded({ _count: 1, _sum: { totalKzt: 9900 } }),
         count: recorded(1),
-        groupBy: recorded([{ status: null, _count: 1 }]),
+        groupBy: jest.fn((args: { by: string[]; where?: unknown }) => {
+          wheres.push(args.where);
+          return Promise.resolve(
+            args.by.includes('currency')
+              ? [
+                  {
+                    currency: 'EUR',
+                    fxToUsd: new Prisma.Decimal('1.1'),
+                    _count: { _all: 1 },
+                    _sum: { totalAmount: 60_70 },
+                  },
+                  {
+                    currency: 'EUR',
+                    fxToUsd: null,
+                    _count: { _all: 1 },
+                    _sum: { totalAmount: 20_00 },
+                  },
+                ]
+              : [{ status: null, _count: 1 }],
+          );
+        }),
+        findMany: jest.fn((args: { where?: unknown }) => {
+          wheres.push(args.where);
+          return Promise.resolve([
+            {
+              currency: 'EUR',
+              totalAmount: 60_70,
+              fxToUsd: new Prisma.Decimal('1.1'),
+              deliveryCost: 3_00,
+              deliveryCostCurrency: 'EUR',
+              deliveryCostFxToUsd: new Prisma.Decimal('1.1'),
+              lines: [
+                {
+                  quantity: 2,
+                  unitCost: 9_50,
+                  costCurrency: 'EUR',
+                  costFxToUsd: new Prisma.Decimal('1.1'),
+                },
+              ],
+            },
+          ]);
+        }),
       },
     };
     const stats = await makeService(prisma).countryStats(['DE']);
     expect(stats).toEqual({
       countries: ['DE'],
       books: { total: 3, today: 3, byStatus: { done: 2 } },
-      orders: { total: 1, today: 1, byStatus: { timer: 1 }, totalKzt: 9900 },
+      orders: {
+        total: 1,
+        today: 1,
+        byStatus: { timer: 1 },
+        revenue: {
+          count: 2,
+          byCurrency: [
+            {
+              currency: 'EUR',
+              count: 2,
+              total: { amount: 80_70, currency: 'EUR' },
+            },
+          ],
+          // 60.70 € at 1.1; the order with no rate is left out.
+          approxUsd: { amount: 66_77, currency: 'USD' },
+          unconverted: 1,
+        },
+        // Sold for 66.77 $, printed for 2 × 9.50 € and delivered for 3 € (22 € = 24.20 $).
+        margin: {
+          orders: 1,
+          revenue: { amount: 66_77, currency: 'USD' },
+          cost: { amount: 24_20, currency: 'USD' },
+          margin: { amount: 42_57, currency: 'USD' },
+        },
+      },
       spend: {
         booksTodayUsd: 0.5,
         staff: [{ country: 'DE', usd: 0.25, capUsd: 1 }],
       },
     });
-    expect(wheres).toHaveLength(7);
+    expect(wheres).toHaveLength(9);
     for (const where of wheres) {
       expect(where).toMatchObject({ country: { in: ['DE'] } });
     }

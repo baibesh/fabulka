@@ -35,6 +35,8 @@ import { StorageService } from '../storage/storage.service';
 import { questions, TemplatesService } from '../templates/templates.service';
 import { ThemesService } from '../themes/themes.service';
 import { assertScope, listScope, outOfScope } from './scope';
+import { orderMargin, orderRevenue, purchaseRevenue } from './sales';
+import { addMoney } from '@fabulka/shared';
 
 /** A catalog book with its samples and how many books were made from it. */
 const withSamples = {
@@ -95,10 +97,8 @@ export class AdminService {
         select avg(extract(epoch from ("updatedAt" - "createdAt")))::float as seconds
         from "Book" where status = 'done'`,
       this.quota.caps(),
-      this.prisma.order.aggregate({ _count: true, _sum: { totalKzt: true } }),
-      this.prisma.credit.aggregate({
-        _sum: { books: true, priceKzt: true, priceUsd: true },
-      }),
+      orderRevenue(this.prisma),
+      purchaseRevenue(this.prisma),
       this.prisma.book.groupBy({
         by: ['country'],
         where: { country: { not: null } },
@@ -140,11 +140,9 @@ export class AdminService {
       },
       caps,
       sales: {
-        orders: orders._count,
-        ordersKzt: orders._sum.totalKzt ?? 0,
-        purchases: purchases._sum.books ?? 0,
-        purchasesKzt: purchases._sum.priceKzt ?? 0,
-        purchasesUsd: Math.round((purchases._sum.priceUsd ?? 0) * 100) / 100,
+        orders,
+        purchases,
+        approxUsd: addMoney(orders.approxUsd, purchases.approxUsd),
       },
       printInterest: printInterest.map((p) => ({
         country: p.country,
@@ -197,11 +195,7 @@ export class AdminService {
         where: { ...inCountries, createdAt: today },
         _sum: { costUsd: true },
       }),
-      this.prisma.order.aggregate({
-        where: inCountries,
-        _count: true,
-        _sum: { totalKzt: true },
-      }),
+      this.prisma.order.count({ where: inCountries }),
       this.prisma.order.count({ where: { ...inCountries, createdAt: today } }),
       this.prisma.order.groupBy({
         by: ['status'],
@@ -209,6 +203,10 @@ export class AdminService {
         _count: true,
       }),
       this.caps.spendByCountry(countries),
+    ]);
+    const [revenue, margin] = await Promise.all([
+      orderRevenue(this.prisma, inCountries),
+      orderMargin(this.prisma, inCountries),
     ]);
     return {
       countries: countries ?? [],
@@ -218,12 +216,13 @@ export class AdminService {
         byStatus: Object.fromEntries(byStatus.map((s) => [s.status, s._count])),
       },
       orders: {
-        total: orders._count,
+        total: orders,
         today: ordersToday,
         byStatus: Object.fromEntries(
           orderRows.map((s) => [s.status ?? 'timer', s._count]),
         ),
-        totalKzt: orders._sum.totalKzt ?? 0,
+        revenue,
+        margin,
       },
       spend: {
         booksTodayUsd: Math.round((spend._sum.costUsd ?? 0) * 10_000) / 10_000,

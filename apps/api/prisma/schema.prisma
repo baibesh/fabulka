@@ -91,18 +91,32 @@ model User {
   createdAt DateTime @default(now())
 }
 
-/// Books a visitor bought on top of the free ones (demo payment: nothing is charged).
+/// Books a visitor bought on top of the free ones, priced and paid in their country's currency when
+/// bought (a snapshot: later price or rate changes never touch it). Only paid ones add books.
 model Credit {
-  id        String   @id @default(cuid())
-  clientKey String
-  books     Int
-  /// What it cost in tenge; 0 when bought in dollars.
-  priceKzt  Int
-  /// What it cost in dollars (a country priced in USD); 0 when bought in tenge.
-  priceUsd  Float    @default(0)
-  createdAt DateTime @default(now())
+  id              String   @id @default(cuid())
+  clientKey       String
+  books           Int
+  /// The kind of book it was priced as (BOOK_KINDS); null for purchases made before kinds were kept.
+  kind            String?
+  /// ISO 4217 code of the amounts below.
+  currency        String
+  /// The price of one book, in the currency's minor units.
+  unitAmount      Int
+  /// What was charged: unitAmount × books, in minor units.
+  amount          Int
+  /// US dollars for one unit of `currency` when bought (reports only; never used to charge); null when no rate was known.
+  fxToUsd         Decimal? @db.Decimal(24, 12)
+  /// PAYMENT_PROVIDERS; "manual" is the demo: nothing is charged and it is paid at once.
+  paymentProvider String   @default("manual")
+  /// The provider's payment id.
+  paymentId       String?
+  /// PAYMENT_STATUSES.
+  paymentStatus   String   @default("paid")
+  createdAt       DateTime @default(now())
 
   @@index([clientKey])
+  @@index([paymentId])
 }
 
 enum Cover {
@@ -112,44 +126,108 @@ enum Cover {
 
 /// A printed copy of a book (demo payment; the delivery timeline is simulated).
 model Order {
-  id            String             @id @default(cuid(2))
-  book          Book               @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  bookId        String
-  recipientName String
-  phone         String
+  id                   String             @id @default(cuid(2))
+  book                 Book               @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  bookId               String
+  recipientName        String
+  phone                String
   /// Where the confirmation and status emails go.
-  email         String
+  email                String
   /// Language of those emails (ru, kk, en); the book's language when not set.
-  locale        String?
+  locale               String?
   /// The city's Russian name when ordered (kept even if the owner renames or removes the city).
-  city          String
+  city                 String
   /// The city's id in reference.cities; null for orders made before cities had ids.
-  cityId        String?
-  address       String
-  cover         Cover
+  cityId               String?
+  address              String
+  cover                Cover
   /// The book's layout when ordered (BookLayout in @fabulka/shared): what is printed.
-  layout        Json?
-  quantity      Int
-  booksKzt      Int
-  deliveryKzt   Int
-  totalKzt      Int
+  layout               Json?
+  quantity             Int
+  /// ISO 4217 code every amount of the order is in: its country's currency when ordered.
+  currency             String
+  /// The lines' total, in minor units.
+  itemsAmount          Int
+  /// The delivery fee charged, in minor units (0 when free).
+  deliveryAmount       Int
+  /// What was charged: itemsAmount + deliveryAmount, in minor units.
+  totalAmount          Int
+  /// US dollars for one unit of `currency` when ordered (reports only; never used to charge); null when no rate was known.
+  fxToUsd              Decimal?           @db.Decimal(24, 12)
+  /// The print partner's delivery cost when ordered (any currency; for margins), null when not set.
+  deliveryCost         Int?
+  deliveryCostCurrency String?
+  deliveryCostFxToUsd  Decimal?           @db.Decimal(24, 12)
+  /// PAYMENT_PROVIDERS; "manual" is the demo: nothing is charged and it is paid at once.
+  paymentProvider      String             @default("manual")
+  paymentId            String?
+  /// PAYMENT_STATUSES.
+  paymentStatus        String             @default("paid")
+  /// What was ordered and at what price, frozen when ordered.
+  lines                OrderLine[]
   /// Set by hand in the admin (ORDER_STATUSES); until then the stage follows the demo timer.
-  status        String?
+  status               String?
   /// Anonymous visitor key the order was placed with; it moves to the account on sign-in.
-  clientKey     String
+  clientKey            String
   /// The signed-in parent's account (set when ordered signed in, or on sign-in later).
-  user          User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
-  userId        String?
+  user                 User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId               String?
   /// Stages the order reached and when (written on create and on each change in the admin).
-  events        OrderStatusEvent[]
+  events               OrderStatusEvent[]
   /// The country it was ordered from (ISO code); null when not known (only global staff see it).
-  country       String?
-  createdAt     DateTime           @default(now())
+  country              String?
+  createdAt            DateTime           @default(now())
 
   @@index([bookId])
   @@index([country])
   @@index([clientKey])
   @@index([userId])
+  @@index([paymentId])
+}
+
+/// One line of an order as priced when ordered: a book in a format and cover, how many, the price of
+/// one and of all (in the order's currency), and the print partner's cost per copy when it was set.
+model OrderLine {
+  id           String   @id @default(cuid())
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId      String
+  /// Its place in the order.
+  position     Int      @default(0)
+  bookId       String
+  /// The format's id; null for orders made before formats.
+  format       String?
+  cover        Cover
+  quantity     Int
+  /// One copy, in minor units of the order's currency.
+  unitAmount   Int
+  /// unitAmount × quantity.
+  lineAmount   Int
+  /// The print partner's cost of one copy when ordered (any currency), null when not set.
+  unitCost     Int?
+  costCurrency String?
+  costFxToUsd  Decimal? @db.Decimal(24, 12)
+
+  @@index([orderId])
+}
+
+/// A rate to US dollars for one day (reports only: approximate dollar totals; nothing is charged at
+/// a converted price). Fetched daily from public sources; a superadmin's override is a "manual" row.
+model FxRate {
+  id        String   @id @default(cuid())
+  /// The day the rate is for.
+  date      DateTime @db.Date
+  /// ISO 4217 code.
+  currency  String
+  /// US dollars for one unit of the currency.
+  rateToUsd Decimal  @db.Decimal(24, 12)
+  /// FX_SOURCES: ecb, nbk or manual.
+  source    String
+  /// Who set a manual rate (an email).
+  setBy     String?
+  createdAt DateTime @default(now())
+
+  @@unique([date, currency, source])
+  @@index([currency, date])
 }
 
 /// One stage an order reached (ORDER_STATUSES) and when.

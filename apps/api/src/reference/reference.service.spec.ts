@@ -8,7 +8,7 @@ import {
   DEFAULT_FAQ,
   DEFAULT_PRICES,
   REFERENCE_KEYS,
-  type Prices,
+  type DefaultPrices,
 } from '@fabulka/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import { RESTRICTED_COUNTRIES } from '../geo/restricted';
@@ -21,6 +21,7 @@ import {
   SEEDED_FAQ_V3,
   SEEDED_FAQ_V4,
   SEEDED_FAQ_V5,
+  SEEDED_FAQ_V6,
 } from './seeded';
 
 /** The Setting table in memory behind the few Prisma calls the service makes. */
@@ -60,10 +61,34 @@ function settingsStore(initial: Record<string, unknown> = {}) {
   return { service, rows, setting };
 }
 
-const dearer: Prices = {
+const dearer: DefaultPrices = {
   ...DEFAULT_PRICES,
-  books: { ...DEFAULT_PRICES.books, template: { KZT: 2500, USD: 4.5 } },
+  KZT: { books: { template: 2_500_00, custom: 2_900_00 }, delivery: 1_500_00 },
+  USD: { books: { template: 4_50, custom: 5_90 }, delivery: 9_90 },
 };
+const kzt = (amount: number) => ({ amount, currency: 'KZT' });
+
+/** What an order of one book in this format from `country` to the city costs, as the service prices it. */
+async function quote(
+  service: ReferenceService,
+  formatId: string,
+  cover: 'soft' | 'hard',
+  quantity: number,
+  cityId: string,
+  country = 'KZ',
+) {
+  const format = await service.offeredFormat(formatId, country);
+  const result = await service.quote(
+    'b1',
+    format,
+    cover,
+    quantity,
+    cityId,
+    country,
+  );
+  if (!result) throw new Error('not priced');
+  return result;
+}
 
 describe('ReferenceService seeding', () => {
   it('stores today’s prices, cities, countries and an empty extra block list when absent', async () => {
@@ -76,10 +101,7 @@ describe('ReferenceService seeding', () => {
     expect(rows.get(REFERENCE_KEYS.prices)).toEqual(DEFAULT_PRICES);
     expect(rows.get(REFERENCE_KEYS.cities)).toEqual(DEFAULT_CITIES);
     expect(rows.get(REFERENCE_KEYS.extraBlocked)).toEqual([]);
-    expect(await service.bookPrice('template')).toEqual({
-      amount: 1900,
-      currency: 'KZT',
-    });
+    expect(await service.bookPrice('template')).toEqual(kzt(1_900_00));
   });
 
   it('never overwrites what the owner has changed', async () => {
@@ -92,7 +114,7 @@ describe('ReferenceService seeding', () => {
     expect(rows.get(REFERENCE_KEYS.prices)).toEqual(dearer);
     expect(rows.get(REFERENCE_KEYS.extraBlocked)).toEqual(['NL']);
     expect(rows.get(REFERENCE_KEYS.cities)).toEqual(DEFAULT_CITIES);
-    expect((await service.prices()).books.template.KZT).toBe(2500);
+    expect((await service.prices()).KZT?.books.template).toBe(2_500_00);
   });
 
   it('upgrades an untouched older seed of the countries and the FAQ to today’s', async () => {
@@ -154,7 +176,12 @@ describe('ReferenceService seeding', () => {
   });
 
   it('leaves an edited FAQ of the proofread seeds alone', () => {
-    for (const seed of [SEEDED_FAQ_V3, SEEDED_FAQ_V4, SEEDED_FAQ_V5]) {
+    for (const seed of [
+      SEEDED_FAQ_V3,
+      SEEDED_FAQ_V4,
+      SEEDED_FAQ_V5,
+      SEEDED_FAQ_V6,
+    ]) {
       const faq = (structuredClone(seed) as { published: boolean }[]).map(
         (item, i) => (i === 0 ? { ...item, published: false } : item),
       );
@@ -223,16 +250,14 @@ describe('ReferenceService seeding', () => {
       },
     ]);
     expect(
-      (await service.orderPrice(DEFAULT_FORMATS[0], 'soft', 1, 'taraz'))
-        .delivery,
-    ).toBe(0);
+      (await quote(service, 'square-210', 'soft', 1, 'taraz')).delivery,
+    ).toEqual(kzt(0));
     expect(
-      (await service.orderPrice(DEFAULT_FORMATS[0], 'soft', 1, 'almaty'))
-        .delivery,
-    ).toBe(1500);
+      (await quote(service, 'square-210', 'soft', 1, 'almaty')).delivery,
+    ).toEqual(kzt(1_500_00));
   });
 
-  it('turns print off where an edited list priced it in dollars', async () => {
+  it('keeps print on where a list priced it in dollars: print is priced in any currency now', async () => {
     const countries = [
       { code: 'KZ', languages: ['kk', 'ru'], currency: 'KZT', print: true },
       { code: 'UZ', languages: ['ru'], currency: 'USD', print: true },
@@ -242,11 +267,96 @@ describe('ReferenceService seeding', () => {
     });
     await service.onModuleInit();
 
-    expect(rows.get(REFERENCE_KEYS.countries)).toEqual([
-      countries[0],
-      { ...countries[1], print: false },
-    ]);
-    expect((await service.infoFor('UZ')).print).toBe(false);
+    expect(rows.get(REFERENCE_KEYS.countries)).toEqual(countries);
+    expect((await service.infoFor('UZ')).print).toBe(true);
+  });
+
+  it('upgrades tenge and dollar prices stored before minor units, keeping every country override', async () => {
+    const { service, rows } = settingsStore({
+      [REFERENCE_KEYS.prices]: {
+        books: {
+          template: { KZT: 2500, USD: 4.5 },
+          custom: { KZT: 2900, USD: 5.9 },
+        },
+        deliveryKzt: 1200,
+      },
+      [REFERENCE_KEYS.formats]: DEFAULT_FORMATS.map((f) => ({
+        ...f,
+        prices:
+          f.id === 'square-210'
+            ? { soft: 9500, hard: 14500 }
+            : { soft: 7000, hard: 11000 },
+      })),
+      [REFERENCE_KEYS.countryPrices]: {
+        DE: {
+          books: {
+            template: { KZT: 1900, USD: 4.9 },
+            custom: { KZT: 2900, USD: 6.9 },
+          },
+          deliveryKzt: 9999,
+        },
+        KZ: {
+          books: {
+            template: { KZT: 2100, USD: 3.9 },
+            custom: { KZT: 3100, USD: 5.9 },
+          },
+          deliveryKzt: 1500,
+        },
+      },
+      [REFERENCE_KEYS.countryDelivery]: {
+        KZ: { feeKzt: 2500, freeEverywhere: false },
+      },
+      [REFERENCE_KEYS.countryFormats]: {
+        KZ: { 'a5-portrait': { prices: { soft: 5000, hard: 8000 } } },
+      },
+    });
+    await service.onModuleInit();
+
+    expect(rows.get(REFERENCE_KEYS.prices)).toEqual({
+      KZT: {
+        books: { template: 2_500_00, custom: 2_900_00 },
+        delivery: 1_200_00,
+      },
+      USD: {
+        books: { template: 4_50, custom: 5_90 },
+        delivery: DEFAULT_PRICES.USD!.delivery,
+      },
+      EUR: DEFAULT_PRICES.EUR,
+    });
+    expect(rows.get(REFERENCE_KEYS.countryPrices)).toEqual({
+      DE: { currency: 'USD', books: { template: 4_90, custom: 6_90 } },
+      KZ: { currency: 'KZT', books: { template: 2_100_00, custom: 3_100_00 } },
+    });
+    expect(rows.get(REFERENCE_KEYS.countryDelivery)).toEqual({
+      KZ: { currency: 'KZT', fee: 2_500_00, freeEverywhere: false },
+    });
+    const formats = rows.get(REFERENCE_KEYS.formats) as typeof DEFAULT_FORMATS;
+    expect(formats[0].prices).toEqual({
+      ...DEFAULT_FORMATS[0].prices,
+      KZT: { soft: 9_500_00, hard: 14_500_00 },
+    });
+    expect(await service.bookPrice('template', 'DE')).toEqual({
+      amount: 4_90,
+      currency: 'USD',
+    });
+    expect(await service.bookPrice('template', 'KZ')).toEqual(kzt(2_100_00));
+    const order = await quote(service, 'a5-portrait', 'soft', 2, 'shymkent');
+    expect(order).toMatchObject({
+      subtotal: kzt(10_000_00),
+      delivery: kzt(2_500_00),
+      total: kzt(12_500_00),
+    });
+    // Upgraded once: a second start changes nothing.
+    const writes = rows.size;
+    await service.onModuleInit();
+    expect(rows.size).toBe(writes);
+    expect(rows.get(REFERENCE_KEYS.countryFormats)).toEqual({
+      KZ: {
+        'a5-portrait': {
+          prices: { currency: 'KZT', soft: 5_000_00, hard: 8_000_00 },
+        },
+      },
+    });
   });
 
   it('falls back to the default for a missing or broken value', async () => {
@@ -271,18 +381,21 @@ describe('ReferenceService cache', () => {
 
     await service.setPrices(dearer);
     expect(setting.findMany).toHaveBeenCalledTimes(2);
-    expect((await service.bookPrice('template', 'UZ')).amount).toBe(4.5);
+    expect((await service.bookPrice('template', 'UZ'))?.amount).toBe(4_50);
     expect(setting.findMany).toHaveBeenCalledTimes(2);
   });
 
   it('picks up a change made elsewhere once the cache expires', async () => {
     jest.useFakeTimers();
     const { service, rows } = settingsStore();
-    expect((await service.prices()).deliveryKzt).toBe(1500);
-    rows.set(REFERENCE_KEYS.prices, { ...DEFAULT_PRICES, deliveryKzt: 900 });
-    expect((await service.prices()).deliveryKzt).toBe(1500);
+    expect((await service.prices()).KZT?.delivery).toBe(1_500_00);
+    rows.set(REFERENCE_KEYS.prices, {
+      ...DEFAULT_PRICES,
+      KZT: { ...DEFAULT_PRICES.KZT!, delivery: 900_00 },
+    });
+    expect((await service.prices()).KZT?.delivery).toBe(1_500_00);
     jest.advanceTimersByTime(CACHE_MS + 1);
-    expect((await service.prices()).deliveryKzt).toBe(900);
+    expect((await service.prices()).KZT?.delivery).toBe(900_00);
   });
 
   it('does not keep a failed read', async () => {
@@ -297,7 +410,10 @@ describe('ReferenceService edits', () => {
   it('refuses invalid prices and cities', async () => {
     const { service, setting } = settingsStore();
     await expect(
-      service.setPrices({ ...DEFAULT_PRICES, deliveryKzt: -5 }),
+      service.setPrices({
+        ...DEFAULT_PRICES,
+        KZT: { ...DEFAULT_PRICES.KZT!, delivery: -5 },
+      }),
     ).rejects.toThrow();
     await expect(
       service.setCities([...DEFAULT_CITIES, DEFAULT_CITIES[0]]),
@@ -311,16 +427,15 @@ describe('ReferenceService edits', () => {
       DEFAULT_CITIES.map((c) => ({ ...c, freeDelivery: c.id === 'taraz' })),
     );
     expect(
-      await service.orderPrice(DEFAULT_FORMATS[0], 'soft', 1, 'taraz'),
-    ).toEqual({
-      books: 9900,
-      delivery: 0,
-      total: 9900,
+      await quote(service, 'square-210', 'soft', 1, 'taraz'),
+    ).toMatchObject({
+      subtotal: kzt(9_900_00),
+      delivery: kzt(0),
+      total: kzt(9_900_00),
     });
     expect(
-      (await service.orderPrice(DEFAULT_FORMATS[0], 'soft', 1, 'almaty'))
-        .delivery,
-    ).toBe(1500);
+      (await quote(service, 'square-210', 'soft', 1, 'almaty')).delivery,
+    ).toEqual(kzt(1_500_00));
   });
 });
 
@@ -339,7 +454,10 @@ describe('ReferenceService formats', () => {
       'a4-landscape',
       'a5-portrait',
     ]);
-    expect(formats[0].prices).toEqual({ soft: 8800, hard: 13800 });
+    expect(formats[0].prices).toEqual({
+      ...DEFAULT_FORMATS[0].prices,
+      KZT: { soft: 8_800_00, hard: 13_800_00 },
+    });
     expect(formats[1].prices).toEqual(DEFAULT_FORMATS[1].prices);
   });
 
@@ -428,11 +546,11 @@ describe('ReferenceService countries', () => {
     expect(rows.get(REFERENCE_KEYS.countries)).toEqual(saved);
     expect((await service.public()).countries).toEqual(saved);
     expect(await service.bookPrice('template', 'KZ')).toEqual({
-      amount: 3.9,
+      amount: 3_90,
       currency: 'USD',
     });
     // Uzbekistan is no longer listed: it is "other", in dollars.
-    expect((await service.bookPrice('template', 'UZ')).currency).toBe('USD');
+    expect((await service.bookPrice('template', 'UZ'))?.currency).toBe('USD');
   });
 
   it('refuses a Meta-listed code, saying so', async () => {
@@ -468,12 +586,15 @@ describe('ReferenceService countries', () => {
     );
   });
 
-  it('refuses print priced in anything but tenge', async () => {
-    const { service, setting } = settingsStore();
-    await expect(
-      service.setCountries([{ ...kz, currency: 'USD' }]),
-    ).rejects.toThrow();
-    expect(setting.upsert).not.toHaveBeenCalled();
+  it('takes print in any currency, priced in it', async () => {
+    const { service } = settingsStore();
+    await service.setCountries([kz, { ...de, currency: 'EUR', print: true }]);
+    expect(await service.infoFor('DE')).toMatchObject({
+      currency: 'EUR',
+      print: true,
+    });
+    const format = await service.offeredFormat('square-210', 'DE');
+    expect(format.prices?.soft).toEqual({ amount: 18_90, currency: 'EUR' });
   });
 
   it('takes the country chosen on the site, else the IP’s, else other', async () => {
@@ -519,43 +640,80 @@ describe('ReferenceService FAQ', () => {
 });
 
 describe('ReferenceService country prices and landing', () => {
-  const de: Prices = {
-    books: {
-      template: { KZT: 1900, USD: 4.9 },
-      custom: { KZT: 2900, USD: 6.9 },
-    },
-    deliveryKzt: 1500,
+  const de = {
+    currency: 'USD' as const,
+    books: { template: 4_90, custom: 6_90 },
   };
 
-  it('prices a country from its own list, the others from the global one, until it is cleared', async () => {
+  it("prices a country from its own list, the others from their currency's default, until it is cleared", async () => {
     const { service, rows } = settingsStore();
     await service.setCountryPrices('DE', de);
     expect(rows.get(REFERENCE_KEYS.countryPrices)).toEqual({ DE: de });
     expect(await service.bookPrice('template', 'DE')).toEqual({
-      amount: 4.9,
+      amount: 4_90,
       currency: 'USD',
     });
-    expect((await service.bookPrice('template', 'AT')).amount).toBe(3.9);
+    expect((await service.bookPrice('template', 'AT'))?.amount).toBe(3_90);
     expect((await service.public()).countryPrices).toEqual({ DE: de });
     await service.setCountryPrices('DE', null);
-    expect((await service.bookPrice('template', 'DE')).amount).toBe(3.9);
+    expect((await service.bookPrice('template', 'DE'))?.amount).toBe(3_90);
   });
 
-  it("delivers an order at its country's own fee (not the country prices' one)", async () => {
+  it("refuses a country's prices in another currency than it charges in", async () => {
+    const { service, setting } = settingsStore();
+    await expect(
+      service.setCountryPrices('DE', { ...de, currency: 'EUR' }),
+    ).rejects.toMatchObject({
+      response: { code: 'currency_mismatch', expected: 'USD' },
+    });
+    await expect(
+      service.setCountryDelivery('KZ', {
+        currency: 'USD',
+        fee: 5_00,
+        freeEverywhere: false,
+      }),
+    ).rejects.toMatchObject({ response: { code: 'currency_mismatch' } });
+    await expect(
+      service.setCountryFormats('KZ', {
+        'square-210': { prices: { currency: 'EUR', soft: 10_00, hard: 20_00 } },
+      }),
+    ).rejects.toMatchObject({ response: { code: 'currency_mismatch' } });
+    // A print partner's cost may be in any currency.
+    await service.setCountryFormats('KZ', {
+      'square-210': { cost: { currency: 'EUR', soft: 6_00, hard: 9_00 } },
+    });
+    expect(setting.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("sets one currency's default book prices and delivery fee, keeping the others", async () => {
+    const { service } = settingsStore();
+    await service.setDefaultBookPrices({
+      currency: 'EUR',
+      books: { template: 4_50, custom: 6_50 },
+    });
+    await service.setDeliveryFee('EUR', 5_90);
+    const prices = await service.prices();
+    expect(prices.EUR).toEqual({
+      books: { template: 4_50, custom: 6_50 },
+      delivery: 5_90,
+    });
+    expect(prices.KZT).toEqual(DEFAULT_PRICES.KZT);
+    await expect(
+      service.setDefaultBookPrices({
+        currency: 'KZT',
+        books: { template: 1_900_50, custom: 2_900_00 },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("delivers an order at its country's own fee", async () => {
     const { service } = settingsStore({
-      [REFERENCE_KEYS.countryPrices]: { KZ: { ...de, deliveryKzt: 9999 } },
       [REFERENCE_KEYS.countryDelivery]: {
-        KZ: { feeKzt: 2500, freeEverywhere: false },
+        KZ: { currency: 'KZT', fee: 2_500_00, freeEverywhere: false },
       },
     });
-    const price = await service.orderPrice(
-      DEFAULT_FORMATS[0],
-      'soft',
-      1,
-      'shymkent',
-      'KZ',
-    );
-    expect(price.delivery).toBe(2500);
+    const price = await quote(service, 'square-210', 'soft', 1, 'shymkent');
+    expect(price.delivery).toEqual(kzt(2_500_00));
   });
 
   it('keeps landing overrides by country and refuses a country the site does not offer', async () => {
@@ -618,15 +776,18 @@ describe('ReferenceService per-country cities and formats', () => {
     const [square, a4] = DEFAULT_FORMATS;
     await service.setCountryFormats('KZ', {
       [square.id]: { published: false },
-      [a4.id]: { prices: { soft: 5000, hard: 8000 } },
+      [a4.id]: { prices: { currency: 'KZT', soft: 5_000_00, hard: 8_000_00 } },
     });
-    await expect(service.publishedFormat(square.id, 'KZ')).rejects.toThrow(
+    await expect(service.offeredFormat(square.id, 'KZ')).rejects.toThrow(
       BadRequestException,
     );
-    expect((await service.publishedFormat(a4.id, 'KZ')).prices.soft).toBe(5000);
-    expect((await service.publishedFormat(a4.id, 'UZ')).prices.soft).toBe(
-      a4.prices.soft,
+    expect((await service.offeredFormat(a4.id, 'KZ')).prices?.soft).toEqual(
+      kzt(5_000_00),
     );
+    expect((await service.offeredFormat(a4.id, 'UZ')).prices?.soft).toEqual({
+      amount: a4.prices.USD!.soft,
+      currency: 'USD',
+    });
     // Offered somewhere: its sizes may still lay a book out.
     expect((await service.publishedFormat(square.id)).id).toBe(square.id);
     await expect(
@@ -634,8 +795,8 @@ describe('ReferenceService per-country cities and formats', () => {
     ).rejects.toMatchObject({ response: { code: 'format_unknown' } });
     await service.setCountryCities('DE', [berlin]);
     // Berlin is not a Kazakh city: an order from Kazakhstan pays the fee there.
-    expect(
-      (await service.orderPrice(square, 'soft', 1, 'berlin', 'KZ')).delivery,
-    ).toBe(DEFAULT_PRICES.deliveryKzt);
+    expect((await quote(service, a4.id, 'soft', 1, 'berlin')).delivery).toEqual(
+      kzt(DEFAULT_PRICES.KZT!.delivery),
+    );
   });
 });
