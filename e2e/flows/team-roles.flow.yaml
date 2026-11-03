@@ -1,0 +1,98 @@
+# Roles live in the database: the superadmin creates a role with only «Orders» in Team → Roles and
+# invites someone with it; that person's admin shows the Orders section and nothing else.
+appId: ${WEB}
+tags: [admin, team, auth]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  roleKey: "orders_${Date.now()}"
+  ordersEmail: "orders+${Date.now()}@e2e.test"
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+commands:
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-email }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card, timeout: 15000 }
+  - tapOn: { testId: admin-nav-team }
+  - waitForVisible: { testId: team-invite-form }
+
+  # The seeded roles: the superadmin's is shown, never edited; the country manager's is country-scoped.
+  - tapOn: { testId: team-tab-roles }
+  - waitForVisible: { testId: role-card-admin }
+  - assertVisible: { css: "[data-testid=role-card-admin] [data-testid=role-right-orders][disabled]" }
+  - assertNotVisible: { css: "[data-testid=role-card-admin] [data-testid=role-save]" }
+  - assertVisible: { css: "[data-testid=role-card-country_manager] [data-testid=role-scoped]:checked" }
+  - assertVisible: { css: "[data-testid=role-card-seo] [data-testid=role-right-seo]:checked" }
+
+  # A new role with Orders only.
+  - scrollUntilVisible: { testId: role-new-key }
+  - tapOn: { testId: role-new-key }
+  - inputText: "${roleKey}"
+  - tapOn: { testId: role-new-name }
+  - inputText: "Orders desk"
+  - check: { testId: role-new-right-orders }
+  - tapOn: { testId: role-create }
+  - waitForVisible: { testId: "role-card-${roleKey}", timeout: 10000 }
+  - sql:
+      query: "select array_to_string(rights, ',') as rights, scoped, locked from \"StaffRole\" where key = $1"
+      params: ["${roleKey}"]
+      readOnly: true
+      assert: { rows: 1, first: { rights: orders, scoped: false, locked: false } }
+
+  # Invite someone with it (Team's role picker lists the roles from the database).
+  - tapOn: { testId: team-tab-people }
+  - waitForVisible: { testId: team-invite-form }
+  - tapOn: { testId: team-invite-email }
+  - inputText: "${ordersEmail}"
+  - check: { testId: "team-invite-role-${roleKey}" }
+  - assertNotVisible: { testId: team-invite-countries }
+  - tapOn: { testId: team-invite-submit }
+  - waitForVisible: { css: "[data-testid=team-invite-result][data-status=sent]", timeout: 10000 }
+  - waitForVisible: { css: "[data-testid='team-row-${ordersEmail}'][data-status=invited]" }
+
+  # Through the API: only the orders section.
+  - request:
+      url: ${API}/auth/login
+      query: { return: /api/admin/me }
+      headers: { Accept: application/json }
+      extract: { state: "$.state" }
+      assert: { status: 200 }
+  - request:
+      url: ${API}/auth/mock/authorize
+      query: { state: "${state}", email: "${ordersEmail}" }
+      assert: { status: 200, json: { "$.superadmin": false } }
+  - assertTrue: { contains: ["${response.body}", "\"permissions\":[\"orders\"]"] }
+  - assertTrue: { contains: ["${response.body}", "\"countries\":[]"] }
+  - request: { url: "${API}/admin/orders", assert: { status: 200 } }
+  - request: { url: "${API}/admin/templates", assert: { status: 403 } }
+
+  # In the browser: the nav shows Orders alone.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login-keycloak }
+  - tapOn: { testId: admin-login-keycloak }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${ordersEmail}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { testId: orders-table, timeout: 15000 }
+  - assertVisible: { testId: admin-nav-orders }
+  - assertNotVisible: { testId: admin-nav-dashboard }
+  - assertNotVisible: { testId: admin-nav-catalog }
+  - assertNotVisible: { testId: admin-nav-examples }
+  - assertNotVisible: { testId: admin-nav-reference }
+  - assertNotVisible: { testId: admin-nav-seo }
+  - assertNotVisible: { testId: admin-nav-team }
+after:
+  - sql: { exec: "delete from \"StaffMember\" where email = $1", params: ["${ordersEmail}"] }
+  - sql: { exec: "delete from \"StaffRole\" where key = $1", params: ["${roleKey}"] }
+  - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${ordersEmail}"] }

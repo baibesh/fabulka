@@ -34,6 +34,13 @@ commands:
   - request: { url: "${API}/admin/reference", assert: { status: 403 } }
   - request: { method: PUT, url: "${API}/admin/reference/faq", json: [], assert: { status: 403 } }
   - request: { method: POST, url: "${API}/admin/pause", json: { paused: true }, assert: { status: 403 } }
+  - request: { url: "${API}/admin/team", assert: { status: 403 } }
+  # The realm role made them a staff row with the role seo (the bootstrap of Team).
+  - sql:
+      query: "select status::text as status, array_to_string(roles, ',') as roles from \"StaffMember\" where email = $1"
+      params: ["${seoEmail}"]
+      readOnly: true
+      assert: { rows: 1, first: { status: active, roles: seo } }
   - request: { url: "${API}/auth/me", assert: { status: 200, json: { "$.user.admin": false, "$.user.seo": true } } }
   # Signed out: 401, not 403.
   - request: { method: POST, url: "${API}/auth/logout", assert: { status: 200 } }
@@ -70,3 +77,4 @@ commands:
   - assertVisible: { testId: auth-admin }
 after:
   - sql: { exec: "delete from \"User\" where sub = any($1::text[])", params: ["{mock:${seoEmail},mock:${browserEmail}}"] }
+  - sql: { exec: "delete from \"StaffMember\" where email = any($1::text[])", params: ["{${seoEmail},${browserEmail}}"] }

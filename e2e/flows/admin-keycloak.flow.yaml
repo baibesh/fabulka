@@ -42,3 +42,4 @@ commands:
   - waitForVisible: { testId: admin-login-keycloak, timeout: 15000 }
 after:
   - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${email}"] }
+  - sql: { exec: "delete from \"StaffMember\" where email = $1", params: ["${email}"] }

@@ -3,6 +3,11 @@
 # and signing out ends it all. Redirects are followed and the cookie jar carries the session.
 device: none
 tags: [api, auth]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
 env:
   visitor: "e2e-auth-visitor-${Date.now()}"
   otherBrowser: "e2e-auth-other-${Date.now()}"
@@ -96,3 +101,5 @@ commands:
       assert: { status: 401 }
 after:
   - request: { method: POST, url: /auth/logout }
+  # The realm role admin made a staff row (Team's bootstrap); the accounts stay as before.
+  - sql: { exec: "delete from \"StaffMember\" where email = $1", params: ["${adminEmail}"] }

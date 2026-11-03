@@ -55,3 +55,8 @@ Things noticed while using tapstep on Fabulka. Version: 0.13.11.
     `flows: ["flows/**"]` in e2e/config.yaml, `tapstep test e2e/flows --config e2e/config.yaml` ran
     `flows/kazakhstan.helper.yaml` on its own (and failed it: no page open), although directory runs
     are documented to skip helpers. Workaround: keep helpers outside the glob (`e2e/helpers/`).
+14. **`assertVisible: { testId: …, contains: … }` misses text that sits in a child of that element.**
+    A notice `<div data-testid=team-invite-result>` whose text is in a nested `<div>` failed with
+    `"Invitation sent to" not found`, while the self-heal list showed the exact line on screen. The
+    same text without `testId` passes. As with note 7, saying "found, but inside a descendant of
+    testId=…" (or matching descendants' text for `contains`) would have saved two runs.

@@ -1,0 +1,141 @@
+# The admin's Team: a superadmin invites a country manager for Germany (the test Keycloak keeps the
+# set-up email in memory), the manager signs in through Fabulka ID and sees only their sections, with
+# Germany as their country; once disabled, their very next admin request is refused.
+appId: ${WEB}
+tags: [admin, team, auth]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  cmEmail: "cm+${Date.now()}@e2e.test"
+  # The test-only admin account from e2e/start-stack.sh (the emergency sign-in: a superadmin).
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+commands:
+  # The superadmin opens Team and invites a country manager for Germany.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-email }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card, timeout: 15000 }
+  - tapOn: { testId: admin-nav-team }
+  - waitForVisible: { testId: team-invite-form }
+  - assertVisible: { testId: team-table }
+  - tapOn: { testId: team-invite-email }
+  - inputText: "${cmEmail}"
+  - tapOn: { testId: team-invite-name }
+  - inputText: "Lena Berlin"
+  - check: { testId: team-invite-role-country_manager }
+  # A country manager needs a country before the invite can go.
+  - waitForVisible: { css: "[data-testid=team-invite-countries][data-loaded=true]" }
+  - assertVisible: "A country-scoped role needs at least one country."
+  - tapOn: { testId: team-invite-country-add }
+  - waitForVisible: { testId: team-invite-country-menu }
+  - tapOn: { testId: team-invite-country-option-DE }
+  - waitForVisible: { css: "[data-testid=team-invite-countries][data-value=DE]" }
+  - tapOn: { testId: team-invite-submit }
+  - waitForVisible: { css: "[data-testid=team-invite-result][data-status=sent]", timeout: 10000 }
+  - assertVisible: { contains: "Invitation sent to" }
+  - waitForVisible: { css: "[data-testid='team-row-${cmEmail}'][data-status=invited]" }
+  - sql:
+      query: "select status::text as status, array_to_string(roles, ',') as roles, array_to_string(countries, ',') as countries, name from \"StaffMember\" where email = $1"
+      params: ["${cmEmail}"]
+      assert: { rows: 1, first: { status: invited, roles: country_manager, countries: DE, name: "Lena Berlin" } }
+  # The test Keycloak's set-up email, back to the admin's sign-in page.
+  - request:
+      url: ${API}/test/mails
+      query: { to: "${cmEmail}" }
+      assert: { status: 200 }
+  - assertTrue: { contains: ["${response.body}", "staff invitation"] }
+  - assertTrue: { contains: ["${response.body}", "/admin/login"] }
+
+  # The manager through the API: their countries come from Team, not from Keycloak.
+  - request:
+      url: ${API}/auth/login
+      query: { return: /api/admin/me }
+      headers: { Accept: application/json }
+      extract: { state: "$.state" }
+      assert: { status: 200 }
+  - request:
+      url: ${API}/auth/mock/authorize
+      query: { state: "${state}", email: "${cmEmail}" }
+      assert: { status: 200, json: { "$.roles[0]": country_manager, "$.countries[0]": DE, "$.superadmin": false } }
+  - assertTrue: { contains: ["${response.body}", "\"countries\":[\"DE\"]"] }
+  - assertTrue: { contains: ["${response.body}", "\"permissions\":[\"orders\",\"catalog\",\"examples\",\"reference\"]"] }
+  - request: { url: "${API}/admin/orders", assert: { status: 200 } }
+  - request: { url: "${API}/admin/examples", assert: { status: 200 } }
+  - request: { url: "${API}/admin/templates", assert: { status: 200 } }
+  - request: { url: "${API}/admin/reference", assert: { status: 200 } }
+  - request: { url: "${API}/admin/stats", assert: { status: 403, json: { "$.code": admin_forbidden } } }
+  - request: { url: "${API}/admin/books", assert: { status: 403 } }
+  - request: { url: "${API}/admin/seo/pages?lang=de", assert: { status: 403 } }
+  - request: { url: "${API}/admin/team", assert: { status: 403 } }
+  - request: { method: PUT, url: "${API}/admin/reference/faq", json: [], assert: { status: 403 } }
+  # The prices are one list for every country: not a country manager's to change.
+  - request:
+      method: PUT
+      url: ${API}/admin/reference/prices
+      json: { books: { template: { KZT: 1900, USD: 3.9 }, custom: { KZT: 2900, USD: 5.9 } }, deliveryKzt: 1500 }
+      assert: { status: 403, json: { "$.code": admin_forbidden } }
+  - request: { url: "${API}/auth/me", assert: { status: 200, json: { "$.user.admin": false, "$.user.staff": true } } }
+  - sql:
+      query: "select status::text as status, (\"keycloakId\" is not null) as linked from \"StaffMember\" where email = $1"
+      params: ["${cmEmail}"]
+      assert: { rows: 1, first: { status: active, linked: true } }
+
+  # The manager in the browser: their sections only, starting on the first one.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login-keycloak }
+  - tapOn: { testId: admin-login-keycloak }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${cmEmail}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { testId: orders-table, timeout: 15000 }
+  - assertUrl: { contains: "/admin/orders" }
+  - assertVisible: { testId: admin-nav-orders }
+  - assertVisible: { testId: admin-nav-catalog }
+  - assertVisible: { testId: admin-nav-examples }
+  - assertVisible: { testId: admin-nav-reference }
+  - assertNotVisible: { testId: admin-nav-dashboard }
+  - assertNotVisible: { testId: admin-nav-books }
+  - assertNotVisible: { testId: admin-nav-seo }
+  - assertNotVisible: { testId: admin-nav-journal }
+  - assertNotVisible: { testId: admin-nav-team }
+  # Reference: only their countries' prices and landing, which come later; a note for now.
+  - tapOn: { testId: admin-nav-reference }
+  - waitForVisible: { testId: reference-scoped }
+  - assertNotVisible: { testId: reference-tabs }
+  - openLink: "${WEB}/admin/team"
+  - waitForVisible: { testId: admin-forbidden, timeout: 15000 }
+
+  # The superadmin disables them; the manager's next request is refused.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-email }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card, timeout: 15000 }
+  - openLink: "${WEB}/admin/team"
+  - waitForVisible: { css: "[data-testid='team-row-${cmEmail}'][data-status=active]", timeout: 15000 }
+  - assertVisible: { css: "[data-testid='team-row-${cmEmail}'] [data-testid=team-countries][data-value=DE]" }
+  - tapOn: { css: "[data-testid='team-row-${cmEmail}'] [data-testid=team-disable]" }
+  - waitForVisible: { testId: team-disable-dialog }
+  - tapOn: { testId: team-disable-confirm }
+  - waitForVisible: { css: "[data-testid='team-row-${cmEmail}'][data-status=disabled]" }
+  - request: { url: "${API}/admin/me", assert: { status: 401 } }
+  - request: { url: "${API}/admin/orders", assert: { status: 401 } }
+  - request: { url: "${API}/auth/me", assert: { status: 200, json: { "$.user.staff": false } } }
+after:
+  - sql: { exec: "delete from \"StaffMember\" where email = $1", params: ["${cmEmail}"] }
+  - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${cmEmail}"] }
