@@ -1,0 +1,213 @@
+# Activity and staff caps. A superadmin changes Germany's prices and sees the event with its diff in
+# Activity, and downloads the list as CSV; a German country manager sees Germany's events but not
+# Kazakhstan's; a manager capped at one cent a day translates an example once (mock models charge a
+# cent a call, MOCK_STAFF_COST_USD in e2e/start-stack.sh), then gets staff_cap_reached, with the
+# spent budget shown where the action is. Germany's prices go back at the end.
+appId: ${WEB}
+tags: [admin, team, audit]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  stamp: "${Date.now()}"
+  cmEmail: "cm-act+${stamp}@e2e.test"
+  cmId: "e2e-cm-act-${stamp}"
+  capEmail: "cm-cap+${stamp}@e2e.test"
+  capId: "e2e-cm-cap-${stamp}"
+  childName: "Activity ${stamp}"
+  # The test-only admin account from e2e/start-stack.sh (the emergency sign-in: a superadmin).
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+  headers:
+    X-Client-Key: "e2e-activity-${stamp}"
+    X-Demo-Code: E2E-DEMO
+before:
+  - sql:
+      exec: "insert into \"StaffMember\" (id, email, name, status, roles, countries, \"updatedAt\") values ($1, $2, 'Lena Activity', 'active', '{country_manager}', '{DE}', now())"
+      params: ["${cmId}", "${cmEmail}"]
+  # A cent a day of their own: one translation, then the cap.
+  - sql:
+      exec: "insert into \"StaffMember\" (id, email, name, status, roles, countries, \"capUsd\", \"updatedAt\") values ($1, $2, 'Max Capped', 'active', '{country_manager}', '{DE}', 0.01, now())"
+      params: ["${capId}", "${capEmail}"]
+commands:
+  # A finished German book (mock models), and an order from Kazakhstan.
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${childName}", age: 4, gender: boy, interests: [Züge], city: Berlin, language: de }
+      extract: { deBook: "$.id" }
+      assert: { status: 201 }
+  - request: { url: "/books/${deBook}", retryUntil: { status: 200, json: { "$.status": done } }, timeout: 30000 }
+  - sql: { exec: "update \"Book\" set country = 'DE' where id = $1", params: ["${deBook}"] }
+  - sql:
+      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, \"booksKzt\", \"deliveryKzt\", \"totalKzt\", \"clientKey\", country) values ($1, $2, 'Айгерим', '+77010000000', 'a@e2e.test', 'Алматы', 'ул. Абая, 1', 'soft', 1, 9900, 0, 9900, 'e2e-activity', 'KZ')"
+      params: ["kz-act-${stamp}", "${deBook}"]
+
+  # ---- The superadmin: Germany's prices twice (the second change has a before), a Kazakh order -----
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: PUT
+      url: /admin/reference/prices
+      query: { country: DE }
+      json: { books: { template: { KZT: 2500, USD: 4.9 }, custom: { KZT: 2900, USD: 5.9 } }, deliveryKzt: 1500 }
+      assert: { status: 200 }
+  - request:
+      method: PUT
+      url: /admin/reference/prices
+      query: { country: DE }
+      json: { books: { template: { KZT: 2700, USD: 4.9 }, custom: { KZT: 2900, USD: 5.9 } }, deliveryKzt: 1500 }
+      assert: { status: 200 }
+  - request:
+      method: PATCH
+      url: /admin/orders/kz-act-${stamp}
+      json: { status: printing }
+      assert: { status: 200, json: { "$.country": KZ } }
+  # The events: Germany's price change with its diff, the order's status with the country it is from.
+  - request:
+      url: /admin/activity
+      query: { country: DE, section: reference, limit: 1 }
+      assert: { status: 200, json: { "$.events[0].action": prices.set, "$.events[0].country": DE, "$.events[0].actorEmail": "admin@e2e.test", "$.events[0].summary.changes[0].path": books.template.KZT, "$.events[0].summary.changes[0].before": 2500, "$.events[0].summary.changes[0].after": 2700 } }
+  - request:
+      url: /admin/activity
+      query: { q: "kz-act-${stamp}" }
+      assert: { status: 200, json: { "$.events[0].action": order.status, "$.events[0].country": KZ, "$.events[0].summary.changes[0].after": printing } }
+  # The CSV of the filtered list.
+  - request:
+      url: /admin/activity/export.csv
+      query: { country: DE, section: reference }
+      assert: { status: 200, headers: { Content-Type: "text/csv; charset=utf-8" } }
+  - assertTrue: { contains: ["${response.body}", "at,actor_email,actor_roles,section,action,target_type,target_id,country,summary,ip,user_agent"] }
+  - assertTrue: { contains: ["${response.body}", "prices.set,prices,DE,DE"] }
+  - assertTrue: ${!http.get(API + '/admin/activity/export.csv?country=DE').body.includes('kz-act-' + stamp)}
+
+  # In the browser: the row reads in the admin's language and opens to the diff; the CSV link follows the filters.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-email }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card, timeout: 15000 }
+  - assertVisible: { testId: staff-spend }
+  - tapOn: { testId: admin-nav-activity }
+  - waitForVisible: { testId: activity-table }
+  - selectOption: { testId: activity-filter-section, optionValue: reference }
+  - waitForVisible: { css: "[data-testid=activity-row][data-action='prices.set'][data-country=DE]" }
+  - assertVisible: { css: "[data-testid=activity-csv][href*='section=reference']" }
+  - tapOn: { css: "[data-testid=activity-row][data-action='prices.set'][data-country=DE]" }
+  - waitForVisible: { css: "[data-testid=activity-change][data-path='books.template.KZT']" }
+  - assertVisible: { css: "[data-testid=activity-change][data-path='books.template.KZT']", containsDescendants: { text: "2700" } }
+  - assertVisible: { text: "Changed prices" }
+
+  # ---- The German manager: Germany's events, never Kazakhstan's --------------------------------------
+  - request:
+      url: ${API}/auth/login
+      query: { return: /api/admin/me }
+      headers: { Accept: application/json }
+      extract: { state: "$.state" }
+      assert: { status: 200 }
+  - request:
+      url: ${API}/auth/mock/authorize
+      query: { state: "${state}", email: "${cmEmail}" }
+      assert: { status: 200, json: { "$.countries[0]": DE, "$.superadmin": false } }
+  - request: { url: /admin/activity, query: { section: reference }, assert: { status: 200, json: { "$.events[0].country": DE } } }
+  - assertTrue: ${!http.get(API + '/admin/activity?limit=200').body.includes('kz-act-' + stamp)}
+  - request: { url: /admin/activity, query: { country: KZ }, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "\"events\":[]"] }
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login-keycloak }
+  - tapOn: { testId: admin-login-keycloak }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${cmEmail}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { css: "[data-testid=country-dashboard][data-countries=DE]", timeout: 15000 }
+  - tapOn: { testId: admin-nav-activity }
+  - waitForVisible: { css: "[data-testid=activity-row][data-action='prices.set'][data-country=DE]" }
+  - assertNotVisible: { css: "[data-testid=activity-row][data-country=KZ]" }
+  - assertNotVisible: { css: "[data-testid=activity-row][data-target='kz-act-${stamp}']" }
+
+  # ---- The capped manager: one translation, then staff_cap_reached ----------------------------------
+  - request:
+      url: ${API}/auth/login
+      query: { return: /api/admin/me }
+      headers: { Accept: application/json }
+      extract: { state: "$.state" }
+      assert: { status: 200 }
+  - request:
+      url: ${API}/auth/mock/authorize
+      query: { state: "${state}", email: "${capEmail}" }
+      assert: { status: 200, json: { "$.countries[0]": DE } }
+  - request:
+      method: POST
+      url: /admin/examples
+      json: { bookId: "${deBook}" }
+      extract: { example: "$.id" }
+      assert: { status: 201, json: { "$.countries[0]": DE } }
+  - request: { url: /admin/caps/me, query: { country: DE }, assert: { status: 200, json: { "$.allowed": true, "$.person.capUsd": 0.01 } } }
+  - request:
+      method: POST
+      url: /admin/examples/${example}/translate
+      query: { country: DE }
+      json: { languages: [en] }
+      assert: { status: 201 }
+  # The translation's model calls cost a cent: the cap is spent.
+  - request: { url: /admin/caps/me, query: { country: DE }, retryUntil: { status: 200, json: { "$.allowed": false } }, timeout: 30000 }
+  - request:
+      method: POST
+      url: /admin/examples/${example}/translate
+      query: { country: DE }
+      json: { languages: [es] }
+      assert: { status: 429, json: { "$.code": staff_cap_reached, "$.budget.remainingUsd": 0, "$.budget.allowed": false } }
+  - sql:
+      query: "select count(*)::int as n from \"ModelCall\" where \"staffEmail\" = $1 and \"staffCountry\" = 'DE' and kind = 'translate'"
+      params: ["${capEmail}"]
+      readOnly: true
+      assert: { first: { n: 1 } }
+  # Where the action is, the spent budget and the refusal in the admin's words.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login-keycloak }
+  - tapOn: { testId: admin-login-keycloak }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${capEmail}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { testId: country-dashboard, timeout: 15000 }
+  - tapOn: { testId: admin-nav-examples }
+  - waitForVisible: { css: "[data-testid=staff-budget][data-allowed=false]" }
+  - waitForVisible: { css: "[data-testid='example-${example}-lang-en'][data-state=done]", timeout: 30000 }
+  - tapOn: { testId: "example-${example}-translate-es" }
+  - waitForVisible: { testId: "example-${example}-error" }
+  - assertVisible: { testId: "example-${example}-error", contains: "generation budget is spent" }
+
+  # The superadmin sees today's spend in Team, and puts Germany's prices back.
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request: { url: /admin/team, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "\"email\":\"${capEmail}\""] }
+  - assertTrue: { contains: ["${response.body}", "\"spentTodayUsd\":0.01,\"capUsd\":0.01"] }
+  - request: { method: DELETE, url: /admin/reference/prices, query: { country: DE }, assert: { status: 204 } }
+after:
+  - sql: { exec: "delete from \"Book\" where id in (select v.\"bookId\" from \"ExampleVersion\" v join \"ExampleVersion\" mine on mine.\"exampleId\" = v.\"exampleId\" join \"Book\" b on b.id = mine.\"bookId\" where b.\"clientKey\" = $1)", params: ["e2e-activity-${stamp}"] }
+  - sql: { exec: "delete from \"Book\" where \"clientKey\" = $1", params: ["e2e-activity-${stamp}"] }
+  - sql: { exec: "delete from \"Example\" e where not exists (select 1 from \"ExampleVersion\" v where v.\"exampleId\" = e.id)" }
+  - sql: { exec: "update \"Setting\" set value = value - 'DE' where key = 'reference.country_prices'" }
+  - sql: { exec: "delete from \"StaffMember\" where email in ($1, $2)", params: ["${cmEmail}", "${capEmail}"] }
+  - sql: { exec: "delete from \"User\" where sub in ($1, $2)", params: ["mock:${cmEmail}", "mock:${capEmail}"] }
+  - sql: { exec: "delete from \"AuditEvent\" where \"actorEmail\" in ($1, $2) or \"targetId\" = $3", params: ["${cmEmail}", "${capEmail}", "kz-act-${stamp}"] }

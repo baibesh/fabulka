@@ -5,6 +5,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 : "${DATABASE_URL:?set DATABASE_URL to the e2e database}"
 export MODELS=mock MOCK_DELAY_MS="${MOCK_DELAY_MS:-100}" PAGE_COUNT="${PAGE_COUNT:-4}"
 export FREE_BOOKS=3 DEMO_CODES=E2E-DEMO ORDER_STAGE_MS="${ORDER_STAGE_MS:-1500}"
+# Staff generation (translations, theme proposals) costs a cent a call, so the activity flow can reach a daily cap.
+export MOCK_STAFF_COST_USD=0.01
 # Needs apps/api/geoip/country.mmdb: pnpm --filter @fabulka/api geoip
 export GEO_BLOCK=true
 # Filling in the form by voice (mocked transcription), for the api-voice flow.

@@ -67,12 +67,15 @@ commands:
       query: { state: "${state}", email: "${cmEmail}" }
       assert: { status: 200, json: { "$.roles[0]": country_manager, "$.countries[0]": DE, "$.superadmin": false } }
   - assertTrue: { contains: ["${response.body}", "\"countries\":[\"DE\"]"] }
-  - assertTrue: { contains: ["${response.body}", "\"permissions\":[\"orders\",\"catalog\",\"examples\",\"reference\"]"] }
+  - assertTrue: { contains: ["${response.body}", "\"permissions\":[\"dashboard\",\"orders\",\"catalog\",\"examples\",\"reference\",\"audit\"]"] }
   - request: { url: "${API}/admin/orders", assert: { status: 200 } }
   - request: { url: "${API}/admin/examples", assert: { status: 200 } }
   - request: { url: "${API}/admin/templates", assert: { status: 200 } }
   - request: { url: "${API}/admin/reference", assert: { status: 200 } }
-  - request: { url: "${API}/admin/stats", assert: { status: 403, json: { "$.code": admin_forbidden } } }
+  # Their countries' dashboard, never the whole service's.
+  - request: { url: "${API}/admin/stats", assert: { status: 403, json: { "$.code": scope_forbidden } } }
+  - request: { url: "${API}/admin/stats/countries", assert: { status: 200, json: { "$.countries[0]": DE } } }
+  - request: { method: POST, url: "${API}/admin/pause", json: { paused: true }, assert: { status: 403, json: { "$.code": scope_forbidden } } }
   - request: { url: "${API}/admin/books", assert: { status: 403 } }
   - request: { url: "${API}/admin/seo/pages?lang=de", assert: { status: 403 } }
   - request: { url: "${API}/admin/team", assert: { status: 403 } }
@@ -89,7 +92,7 @@ commands:
       params: ["${cmEmail}"]
       assert: { rows: 1, first: { status: active, linked: true } }
 
-  # The manager in the browser: their sections only, starting on the first one.
+  # The manager in the browser: their sections only, starting on their countries' dashboard.
   - launchApp: { appId: "${WEB}", clearState: true }
   - openLink: "${WEB}/admin"
   - waitForVisible: { testId: admin-login-keycloak }
@@ -98,13 +101,14 @@ commands:
   - tapOn: { testId: mock-login-email }
   - inputText: "${cmEmail}"
   - tapOn: { testId: mock-login-submit }
-  - waitForVisible: { testId: orders-table, timeout: 15000 }
-  - assertUrl: { contains: "/admin/orders" }
+  - waitForVisible: { css: "[data-testid=country-dashboard][data-countries=DE]", timeout: 15000 }
+  - assertNotVisible: { testId: pause-card }
+  - assertVisible: { testId: admin-nav-dashboard }
+  - assertVisible: { testId: admin-nav-activity }
   - assertVisible: { testId: admin-nav-orders }
   - assertVisible: { testId: admin-nav-catalog }
   - assertVisible: { testId: admin-nav-examples }
   - assertVisible: { testId: admin-nav-reference }
-  - assertNotVisible: { testId: admin-nav-dashboard }
   - assertNotVisible: { testId: admin-nav-books }
   - assertNotVisible: { testId: admin-nav-seo }
   - assertNotVisible: { testId: admin-nav-journal }

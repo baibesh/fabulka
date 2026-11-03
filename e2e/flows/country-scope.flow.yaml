@@ -229,6 +229,9 @@ commands:
   - tapOn: { testId: mock-login-email }
   - inputText: "${cmEmail}"
   - tapOn: { testId: mock-login-submit }
+  # They start on their countries' dashboard, then open the orders.
+  - waitForVisible: { css: "[data-testid=country-dashboard][data-countries=DE]", timeout: 15000 }
+  - tapOn: { testId: admin-nav-orders }
   - waitForVisible: { testId: orders-table, timeout: 15000 }
   # Their working country is Germany; the orders are Germany's.
   - assertVisible: { css: "[data-testid=admin-country][data-value=DE]" }
