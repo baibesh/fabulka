@@ -211,11 +211,13 @@ describe('ReferenceService seeding', () => {
     expect(rows.get(REFERENCE_KEYS.cities)).toEqual([
       {
         id: 'almaty',
+        country: 'KZ',
         name: { ru: 'Алматы', kk: 'Алматы', en: 'Almaty' },
         freeDelivery: false,
       },
       {
         id: 'taraz',
+        country: 'KZ',
         name: { ru: 'Тараз', kk: 'Тараз', en: 'Taraz' },
         freeDelivery: true,
       },
@@ -513,5 +515,127 @@ describe('ReferenceService FAQ', () => {
       service.setFaq([{ ...DEFAULT_FAQ[0], a: { kk: 'Жауап' } }]),
     ).rejects.toThrow();
     expect(setting.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('ReferenceService country prices and landing', () => {
+  const de: Prices = {
+    books: {
+      template: { KZT: 1900, USD: 4.9 },
+      custom: { KZT: 2900, USD: 6.9 },
+    },
+    deliveryKzt: 1500,
+  };
+
+  it('prices a country from its own list, the others from the global one, until it is cleared', async () => {
+    const { service, rows } = settingsStore();
+    await service.setCountryPrices('DE', de);
+    expect(rows.get(REFERENCE_KEYS.countryPrices)).toEqual({ DE: de });
+    expect(await service.bookPrice('template', 'DE')).toEqual({
+      amount: 4.9,
+      currency: 'USD',
+    });
+    expect((await service.bookPrice('template', 'AT')).amount).toBe(3.9);
+    expect((await service.public()).countryPrices).toEqual({ DE: de });
+    await service.setCountryPrices('DE', null);
+    expect((await service.bookPrice('template', 'DE')).amount).toBe(3.9);
+  });
+
+  it("delivers an order at its country's own fee (not the country prices' one)", async () => {
+    const { service } = settingsStore({
+      [REFERENCE_KEYS.countryPrices]: { KZ: { ...de, deliveryKzt: 9999 } },
+      [REFERENCE_KEYS.countryDelivery]: {
+        KZ: { feeKzt: 2500, freeEverywhere: false },
+      },
+    });
+    const price = await service.orderPrice(
+      DEFAULT_FORMATS[0],
+      'soft',
+      1,
+      'shymkent',
+      'KZ',
+    );
+    expect(price.delivery).toBe(2500);
+  });
+
+  it('keeps landing overrides by country and refuses a country the site does not offer', async () => {
+    const { service } = settingsStore();
+    await service.setLanding('DE', {
+      hero: { de: { title: 'Hallo' } },
+      faqHidden: [],
+      faq: [],
+      hiddenSections: [],
+    });
+    expect((await service.public()).landing.DE.hero.de?.title).toBe('Hallo');
+    await expect(service.setLanding('FR', null)).rejects.toMatchObject({
+      response: { code: 'country_unknown' },
+    });
+    await expect(service.setCountryPrices('FR', de)).rejects.toThrow(
+      BadRequestException,
+    );
+    await service.setLanding('DE', null);
+    expect((await service.admin()).landing).toEqual({});
+  });
+});
+
+describe('ReferenceService per-country cities and formats', () => {
+  const berlin = {
+    id: 'berlin',
+    country: 'DE',
+    name: { ru: 'Берлин', en: 'Berlin' },
+    freeDelivery: true,
+  };
+
+  it("replaces one country's cities and keeps the others", async () => {
+    const { service } = settingsStore();
+    expect(await service.setCountryCities('DE', [berlin])).toEqual([berlin]);
+    expect(await service.citiesFor('DE')).toEqual([berlin]);
+    expect(await service.citiesFor('KZ')).toEqual(DEFAULT_CITIES);
+    // A city sent for Germany is Germany's, whatever it says.
+    await service.setCountryCities('DE', [
+      berlin,
+      {
+        ...berlin,
+        id: 'munich',
+        country: 'KZ',
+        name: { ru: 'Мюнхен', en: 'Munich' },
+      },
+    ]);
+    expect((await service.citiesFor('DE')).map((c) => c.id)).toEqual([
+      'berlin',
+      'munich',
+    ]);
+    expect(await service.citiesFor('KZ')).toEqual(DEFAULT_CITIES);
+    await expect(
+      service.setCountryCities('DE', [{ ...berlin, id: 'almaty' }]),
+    ).rejects.toMatchObject({ response: { code: 'city_id_taken' } });
+    await service.setCountryCities('DE', []);
+    expect(await service.citiesFor('DE')).toEqual([]);
+  });
+
+  it("offers and prices formats per country, and orders only to the country's cities", async () => {
+    const { service } = settingsStore();
+    const [square, a4] = DEFAULT_FORMATS;
+    await service.setCountryFormats('KZ', {
+      [square.id]: { published: false },
+      [a4.id]: { prices: { soft: 5000, hard: 8000 } },
+    });
+    await expect(service.publishedFormat(square.id, 'KZ')).rejects.toThrow(
+      BadRequestException,
+    );
+    expect((await service.publishedFormat(a4.id, 'KZ')).prices.soft).toBe(5000);
+    expect((await service.publishedFormat(a4.id, 'UZ')).prices.soft).toBe(
+      a4.prices.soft,
+    );
+    // Offered somewhere: its sizes may still lay a book out.
+    expect((await service.publishedFormat(square.id)).id).toBe(square.id);
+    await expect(
+      service.setCountryFormats('KZ', { nope: { published: true } }),
+    ).rejects.toMatchObject({ response: { code: 'format_unknown' } });
+    await service.setCountryCities('DE', [berlin]);
+    // Berlin is not a Kazakh city: an order from Kazakhstan pays the fee there.
+    expect(
+      (await service.orderPrice(square, 'soft', 1, 'berlin', 'KZ')).delivery,
+    ).toBe(DEFAULT_PRICES.deliveryKzt);
   });
 });

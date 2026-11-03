@@ -32,10 +32,20 @@ describe("built-in roles", () => {
     }
   });
 
-  it("make the country manager country-scoped with reference prices and landing only", () => {
+  it("make the country manager country-scoped with the per-country parts of Reference only", () => {
     const role = BUILTIN_ROLES.find((r) => r.key === "country_manager")!;
     expect(role.scoped).toBe(true);
-    expect(role.rights).toEqual(["examples", "catalog", "orders", "reference.prices", "reference.landing"]);
+    expect(role.rights).toEqual([
+      "examples",
+      "catalog",
+      "orders",
+      "reference.prices",
+      "reference.landing",
+      "reference.cities",
+      "reference.delivery",
+      "reference.formats_country",
+    ]);
+    expect(role.rights).not.toContain("reference");
   });
 });
 
@@ -76,7 +86,16 @@ describe("accessOf and permissionsOf", () => {
   });
 
   it("lists every right including parts", () => {
-    expect(rightsOf(de)).toEqual(["orders", "catalog", "examples", "reference.prices", "reference.landing"]);
+    expect(rightsOf(de)).toEqual([
+      "orders",
+      "catalog",
+      "examples",
+      "reference.prices",
+      "reference.landing",
+      "reference.cities",
+      "reference.delivery",
+      "reference.formats_country",
+    ]);
     expect(rightsOf(superadmin)).toEqual([...ADMIN_RIGHTS]);
   });
 

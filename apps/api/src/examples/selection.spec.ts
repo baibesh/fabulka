@@ -1,7 +1,7 @@
 import {
   orSamples,
   pickExamples,
-  templateCountriesOf,
+  templateRuleOf,
   type Candidate,
   type CandidateVersion,
 } from './selection';
@@ -23,7 +23,15 @@ const example = (
   versions: CandidateVersion[],
   countries: string[] = [],
   templateCountries: string[] | null = null,
-): Candidate => ({ id, countries, templateCountries, versions });
+  mode: 'include' | 'exclude' = 'include',
+): Candidate => ({
+  id,
+  rule: { mode, countries },
+  template: templateCountries
+    ? { mode: 'include', countries: templateCountries }
+    : null,
+  versions,
+});
 
 describe('pickExamples', () => {
   it('shows each example in exactly the page language, never another one', () => {
@@ -110,15 +118,40 @@ describe('orSamples', () => {
   });
 });
 
-describe('templateCountriesOf', () => {
+describe('templateRuleOf', () => {
   it("takes the first version's catalog book; null for a story of its own", () => {
     expect(
-      templateCountriesOf([
-        { template: { countries: ['KZ'] } },
-        { template: { countries: ['DE'] } },
+      templateRuleOf([
+        { template: { countries: ['KZ'], countriesMode: 'exclude' } },
+        { template: { countries: ['DE'], countriesMode: 'include' } },
       ]),
-    ).toEqual(['KZ']);
-    expect(templateCountriesOf([{ template: null }])).toBeNull();
-    expect(templateCountriesOf([])).toBeNull();
+    ).toEqual({ mode: 'exclude', countries: ['KZ'] });
+    expect(templateRuleOf([{ template: null }])).toBeNull();
+    expect(templateRuleOf([])).toBeNull();
+  });
+});
+
+describe('pickExamples with "everywhere except…"', () => {
+  const examples = [
+    example('not-kz', [version('en')], ['KZ'], null, 'exclude'),
+    example('only-kz', [version('en')], ['KZ']),
+    example('not-kz-template', [version('en')], [], ['DE']),
+  ];
+  const ids = (country: string | null) =>
+    pickExamples(examples, country, 'en').map((p) => p.exampleId);
+
+  it('hides an exclude example in the countries it names, shows it everywhere else', () => {
+    expect(ids('KZ')).toEqual(['only-kz']);
+    expect(ids('DE')).toEqual(['not-kz', 'not-kz-template']);
+    // "other" is in no list: shown an exclude example, not an include one.
+    expect(ids(null)).toEqual(['not-kz']);
+  });
+
+  it("lets the example's own exclude rule override its catalog book's countries", () => {
+    const own = example('own', [version('en')], ['DE'], ['DE'], 'exclude');
+    expect(pickExamples([own], 'DE', 'en')).toEqual([]);
+    expect(pickExamples([own], 'ES', 'en').map((p) => p.exampleId)).toEqual([
+      'own',
+    ]);
   });
 });

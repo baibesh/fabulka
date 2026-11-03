@@ -23,7 +23,7 @@ import {
   TranslateExampleSchema,
   transliterate,
   UpdateExampleSchema,
-  showcaseCountries,
+  showcaseRule,
   methodologyText,
   cityId,
   cityName,
@@ -139,11 +139,14 @@ describe("orders", () => {
       { ru: "Алматы ", kk: "", en: "Almaty 2", freeDelivery: false },
     ];
     expect(upgradeCities(old)).toEqual([
-      { id: "almaty", name: { ru: "Алматы", kk: "Алматы", en: "Almaty" }, freeDelivery: true },
-      { id: "turkestan", name: { ru: "Туркестан", kk: "Түркістан", en: "Turkistan" }, freeDelivery: false },
-      { id: "almaty-2", name: { ru: "Алматы ", en: "Almaty 2" }, freeDelivery: false },
+      { id: "almaty", country: "KZ", name: { ru: "Алматы", kk: "Алматы", en: "Almaty" }, freeDelivery: true },
+      { id: "turkestan", country: "KZ", name: { ru: "Туркестан", kk: "Түркістан", en: "Turkistan" }, freeDelivery: false },
+      { id: "almaty-2", country: "KZ", name: { ru: "Алматы ", en: "Almaty 2" }, freeDelivery: false },
     ]);
     expect(upgradeCities(DEFAULT_CITIES)).toBeNull();
+    // Cities with ids but stored before countries: Kazakhstan's.
+    const before = DEFAULT_CITIES.map(({ country: _, ...rest }) => rest);
+    expect(upgradeCities(before)).toEqual(DEFAULT_CITIES);
     expect(upgradeCities("broken")).toBeNull();
     expect(CitiesSchema.safeParse(upgradeCities(old.slice(0, 2))).success).toBe(true);
     expect(cityName(DEFAULT_CITIES[7], "kk")).toBe("Өскемен");
@@ -559,39 +562,40 @@ describe("template countries", () => {
 });
 
 describe("example countries", () => {
+  const inc = (countries: string[]) => ({ mode: "include" as const, countries });
   it("takes the book's own countries first, then its catalog book's, else none", () => {
-    expect(showcaseCountries(["KZ"], ["DE"])).toEqual(["KZ"]);
-    expect(showcaseCountries([], ["DE"])).toEqual(["DE"]);
-    expect(showcaseCountries([], [])).toEqual([]);
-    expect(showcaseCountries([], null)).toEqual([]);
+    expect(showcaseRule(inc(["KZ"]), inc(["DE"]))).toEqual(inc(["KZ"]));
+    expect(showcaseRule(inc([]), inc(["DE"]))).toEqual(inc(["DE"]));
+    expect(showcaseRule(inc([]), inc([]))).toEqual(inc([]));
+    expect(showcaseRule(inc([]), null)).toEqual(inc([]));
   });
 
   it("shows a story of its own limited to Kazakhstan there only", () => {
-    expect(exampleShownIn(["KZ"], null, "KZ")).toBe(true);
-    expect(exampleShownIn(["KZ"], null, "DE")).toBe(false);
+    expect(exampleShownIn(inc(["KZ"]), null, "KZ")).toBe(true);
+    expect(exampleShownIn(inc(["KZ"]), null, "DE")).toBe(false);
     // "other", none and unknown codes reach here as null.
-    expect(exampleShownIn(["KZ"], null, catalogCountry("other"))).toBe(false);
-    expect(exampleShownIn(["KZ"], null, catalogCountry(undefined))).toBe(false);
-    expect(exampleShownIn(["KZ"], null, catalogCountry("XX"))).toBe(false);
+    expect(exampleShownIn(inc(["KZ"]), null, catalogCountry("other"))).toBe(false);
+    expect(exampleShownIn(inc(["KZ"]), null, catalogCountry(undefined))).toBe(false);
+    expect(exampleShownIn(inc(["KZ"]), null, catalogCountry("XX"))).toBe(false);
   });
 
   it("follows the catalog book when the book has no countries of its own", () => {
-    expect(exampleShownIn([], ["KZ"], "KZ")).toBe(true);
-    expect(exampleShownIn([], ["KZ"], "DE")).toBe(false);
-    expect(exampleShownIn([], ["KZ"], null)).toBe(false);
+    expect(exampleShownIn(inc([]), inc(["KZ"]), "KZ")).toBe(true);
+    expect(exampleShownIn(inc([]), inc(["KZ"]), "DE")).toBe(false);
+    expect(exampleShownIn(inc([]), inc(["KZ"]), null)).toBe(false);
   });
 
   it("lets the book's own countries override its catalog book's", () => {
-    expect(exampleShownIn(["DE"], ["KZ"], "DE")).toBe(true);
-    expect(exampleShownIn(["DE"], ["KZ"], "KZ")).toBe(false);
-    expect(exampleShownIn(["DE", "KZ"], [], "KZ")).toBe(true);
-    expect(exampleShownIn(["DE"], [], null)).toBe(false);
+    expect(exampleShownIn(inc(["DE"]), inc(["KZ"]), "DE")).toBe(true);
+    expect(exampleShownIn(inc(["DE"]), inc(["KZ"]), "KZ")).toBe(false);
+    expect(exampleShownIn(inc(["DE", "KZ"]), inc([]), "KZ")).toBe(true);
+    expect(exampleShownIn(inc(["DE"]), inc([]), null)).toBe(false);
   });
 
   it("shows a book limited nowhere to everyone, \"other\" included", () => {
-    expect(exampleShownIn([], null, "DE")).toBe(true);
-    expect(exampleShownIn([], null, null)).toBe(true);
-    expect(exampleShownIn([], [], null)).toBe(true);
+    expect(exampleShownIn(inc([]), null, "DE")).toBe(true);
+    expect(exampleShownIn(inc([]), null, null)).toBe(true);
+    expect(exampleShownIn(inc([]), inc([]), null)).toBe(true);
   });
 
 });
@@ -605,7 +609,7 @@ describe("examples", () => {
   });
 
   it("validates countries, the order and the languages to translate into", () => {
-    expect(UpdateExampleSchema.parse({ countries: [" kz"] })).toEqual({ countries: ["KZ"] });
+    expect(UpdateExampleSchema.parse({ countries: [" kz"] })).toEqual({ countries: ["KZ"], mode: "include" });
     expect(UpdateExampleSchema.safeParse({ countries: ["other"] }).success).toBe(false);
     expect(UpdateExampleSchema.safeParse({}).success).toBe(false);
     expect(TranslateExampleSchema.parse({ languages: ["en", "de"] })).toEqual({ languages: ["en", "de"] });

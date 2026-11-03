@@ -24,13 +24,17 @@ export class TemplatesController {
     return this.templates.list(language(lang), catalogCountry(country));
   }
 
-  /** Any published book, wherever it is listed: a direct link opens it from every country. */
+  /**
+   * Any published book, wherever it is listed: a direct link opens it from every country. ?country=
+   * picks the sample: the visitor's country's own, else the global one.
+   */
   @Get(':slug')
   get(
     @Param('slug') slug: string,
     @Query('lang') lang?: string,
+    @Query('country') country?: string,
   ): Promise<Template> {
-    return this.templates.get(slug, language(lang));
+    return this.templates.get(slug, language(lang), catalogCountry(country));
   }
 }
 

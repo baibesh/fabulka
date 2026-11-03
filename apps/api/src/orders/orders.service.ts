@@ -2,7 +2,9 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
@@ -21,8 +23,11 @@ import {
   cityName,
   maskPhone,
   orderStatusAt,
+  OTHER_COUNTRY,
+  type AdminAccess,
   type AdminOrder,
   type Country,
+  type CountryEntry,
   type CreateOrderInput,
   type Language,
   type Order,
@@ -37,6 +42,7 @@ import { orderConfirmation, orderStatusChanged } from '../mail/templates';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReferenceService } from '../reference/reference.service';
 import { StorageService } from '../storage/storage.service';
+import { assertScope, listCountries, listScope } from '../admin/scope';
 
 type OrderWith = OrderRow & { book: BookRow; events: EventRow[] };
 
@@ -83,11 +89,28 @@ export function ownsOrder(
 }
 
 /**
+ * The country an order made before orders kept one was placed from, for the backfill: the book's
+ * country when it is one with print (an order can only be placed from such a country), else the
+ * only country with print when there is exactly one (Kazakhstan so far: every delivery city is
+ * there), else null (only global staff see the order).
+ */
+export function backfilledCountry(
+  bookCountry: string | null,
+  countries: readonly CountryEntry[],
+): string | null {
+  const print = countries.filter((c) => c.print).map((c) => c.code);
+  const code = bookCountry?.trim().toUpperCase();
+  if (code && print.includes(code)) return code;
+  return print.length === 1 ? print[0] : null;
+}
+
+/**
  * Printed-book orders. Payment is a demo (nothing is charged) and the print and
  * delivery stages advance on a timer, ORDER_STAGE_MS per stage.
  */
 @Injectable()
-export class OrdersService {
+export class OrdersService implements OnModuleInit {
+  private readonly logger = new Logger(OrdersService.name);
   private readonly stageMs: number;
 
   constructor(
@@ -100,6 +123,27 @@ export class OrdersService {
     private readonly pdf: PdfService,
   ) {
     this.stageMs = Number(config.get('ORDER_STAGE_MS', 20_000));
+  }
+
+  /** Gives orders placed before orders kept a country one (backfilledCountry). */
+  async onModuleInit() {
+    const rows = await this.prisma.order.findMany({
+      where: { country: null },
+      select: { id: true, book: { select: { country: true } } },
+    });
+    if (!rows.length) return;
+    const countries = await this.reference.countries();
+    let filled = 0;
+    for (const row of rows) {
+      const country = backfilledCountry(row.book.country, countries);
+      if (!country) continue;
+      await this.prisma.order.update({
+        where: { id: row.id },
+        data: { country },
+      });
+      filled++;
+    }
+    if (filled) this.logger.log(`gave ${filled} orders their country`);
   }
 
   /**
@@ -130,6 +174,7 @@ export class OrdersService {
     // The format the parent picked (published only); the book is laid out at it before it is frozen.
     const format = await this.reference.publishedFormat(
       input.format ?? layoutOf(book.layout).format.id,
+      country,
     );
     const layout = await this.books.ensureFormat(book.id, format.id);
     // Render QA found text that does not fit or a letter without its font: not sent to print.
@@ -139,8 +184,8 @@ export class OrdersService {
         message: 'This book cannot be printed yet: its layout needs a fix',
       });
     }
-    // Only to a city on the owner's list; the order keeps its Russian name as it is today.
-    const city = (await this.reference.cities()).find(
+    // Only to a city of the order's country; the order keeps its Russian name as it is today.
+    const city = (await this.reference.citiesFor(country)).find(
       (c) => c.id === input.cityId,
     );
     if (!city) {
@@ -155,6 +200,7 @@ export class OrdersService {
       input.cover,
       input.quantity,
       city.id,
+      country,
     );
     const row = await this.prisma.order.create({
       data: {
@@ -175,6 +221,7 @@ export class OrdersService {
         totalKzt: price.total,
         clientKey,
         userId: userId ?? null,
+        country: country === OTHER_COUNTRY ? null : country,
         events: { create: { status: ORDER_STATUSES[0] } },
       },
       include: withBookAndEvents,
@@ -217,14 +264,39 @@ export class OrdersService {
     return rows.map((row) => this.toDto(row));
   }
 
-  /** All orders, newest first, with what the admin needs to ship them. */
-  async list(): Promise<AdminOrder[]> {
+  /**
+   * The orders the session may see, newest first, with what the admin needs to ship them: a country
+   * manager's countries only (an order with no country is global staff's), narrowed to the working
+   * country (?country=) when the admin picked one.
+   */
+  async list(
+    session: AdminAccess,
+    working?: string | null,
+  ): Promise<AdminOrder[]> {
+    const countries = listCountries(listScope(session, 'orders'), working);
+    if (countries && !countries.length) return [];
     const rows = await this.prisma.order.findMany({
+      where: countries ? { country: { in: countries } } : undefined,
       orderBy: { createdAt: 'desc' },
       include: withBookAndEvents,
       take: 200,
     });
     return rows.map((row) => this.adminDto(row));
+  }
+
+  /** 404 for no order; 403 scope_forbidden for one outside the session's countries. */
+  private async assertOrderScope(id: string, session: AdminAccess) {
+    const row = await this.prisma.order.findUnique({
+      where: { id },
+      select: { country: true },
+    });
+    if (!row) throw new NotFoundException(`order ${id} not found`);
+    assertScope(
+      session,
+      'orders',
+      row.country ? [row.country] : null,
+      'The order is not from your countries',
+    );
   }
 
   /**
@@ -235,8 +307,10 @@ export class OrdersService {
   async setStatus(
     id: string,
     status: OrderStatus,
-    note?: string,
+    note: string | undefined,
+    session: AdminAccess,
   ): Promise<AdminOrder> {
+    await this.assertOrderScope(id, session);
     const before = await this.prisma.order.findUnique({
       where: { id },
       include: withBookAndEvents,
@@ -284,7 +358,11 @@ export class OrdersService {
    * The print file of an order (admin): its frozen layout rendered with bleed and crop marks, made
    * on first request and kept. Returns the file's storage path.
    */
-  async printFile(id: string): Promise<{ path: string; name: string }> {
+  async printFile(
+    id: string,
+    session: AdminAccess,
+  ): Promise<{ path: string; name: string }> {
+    await this.assertOrderScope(id, session);
     const row = await this.prisma.order.findUnique({
       where: { id },
       include: { book: true },
@@ -368,6 +446,7 @@ export class OrdersService {
     return {
       ...this.toDto(row),
       phone: row.phone,
+      country: row.country,
       manual: row.status !== null,
     };
   }

@@ -8,8 +8,18 @@ import type { Prisma } from '@prisma/client';
 import {
   COUNTRY_BLOCKED,
   COUNTRY_POLICY_BLOCKED,
+  COUNTRY_UNKNOWN,
+  CITY_ID_TAKEN,
   CitiesSchema,
   CountriesSchema,
+  CountryCitiesSchema,
+  CountryDeliveriesSchema,
+  CountryDeliverySchema,
+  CountryFormatOverridesSchema,
+  CountryFormatsSchema,
+  CountryLandingSchema,
+  CountryPricesSchema,
+  LandingOverridesSchema,
   DEFAULT_CITIES,
   DEFAULT_COUNTRIES,
   DEFAULT_FAQ,
@@ -25,6 +35,9 @@ import {
   bookPrice,
   countryFromIp,
   countryInfo,
+  citiesOf,
+  deliveryFor,
+  formatsFor,
   orderPrice,
   upgradeCities,
   type AdminReference,
@@ -33,6 +46,13 @@ import {
   type City,
   type Country,
   type CountryEntry,
+  type CountryDeliveries,
+  type CountryDelivery,
+  type CountryFormatOverrides,
+  type CountryFormats,
+  type CountryLanding,
+  type CountryPrices,
+  type LandingOverrides,
   type Cover,
   type FaqItem,
   type Prices,
@@ -67,6 +87,14 @@ interface Snapshot {
   faq: FaqItem[];
   /** Print formats, unpublished ones included. */
   formats: PrintFormat[];
+  /** Countries priced from their own list. */
+  countryPrices: CountryPrices;
+  /** Countries' landing overrides. */
+  landing: LandingOverrides;
+  /** Countries' own delivery fee and free-delivery rule. */
+  countryDelivery: CountryDeliveries;
+  /** Countries' own format offer and cover prices. */
+  countryFormats: CountryFormats;
 }
 
 const DEFAULTS: Snapshot = {
@@ -76,6 +104,10 @@ const DEFAULTS: Snapshot = {
   countries: DEFAULT_COUNTRIES,
   faq: DEFAULT_FAQ,
   formats: DEFAULT_FORMATS,
+  countryPrices: {},
+  landing: {},
+  countryDelivery: {},
+  countryFormats: {},
 };
 
 const SCHEMAS: { [K in keyof Snapshot]: ZodType<Snapshot[K]> } = {
@@ -85,6 +117,10 @@ const SCHEMAS: { [K in keyof Snapshot]: ZodType<Snapshot[K]> } = {
   countries: CountriesSchema,
   faq: FaqSchema,
   formats: FormatsSchema,
+  countryPrices: CountryPricesSchema,
+  landing: LandingOverridesSchema,
+  countryDelivery: CountryDeliveriesSchema,
+  countryFormats: CountryFormatsSchema,
 };
 
 const FIELDS = Object.keys(REFERENCE_KEYS) as (keyof Snapshot)[];
@@ -231,6 +267,10 @@ export class ReferenceService implements OnModuleInit {
       countries: pick('countries'),
       faq: pick('faq'),
       formats: pick('formats'),
+      countryPrices: pick('countryPrices'),
+      landing: pick('landing'),
+      countryDelivery: pick('countryDelivery'),
+      countryFormats: pick('countryFormats'),
     };
   }
 
@@ -239,11 +279,23 @@ export class ReferenceService implements OnModuleInit {
     return (await this.snapshot()).formats;
   }
 
-  /** The published format with this id; 400 format_unknown otherwise. */
-  async publishedFormat(id: string): Promise<PrintFormat> {
-    const format = (await this.formats()).find(
-      (f) => f.id === id && f.published,
-    );
+  /**
+   * The format with this id as offered in `country` (its offer and cover prices: formatsFor); with
+   * no country, one offered anywhere (globally or by some country), for its sizes. 400
+   * format_unknown otherwise.
+   */
+  async publishedFormat(id: string, country?: Country): Promise<PrintFormat> {
+    const { formats, countryFormats } = await this.snapshot();
+    const format = country
+      ? formatsFor(country, formats, countryFormats).find(
+          (f) => f.id === id && f.published,
+        )
+      : formats.find(
+          (f) =>
+            f.id === id &&
+            (f.published ||
+              Object.values(countryFormats).some((o) => o[id]?.published)),
+        );
     if (!format) {
       throw new BadRequestException({
         code: FORMAT_UNKNOWN,
@@ -271,6 +323,11 @@ export class ReferenceService implements OnModuleInit {
     return (await this.snapshot()).cities;
   }
 
+  /** The cities of one country, in order: where an order from there may go. */
+  async citiesFor(country: Country): Promise<City[]> {
+    return citiesOf(country, (await this.snapshot()).cities);
+  }
+
   /**
    * The countries the site offers. A blocked one (Meta's list, or the owner's added after it was
    * listed) is left out: its visitors are turned away anyway.
@@ -283,27 +340,68 @@ export class ReferenceService implements OnModuleInit {
     );
   }
 
-  /** GET /reference: prices, cities, the offered countries and the published FAQ for the site. */
+  /**
+   * GET /reference: prices (the global list and the countries' own), cities, the offered countries,
+   * the published FAQ and the countries' landing overrides for the site.
+   */
   async public(): Promise<Reference> {
-    const { prices, cities, faq, formats } = await this.snapshot();
+    const {
+      prices,
+      cities,
+      faq,
+      formats,
+      countryPrices,
+      landing,
+      countryDelivery,
+      countryFormats,
+    } = await this.snapshot();
     return {
       prices,
-      formats: formats.filter((f) => f.published),
+      // A format nobody offers stays off the site; one some country offers comes with its global flag.
+      formats: formats.filter(
+        (f) =>
+          f.published ||
+          Object.values(countryFormats).some((o) => o[f.id]?.published),
+      ),
+      countryDelivery,
+      countryFormats,
       cities,
       countries: await this.countries(),
       faq: faq.filter((item) => item.published),
+      countryPrices,
+      // A country's draft questions stay off the site, like the shared ones.
+      landing: Object.fromEntries(
+        Object.entries(landing).map(([code, own]) => [
+          code,
+          { ...own, faq: own.faq.filter((item) => item.published) },
+        ]),
+      ),
     };
   }
 
   async admin(): Promise<AdminReference> {
-    const { prices, cities, extraBlocked, countries, faq, formats } =
-      await this.snapshot();
+    const {
+      prices,
+      cities,
+      extraBlocked,
+      countries,
+      faq,
+      formats,
+      countryPrices,
+      landing,
+      countryDelivery,
+      countryFormats,
+    } = await this.snapshot();
     return {
       prices,
       formats,
       cities,
       countries,
       faq,
+      countryPrices,
+      landing,
+      countryDelivery,
+      countryFormats,
       blocked: blocked(extraBlocked),
     };
   }
@@ -325,25 +423,147 @@ export class ReferenceService implements OnModuleInit {
     return countryInfo(country, await this.countries());
   }
 
-  /** What one more book of this kind costs, at the stored prices and the country's currency. */
+  /**
+   * What one more book of this kind costs, at the country's own prices if it has them (else the
+   * global ones), in the country's currency.
+   */
   async bookPrice(kind: BookKind, country: Country = 'KZ') {
+    const { prices, countryPrices } = await this.snapshot();
     return bookPrice(
       kind,
       country,
-      await this.prices(),
+      prices,
       await this.countries(),
+      countryPrices,
     );
   }
 
-  /** What a printed order in this format to the city with this id costs, at the stored prices and cities. */
+  /**
+   * What a printed order from `country` in this format to the city with this id costs, at the
+   * country's prices (its own list, else the global one) and the stored cities.
+   */
   async orderPrice(
     format: PrintFormat,
     cover: Cover,
     quantity: number,
     cityId: string,
+    country: Country = 'KZ',
   ) {
-    const { prices, cities } = await this.snapshot();
-    return orderPrice(format, cover, quantity, cityId, prices, cities);
+    const { prices, cities, countryDelivery } = await this.snapshot();
+    return orderPrice(
+      format,
+      cover,
+      quantity,
+      cityId,
+      deliveryFor(country, prices, countryDelivery),
+      citiesOf(country, cities),
+    );
+  }
+
+  /**
+   * One country's cities, in order (replacing the ones it had; other countries' stay). Ids stay
+   * those the cities have (orders refer to them); a new one must not be another country's: 400
+   * city_id_taken.
+   */
+  async setCountryCities(country: string, cities: City[]): Promise<City[]> {
+    await this.assertOffered(country);
+    const own = CountryCitiesSchema.parse(cities).map((c) => ({
+      ...c,
+      country,
+    }));
+    const { cities: all } = await this.snapshot();
+    const others = all.filter((c) => c.country !== country);
+    const taken = own.filter((c) => others.some((o) => o.id === c.id));
+    if (taken.length) {
+      throw new BadRequestException({
+        code: CITY_ID_TAKEN,
+        cities: taken.map((c) => c.id),
+        message: `${taken.map((c) => c.id).join(', ')}: another country has a city with this id`,
+      });
+    }
+    const next = CitiesSchema.parse([...others, ...own]);
+    return citiesOf(country, (await this.save('cities', next)).cities);
+  }
+
+  /** The country's own delivery fee and rule, or null for the global fee again. */
+  async setCountryDelivery(
+    country: string,
+    delivery: CountryDelivery | null,
+  ): Promise<CountryDeliveries> {
+    await this.assertOffered(country);
+    const { countryDelivery } = await this.snapshot();
+    const next = { ...countryDelivery };
+    if (delivery) next[country] = CountryDeliverySchema.parse(delivery);
+    else delete next[country];
+    return (await this.save('countryDelivery', next)).countryDelivery;
+  }
+
+  /** The global delivery fee (reference.prices.deliveryKzt): countries without their own pay it. */
+  async setDeliveryFee(feeKzt: number): Promise<Prices> {
+    const { prices } = await this.snapshot();
+    return this.setPrices({ ...prices, deliveryKzt: feeKzt });
+  }
+
+  /**
+   * The country's own format offer and cover prices (by format id; only formats there are), or
+   * null to follow the global formats again. 400 format_unknown for an unknown id.
+   */
+  async setCountryFormats(
+    country: string,
+    overrides: CountryFormatOverrides | null,
+  ): Promise<CountryFormats> {
+    await this.assertOffered(country);
+    const { countryFormats, formats } = await this.snapshot();
+    const next = { ...countryFormats };
+    if (overrides) {
+      const parsed = CountryFormatOverridesSchema.parse(overrides);
+      const unknown = Object.keys(parsed).filter(
+        (id) => !formats.some((f) => f.id === id),
+      );
+      if (unknown.length) {
+        throw new BadRequestException({
+          code: FORMAT_UNKNOWN,
+          message: `No print format ${unknown.join(', ')}`,
+        });
+      }
+      next[country] = parsed;
+    } else delete next[country];
+    return (await this.save('countryFormats', next)).countryFormats;
+  }
+
+  /** The country's own prices, or null to price it from the global list again. 400 country_unknown for a country the site does not offer. */
+  async setCountryPrices(
+    country: string,
+    prices: Prices | null,
+  ): Promise<CountryPrices> {
+    await this.assertOffered(country);
+    const { countryPrices } = await this.snapshot();
+    const next = { ...countryPrices };
+    if (prices) next[country] = PricesSchema.parse(prices);
+    else delete next[country];
+    return (await this.save('countryPrices', next)).countryPrices;
+  }
+
+  /** The country's landing overrides, or null to show it the defaults again. */
+  async setLanding(
+    country: string,
+    landing: CountryLanding | null,
+  ): Promise<LandingOverrides> {
+    await this.assertOffered(country);
+    const { landing: all } = await this.snapshot();
+    const next = { ...all };
+    if (landing) next[country] = CountryLandingSchema.parse(landing);
+    else delete next[country];
+    return (await this.save('landing', next)).landing;
+  }
+
+  /** 400 country_unknown unless the site offers the country (reference.countries, less blocked ones). */
+  private async assertOffered(country: string): Promise<void> {
+    if ((await this.countries()).some((c) => c.code === country)) return;
+    throw new BadRequestException({
+      code: COUNTRY_UNKNOWN,
+      message: `${country} is not one of the countries the site offers`,
+    });
   }
 
   /**

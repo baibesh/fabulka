@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { LANGUAGES, LanguageSchema, type Language } from "./language";
 import { TemplateCountriesSchema } from "./reference";
+import { CountriesModeSchema } from "./country-rules";
 
 // ---- Examples on the home page -----------------------------------------------------------------
 //
@@ -51,24 +52,64 @@ export const AdminExampleSchema = z.object({
    * (showcaseCountries), everywhere for a story of its own.
    */
   countries: z.array(z.string()),
+  /** Whether `countries` are where it shows (include) or where it does not ("everywhere except…"). */
+  countriesMode: CountriesModeSchema.default("include"),
   /** The catalog book's countries of its versions (empty: everywhere); null for a story of its own. */
   templateCountries: z.array(z.string()).nullable(),
+  templateCountriesMode: CountriesModeSchema.default("include"),
+  /** Whether this session may change it: every country it shows in is theirs (or they hold the right everywhere). */
+  editable: z.boolean().default(true),
   sortOrder: z.number().int(),
   versions: z.array(AdminExampleVersionSchema),
   createdAt: z.string(),
 });
 export type AdminExample = z.infer<typeof AdminExampleSchema>;
 
-/** Body of POST /admin/examples (a new example with this book as its first version) and of POST /admin/examples/:id/versions. */
+/** Body of POST /admin/examples/:id/versions. */
 export const ExampleBookRefSchema = z.object({ bookId: z.string().trim().min(1).max(40) });
 export type ExampleBookRef = z.infer<typeof ExampleBookRefSchema>;
+
+/**
+ * Body of POST /admin/examples: a new example with this book as its first version, shown in these
+ * countries. A country manager's example must name only their countries (none: all of theirs).
+ */
+export const CreateExampleSchema = ExampleBookRefSchema.extend({ countries: TemplateCountriesSchema.optional() });
+export type CreateExample = z.infer<typeof CreateExampleSchema>;
 
 /** Body of PATCH /admin/examples/:id. */
 export const UpdateExampleSchema = z.object({
   /** Codes from reference.countries (the API refuses others), or empty to follow the catalog book's. */
   countries: TemplateCountriesSchema,
+  /** include: shown only there; exclude: everywhere except there. */
+  mode: CountriesModeSchema.default("include"),
 });
 export type UpdateExample = z.infer<typeof UpdateExampleSchema>;
+
+/** A finished book staff may make a new example from (GET /admin/examples/candidates). */
+export const ExampleCandidateSchema = z.object({
+  id: z.string(),
+  title: z.string().nullable(),
+  childName: z.string(),
+  language: LanguageSchema,
+  country: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type ExampleCandidate = z.infer<typeof ExampleCandidateSchema>;
+
+/** What the home page shows in one country × language cell of the visitor matrix. */
+export const VisitorCellSchema = z.object({
+  language: LanguageSchema,
+  /** The country offers this language (else its visitors are switched to another one). */
+  offered: z.boolean(),
+  /** "example": examples are shown; "sample": none, catalog samples fill in; "empty": nothing. */
+  kind: z.enum(["example", "sample", "empty"]),
+  items: z.array(z.object({ id: z.string(), title: z.string(), heroImageUrl: z.string().nullable() })),
+});
+export type VisitorCell = z.infer<typeof VisitorCellSchema>;
+
+/** GET /admin/examples/matrix: per country (an ISO code, or "other"), what a visitor sees per language. */
+export const VisitorMatrixSchema = z.array(z.object({ country: z.string(), cells: z.array(VisitorCellSchema) }));
+export type VisitorMatrix = z.infer<typeof VisitorMatrixSchema>;
 
 /** Body of POST /admin/examples/order: every example's id, in the order the home page shows them. */
 export const ReorderExamplesSchema = z.object({ ids: z.array(z.string().min(1)).min(1).max(500) });
@@ -105,6 +146,8 @@ export const EXAMPLE_ERRORS = [
   "example_order_mismatch",
   /** A country the site does not offer. */
   "example_country_unknown",
+  /** The example shows in countries that are not this session's (or everywhere): only global staff change it. */
+  "scope_forbidden",
 ] as const;
 export type ExampleError = (typeof EXAMPLE_ERRORS)[number];
 

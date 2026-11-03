@@ -12,7 +12,8 @@ import {
   TemplateBlocksSchema,
   ThemeCheckSchema,
 } from "./layout";
-import { TemplateCountriesSchema, countryInfo, type City, type Country, type CountryEntry, type Currency, type PrintFormat, type Prices } from "./reference";
+import { TemplateCountriesSchema, countryInfo, pricesFor, type City, type Country, type CountryEntry, type CountryPrices, type Currency, type PrintFormat, type Prices } from "./reference";
+import { CountriesModeSchema } from "./country-rules";
 
 export * from "./language";
 export * from "./methodologies";
@@ -24,6 +25,7 @@ export * from "./seo";
 export * from "./admin-access";
 export * from "./staff";
 export * from "./examples";
+export * from "./country-rules";
 
 /** What the parent tells us about the child. */
 export const ChildProfileSchema = z.object({
@@ -386,17 +388,18 @@ export type BookKind = z.infer<typeof BookKindSchema>;
 
 /**
  * What one more generated (digital) book of this kind costs a visitor from `country`, at the
- * owner's prices (reference.prices) in the currency the owner set for that country
- * (reference.countries; "other" pays in dollars).
+ * owner's prices (the country's own list in reference.country_prices, else reference.prices) in
+ * the currency the owner set for that country (reference.countries; "other" pays in dollars).
  */
 export function bookPrice(
   kind: BookKind,
   country: Country,
   prices: Prices,
   countries: readonly CountryEntry[],
+  countryPrices?: CountryPrices,
 ): { amount: number; currency: Currency } {
   const { currency } = countryInfo(country, countries);
-  return { amount: prices.books[kind][currency], currency };
+  return { amount: pricesFor(country, prices, countryPrices).books[kind][currency], currency };
 }
 
 /** An email a parent typed: for order and receipt emails. */
@@ -462,11 +465,18 @@ export type CreateOrderInput = z.infer<typeof CreateOrderSchema>;
  * What a printed order costs at the owner's prices: the copies, plus the flat delivery fee unless
  * the city (by id) is one with free delivery.
  */
-export function orderPrice(format: PrintFormat, cover: Cover, quantity: number, cityId: string, prices: Prices, cities: readonly City[]) {
+export function orderPrice(
+  format: PrintFormat,
+  cover: Cover,
+  quantity: number,
+  cityId: string,
+  delivery: { deliveryKzt: number; freeEverywhere?: boolean },
+  cities: readonly City[],
+) {
   const books = format.prices[cover] * quantity;
-  const free = cities.some((c) => c.freeDelivery && c.id === cityId);
-  const delivery = free ? 0 : prices.deliveryKzt;
-  return { books, delivery, total: books + delivery };
+  const free = delivery.freeEverywhere === true || cities.some((c) => c.freeDelivery && c.id === cityId);
+  const fee = free ? 0 : delivery.deliveryKzt;
+  return { books, delivery: fee, total: books + fee };
 }
 
 /** Body of a 400 from POST /orders: the city is not one we deliver to (reference.cities). */
@@ -634,6 +644,8 @@ export type AdminBook = z.infer<typeof AdminBookSchema>;
 
 export const AdminOrderSchema = OrderSchema.extend({
   phone: z.string(),
+  /** The country it was ordered from (ISO code); null for an order whose country is not known (global staff only). */
+  country: z.string().nullable().default(null),
   /** True when the status was set by hand rather than by the demo timer. */
   manual: z.boolean(),
 });
@@ -655,13 +667,21 @@ export const SampleOptionSchema = z.object({
   title: z.string().nullable(),
   childName: z.string(),
   language: LanguageSchema,
+  /** The country it was made in (a country's sample is picked among its books). */
+  country: z.string().nullable().default(null),
   createdAt: z.string(),
 });
 export type SampleOption = z.infer<typeof SampleOptionSchema>;
 
+/** A template's samples for single countries: by country code, the sample book per language. */
+export const CountrySamplesSchema = z.record(z.string(), TemplateSamplesSchema);
+export type CountrySamples = z.infer<typeof CountrySamplesSchema>;
+
 export const AdminTemplateSchema = TemplateSchema.omit({ sampleDetails: true, sampleBookId: true, sampleLanguage: true }).extend({
-  /** The sample book per language. */
+  /** The global sample book per language (shown where a country has none of its own). */
   samples: TemplateSamplesSchema,
+  /** Countries' own samples, which their visitors see before the global ones. */
+  countrySamples: CountrySamplesSchema.default({}),
   /** Finished books from this template, newest first: the ones staff may pick as samples. */
   sampleOptions: z.array(SampleOptionSchema),
   published: z.boolean(),
@@ -673,11 +693,34 @@ export const AdminTemplateSchema = TemplateSchema.omit({ sampleDetails: true, sa
   layoutTheme: z.string().nullable(),
   /** The blocks its books get; null: the default ones (DEFAULT_BLOCKS). */
   blocks: TemplateBlocksSchema.nullable(),
-  /** Country codes (reference.countries) where the catalog lists it; empty: everywhere. */
+  /** Country codes (reference.countries) the catalog lists it in, or leaves it out of (`countriesMode`); empty: everywhere. */
   countries: z.array(z.string()),
+  countriesMode: CountriesModeSchema.default("include"),
   books: z.number().int(),
 });
 export type AdminTemplate = z.infer<typeof AdminTemplateSchema>;
+
+/** Body of PUT /admin/templates/:slug/visibility: show or hide the catalog book in one country. */
+export const TemplateVisibilitySchema = z.object({ country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/), visible: z.boolean() });
+export type TemplateVisibility = z.infer<typeof TemplateVisibilitySchema>;
+
+/** Body of PUT /admin/templates/:slug/samples: a sample for one language, global (country null) or one country's. */
+export const TemplateSampleSchema = z.object({
+  country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).nullable(),
+  language: LanguageSchema,
+  /** A finished book from this template in that language, or null to clear it. */
+  bookId: z.string().min(1).max(40).nullable(),
+});
+export type TemplateSample = z.infer<typeof TemplateSampleSchema>;
+
+/**
+ * Body code of a 409 from PUT /admin/templates/:slug/visibility: hiding the catalog book in its
+ * only listed country would list it everywhere; only global staff may (unpublish it instead).
+ */
+export const CATALOG_LAST_COUNTRY = "catalog_last_country";
+
+/** Body code of a 409 from PUT /admin/templates/:slug/samples: the book is a sample somewhere else already. */
+export const SAMPLE_TAKEN = "sample_taken";
 
 export const UpdateTemplateSchema = z
   .object({
@@ -704,6 +747,8 @@ export const UpdateTemplateSchema = z
      * empty for everywhere. Its page opens from anywhere by a direct link.
      */
     countries: TemplateCountriesSchema,
+    /** Whether `countries` are the only ones it is listed in (include) or the ones it is left out of (exclude). */
+    countriesMode: CountriesModeSchema,
     published: z.boolean(),
     sortOrder: z.number().int(),
   })

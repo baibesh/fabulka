@@ -14,6 +14,10 @@ export const REFERENCE_KEYS = {
   countries: "reference.countries",
   faq: "reference.faq",
   formats: "reference.formats",
+  countryPrices: "reference.country_prices",
+  landing: "reference.landing",
+  countryDelivery: "reference.country_delivery",
+  countryFormats: "reference.country_formats",
 } as const;
 
 const tenge = z.number().int().min(0).max(10_000_000);
@@ -34,6 +38,37 @@ export const PricesSchema = z.object({
   deliveryKzt: tenge,
 });
 export type Prices = z.infer<typeof PricesSchema>;
+
+/** An upper-case ISO code as a key of the per-country reference data. */
+const CountryKeySchema = z.string().regex(/^[A-Z]{2}$/);
+
+/**
+ * Prices of single countries (reference.country_prices): a country listed here is priced from its
+ * own list instead of the global one (a country manager edits their countries' lists).
+ */
+export const CountryPricesSchema = z.record(CountryKeySchema, PricesSchema);
+export type CountryPrices = z.infer<typeof CountryPricesSchema>;
+
+/** The prices for `country`: its own list (reference.country_prices) when it has one, else the global one. */
+export function pricesFor(country: string, prices: Prices, countryPrices: CountryPrices | undefined): Prices {
+  return countryPrices?.[country] ?? prices;
+}
+
+/**
+ * A country's delivery of printed copies (reference.country_delivery): the flat fee to a city
+ * without free delivery, in the print currency (tenge), and whether delivery is free to every city.
+ * Which cities deliver free is each city's own flag (reference.cities).
+ */
+export const CountryDeliverySchema = z.object({ feeKzt: tenge, freeEverywhere: z.boolean() });
+export type CountryDelivery = z.infer<typeof CountryDeliverySchema>;
+export const CountryDeliveriesSchema = z.record(CountryKeySchema, CountryDeliverySchema);
+export type CountryDeliveries = z.infer<typeof CountryDeliveriesSchema>;
+
+/** The delivery rule for an order from `country`: its own, else the global fee (reference.prices.deliveryKzt), free to the free cities only. */
+export function deliveryFor(country: string, prices: Prices, countryDelivery: CountryDeliveries | undefined): { deliveryKzt: number; freeEverywhere: boolean } {
+  const own = countryDelivery?.[country];
+  return own ? { deliveryKzt: own.feeKzt, freeEverywhere: own.freeEverywhere } : { deliveryKzt: prices.deliveryKzt, freeEverywhere: false };
+}
 
 // ---- Print formats ---------------------------------------------------------------------------
 
@@ -78,6 +113,31 @@ export const FormatsSchema = z
     });
     if (!formats.some((f) => f.published)) ctx.addIssue({ code: "custom", path: [0, "published"], message: "Publish at least one format" });
   });
+
+/**
+ * A format in one country (reference.country_formats): whether it is offered there and its cover
+ * prices there; whatever is left out follows the global format. Sizes and ids stay global.
+ */
+export const CountryFormatSchema = z.object({
+  published: z.boolean().optional(),
+  prices: z.object({ soft: tenge.min(1), hard: tenge.min(1) }).optional(),
+});
+export type CountryFormat = z.infer<typeof CountryFormatSchema>;
+/** Body of PUT /admin/reference/country-formats?country=: that country's overrides by format id. */
+export const CountryFormatOverridesSchema = z.record(FormatIdSchema, CountryFormatSchema);
+export type CountryFormatOverrides = z.infer<typeof CountryFormatOverridesSchema>;
+export const CountryFormatsSchema = z.record(CountryKeySchema, CountryFormatOverridesSchema);
+export type CountryFormats = z.infer<typeof CountryFormatsSchema>;
+
+/** The formats as a visitor from `country` gets them: offered and priced as the country says, else globally. */
+export function formatsFor(country: string, formats: readonly PrintFormat[], countryFormats: CountryFormats | undefined): PrintFormat[] {
+  const own = countryFormats?.[country];
+  if (!own) return [...formats];
+  return formats.map((format) => {
+    const o = own[format.id];
+    return o ? { ...format, published: o.published ?? format.published, prices: o.prices ?? format.prices } : format;
+  });
+}
 
 /** The size part of a format, as a book's layout keeps it. */
 export function bookFormatOf(format: PrintFormat): { id: string; widthMm: number; heightMm: number; bleedMm: number; safeMm: number } {
@@ -148,6 +208,8 @@ export const CityIdSchema = z
  */
 export const CitySchema = z.object({
   id: CityIdSchema,
+  /** The country it is in (reference.countries); cities stored before countries are Kazakhstan's. */
+  country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).default("KZ"),
   /** By language code; Russian and English required, the rest fall back to them (see `localized`). */
   name: localizedTextSchema(60),
   /** Our print partners deliver here for free; elsewhere the flat fee applies. */
@@ -166,11 +228,20 @@ export const CitiesSchema = z
     cities.forEach((city, i) => {
       if (ids.has(city.id)) ctx.addIssue({ code: "custom", path: [i, "id"], message: "Duplicate city" });
       ids.add(city.id);
-      const name = (city.name.ru ?? "").trim().toLowerCase();
-      if (name && names.has(name)) ctx.addIssue({ code: "custom", path: [i, "name", "ru"], message: "Duplicate city" });
+      // The same name may be in two countries, not twice in one.
+      const name = `${city.country}:${(city.name.ru ?? "").trim().toLowerCase()}`;
+      if (!name.endsWith(":") && names.has(name)) ctx.addIssue({ code: "custom", path: [i, "name", "ru"], message: "Duplicate city" });
       names.add(name);
     });
   });
+
+/** Body of PUT /admin/reference/cities?country=: that country's cities in order (may be none). */
+export const CountryCitiesSchema = z.array(CitySchema).max(100);
+
+/** The cities of `country`, in the owner's order. */
+export function citiesOf(country: string, cities: readonly City[]): City[] {
+  return cities.filter((city) => city.country === country);
+}
 
 /** Latin letters for Russian and Kazakh Cyrillic, for city ids. */
 const LATIN: Record<string, string> = {
@@ -210,12 +281,17 @@ export function cityName(city: City, language: Language): string {
  * today's shape comes back as it is. Null when there is nothing to change.
  */
 export function upgradeCities(stored: unknown): City[] | null {
-  if (!Array.isArray(stored) || !stored.some((c) => c && typeof c === "object" && !("id" in c) && "ru" in c)) return null;
+  if (!Array.isArray(stored)) return null;
+  // Cities stored before cities had a country are all Kazakhstan's.
+  if (stored.every((c) => c && typeof c === "object" && "id" in c) && stored.some((c) => !("country" in c))) {
+    return stored.map((c: City) => ({ ...c, country: c.country ?? "KZ" }));
+  }
+  if (!stored.some((c) => c && typeof c === "object" && !("id" in c) && "ru" in c)) return null;
   const taken: string[] = [];
   return stored.map((c: { id?: string; ru?: string; kk?: string; en?: string; name?: LocalizedText; freeDelivery?: boolean }) => {
     if (c.id && c.name) {
       taken.push(c.id);
-      return c as City;
+      return { ...(c as City), country: (c as City).country ?? "KZ" };
     }
     const id = cityId(c.ru ?? c.en ?? "", taken);
     taken.push(id);
@@ -224,7 +300,7 @@ export function upgradeCities(stored: unknown): City[] | null {
       const text = c[language as "ru" | "kk" | "en"];
       if (text) name[language] = text;
     }
-    return { id, name, freeDelivery: Boolean(c.freeDelivery) };
+    return { id, country: "KZ", name, freeDelivery: Boolean(c.freeDelivery) };
   });
 }
 
@@ -343,24 +419,6 @@ export function catalogCountry(param: string | null | undefined): string | null 
   return parsed.success ? parsed.data : null;
 }
 
-/**
- * The countries a featured example is shown in: its own if staff set any, else its catalog book's
- * (none for a story of its own). Empty means everywhere.
- */
-export function showcaseCountries(own: readonly string[], template: readonly string[] | null | undefined): readonly string[] {
-  return own.length > 0 ? own : (template ?? []);
-}
-
-/**
- * Whether a featured example goes on the home page for a visitor from `country` (catalogCountry:
- * null for "other", a missing or an unknown one): everywhere when showcaseCountries is empty, else
- * only in the countries it names.
- */
-export function exampleShownIn(own: readonly string[], template: readonly string[] | null | undefined, country: string | null): boolean {
-  const countries = showcaseCountries(own, template);
-  return countries.length === 0 || (country !== null && countries.includes(country));
-}
-
 /** A catalog book's (or an example's) countries as staff set them: distinct ISO codes; empty means everywhere. */
 export const TemplateCountriesSchema = z
   .array(CountryCodeSchema)
@@ -391,6 +449,12 @@ export const COUNTRY_POLICY_BLOCKED = "country_policy_blocked";
  * cannot be offered on the site. A code on Meta's list gets COUNTRY_POLICY_BLOCKED instead.
  */
 export const COUNTRY_BLOCKED = "country_blocked";
+
+/** Body of a 400 from PUT /admin/reference/cities?country=: a new city's id is another country's city's. */
+export const CITY_ID_TAKEN = "city_id_taken";
+
+/** Body of a 400 from the per-country reference routes: the site does not offer this country. */
+export const COUNTRY_UNKNOWN = "country_unknown";
 
 // ---- FAQ -----------------------------------------------------------------------------------
 
@@ -471,18 +535,125 @@ export function fillFaq(text: string, vars: Partial<Record<FaqPlaceholder, strin
   return text.replace(/\{(\w+)\}/g, (whole, name: string) => vars[name as FaqPlaceholder] ?? whole);
 }
 
+// ---- Country landing data ------------------------------------------------------------------
+//
+// A country can override what its visitors see on the landing (reference.landing): the hero's title
+// and lead per language, the FAQ (hide some of the shared entries, add its own) and which sections
+// show. Everything not overridden falls back to the language defaults. SEO (titles, descriptions)
+// is not here: it stays per language with the seo role.
+
+/** The landing's sections a country may hide (the hero always shows). */
+export const LANDING_SECTIONS = ["howItWorks", "liveExample", "examples", "toyStory", "catalog", "methods", "pricing", "faq"] as const;
+export const LandingSectionSchema = z.enum(LANDING_SECTIONS);
+export type LandingSection = z.infer<typeof LandingSectionSchema>;
+
+/** The hero's text in one language; a missing or empty field keeps the default. */
+export const LandingHeroSchema = z.object({
+  title: z.string().trim().max(120).optional(),
+  lead: z.string().trim().max(400).optional(),
+});
+export type LandingHero = z.infer<typeof LandingHeroSchema>;
+
+/** A question only one country's landing has, in the languages it is written in (shown only in those). */
+export const CountryFaqItemSchema = z.object({
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
+  q: z.partialRecord(LanguageSchema, z.string().trim().min(1).max(200)),
+  a: z.partialRecord(LanguageSchema, z.string().trim().min(1).max(1500)),
+  published: z.boolean(),
+});
+export type CountryFaqItem = z.infer<typeof CountryFaqItemSchema>;
+
+/** Body of PUT /admin/reference/landing?country=: one country's overrides. */
+export const CountryLandingSchema = z.object({
+  hero: z.partialRecord(LanguageSchema, LandingHeroSchema).default({}),
+  /** Ids of shared FAQ entries (reference.faq) this country's landing leaves out. */
+  faqHidden: z.array(z.string().max(40)).max(100).default([]),
+  /** The country's own questions, after the shared ones. */
+  faq: z
+    .array(CountryFaqItemSchema)
+    .max(30)
+    .default([])
+    .superRefine((items, ctx) => {
+      const seen = new Set<string>();
+      items.forEach((item, i) => {
+        if (seen.has(item.id)) ctx.addIssue({ code: "custom", path: [i, "id"], message: "Duplicate id" });
+        seen.add(item.id);
+      });
+    }),
+  /** Sections the country's landing does not show. */
+  hiddenSections: z
+    .array(LandingSectionSchema)
+    .default([])
+    .refine((list) => new Set(list).size === list.length, "Duplicate section"),
+});
+export type CountryLanding = z.infer<typeof CountryLandingSchema>;
+
+/** Every country's landing overrides, by ISO code (reference.landing). */
+export const LandingOverridesSchema = z.record(CountryKeySchema, CountryLandingSchema);
+export type LandingOverrides = z.infer<typeof LandingOverridesSchema>;
+
+/** The hero's title and lead for a visitor from `country` in `language`; null where the default stays. */
+export function heroFor(overrides: LandingOverrides | undefined, country: string, language: Language): { title: string | null; lead: string | null } {
+  const hero = overrides?.[country]?.hero[language];
+  return { title: hero?.title?.trim() || null, lead: hero?.lead?.trim() || null };
+}
+
+/** Whether the landing shows this section to a visitor from `country`. */
+export function sectionShown(overrides: LandingOverrides | undefined, country: string, section: LandingSection): boolean {
+  return !overrides?.[country]?.hiddenSections.includes(section);
+}
+
+/** One question as the landing shows it: its text in the page's language (placeholders not filled yet). */
+export interface LandingFaqEntry {
+  id: string;
+  /** The country's own question (not one of the shared ones). */
+  own: boolean;
+  q: string;
+  a: string;
+}
+
+/**
+ * The questions a visitor from `country` reading in `language` sees: the shared ones for the country
+ * (faqFor) less those it hides, then its own published ones written in that language.
+ */
+export function landingFaq(
+  items: readonly FaqItem[],
+  overrides: LandingOverrides | undefined,
+  country: Country,
+  countries: readonly CountryEntry[],
+  language: Language,
+): LandingFaqEntry[] {
+  const own = overrides?.[country];
+  const hidden = new Set(own?.faqHidden ?? []);
+  const shared = faqFor(items, country, countries)
+    .filter((item) => !hidden.has(item.id))
+    .map((item) => ({ id: item.id, own: false, q: localized(item.q, language), a: localized(item.a, language) }));
+  const extra = (own?.faq ?? [])
+    .filter((item) => item.published && item.q[language] && item.a[language])
+    .map((item) => ({ id: item.id, own: true, q: item.q[language]!, a: item.a[language]! }));
+  return [...shared, ...extra];
+}
+
 /**
  * GET /reference: what the site prices and offers. `countries` leaves out the blocked ones (Meta's
  * and the owner's), so the site never offers them; "other" is not in it.
  */
 export const ReferenceSchema = z.object({
   prices: PricesSchema,
-  /** Print formats; the site gets only the published ones. */
+  /** Print formats, each with whether it is offered globally; a country may offer and price them its own way (countryFormats, formatsFor). */
   formats: z.array(PrintFormatSchema),
   cities: z.array(CitySchema),
   countries: z.array(CountryEntrySchema),
   /** The landing's questions; the site gets only the published ones and picks those for its country. */
   faq: z.array(FaqItemSchema),
+  /** Countries priced from their own list instead of `prices`. */
+  countryPrices: CountryPricesSchema.default({}),
+  /** Countries' landing overrides (hero, FAQ, sections); the rest of the world gets the defaults. */
+  landing: LandingOverridesSchema.default({}),
+  /** Countries' own delivery fee and free-delivery rule; the rest use prices.deliveryKzt. */
+  countryDelivery: CountryDeliveriesSchema.default({}),
+  /** Countries' own format offer and cover prices; the rest use the formats as they are. */
+  countryFormats: CountryFormatsSchema.default({}),
 });
 export type Reference = z.infer<typeof ReferenceSchema>;
 
@@ -511,16 +682,16 @@ export const DEFAULT_PRICES: Prices = {
 
 /** The cities the site launched with; the seed of reference.cities. */
 export const DEFAULT_CITIES: City[] = [
-  { id: "almaty", name: { ru: "Алматы", kk: "Алматы", en: "Almaty" }, freeDelivery: true },
-  { id: "astana", name: { ru: "Астана", kk: "Астана", en: "Astana" }, freeDelivery: true },
-  { id: "shymkent", name: { ru: "Шымкент", kk: "Шымкент", en: "Shymkent" }, freeDelivery: false },
-  { id: "karaganda", name: { ru: "Караганда", kk: "Қарағанды", en: "Karaganda" }, freeDelivery: false },
-  { id: "aktobe", name: { ru: "Актобе", kk: "Ақтөбе", en: "Aktobe" }, freeDelivery: false },
-  { id: "taraz", name: { ru: "Тараз", kk: "Тараз", en: "Taraz" }, freeDelivery: false },
-  { id: "pavlodar", name: { ru: "Павлодар", kk: "Павлодар", en: "Pavlodar" }, freeDelivery: false },
-  { id: "ust-kamenogorsk", name: { ru: "Усть-Каменогорск", kk: "Өскемен", en: "Oskemen" }, freeDelivery: false },
-  { id: "atyrau", name: { ru: "Атырау", kk: "Атырау", en: "Atyrau" }, freeDelivery: false },
-  { id: "kostanay", name: { ru: "Костанай", kk: "Қостанай", en: "Kostanay" }, freeDelivery: false },
+  { id: "almaty", country: "KZ", name: { ru: "Алматы", kk: "Алматы", en: "Almaty" }, freeDelivery: true },
+  { id: "astana", country: "KZ", name: { ru: "Астана", kk: "Астана", en: "Astana" }, freeDelivery: true },
+  { id: "shymkent", country: "KZ", name: { ru: "Шымкент", kk: "Шымкент", en: "Shymkent" }, freeDelivery: false },
+  { id: "karaganda", country: "KZ", name: { ru: "Караганда", kk: "Қарағанды", en: "Karaganda" }, freeDelivery: false },
+  { id: "aktobe", country: "KZ", name: { ru: "Актобе", kk: "Ақтөбе", en: "Aktobe" }, freeDelivery: false },
+  { id: "taraz", country: "KZ", name: { ru: "Тараз", kk: "Тараз", en: "Taraz" }, freeDelivery: false },
+  { id: "pavlodar", country: "KZ", name: { ru: "Павлодар", kk: "Павлодар", en: "Pavlodar" }, freeDelivery: false },
+  { id: "ust-kamenogorsk", country: "KZ", name: { ru: "Усть-Каменогорск", kk: "Өскемен", en: "Oskemen" }, freeDelivery: false },
+  { id: "atyrau", country: "KZ", name: { ru: "Атырау", kk: "Атырау", en: "Atyrau" }, freeDelivery: false },
+  { id: "kostanay", country: "KZ", name: { ru: "Костанай", kk: "Қостанай", en: "Kostanay" }, freeDelivery: false },
 ];
 
 const ruEn: Language[] = ["ru", "en"];

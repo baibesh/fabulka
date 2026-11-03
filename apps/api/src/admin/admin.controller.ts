@@ -1,8 +1,8 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
   HttpCode,
   Param,
@@ -32,16 +32,24 @@ import {
   UpdateMethodologySchema,
   UpdateOrderStatusSchema,
   UpdateTemplateSchema,
+  CountryLandingSchema,
+  CountryCitiesSchema,
+  CountryDeliverySchema,
+  CountryFormatOverridesSchema,
+  type CountryDelivery,
+  type CountryFormatOverrides,
+  TemplateSampleSchema,
+  TemplateVisibilitySchema,
+  type CountryLanding,
+  type TemplateSample,
+  type TemplateVisibility,
   type AdminLogin,
   type AdminLoginOptions,
   type AdminMe,
   ADMIN_PERMISSIONS,
-  ADMIN_FORBIDDEN,
-  allowedFor,
   isSuperAdmin,
   permissionsOf,
   rightsOf,
-  type City,
   type CountryEntry,
   type CreateMethodology,
   type FaqItem,
@@ -55,7 +63,7 @@ import {
   type UpdateTemplate,
 } from '@fabulka/shared';
 import type { Response } from 'express';
-import type { z } from 'zod';
+import type { ZodType, z } from 'zod';
 import { AuthService } from '../auth/auth.service';
 import { BooksService } from '../books/books.service';
 import { CurrentClient, type Client } from '../common/client';
@@ -70,6 +78,18 @@ import { AdminAuthService } from './admin-auth.service';
 import { AdminGuard, CurrentAdmin, RequirePermission } from './admin.guard';
 import type { AdminSession } from './admin-auth.service';
 import { AdminService } from './admin.service';
+import { assertScope } from './scope';
+
+/** A body checked with `schema` (400 with the issues otherwise), for routes whose schema depends on a query. */
+function parseBody<T>(schema: ZodType<T>, body: unknown): T {
+  return new ZodPipe(schema).transform(body);
+}
+
+/** A ?country= as an upper-case ISO code, or null when there is none. */
+function countryParam(value: string | undefined): string | null {
+  const code = value?.trim().toUpperCase();
+  return code && /^[A-Z]{2}$/.test(code) ? code : null;
+}
 
 @Controller('admin')
 export class AdminAuthController {
@@ -155,10 +175,11 @@ export class AdminController {
     return this.admin.listBooks(status);
   }
 
+  /** For a country manager (catalog), only a public book or one made in their countries. */
   @Get('books/:id')
   @RequirePermission('books', 'catalog')
-  book(@Param('id') id: string) {
-    return this.admin.book(id);
+  book(@Param('id') id: string, @CurrentAdmin() session: AdminSession) {
+    return this.admin.book(id, session);
   }
 
   /** The book's model calls in order: the timeline on its admin page. */
@@ -186,10 +207,14 @@ export class AdminController {
     return this.admin.deleteBook(id);
   }
 
+  /** A country manager's countries' orders only; ?country= narrows to the working country. */
   @Get('orders')
   @RequirePermission('orders')
-  listOrders() {
-    return this.orders.list();
+  listOrders(
+    @CurrentAdmin() session: AdminSession,
+    @Query('country') country?: string,
+  ) {
+    return this.orders.list(session, country);
   }
 
   /** The order's print file: its frozen layout with bleed and crop marks (made on first request). */
@@ -197,9 +222,10 @@ export class AdminController {
   @RequirePermission('orders')
   async printFile(
     @Param('id') id: string,
+    @CurrentAdmin() session: AdminSession,
     @Res() response: Response,
   ): Promise<void> {
-    const file = await this.orders.printFile(id);
+    const file = await this.orders.printFile(id, session);
     response.setHeader('Content-Type', 'application/pdf');
     response.setHeader(
       'Content-Disposition',
@@ -214,8 +240,9 @@ export class AdminController {
     @Param('id') id: string,
     @Body(new ZodPipe(UpdateOrderStatusSchema))
     body: z.infer<typeof UpdateOrderStatusSchema>,
+    @CurrentAdmin() session: AdminSession,
   ) {
-    return this.orders.setStatus(id, body.status, body.note);
+    return this.orders.setStatus(id, body.status, body.note, session);
   }
 
   @Get('journal/stats')
@@ -298,17 +325,47 @@ export class AdminController {
 
   @Get('templates/:slug')
   @RequirePermission('catalog')
-  template(@Param('slug') slug: string) {
-    return this.admin.template(slug);
+  template(@Param('slug') slug: string, @CurrentAdmin() session: AdminSession) {
+    return this.admin.template(slug, session);
   }
 
+  /** Content, countries and global samples: global staff only (403 scope_forbidden otherwise). */
   @Patch('templates/:slug')
   @RequirePermission('catalog')
   updateTemplate(
     @Param('slug') slug: string,
     @Body(new ZodPipe(UpdateTemplateSchema)) body: UpdateTemplate,
+    @CurrentAdmin() session: AdminSession,
   ) {
-    return this.admin.updateTemplate(slug, body);
+    return this.admin.updateTemplate(slug, body, session);
+  }
+
+  /** Shows or hides the catalog book in one country (a country manager: one of theirs). */
+  @Put('templates/:slug/visibility')
+  @RequirePermission('catalog')
+  setTemplateVisibility(
+    @Param('slug') slug: string,
+    @Body(new ZodPipe(TemplateVisibilitySchema)) body: TemplateVisibility,
+    @CurrentAdmin() session: AdminSession,
+  ) {
+    return this.admin.setVisibility(slug, body.country, body.visible, session);
+  }
+
+  /** Sets or clears a sample: global (global staff) or one country's (a country manager: theirs). */
+  @Put('templates/:slug/samples')
+  @RequirePermission('catalog')
+  setTemplateSample(
+    @Param('slug') slug: string,
+    @Body(new ZodPipe(TemplateSampleSchema)) body: TemplateSample,
+    @CurrentAdmin() session: AdminSession,
+  ) {
+    return this.admin.setSample(
+      slug,
+      body.country,
+      body.language,
+      body.bookId,
+      session,
+    );
   }
 
   @Get('methodologies')
@@ -364,6 +421,9 @@ export class AdminController {
     'reference',
     'reference.prices',
     'reference.landing',
+    'reference.cities',
+    'reference.delivery',
+    'reference.formats_country',
     'catalog',
     'methodologies',
   )
@@ -372,28 +432,199 @@ export class AdminController {
   }
 
   /**
-   * The prices are one list for every country so far: changing them needs the right everywhere.
-   * Country prices (a later step) will ask allowedFor() with the country being priced.
+   * The global prices (no ?country=: global staff only), or one country's own list (?country=XX:
+   * reference.prices in that country), which its visitors are priced from instead.
    */
   @Put('reference/prices')
   @RequirePermission('reference.prices')
-  setPrices(
+  async setPrices(
     @Body(new ZodPipe(PricesSchema)) body: Prices,
     @CurrentAdmin() session: AdminSession,
+    @Query('country') country?: string,
   ) {
-    if (!allowedFor(session, 'reference.prices', null)) {
-      throw new ForbiddenException({
-        code: ADMIN_FORBIDDEN,
-        message: 'The prices of every country are not yours to change',
-      });
-    }
-    return this.reference.setPrices(body);
+    const code = countryParam(country);
+    assertScope(
+      session,
+      'reference.prices',
+      code ? [code] : null,
+      code
+        ? 'Not one of your countries'
+        : 'The global prices are not yours to change',
+    );
+    if (!code) return this.reference.setPrices(body);
+    return (await this.reference.setCountryPrices(code, body))[code];
   }
 
+  /** The country is priced from the global list again. */
+  @Delete('reference/prices')
+  @RequirePermission('reference.prices')
+  @HttpCode(204)
+  async clearCountryPrices(
+    @CurrentAdmin() session: AdminSession,
+    @Query('country') country?: string,
+  ) {
+    const code = countryParam(country);
+    assertScope(
+      session,
+      'reference.prices',
+      code ? [code] : null,
+      'Not one of your countries',
+    );
+    if (!code) throw new BadRequestException('?country= is required');
+    await this.reference.setCountryPrices(code, null);
+  }
+
+  /** One country's landing overrides (hero, FAQ, sections): reference.landing in that country. */
+  @Put('reference/landing')
+  @RequirePermission('reference.landing')
+  async setLanding(
+    @Body(new ZodPipe(CountryLandingSchema)) body: CountryLanding,
+    @CurrentAdmin() session: AdminSession,
+    @Query('country') country?: string,
+  ) {
+    const code = countryParam(country);
+    assertScope(
+      session,
+      'reference.landing',
+      code ? [code] : null,
+      'Not one of your countries',
+    );
+    if (!code) throw new BadRequestException('?country= is required');
+    return (await this.reference.setLanding(code, body))[code];
+  }
+
+  /** The country's landing shows the defaults again. */
+  @Delete('reference/landing')
+  @RequirePermission('reference.landing')
+  @HttpCode(204)
+  async clearLanding(
+    @CurrentAdmin() session: AdminSession,
+    @Query('country') country?: string,
+  ) {
+    const code = countryParam(country);
+    assertScope(
+      session,
+      'reference.landing',
+      code ? [code] : null,
+      'Not one of your countries',
+    );
+    if (!code) throw new BadRequestException('?country= is required');
+    await this.reference.setLanding(code, null);
+  }
+
+  /**
+   * Delivery cities: one country's (?country=XX: reference.cities there), or the whole list of every
+   * country (global staff). Ids stay as they are: orders refer to them.
+   */
   @Put('reference/cities')
-  @RequirePermission('reference')
-  setCities(@Body(new ZodPipe(CitiesSchema)) body: City[]) {
-    return this.reference.setCities(body);
+  @RequirePermission('reference.cities')
+  async setCities(
+    @Body() body: unknown,
+    @CurrentAdmin() session: AdminSession,
+    @Query('country') country?: string,
+  ) {
+    const code = countryParam(country);
+    assertScope(
+      session,
+      'reference.cities',
+      code ? [code] : null,
+      code
+        ? 'Not one of your countries'
+        : "Every country's cities are not yours to change",
+    );
+    if (!code) return this.reference.setCities(parseBody(CitiesSchema, body));
+    return this.reference.setCountryCities(
+      code,
+      parseBody(CountryCitiesSchema, body),
+    );
+  }
+
+  /**
+   * The delivery fee: one country's own fee and free-delivery rule (?country=XX:
+   * reference.delivery there), or the global fee countries without one pay (global staff).
+   */
+  @Put('reference/delivery')
+  @RequirePermission('reference.delivery')
+  async setDelivery(
+    @Body(new ZodPipe(CountryDeliverySchema)) body: CountryDelivery,
+    @CurrentAdmin() session: AdminSession,
+    @Query('country') country?: string,
+  ) {
+    const code = countryParam(country);
+    assertScope(
+      session,
+      'reference.delivery',
+      code ? [code] : null,
+      code
+        ? 'Not one of your countries'
+        : 'The global delivery fee is not yours to change',
+    );
+    if (!code) {
+      const prices = await this.reference.setDeliveryFee(body.feeKzt);
+      return { feeKzt: prices.deliveryKzt, freeEverywhere: false };
+    }
+    return (await this.reference.setCountryDelivery(code, body))[code];
+  }
+
+  /** The country pays the global delivery fee again. */
+  @Delete('reference/delivery')
+  @RequirePermission('reference.delivery')
+  @HttpCode(204)
+  async clearDelivery(
+    @CurrentAdmin() session: AdminSession,
+    @Query('country') country?: string,
+  ) {
+    const code = countryParam(country);
+    assertScope(
+      session,
+      'reference.delivery',
+      code ? [code] : null,
+      'Not one of your countries',
+    );
+    if (!code) throw new BadRequestException('?country= is required');
+    await this.reference.setCountryDelivery(code, null);
+  }
+
+  /**
+   * One country's print formats: which are offered there and their cover prices
+   * (reference.formats_country there). Sizes and ids stay global (PUT reference/formats).
+   */
+  @Put('reference/country-formats')
+  @RequirePermission('reference.formats_country')
+  async setCountryFormats(
+    @Body(new ZodPipe(CountryFormatOverridesSchema))
+    body: CountryFormatOverrides,
+    @CurrentAdmin() session: AdminSession,
+    @Query('country') country?: string,
+  ) {
+    const code = countryParam(country);
+    assertScope(
+      session,
+      'reference.formats_country',
+      code ? [code] : null,
+      'Not one of your countries',
+    );
+    if (!code) throw new BadRequestException('?country= is required');
+    return (await this.reference.setCountryFormats(code, body))[code];
+  }
+
+  /** The country offers and prices formats as globally again. */
+  @Delete('reference/country-formats')
+  @RequirePermission('reference.formats_country')
+  @HttpCode(204)
+  async clearCountryFormats(
+    @CurrentAdmin() session: AdminSession,
+    @Query('country') country?: string,
+  ) {
+    const code = countryParam(country);
+    assertScope(
+      session,
+      'reference.formats_country',
+      code ? [code] : null,
+      'Not one of your countries',
+    );
+    if (!code) throw new BadRequestException('?country= is required');
+    await this.reference.setCountryFormats(code, null);
   }
 
   /**

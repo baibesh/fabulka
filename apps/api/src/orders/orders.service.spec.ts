@@ -11,6 +11,10 @@ import {
   DEFAULT_FORMATS,
   FORMAT_UNKNOWN,
   legacyLayout,
+  BUILTIN_ROLES,
+  DEFAULT_COUNTRIES,
+  SUPER_ROLE,
+  accessOf,
 } from '@fabulka/shared';
 import type { BooksService } from '../books/books.service';
 import type { MailService } from '../mail/mail.service';
@@ -18,6 +22,10 @@ import type { PdfService } from '../pdf/pdf.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { ReferenceService } from '../reference/reference.service';
 import { StorageService } from '../storage/storage.service';
+import { backfilledCountry } from './orders.service';
+
+const SUPER = accessOf([SUPER_ROLE], BUILTIN_ROLES, []);
+const DE = accessOf(['country_manager'], BUILTIN_ROLES, ['DE']);
 import { OrdersService, ownsOrder } from './orders.service';
 
 const book = {
@@ -292,7 +300,7 @@ describe('OrdersService.setStatus (history)', () => {
     const before = orderRow({ status: 'printing' });
     prisma.order.findUnique.mockResolvedValue(before);
     prisma.order.update.mockResolvedValue({ ...before, status: 'shipped' });
-    await service.setStatus('o1', 'shipped', 'KZ123');
+    await service.setStatus('o1', 'shipped', 'KZ123', SUPER);
     expect(callArg(prisma.order.update, 0).data).toEqual({
       status: 'shipped',
       events: {
@@ -309,7 +317,7 @@ describe('OrdersService.setStatus (history)', () => {
     const before = orderRow({ status: null, createdAt });
     prisma.order.findUnique.mockResolvedValue(before);
     prisma.order.update.mockResolvedValue({ ...before, status: 'delivered' });
-    await service.setStatus('o1', 'delivered');
+    await service.setStatus('o1', 'delivered', undefined, SUPER);
     const { events } = callArg(prisma.order.update, 0).data as {
       events: { createMany: { data: { status: string; createdAt?: Date }[] } };
     };
@@ -327,7 +335,7 @@ describe('OrdersService.setStatus (history)', () => {
     const before = orderRow({ status: 'printing' });
     prisma.order.findUnique.mockResolvedValue(before);
     prisma.order.update.mockResolvedValue(before);
-    await service.setStatus('o1', 'printing');
+    await service.setStatus('o1', 'printing', undefined, SUPER);
     expect(callArg(prisma.order.update, 0).data).toEqual({
       status: 'printing',
     });
@@ -343,6 +351,77 @@ describe('OrdersService.setStatus (history)', () => {
     const order = await service.get('o1', 'k');
     expect(order.status).toBe('printing');
     expect(order.history.map((e) => e.status)).toEqual(['paid', 'printing']);
+  });
+});
+
+describe('OrdersService: country scope', () => {
+  it("lists a manager's countries' orders only, narrowed to the working country", async () => {
+    const { service, prisma } = makeService({});
+    await service.list(DE);
+    expect(callArg(prisma.order.findMany, 0).where).toEqual({
+      country: { in: ['DE'] },
+    });
+    await service.list(SUPER);
+    expect(callArg(prisma.order.findMany, 1).where).toBeUndefined();
+    await service.list(SUPER, 'kz');
+    expect(callArg(prisma.order.findMany, 2).where).toEqual({
+      country: { in: ['KZ'] },
+    });
+    // A working country outside the manager's: nothing, without asking the database.
+    expect(await service.list(DE, 'KZ')).toEqual([]);
+    expect(prisma.order.findMany).toHaveBeenCalledTimes(3);
+  });
+
+  it("refuses a manager another country's order, and one with no country", async () => {
+    const { service, prisma } = makeService({});
+    const code = (promise: Promise<unknown>) =>
+      promise.then(
+        () => 'ok',
+        (error: { getResponse(): { code: string } }) =>
+          error.getResponse().code,
+      );
+    prisma.order.findUnique.mockResolvedValue(orderRow({ country: 'KZ' }));
+    expect(await code(service.setStatus('o1', 'shipped', undefined, DE))).toBe(
+      'scope_forbidden',
+    );
+    expect(await code(service.printFile('o1', DE))).toBe('scope_forbidden');
+    prisma.order.findUnique.mockResolvedValue(orderRow({ country: null }));
+    expect(await code(service.setStatus('o1', 'shipped', undefined, DE))).toBe(
+      'scope_forbidden',
+    );
+    const de = orderRow({ country: 'DE', status: 'printing' });
+    prisma.order.findUnique.mockResolvedValue(de);
+    prisma.order.update.mockResolvedValue({ ...de, status: 'shipped' });
+    expect(await code(service.setStatus('o1', 'shipped', undefined, DE))).toBe(
+      'ok',
+    );
+  });
+});
+
+describe('backfilledCountry', () => {
+  const kzOnly = DEFAULT_COUNTRIES;
+  const twoPrint = DEFAULT_COUNTRIES.map((c) =>
+    c.code === 'UZ' ? { ...c, currency: 'KZT' as const, print: true } : c,
+  );
+
+  it("takes the book's country when it has print, else the only print country", () => {
+    expect(backfilledCountry('KZ', kzOnly)).toBe('KZ');
+    expect(backfilledCountry('kz', kzOnly)).toBe('KZ');
+    // A book made abroad (or with no country) could only have been ordered from Kazakhstan.
+    expect(backfilledCountry('DE', kzOnly)).toBe('KZ');
+    expect(backfilledCountry(null, kzOnly)).toBe('KZ');
+  });
+
+  it('leaves an order it cannot place without a country', () => {
+    expect(backfilledCountry('UZ', twoPrint)).toBe('UZ');
+    expect(backfilledCountry(null, twoPrint)).toBeNull();
+    expect(backfilledCountry('DE', twoPrint)).toBeNull();
+    expect(
+      backfilledCountry(
+        'KZ',
+        kzOnly.map((c) => ({ ...c, print: false })),
+      ),
+    ).toBeNull();
   });
 });
 

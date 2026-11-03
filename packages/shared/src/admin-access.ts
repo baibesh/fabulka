@@ -16,9 +16,12 @@ export type AdminPermission = z.infer<typeof AdminPermissionSchema>;
 
 /**
  * Parts of a section a role may get without the whole section: "<section>.<part>". The whole
- * section covers its parts. Reference: the prices and the country's landing data.
+ * section covers its parts. Reference's per-country data: prices, landing (with its FAQ), delivery
+ * cities, the delivery fee, and which print formats are offered and at what price. The rest of
+ * Reference (the countries list, blocked countries, format specs, global defaults) is the whole
+ * section's alone.
  */
-export const ADMIN_SECTION_PARTS = ["reference.prices", "reference.landing"] as const;
+export const ADMIN_SECTION_PARTS = ["reference.prices", "reference.landing", "reference.cities", "reference.delivery", "reference.formats_country"] as const;
 
 /** Everything a role may be given: whole sections and section parts. */
 export const ADMIN_RIGHTS = [...ADMIN_PERMISSIONS, ...ADMIN_SECTION_PARTS] as const;
@@ -71,7 +74,7 @@ export const BUILTIN_ROLES: readonly (RoleDef & { name: string; locked: boolean 
   {
     key: "country_manager",
     name: "Country manager",
-    rights: ["examples", "catalog", "orders", "reference.prices", "reference.landing"],
+    rights: ["examples", "catalog", "orders", "reference.prices", "reference.landing", "reference.cities", "reference.delivery", "reference.formats_country"],
     scoped: true,
     locked: false,
   },
@@ -192,3 +195,29 @@ export type AdminMe = z.infer<typeof AdminMeSchema>;
 
 /** Body of a 403 from an admin route the session's roles do not open. */
 export const ADMIN_FORBIDDEN = "admin_forbidden";
+
+/**
+ * Body code of a 403 from a route the session may open but not for this thing: it belongs to (or
+ * would reach) countries outside the session's, or to everywhere, which only global staff change.
+ */
+export const SCOPE_FORBIDDEN = "scope_forbidden";
+
+/**
+ * The countries `right` is limited to for this session: null when it holds everywhere (the
+ * superadmin, a global right), else the session's countries (empty without the right at all).
+ */
+export function scopeOf(access: AdminAccess, right: AdminRight): string[] | null {
+  if (isSuperAdmin(access) || covers(access.global, right)) return null;
+  return covers(access.scoped, right) ? [...access.countries] : [];
+}
+
+/** The session's access as the admin pages see it (GET /admin/me), for allowedFor() in the browser. */
+export function accessFromMe(me: AdminMe): AdminAccess {
+  const global = me.superadmin ? [...ADMIN_RIGHTS] : me.global;
+  return {
+    roles: me.superadmin ? [SUPER_ROLE] : me.roles.filter((role) => role !== SUPER_ROLE),
+    global,
+    scoped: me.rights.filter((right) => !covers(global, right)),
+    countries: me.countries,
+  };
+}

@@ -8,7 +8,7 @@ import type { BookTemplate, Prisma } from '@prisma/client';
 import {
   FALLBACK_LANGUAGES,
   LANGUAGES,
-  pickLanguage,
+  pickSample,
   type Answers,
   type ChildProfile,
   type Language,
@@ -110,24 +110,39 @@ export class TemplatesService implements OnModuleInit {
     return rows.map((row) => summary(row, lang));
   }
 
-  async get(slug: string, lang: Language = 'ru'): Promise<Template> {
+  /**
+   * A published catalog book in `lang`, with the sample a visitor from `country` (null: "other")
+   * sees: their country's in their language, else the global one, else the same in the languages
+   * they read next (pickSample).
+   */
+  async get(
+    slug: string,
+    lang: Language = 'ru',
+    country: string | null = null,
+  ): Promise<Template> {
     const row = await this.find(slug);
     // A sample is shown only once it is a finished book; a deleted one goes with its row.
     const samples = await this.prisma.templateSample.findMany({
       where: { templateId: row.id, book: { status: 'done' } },
       select: {
         language: true,
+        country: true,
         book: {
           select: { id: true, child: true, toyName: true, answers: true },
         },
       },
     });
-    // The visitor's language, else the one they read next (Russian for Kazakh, English for Spanish).
-    const language = pickLanguage(
-      samples.map((s) => s.language as Language),
+    const picked = pickSample(
+      samples.map((s) => ({
+        ...s,
+        language: s.language as Language,
+        country: s.country || null,
+      })),
       lang,
+      country,
     );
-    const sample = samples.find((s) => s.language === language)?.book;
+    const language = picked?.language ?? null;
+    const sample = picked?.book;
     // The sample's child is shown publicly anyway: the admin picked the book to be seen.
     const child = sample?.child as unknown as ChildProfile | undefined;
     return {
@@ -159,7 +174,8 @@ export class TemplatesService implements OnModuleInit {
 
 /**
  * The catalog books listed to a visitor from `country` (an ISO code, or null for "other" and
- * unknown ones): those with no countries, plus those with this one.
+ * unknown ones), as ruleShows says: those with no countries, those listing this one (include) and
+ * those not leaving it out ("everywhere except…"; every one of them for "other").
  */
 export function listedWhere(
   country: string | null,
@@ -167,8 +183,13 @@ export function listedWhere(
   const everywhere: Prisma.BookTemplateWhereInput = {
     countries: { isEmpty: true },
   };
+  if (!country) return { OR: [everywhere, { countriesMode: 'exclude' }] };
   return {
-    OR: country ? [everywhere, { countries: { has: country } }] : [everywhere],
+    OR: [
+      everywhere,
+      { countriesMode: 'include', countries: { has: country } },
+      { countriesMode: 'exclude', NOT: { countries: { has: country } } },
+    ],
   };
 }
 

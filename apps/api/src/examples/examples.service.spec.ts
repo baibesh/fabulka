@@ -1,4 +1,9 @@
-import { DEFAULT_COUNTRIES } from '@fabulka/shared';
+import {
+  BUILTIN_ROLES,
+  DEFAULT_COUNTRIES,
+  SUPER_ROLE,
+  accessOf,
+} from '@fabulka/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { ReferenceService } from '../reference/reference.service';
 import type { SeoWebService } from '../seo/seo-web.service';
@@ -6,6 +11,10 @@ import type { StorageService } from '../storage/storage.service';
 import { ExamplesService } from './examples.service';
 import { TRANSLATION_CLIENT_KEY } from './translation';
 import type { TranslatorService } from './translator.service';
+
+/** The superadmin, and a country manager for Germany (examples in DE only). */
+const SUPER = accessOf([SUPER_ROLE], BUILTIN_ROLES, []);
+const DE = accessOf(['country_manager'], BUILTIN_ROLES, ['DE']);
 
 /** A version row as ExamplesService reads it. */
 const version = (
@@ -27,7 +36,10 @@ const version = (
     heroImagePath: `books/${language}-book/hero.jpeg`,
     clientKey: extra.clientKey ?? 'parent',
     costUsd: 0.1,
-    template: extra.template ? { countries: extra.template } : null,
+    country: 'KZ',
+    template: extra.template
+      ? { countries: extra.template, countriesMode: 'include' }
+      : null,
   },
 });
 
@@ -35,9 +47,11 @@ const exampleRow = (
   id: string,
   versions: ReturnType<typeof version>[],
   countries: string[] = [],
+  countriesMode: 'include' | 'exclude' = 'include',
 ) => ({
   id,
   countries,
+  countriesMode,
   sortOrder: 0,
   createdAt: new Date('2026-10-01'),
   versions,
@@ -87,44 +101,57 @@ describe('ExamplesService.forSite', () => {
     expect((await service.forSite('DE', 'ru')).map((b) => b.id)).toEqual([
       'ru-book',
     ]);
-    expect(samples).not.toHaveBeenCalled();
   });
 
   it('fills an empty block with catalog samples in that language, listed in that country', async () => {
     const findMany = jest.fn().mockResolvedValue(rows);
+    const template = (id: string, countries: string[] = []) => ({
+      id,
+      countries,
+      countriesMode: 'include',
+    });
+    const sample = (
+      id: string,
+      language: string,
+      country: string,
+      t: ReturnType<typeof template>,
+    ) => ({
+      language,
+      country,
+      book: { id, title: `Sample ${id}`, heroImagePath: null },
+      template: t,
+    });
+    const everywhere = template('t1');
+    const deOnly = template('t2', ['DE']);
     const samples = jest
       .fn()
       .mockResolvedValue([
-        { book: { id: 's1', title: 'Muestra', heroImagePath: null } },
+        sample('s1', 'es', '', everywhere),
+        sample('s1-kz', 'es', 'KZ', everywhere),
+        sample('s1-en', 'en', '', everywhere),
+        sample('s2', 'es', '', deOnly),
       ]);
     const { service } = makeService({
       example: { findMany },
       templateSample: { findMany: samples },
     });
+    // Kazakhstan's own sample before the global one; the DE-only book is not listed there.
     expect(await service.forSite('KZ', 'es')).toEqual([
       {
-        id: 's1',
-        title: 'Muestra',
+        id: 's1-kz',
+        title: 'Sample s1-kz',
         language: 'es',
         heroImageUrl: null,
         kind: 'sample',
       },
     ]);
-    expect(samples).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          language: 'es',
-          book: { status: 'done', title: { not: null } },
-          template: {
-            published: true,
-            OR: [
-              { countries: { isEmpty: true } },
-              { countries: { has: 'KZ' } },
-            ],
-          },
-        },
-      }),
-    );
+    expect((await service.forSite('DE', 'es')).map((b) => b.id)).toEqual([
+      's1',
+      's2',
+    ]);
+    expect((await service.forSite(null, 'es')).map((b) => b.id)).toEqual([
+      's1',
+    ]);
   });
 });
 
@@ -139,6 +166,7 @@ describe('ExamplesService in the admin', () => {
         findUnique: jest.fn().mockResolvedValue({
           status: 'done',
           language: 'ru',
+          country: 'KZ',
           exampleOf: null,
         }),
       },
@@ -148,9 +176,10 @@ describe('ExamplesService in the admin', () => {
         findUnique,
       },
     });
-    const example = await service.create('ru-book');
+    const example = await service.create('ru-book', undefined, SUPER);
     expect(create).toHaveBeenCalledWith({
       data: {
+        countries: [],
         sortOrder: -1,
         versions: { create: { language: 'ru', bookId: 'ru-book' } },
       },
@@ -182,7 +211,7 @@ describe('ExamplesService in the admin', () => {
       language: 'en',
       exampleOf: null,
     });
-    expect(await code(service.addVersion('ex1', 'b'))).toBe(
+    expect(await code(service.addVersion('ex1', 'b', SUPER))).toBe(
       'example_book_not_done',
     );
     book.mockResolvedValueOnce({
@@ -190,7 +219,7 @@ describe('ExamplesService in the admin', () => {
       language: 'en',
       exampleOf: { exampleId: 'ex2' },
     });
-    expect(await code(service.addVersion('ex1', 'b'))).toBe(
+    expect(await code(service.addVersion('ex1', 'b', SUPER))).toBe(
       'example_book_taken',
     );
     book.mockResolvedValueOnce({
@@ -198,11 +227,11 @@ describe('ExamplesService in the admin', () => {
       language: 'ru',
       exampleOf: null,
     });
-    expect(await code(service.addVersion('ex1', 'b'))).toBe(
+    expect(await code(service.addVersion('ex1', 'b', SUPER))).toBe(
       'example_language_taken',
     );
     book.mockResolvedValueOnce(null);
-    expect(await code(service.addVersion('ex1', 'b'))).toBe(
+    expect(await code(service.addVersion('ex1', 'b', SUPER))).toBe(
       'example_book_not_found',
     );
   });
@@ -222,10 +251,10 @@ describe('ExamplesService in the admin', () => {
         findUniqueOrThrow: jest.fn().mockResolvedValue(source),
       },
     });
-    await expect(service.translate('ex1', ['en'])).rejects.toThrow(
+    await expect(service.translate('ex1', ['en'], SUPER)).rejects.toThrow(
       'en version already',
     );
-    await service.translate('ex1', ['es', 'de']);
+    await service.translate('ex1', ['es', 'de'], SUPER);
     expect(deleteMany).toHaveBeenCalledWith({ where: { id: 'de-book' } });
     expect(removeDir).toHaveBeenCalledWith('books/de-book');
     // In the order languages are listed.
@@ -243,7 +272,7 @@ describe('ExamplesService in the admin', () => {
           .mockResolvedValue(exampleRow('ex1', [version('ru', 'failed')])),
       },
     });
-    await expect(service.translate('ex1', ['en'])).rejects.toThrow(
+    await expect(service.translate('ex1', ['en'], SUPER)).rejects.toThrow(
       'no finished version',
     );
   });
@@ -262,7 +291,7 @@ describe('ExamplesService in the admin', () => {
       exampleVersion: { delete: versionDelete },
       book: { deleteMany: bookDelete },
     });
-    await service.removeVersion('ex1', 'ru');
+    await service.removeVersion('ex1', 'ru', SUPER);
     expect(versionDelete).toHaveBeenCalledWith({
       where: { exampleId_language: { exampleId: 'ex1', language: 'ru' } },
     });
@@ -278,15 +307,17 @@ describe('ExamplesService in the admin', () => {
       example: {
         findMany: jest
           .fn()
-          .mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }])
-          .mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }])
+          .mockResolvedValueOnce([exampleRow('a', []), exampleRow('b', [])])
+          .mockResolvedValueOnce([exampleRow('a', []), exampleRow('b', [])])
           .mockResolvedValueOnce([]),
         update,
       },
       $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
     });
-    await expect(service.reorder(['a'])).rejects.toThrow('every example id');
-    await service.reorder(['b', 'a']);
+    await expect(service.reorder(['a'], SUPER)).rejects.toThrow(
+      'every example you may move',
+    );
+    await service.reorder(['b', 'a'], SUPER);
     expect(update).toHaveBeenCalledWith({
       where: { id: 'b' },
       data: { sortOrder: 0 },
@@ -311,7 +342,7 @@ describe('ExamplesService in the admin', () => {
           ]),
       },
     });
-    const [example] = await service.list();
+    const [example] = await service.list(SUPER);
     expect(example.templateCountries).toEqual(['KZ']);
     expect(example.versions.map((v) => [v.language, v.state, v.error])).toEqual(
       [
@@ -320,5 +351,166 @@ describe('ExamplesService in the admin', () => {
         ['ru', 'done', null],
       ],
     );
+  });
+});
+
+describe('ExamplesService: country scope', () => {
+  const de = exampleRow('de', [version('ru')], ['DE']);
+  const deKz = exampleRow('de-kz', [version('ru')], ['DE', 'KZ']);
+  const global = exampleRow('global', [version('ru')]);
+  const notKz = exampleRow('not-kz', [version('ru')], ['KZ'], 'exclude');
+  const kz = exampleRow('kz', [version('ru')], ['KZ']);
+  const deTemplate = exampleRow('de-template', [
+    version('ru', 'done', { template: ['DE'] }),
+  ]);
+  const code = (promise: Promise<unknown>) =>
+    promise.then(
+      () => 'ok',
+      (error: { getResponse(): { code: string } }) => error.getResponse().code,
+    );
+
+  it("lists for a manager the examples shown in their countries, editable only when all of an example's countries are theirs", async () => {
+    const { service } = makeService({
+      example: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([de, deKz, global, notKz, kz, deTemplate]),
+      },
+    });
+    const list = await service.list(DE);
+    expect(list.map((e) => [e.id, e.editable])).toEqual([
+      ['de', true],
+      ['de-kz', false],
+      ['global', false],
+      ['not-kz', false],
+      ['de-template', true],
+    ]);
+    expect((await service.list(SUPER)).every((e) => e.editable)).toBe(true);
+  });
+
+  it('refuses a manager changes to a global, shared or "everywhere except" example with scope_forbidden', async () => {
+    for (const row of [global, deKz, notKz]) {
+      const { service } = makeService({
+        example: { findUnique: jest.fn().mockResolvedValue(row) },
+      });
+      expect(await code(service.translate(row.id, ['en'], DE))).toBe(
+        'scope_forbidden',
+      );
+      expect(await code(service.remove(row.id, DE))).toBe('scope_forbidden');
+      expect(await code(service.removeVersion(row.id, 'ru', DE))).toBe(
+        'scope_forbidden',
+      );
+      expect(await code(service.update(row.id, ['DE'], 'include', DE))).toBe(
+        'scope_forbidden',
+      );
+    }
+  });
+
+  it("keeps a manager's example within their countries when created or moved", async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'new' });
+    const update = jest.fn().mockResolvedValue({});
+    const book = jest.fn();
+    const { service } = makeService({
+      book: { findUnique: book },
+      example: {
+        aggregate: jest.fn().mockResolvedValue({ _min: { sortOrder: 0 } }),
+        create,
+        update,
+        findUnique: jest.fn().mockResolvedValue(de),
+      },
+    });
+    book.mockResolvedValue({
+      status: 'done',
+      language: 'de',
+      country: 'DE',
+      exampleOf: null,
+    });
+    await service.create('b', undefined, DE);
+    const [[created]] = create.mock.calls as [
+      [{ data: { countries: string[] } }],
+    ];
+    expect(created.data.countries).toEqual(['DE']);
+    expect(await code(service.create('b', ['DE', 'KZ'], DE))).toBe(
+      'scope_forbidden',
+    );
+    // A book from another country is not theirs to publish.
+    book.mockResolvedValue({
+      status: 'done',
+      language: 'de',
+      country: 'KZ',
+      exampleOf: null,
+    });
+    expect(await code(service.create('b', ['DE'], DE))).toBe(
+      'example_book_not_found',
+    );
+    expect(await code(service.update('de', [], 'include', DE))).toBe(
+      'scope_forbidden',
+    );
+    expect(await code(service.update('de', ['ES'], 'exclude', DE))).toBe(
+      'scope_forbidden',
+    );
+    await service.update('de', ['DE'], 'include', DE);
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'de' },
+      data: { countries: ['DE'], countriesMode: 'include' },
+    });
+  });
+
+  it('stores "everywhere except" for global staff, and an empty exclude list as everywhere', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const { service } = makeService({
+      example: { update, findUnique: jest.fn().mockResolvedValue(global) },
+    });
+    await service.update('global', ['KZ'], 'exclude', SUPER);
+    expect(update).toHaveBeenLastCalledWith({
+      where: { id: 'global' },
+      data: { countries: ['KZ'], countriesMode: 'exclude' },
+    });
+    await service.update('global', [], 'exclude', SUPER);
+    expect(update).toHaveBeenLastCalledWith({
+      where: { id: 'global' },
+      data: { countries: [], countriesMode: 'include' },
+    });
+  });
+
+  it('lets a manager reorder only theirs, among the places they hold', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const rows = [global, de, kz, deTemplate];
+    const { service } = makeService({
+      example: { findMany: jest.fn().mockResolvedValue(rows), update },
+      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+    });
+    expect(
+      await code(service.reorder(['de-template', 'de', 'global'], DE)),
+    ).toBe('example_order_mismatch');
+    await service.reorder(['de-template', 'de'], DE);
+    const order = update.mock.calls.map(
+      (call: [{ where: { id: string }; data: { sortOrder: number } }]) => [
+        call[0].where.id,
+        call[0].data.sortOrder,
+      ],
+    );
+    expect(order).toEqual([
+      ['global', 0],
+      ['de-template', 1],
+      ['kz', 2],
+      ['de', 3],
+    ]);
+  });
+
+  it("builds the visitor matrix from the site selection, for the manager's countries", async () => {
+    const { service } = makeService({
+      example: { findMany: jest.fn().mockResolvedValue([de, notKz]) },
+      templateSample: { findMany: jest.fn().mockResolvedValue([]) },
+    });
+    const matrix = await service.matrix(DE);
+    expect(matrix.map((row) => row.country)).toEqual(['DE']);
+    const ru = matrix[0].cells.find((c) => c.language === 'ru')!;
+    expect(ru).toMatchObject({ kind: 'example', offered: false });
+    expect(ru.items.map((i) => i.id)).toEqual(['ru-book', 'ru-book']);
+    const full = await service.matrix(SUPER);
+    expect(full.at(-1)!.country).toBe('other');
+    const kzRow = full.find((row) => row.country === 'KZ')!;
+    expect(kzRow.cells.find((c) => c.language === 'ru')!.kind).toBe('empty');
   });
 });

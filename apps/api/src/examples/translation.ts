@@ -135,6 +135,8 @@ export function translationRow(
     clientKey: TRANSLATION_CLIENT_KEY,
     // Made by staff: counted against the demo cap, never against a visitor's free books.
     demo: true,
+    // The source's country: a country manager who translated it may open it.
+    country: source.country,
   };
 }
 

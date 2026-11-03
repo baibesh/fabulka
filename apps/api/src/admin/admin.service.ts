@@ -1,10 +1,16 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  CATALOG_LAST_COUNTRY,
+  SAMPLE_TAKEN,
+  normalizeRule,
+  withCountry,
+  type AdminAccess,
   type AdminBook,
   type AdminBookRow,
   type AdminStats,
@@ -26,11 +32,12 @@ import { SettingsService } from '../settings/settings.service';
 import { StorageService } from '../storage/storage.service';
 import { questions, TemplatesService } from '../templates/templates.service';
 import { ThemesService } from '../themes/themes.service';
+import { assertScope, listScope, outOfScope } from './scope';
 
 /** A catalog book with its samples and how many books were made from it. */
 const withSamples = {
   _count: { select: { books: true } },
-  samples: { select: { language: true, bookId: true } },
+  samples: { select: { language: true, bookId: true, country: true } },
 } satisfies Prisma.BookTemplateInclude;
 type TemplateWithSamples = Prisma.BookTemplateGetPayload<{
   include: typeof withSamples;
@@ -183,15 +190,22 @@ export class AdminService {
     }));
   }
 
-  async book(id: string): Promise<AdminBook> {
+  /**
+   * A book for its admin page. Someone without the Books section everywhere (a country manager
+   * previewing a catalog sample) gets only a book made in their countries, or one shown publicly
+   * already (a catalog sample, an example's version); else a 404.
+   */
+  async book(id: string, session?: AdminAccess): Promise<AdminBook> {
     const row = await this.prisma.book.findUnique({
       where: { id },
       include: {
         template: { select: { slug: true } },
         exampleOf: { select: { exampleId: true, language: true } },
+        sampleOf: { select: { templateId: true } },
       },
     });
-    if (!row) throw new NotFoundException(`book ${id} not found`);
+    if (!row || (session && !bookVisible(session, row)))
+      throw new NotFoundException(`book ${id} not found`);
     return {
       ...this.books.toDto(row),
       child: row.child as unknown as ChildProfile,
@@ -230,14 +244,23 @@ export class AdminService {
     return rows.map((row) => this.templateDto(row, []));
   }
 
-  async template(slug: string): Promise<AdminTemplate> {
+  /**
+   * A catalog book with the finished books staff may pick as its samples: a country manager's
+   * countries' books only (they set samples for those countries alone).
+   */
+  async template(slug: string, session?: AdminAccess): Promise<AdminTemplate> {
     const row = await this.prisma.bookTemplate.findUnique({
       where: { slug },
       include: withSamples,
     });
     if (!row) throw new NotFoundException(`template ${slug} not found`);
+    const scope = session ? listScope(session, 'catalog') : null;
     const options = await this.prisma.book.findMany({
-      where: { templateId: row.id, status: 'done' },
+      where: {
+        templateId: row.id,
+        status: 'done',
+        ...(scope && { country: { in: scope } }),
+      },
       orderBy: { createdAt: 'desc' },
       take: 100,
       select: {
@@ -245,6 +268,7 @@ export class AdminService {
         title: true,
         child: true,
         language: true,
+        country: true,
         createdAt: true,
       },
     });
@@ -255,15 +279,28 @@ export class AdminService {
         title: book.title,
         childName: (book.child as unknown as ChildProfile).name,
         language: book.language as Language,
+        country: book.country,
         createdAt: book.createdAt.toISOString(),
       })),
     );
   }
 
+  /**
+   * Changes a catalog book's content, countries or global samples: global staff only (a country
+   * manager changes only their countries' visibility and samples, below).
+   */
   async updateTemplate(
     slug: string,
     patch: UpdateTemplate,
+    session?: AdminAccess,
   ): Promise<AdminTemplate> {
+    if (session)
+      assertScope(
+        session,
+        'catalog',
+        null,
+        "A catalog book's content is the same everywhere: only global staff change it",
+      );
     const current = await this.template(slug);
     const ageMin = patch.ageMin ?? current.ageMin;
     const ageMax = patch.ageMax ?? current.ageMax;
@@ -297,12 +334,23 @@ export class AdminService {
     }
     if (patch.countries)
       await this.assertCountries(patch.countries, current.countries);
-    const { blocks, samples, ...rest } = patch;
+    const { blocks, samples, countries, countriesMode, ...rest } = patch;
+    const rule =
+      countries || countriesMode
+        ? normalizeRule({
+            mode: countriesMode ?? current.countriesMode,
+            countries: countries ?? current.countries,
+          })
+        : null;
     await this.prisma.$transaction(async (tx) => {
       const row = await tx.bookTemplate.update({
         where: { slug },
         data: {
           ...rest,
+          ...(rule && {
+            countries: [...rule.countries],
+            countriesMode: rule.mode,
+          }),
           ...(blocks !== undefined && {
             blocks:
               blocks === null
@@ -313,7 +361,7 @@ export class AdminService {
       });
       for (const [language, bookId] of Object.entries(samples ?? {})) {
         await tx.templateSample.deleteMany({
-          where: { templateId: row.id, language },
+          where: { templateId: row.id, language, country: '' },
         });
         if (bookId)
           await tx.templateSample.create({
@@ -321,7 +369,87 @@ export class AdminService {
           });
       }
     });
-    return this.template(slug);
+    return this.template(slug, session);
+  }
+
+  /**
+   * Shows or hides the catalog book in one country, leaving every other country as it is
+   * (withCountry): for a country manager, one of theirs. 409 catalog_last_country when hiding would
+   * leave an include list empty (which means everywhere).
+   */
+  async setVisibility(
+    slug: string,
+    country: string,
+    visible: boolean,
+    session: AdminAccess,
+  ): Promise<AdminTemplate> {
+    assertScope(session, 'catalog', [country], 'Not one of your countries');
+    const current = await this.template(slug, session);
+    await this.assertCountries([country], current.countries);
+    const rule = withCountry(
+      { mode: current.countriesMode, countries: current.countries },
+      country,
+      visible,
+    );
+    if (!rule) {
+      throw new ConflictException({
+        code: CATALOG_LAST_COUNTRY,
+        message: `${slug} is listed only in ${country}: hiding it there would list it everywhere`,
+      });
+    }
+    await this.prisma.bookTemplate.update({
+      where: { slug },
+      data: { countries: [...rule.countries], countriesMode: rule.mode },
+    });
+    return this.template(slug, session);
+  }
+
+  /**
+   * Sets or clears the catalog book's sample in one language, globally (country null: global staff
+   * only) or for one country (a country manager: one of theirs, with a book made there).
+   */
+  async setSample(
+    slug: string,
+    country: string | null,
+    language: string,
+    bookId: string | null,
+    session: AdminAccess,
+  ): Promise<AdminTemplate> {
+    assertScope(
+      session,
+      'catalog',
+      country ? [country] : null,
+      country
+        ? 'Not one of your countries'
+        : 'The global sample is shown everywhere: only global staff change it',
+    );
+    const current = await this.template(slug, session);
+    if (country) await this.assertCountries([country], []);
+    if (bookId) {
+      await this.assertSample(slug, language, bookId, country);
+      const scope = listScope(session, 'catalog');
+      if (scope && !current.sampleOptions.some((o) => o.id === bookId))
+        throw outOfScope('The book was not made in your countries');
+    }
+    const row = await this.prisma.bookTemplate.findUniqueOrThrow({
+      where: { slug },
+      select: { id: true },
+    });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.templateSample.deleteMany({
+        where: { templateId: row.id, language, country: country ?? '' },
+      });
+      if (bookId)
+        await tx.templateSample.create({
+          data: {
+            templateId: row.id,
+            language,
+            country: country ?? '',
+            bookId,
+          },
+        });
+    });
+    return this.template(slug, session);
   }
 
   /**
@@ -332,6 +460,7 @@ export class AdminService {
     slug: string,
     language: string,
     bookId: string,
+    country: string | null = null,
   ): Promise<void> {
     const book = await this.prisma.book.findUnique({
       where: { id: bookId },
@@ -339,7 +468,13 @@ export class AdminService {
         status: true,
         language: true,
         template: { select: { slug: true } },
-        sampleOf: { select: { template: { select: { slug: true } } } },
+        sampleOf: {
+          select: {
+            country: true,
+            language: true,
+            template: { select: { slug: true } },
+          },
+        },
       },
     });
     if (!book) throw new BadRequestException(`Книги ${bookId} нет`);
@@ -356,6 +491,17 @@ export class AdminService {
     const other = book.sampleOf?.template.slug;
     if (other && other !== slug)
       throw new BadRequestException(`Эта книга уже образец для «${other}»`);
+    // Already this book's sample for another country (or globally): one place at a time.
+    if (
+      book.sampleOf &&
+      (book.sampleOf.country || null) !== country &&
+      book.sampleOf.language === language
+    ) {
+      throw new ConflictException({
+        code: SAMPLE_TAKEN,
+        message: `The book is the ${book.sampleOf.country || 'global'} sample already`,
+      });
+    }
   }
 
   /**
@@ -403,11 +549,35 @@ export class AdminService {
       layoutTheme: row.layoutTheme,
       blocks: TemplateBlocksSchema.safeParse(row.blocks).data ?? null,
       countries: row.countries,
+      countriesMode: row.countriesMode,
       samples: Object.fromEntries(
-        row.samples.map((s) => [s.language, s.bookId]),
+        row.samples
+          .filter((s) => !s.country)
+          .map((s) => [s.language, s.bookId]),
       ),
+      countrySamples: row.samples
+        .filter((s) => s.country)
+        .reduce<AdminTemplate['countrySamples']>((all, s) => {
+          all[s.country] = { ...all[s.country], [s.language]: s.bookId };
+          return all;
+        }, {}),
       sampleOptions,
       books: row._count.books,
     };
   }
+}
+
+/**
+ * Whether the session may open a book's admin page: with the Books section everywhere, any book;
+ * else (a country manager) a book shown publicly already (a catalog sample, an example's version)
+ * or one made in their countries.
+ */
+export function bookVisible(
+  session: AdminAccess,
+  book: { country: string | null; sampleOf: unknown; exampleOf: unknown },
+): boolean {
+  if (!listScope(session, 'books')) return true;
+  if (book.sampleOf || book.exampleOf) return true;
+  const scope = listScope(session, 'catalog', 'examples', 'books');
+  return !scope || (!!book.country && scope.includes(book.country));
 }

@@ -1,4 +1,8 @@
-import { exampleShownIn, type Language } from '@fabulka/shared';
+import {
+  exampleShownIn,
+  type CountryRule,
+  type Language,
+} from '@fabulka/shared';
 
 /** Examples on the home page at most. */
 export const EXAMPLE_COUNT = 12;
@@ -15,10 +19,10 @@ export interface CandidateVersion {
 /** An example as the selection sees it, in the home page's order. */
 export interface Candidate {
   id: string;
-  /** Its own countries; empty: as `templateCountries` say. */
-  countries: string[];
-  /** Its catalog book's countries; null for a story of its own. */
-  templateCountries: string[] | null;
+  /** Its own rule; no countries: as `template` says. */
+  rule: CountryRule;
+  /** Its catalog book's rule; null for a story of its own. */
+  template: CountryRule | null;
   versions: CandidateVersion[];
 }
 
@@ -30,8 +34,9 @@ export interface Picked {
 
 /**
  * The home page's examples for a visitor from `country` (catalogCountry: null for "other") reading
- * in `language`: each example shown in that country (exampleShownIn: its own countries, else its
- * catalog book's, else everywhere), with its finished version in exactly that language. An example
+ * in `language`: each example shown in that country (exampleShownIn: its own rule, else its
+ * catalog book's, else everywhere; a rule lists where it shows or, "everywhere except…", where it
+ * does not), with its finished version in exactly that language. An example
  * with no such version is left out: never another language in its place.
  */
 export function pickExamples(
@@ -42,8 +47,7 @@ export function pickExamples(
 ): Picked[] {
   const picked: Picked[] = [];
   for (const example of examples) {
-    if (!exampleShownIn(example.countries, example.templateCountries, country))
-      continue;
+    if (!exampleShownIn(example.rule, example.template, country)) continue;
     const version = example.versions.find(
       (v) => v.language === language && v.status === 'done' && v.title,
     );
@@ -54,13 +58,21 @@ export function pickExamples(
 }
 
 /**
- * The catalog book an example comes from, for its countries: its first version's (versions in the
- * order they were added; a translation keeps its source's catalog book).
+ * The catalog book an example comes from, for its countries: its first version's rule (versions in
+ * the order they were added; a translation keeps its source's catalog book).
  */
-export function templateCountriesOf(
-  versions: readonly { template: { countries: string[] } | null }[],
-): string[] | null {
-  return versions[0]?.template?.countries ?? null;
+export function templateRuleOf(
+  versions: readonly {
+    template: {
+      countries: string[];
+      countriesMode: CountryRule['mode'];
+    } | null;
+  }[],
+): CountryRule | null {
+  const template = versions[0]?.template;
+  return template
+    ? { mode: template.countriesMode, countries: template.countries }
+    : null;
 }
 
 /**

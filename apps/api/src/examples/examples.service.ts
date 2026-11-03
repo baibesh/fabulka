@@ -9,23 +9,35 @@ import {
 import type { Prisma } from '@prisma/client';
 import {
   LANGUAGES,
+  OTHER_COUNTRY,
+  countryInfo,
   exampleVersionState,
   inLanguageOrder,
+  normalizeRule,
+  ownerCountries,
+  ruleShows,
+  sampleInLanguage,
+  showcaseRule,
+  type AdminAccess,
   type AdminExample,
   type ChildProfile,
+  type CountriesMode,
+  type CountryRule,
   type ExampleBook,
+  type ExampleCandidate,
   type ExampleError,
   type Language,
+  type VisitorMatrix,
 } from '@fabulka/shared';
+import { listScope, outOfScope } from '../admin/scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReferenceService } from '../reference/reference.service';
 import { EXAMPLES_TAG, SeoWebService } from '../seo/seo-web.service';
 import { StorageService } from '../storage/storage.service';
-import { listedWhere } from '../templates/templates.service';
 import {
   orSamples,
   pickExamples,
-  templateCountriesOf,
+  templateRuleOf,
   type Candidate,
 } from './selection';
 import { TRANSLATION_CLIENT_KEY } from './translation';
@@ -44,7 +56,8 @@ const versionBook = {
     heroImagePath: true,
     clientKey: true,
     costUsd: true,
-    template: { select: { countries: true } },
+    country: true,
+    template: { select: { countries: true, countriesMode: true } },
   },
 } satisfies Prisma.BookDefaultArgs;
 
@@ -54,7 +67,9 @@ const withVersions = {
     include: { book: versionBook },
   },
 } satisfies Prisma.ExampleInclude;
-type ExampleRow = Prisma.ExampleGetPayload<{ include: typeof withVersions }>;
+export type ExampleRow = Prisma.ExampleGetPayload<{
+  include: typeof withVersions;
+}>;
 
 /** The home page's order: by sortOrder, the newest first among equals. */
 const ORDER: Prisma.ExampleOrderByWithRelationInput[] = [
@@ -94,18 +109,86 @@ export class ExamplesService {
   /**
    * GET /books/examples: for each example shown in `country`, its finished version in exactly
    * `language` (pickExamples); with none, the catalog samples in that language for catalog books
-   * listed in that country.
+   * listed in that country (the country's own sample, else the global one).
    */
   async forSite(
     country: string | null,
     language: Language,
   ): Promise<ExampleBook[]> {
-    const rows = await this.prisma.example.findMany({
-      orderBy: ORDER,
-      include: withVersions,
+    return this.siteExamples(await this.siteData(), country, language);
+  }
+
+  /**
+   * What a visitor sees in each country × language (the admin's visitor matrix): the very same
+   * selection as GET /books/examples, for the session's countries (every offered one and "other"
+   * for global staff).
+   */
+  async matrix(session: AdminAccess): Promise<VisitorMatrix> {
+    const scope = listScope(session, 'examples', 'books');
+    const offered = await this.reference.countries();
+    const codes = scope ?? [...offered.map((c) => c.code), OTHER_COUNTRY];
+    const data = await this.siteData();
+    return codes.map((code) => {
+      const { languages } = countryInfo(code, offered);
+      return {
+        country: code,
+        cells: LANGUAGES.map((language) => {
+          const items = this.siteExamples(
+            data,
+            code === OTHER_COUNTRY ? null : code,
+            language,
+          );
+          return {
+            language,
+            offered: languages.includes(language),
+            kind: items[0]?.kind ?? 'empty',
+            items: items.map(({ id, title, heroImageUrl }) => ({
+              id,
+              title,
+              heroImageUrl,
+            })),
+          };
+        }),
+      };
     });
-    const picked = pickExamples(rows.map(candidate), country, language);
-    const samples = picked.length ? [] : await this.samples(country, language);
+  }
+
+  /** Everything the home page's examples are picked from: the examples and the catalog samples. */
+  private async siteData(): Promise<SiteData> {
+    const [rows, samples] = await Promise.all([
+      this.prisma.example.findMany({ orderBy: ORDER, include: withVersions }),
+      this.prisma.templateSample.findMany({
+        where: {
+          book: { status: 'done', title: { not: null } },
+          template: { published: true },
+        },
+        orderBy: { template: { sortOrder: 'asc' } },
+        include: {
+          book: { select: { id: true, title: true, heroImagePath: true } },
+          template: {
+            select: { id: true, countries: true, countriesMode: true },
+          },
+        },
+      }),
+    ]);
+    return { candidates: rows.map(candidate), samples };
+  }
+
+  /** The examples for one country and language (see forSite), from data read once. */
+  private siteExamples(
+    data: SiteData,
+    country: string | null,
+    language: Language,
+  ): ExampleBook[] {
+    const picked = pickExamples(data.candidates, country, language);
+    const samples = picked.length
+      ? []
+      : siteSamples(data.samples, country, language).map((row) => ({
+          id: row.book.id,
+          title: row.book.title!,
+          language,
+          heroImageUrl: this.storage.url(row.book.heroImagePath),
+        }));
     return orSamples(picked, samples).map((entry) =>
       entry.kind === 'example'
         ? {
@@ -117,30 +200,6 @@ export class ExamplesService {
           }
         : { ...entry.item, kind: 'sample' as const },
     );
-  }
-
-  /** Finished catalog samples in `language`, for published catalog books listed in `country`. */
-  private async samples(
-    country: string | null,
-    language: Language,
-  ): Promise<Omit<ExampleBook, 'kind'>[]> {
-    const rows = await this.prisma.templateSample.findMany({
-      where: {
-        language,
-        book: { status: 'done', title: { not: null } },
-        template: { published: true, ...listedWhere(country) },
-      },
-      orderBy: { template: { sortOrder: 'asc' } },
-      include: {
-        book: { select: { id: true, title: true, heroImagePath: true } },
-      },
-    });
-    return rows.map((row) => ({
-      id: row.book.id,
-      title: row.book.title!,
-      language,
-      heroImageUrl: this.storage.url(row.book.heroImagePath),
-    }));
   }
 
   /**
@@ -183,38 +242,108 @@ export class ExamplesService {
 
   // ---- The admin --------------------------------------------------------------------------------
 
-  async list(): Promise<AdminExample[]> {
+  /** The examples the session may see (those shown in any of its countries), in the home page's order. */
+  async list(session: AdminAccess): Promise<AdminExample[]> {
     const rows = await this.prisma.example.findMany({
       orderBy: ORDER,
       include: withVersions,
     });
-    return rows.map((row) => this.dto(row));
+    return rows
+      .filter((row) => visibleTo(session, row))
+      .map((row) => this.dto(row, session));
   }
 
-  async get(id: string): Promise<AdminExample> {
-    return this.dto(await this.row(id));
+  async get(id: string, session: AdminAccess): Promise<AdminExample> {
+    const row = await this.row(id);
+    if (!visibleTo(session, row))
+      throw outOfScope('Not shown in your countries');
+    return this.dto(row, session);
   }
 
-  /** A new example with this finished book as its version in the book's language, first on the home page. */
-  async create(bookId: string): Promise<AdminExample> {
-    const book = await this.assertBook(bookId);
+  /**
+   * Finished books staff may make a new example from: in the session's countries (by the book's
+   * country), narrowed to the working country, not a version yet and not a translation; newest
+   * first.
+   */
+  async candidates(
+    session: AdminAccess,
+    country: string | null,
+  ): Promise<ExampleCandidate[]> {
+    const scope = listScope(session, 'examples', 'books');
+    const working = country?.trim().toUpperCase() || null;
+    const countries =
+      working && (!scope || scope.includes(working)) ? [working] : scope;
+    if (countries && !countries.length) return [];
+    const rows = await this.prisma.book.findMany({
+      where: {
+        status: 'done',
+        title: { not: null },
+        exampleOf: null,
+        clientKey: { not: TRANSLATION_CLIENT_KEY },
+        ...(countries && { country: { in: countries } }),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        child: true,
+        language: true,
+        country: true,
+        createdAt: true,
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      childName: (row.child as unknown as ChildProfile).name,
+      language: row.language as Language,
+      country: row.country,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * A new example with this finished book as its version in the book's language, first on the home
+   * page, shown in `countries`. A country manager's book must be from their countries, and the
+   * example shows only in their countries (all of them when none are named).
+   */
+  async create(
+    bookId: string,
+    countries: string[] | undefined,
+    session: AdminAccess,
+  ): Promise<AdminExample> {
+    const scope = listScope(session, 'examples', 'books');
+    const book = await this.assertBook(bookId, scope);
+    const list = scope && !countries?.length ? scope : (countries ?? []);
+    if (scope && !list.every((code) => scope.includes(code)))
+      throw outOfScope('An example of yours shows only in your countries');
+    await this.assertOffered(list, []);
     const first = await this.prisma.example.aggregate({
       _min: { sortOrder: true },
     });
     const example = await this.prisma.example.create({
       data: {
+        countries: list,
         sortOrder: (first._min.sortOrder ?? 1) - 1,
         versions: { create: { language: book.language, bookId } },
       },
     });
     this.changed();
-    return this.get(example.id);
+    return this.get(example.id, session);
   }
 
   /** Adds a finished book as the example's version in its language (one not taken yet). */
-  async addVersion(id: string, bookId: string): Promise<AdminExample> {
-    const example = await this.row(id);
-    const book = await this.assertBook(bookId);
+  async addVersion(
+    id: string,
+    bookId: string,
+    session: AdminAccess,
+  ): Promise<AdminExample> {
+    const example = await this.editable(id, session);
+    const book = await this.assertBook(
+      bookId,
+      listScope(session, 'examples', 'books'),
+    );
     if (example.versions.some((v) => v.language === book.language)) {
       throw refuse(
         HttpStatus.CONFLICT,
@@ -226,15 +355,19 @@ export class ExamplesService {
       data: { exampleId: id, language: book.language, bookId },
     });
     this.changed();
-    return this.get(id);
+    return this.get(id, session);
   }
 
   /**
    * Takes a version off the example; its book stays (a translation that failed is deleted with its
    * files, as nobody else has it). An example left with no version goes too.
    */
-  async removeVersion(id: string, language: string): Promise<void> {
-    const example = await this.row(id);
+  async removeVersion(
+    id: string,
+    language: string,
+    session: AdminAccess,
+  ): Promise<void> {
+    const example = await this.editable(id, session);
     const version = example.versions.find((v) => v.language === language);
     if (!version) {
       throw refuse(
@@ -258,7 +391,8 @@ export class ExamplesService {
   }
 
   /** Takes the example off the home page; its books stay. */
-  async remove(id: string): Promise<void> {
+  async remove(id: string, session: AdminAccess): Promise<void> {
+    await this.editable(id, session);
     const { count } = await this.prisma.example.deleteMany({ where: { id } });
     if (!count)
       throw refuse(
@@ -269,30 +403,49 @@ export class ExamplesService {
     this.changed();
   }
 
-  /** The countries it is shown in: those the site offers (one it has already may stay). */
-  async update(id: string, countries: string[]): Promise<AdminExample> {
-    const example = await this.row(id);
-    const offered = new Set([
-      ...(await this.reference.countries()).map((c) => c.code),
-      ...example.countries,
-    ]);
-    const unknown = countries.filter((code) => !offered.has(code));
-    if (unknown.length) {
-      throw refuse(
-        HttpStatus.BAD_REQUEST,
-        'example_country_unknown',
-        `Countries ${unknown.join(', ')} are not in the reference`,
-      );
-    }
-    await this.prisma.example.update({ where: { id }, data: { countries } });
+  /**
+   * Where it is shown: only in `countries` (include) or everywhere but them (exclude), codes the
+   * site offers (one it has already may stay). A country manager may only move an example of theirs
+   * to other countries of theirs: never everywhere, nor "everywhere except…".
+   */
+  async update(
+    id: string,
+    countries: string[],
+    mode: CountriesMode,
+    session: AdminAccess,
+  ): Promise<AdminExample> {
+    const example = await this.editable(id, session);
+    const rule = normalizeRule({ mode, countries });
+    const scope = listScope(session, 'examples', 'books');
+    const owner = ownerCountries(
+      showcaseRule(rule, templateRuleOf(example.versions.map((v) => v.book))),
+    );
+    if (scope && !(owner && owner.every((code) => scope.includes(code))))
+      throw outOfScope('An example of yours shows only in your countries');
+    await this.assertOffered(rule.countries, example.countries);
+    await this.prisma.example.update({
+      where: { id },
+      data: { countries: [...rule.countries], countriesMode: rule.mode },
+    });
     this.changed();
-    return this.get(id);
+    return this.get(id, session);
   }
 
-  /** The home page's order: every example's id, each once. */
-  async reorder(ids: string[]): Promise<AdminExample[]> {
-    const rows = await this.prisma.example.findMany({ select: { id: true } });
-    const known = new Set(rows.map((r) => r.id));
+  /**
+   * The home page's order. Global staff send every example's id. A country manager sends exactly
+   * the ids of the examples they may change, in their new order: those are moved among the places
+   * they hold now, and every other example keeps its place (so a manager never moves anyone else's
+   * example, nor theirs past it).
+   */
+  async reorder(ids: string[], session: AdminAccess): Promise<AdminExample[]> {
+    const rows = await this.prisma.example.findMany({
+      orderBy: ORDER,
+      include: withVersions,
+    });
+    const mine = rows
+      .filter((row) => editableBy(session, row))
+      .map((r) => r.id);
+    const known = new Set(mine);
     if (
       ids.length !== known.size ||
       new Set(ids).size !== ids.length ||
@@ -301,16 +454,21 @@ export class ExamplesService {
       throw refuse(
         HttpStatus.BAD_REQUEST,
         'example_order_mismatch',
-        'Send every example id once',
+        'Send the id of every example you may move, once',
       );
     }
+    const order = reordered(
+      rows.map((r) => r.id),
+      known,
+      ids,
+    );
     await this.prisma.$transaction(
-      ids.map((id, sortOrder) =>
+      order.map((id, sortOrder) =>
         this.prisma.example.update({ where: { id }, data: { sortOrder } }),
       ),
     );
     this.changed();
-    return this.list();
+    return this.list(session);
   }
 
   /**
@@ -318,8 +476,12 @@ export class ExamplesService {
    * finished version, the one staff picked first. A language with a version is refused, unless that
    * version is a failed translation: it is replaced.
    */
-  async translate(id: string, languages: Language[]): Promise<AdminExample> {
-    const example = await this.row(id);
+  async translate(
+    id: string,
+    languages: Language[],
+    session: AdminAccess,
+  ): Promise<AdminExample> {
+    const example = await this.editable(id, session);
     const source = example.versions.find((v) => v.book.status === 'done');
     if (!source) {
       throw refuse(
@@ -350,7 +512,7 @@ export class ExamplesService {
     });
     for (const language of inLanguageOrder(languages))
       await this.translator.start(id, book, language);
-    return this.get(id);
+    return this.get(id, session);
   }
 
   // ---- Helpers ----------------------------------------------------------------------------------
@@ -369,17 +531,54 @@ export class ExamplesService {
     return row;
   }
 
-  /** A book that may become a version: there, finished, and no example's version yet. */
-  private async assertBook(bookId: string) {
+  /** The example, if the session may change it: 403 scope_forbidden otherwise. */
+  private async editable(
+    id: string,
+    session: AdminAccess,
+  ): Promise<ExampleRow> {
+    const row = await this.row(id);
+    if (!editableBy(session, row))
+      throw outOfScope(
+        'The example shows outside your countries: only global staff change it',
+      );
+    return row;
+  }
+
+  /** Countries the site offers (reference.countries); one the example has already may stay. */
+  private async assertOffered(
+    codes: readonly string[],
+    current: readonly string[],
+  ): Promise<void> {
+    if (!codes.length) return;
+    const offered = new Set([
+      ...(await this.reference.countries()).map((c) => c.code),
+      ...current,
+    ]);
+    const unknown = codes.filter((code) => !offered.has(code));
+    if (unknown.length) {
+      throw refuse(
+        HttpStatus.BAD_REQUEST,
+        'example_country_unknown',
+        `Countries ${unknown.join(', ')} are not in the reference`,
+      );
+    }
+  }
+
+  /**
+   * A book that may become a version: there, finished, and no example's version yet; for a country
+   * manager (`scope`), made in one of their countries.
+   */
+  private async assertBook(bookId: string, scope: string[] | null) {
     const book = await this.prisma.book.findUnique({
       where: { id: bookId },
       select: {
         status: true,
         language: true,
+        country: true,
         exampleOf: { select: { exampleId: true } },
       },
     });
-    if (!book) {
+    if (!book || (scope && !(book.country && scope.includes(book.country)))) {
       throw refuse(
         HttpStatus.NOT_FOUND,
         'example_book_not_found',
@@ -413,12 +612,16 @@ export class ExamplesService {
     void this.web.revalidate([EXAMPLES_TAG]);
   }
 
-  private dto(row: ExampleRow): AdminExample {
+  private dto(row: ExampleRow, session: AdminAccess): AdminExample {
     const byLanguage = new Map(row.versions.map((v) => [v.language, v]));
+    const template = templateRuleOf(row.versions.map((v) => v.book));
     return {
       id: row.id,
       countries: row.countries,
-      templateCountries: templateCountriesOf(row.versions.map((v) => v.book)),
+      countriesMode: row.countriesMode,
+      templateCountries: template ? [...template.countries] : null,
+      templateCountriesMode: template?.mode ?? 'include',
+      editable: editableBy(session, row),
       sortOrder: row.sortOrder,
       versions: LANGUAGES.flatMap((language) => {
         const v = byLanguage.get(language);
@@ -444,12 +647,100 @@ export class ExamplesService {
   }
 }
 
+/** What the home page's examples are picked from (see ExamplesService.siteData). */
+interface SiteData {
+  candidates: Candidate[];
+  samples: SampleRow[];
+}
+
+/** A catalog sample as the home page's fill-in sees it. */
+interface SampleRow {
+  language: string;
+  /** "" for the global sample, else a country's own. */
+  country: string;
+  book: { id: string; title: string | null; heroImagePath: string | null };
+  template: { id: string; countries: string[]; countriesMode: CountriesMode };
+}
+
+/**
+ * The catalog samples filling in for a visitor from `country` in `language`: for each published
+ * catalog book listed there (in catalog order), its sample in exactly that language, the country's
+ * own before the global one.
+ */
+export function siteSamples(
+  rows: readonly SampleRow[],
+  country: string | null,
+  language: Language,
+): SampleRow[] {
+  const byTemplate = new Map<string, SampleRow[]>();
+  for (const row of rows) {
+    const rule = {
+      mode: row.template.countriesMode,
+      countries: row.template.countries,
+    };
+    if (!ruleShows(rule, country)) continue;
+    byTemplate.set(row.template.id, [
+      ...(byTemplate.get(row.template.id) ?? []),
+      row,
+    ]);
+  }
+  return [...byTemplate.values()].flatMap((list) => {
+    const keyed = list.map((row) => ({
+      row,
+      language: row.language as Language,
+      country: row.country || null,
+    }));
+    const found = sampleInLanguage(keyed, language, country);
+    return found ? [found.row] : [];
+  });
+}
+
+/** Where an example shows: its own rule, else its catalog book's, else everywhere. */
+export function shownRule(row: ExampleRow): CountryRule {
+  return showcaseRule(
+    { mode: row.countriesMode, countries: row.countries },
+    templateRuleOf(row.versions.map((v) => v.book)),
+  );
+}
+
+/** A country manager sees the examples shown in any of their countries; global staff all. */
+export function visibleTo(session: AdminAccess, row: ExampleRow): boolean {
+  const scope = listScope(session, 'examples', 'books');
+  if (!scope) return true;
+  const rule = shownRule(row);
+  return scope.some((country) => ruleShows(rule, country));
+}
+
+/**
+ * A country manager may change an example only when every country it shows in is theirs: never one
+ * shown everywhere or "everywhere except…" (allowedFor with its owner countries).
+ */
+export function editableBy(session: AdminAccess, row: ExampleRow): boolean {
+  const scope = listScope(session, 'examples', 'books');
+  if (!scope) return true;
+  const owner = ownerCountries(shownRule(row));
+  return !!owner && owner.every((country) => scope.includes(country));
+}
+
+/**
+ * The home page's order after a manager moved theirs (`movable`, now in the order `ids`): the
+ * movable ones fill the places they held, in the new order; the rest stay where they are.
+ */
+export function reordered(
+  current: readonly string[],
+  movable: ReadonlySet<string>,
+  ids: readonly string[],
+): string[] {
+  let next = 0;
+  return current.map((id) => (movable.has(id) ? ids[next++] : id));
+}
+
 /** A row as the home page's selection sees it. */
 function candidate(row: ExampleRow): Candidate {
   return {
     id: row.id,
-    countries: row.countries,
-    templateCountries: templateCountriesOf(row.versions.map((v) => v.book)),
+    rule: { mode: row.countriesMode, countries: row.countries },
+    template: templateRuleOf(row.versions.map((v) => v.book)),
     versions: row.versions.map((v) => ({
       language: v.language,
       bookId: v.bookId,

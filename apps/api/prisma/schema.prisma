@@ -142,9 +142,12 @@ model Order {
   userId        String?
   /// Stages the order reached and when (written on create and on each change in the admin).
   events        OrderStatusEvent[]
+  /// The country it was ordered from (ISO code); null when not known (only global staff see it).
+  country       String?
   createdAt     DateTime           @default(now())
 
   @@index([bookId])
+  @@index([country])
   @@index([clientKey])
   @@index([userId])
 }
@@ -171,69 +174,80 @@ model Setting {
 
 /// A catalog book: a plot written by an author that each child's story is adapted from.
 model BookTemplate {
-  id           String   @id @default(cuid())
-  slug         String   @unique
-  title        String
-  summary      String
-  ageMin       Int
-  ageMax       Int
+  id            String           @id @default(cuid())
+  slug          String           @unique
+  title         String
+  summary       String
+  ageMin        Int
+  ageMax        Int
   /// Story method slug (Methodology.slug).
-  methodology  String
-  languages    String[]
+  methodology   String
+  languages     String[]
   /// What the book is about, in English, for Muse Spark.
-  theme        String
+  theme         String
   /// Plot points in order, in English; Muse Spark spreads them across the pages.
-  plot         Json
+  plot          Json
   /// TemplateQuestion[] (@fabulka/shared).
-  questions    Json     @default("[]")
+  questions     Json             @default("[]")
   /// Replaces the default art style in image prompts.
-  stylePrompt  String?
+  stylePrompt   String?
   /// Book theme (BOOK_THEMES in @fabulka/shared) its books get; null: by the child's age.
-  layoutTheme  String?
+  layoutTheme   String?
   /// Blocks its books get and the optional ones parents may add (TemplateBlocks in @fabulka/shared);
   /// null: the default blocks.
-  blocks       Json?
-  coverUrl     String?
+  blocks        Json?
+  coverUrl      String?
   /// Kazakh and English text by language: TemplateTranslation in @fabulka/shared.
-  translations Json     @default("{}")
-  published    Boolean  @default(true)
-  sortOrder    Int      @default(0)
-  /// Country codes (reference.countries) where the catalog lists it; empty: everywhere. Its page
-  /// opens from anywhere by a direct link.
-  countries    String[] @default([])
-  books        Book[]   @relation("TemplateBooks")
+  translations  Json             @default("{}")
+  published     Boolean          @default(true)
+  sortOrder     Int              @default(0)
+  /// Country codes (reference.countries) where the catalog lists it (include), or leaves it out
+  /// (exclude); empty: everywhere. Its page opens from anywhere by a direct link.
+  countries     String[]         @default([])
+  countriesMode CountriesMode    @default(include)
+  books         Book[]           @relation("TemplateBooks")
   /// Finished books made from this template, shown on its page as examples: one per language.
-  samples      TemplateSample[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  samples       TemplateSample[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 }
 
-/// A catalog book's example in one language: a finished book made from it in that language. A book
-/// is the sample of one catalog book at most; deleting either removes the row.
+/// A catalog book's example in one language, globally or for one country: a finished book made from
+/// it in that language. A book is the sample of one catalog book at most; deleting either removes
+/// the row.
 model TemplateSample {
   template   BookTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   templateId String
   /// The book's language (Language in @fabulka/shared).
   language   String
+  /// The country whose visitors see it before the global one (ISO code); "" for the global sample.
+  country    String       @default("")
   book       Book         @relation(fields: [bookId], references: [id], onDelete: Cascade)
   bookId     String       @unique
   createdAt  DateTime     @default(now())
 
-  @@id([templateId, language])
+  @@id([templateId, language, country])
+}
+
+/// Where something is shown: only in its countries (include), or everywhere but them (exclude).
+enum CountriesMode {
+  include
+  exclude
 }
 
 /// A story on the home page's examples, in one or more languages (admin «Examples»). The home page
 /// shows, for each example listed in the visitor's country, its version in exactly the page's
 /// language. Deleting an example keeps its books.
 model Example {
-  id        String           @id @default(cuid())
-  /// Country codes (reference.countries) where it is shown; empty: as its catalog book's countries
-  /// say, or everywhere for a story of its own (showcaseCountries in @fabulka/shared).
-  countries String[]         @default([])
+  id            String           @id @default(cuid())
+  /// Country codes (reference.countries) where it is shown (include) or not (exclude); empty: as its
+  /// catalog book's countries say, or everywhere for a story of its own (showcaseRule in @fabulka/shared).
+  countries     String[]         @default([])
+  countriesMode CountriesMode    @default(include)
   /// Ascending: the order of the home page.
-  sortOrder Int              @default(0)
-  versions  ExampleVersion[]
-  createdAt DateTime         @default(now())
+  sortOrder     Int              @default(0)
+  versions      ExampleVersion[]
+  createdAt     DateTime         @default(now())
 
   @@index([sortOrder])
 }

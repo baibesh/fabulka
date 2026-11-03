@@ -1,5 +1,10 @@
 import type { ConfigService } from '@nestjs/config';
-import { DEFAULT_COUNTRIES } from '@fabulka/shared';
+import {
+  BUILTIN_ROLES,
+  DEFAULT_COUNTRIES,
+  SUPER_ROLE,
+  accessOf,
+} from '@fabulka/shared';
 import type { BooksService } from '../books/books.service';
 import type { MethodologiesService } from '../methodologies/methodologies.service';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -9,7 +14,10 @@ import type { SettingsService } from '../settings/settings.service';
 import type { StorageService } from '../storage/storage.service';
 import type { TemplatesService } from '../templates/templates.service';
 import { curatedThemes } from '../themes/curated.testing';
-import { AdminService } from './admin.service';
+import { AdminService, bookVisible } from './admin.service';
+
+const SUPER = accessOf([SUPER_ROLE], BUILTIN_ROLES, []);
+const DE = accessOf(['country_manager'], BUILTIN_ROLES, ['DE']);
 
 function makeService(prisma: unknown, storage: unknown = {}) {
   const books = { toDto: (row: { id: string }) => ({ id: row.id }) };
@@ -66,6 +74,27 @@ describe('AdminService.book', () => {
   });
 });
 
+describe('bookVisible', () => {
+  const book = (country: string | null, extra = {}) => ({
+    country,
+    sampleOf: null,
+    exampleOf: null,
+    ...extra,
+  });
+  it("opens a manager's countries' books and public ones only", () => {
+    expect(bookVisible(SUPER, book('KZ'))).toBe(true);
+    expect(bookVisible(DE, book('DE'))).toBe(true);
+    expect(bookVisible(DE, book('KZ'))).toBe(false);
+    expect(bookVisible(DE, book(null))).toBe(false);
+    expect(bookVisible(DE, book('KZ', { sampleOf: { templateId: 't' } }))).toBe(
+      true,
+    );
+    expect(bookVisible(DE, book(null, { exampleOf: { exampleId: 'e' } }))).toBe(
+      true,
+    );
+  });
+});
+
 describe('AdminService.deleteBook', () => {
   it('deletes the book, its files and an example left with no version', async () => {
     const deleteMany = jest.fn().mockResolvedValue({ count: 1 });
@@ -104,11 +133,20 @@ describe('AdminService.updateTemplate samples', () => {
     layoutTheme: null,
     blocks: null,
     countries: ['KZ', 'XK'],
+    countriesMode: 'include',
     _count: { books: 2 },
-    samples: [{ language: 'ru', bookId: 'ru-book' }],
+    samples: [
+      { language: 'ru', bookId: 'ru-book', country: '' },
+      { language: 'de', bookId: 'de-book-de', country: 'DE' },
+    ],
   };
 
-  function setup(book: Record<string, unknown> | null) {
+  function setup(
+    book: Record<string, unknown> | null,
+    options: { id: string }[] = [],
+    template: Record<string, unknown> = templateRow,
+  ) {
+    const update = jest.fn().mockResolvedValue({});
     const tx = {
       bookTemplate: { update: jest.fn().mockResolvedValue({ id: 't1' }) },
       templateSample: {
@@ -117,14 +155,26 @@ describe('AdminService.updateTemplate samples', () => {
       },
     };
     const prisma = {
-      bookTemplate: { findUnique: jest.fn().mockResolvedValue(templateRow) },
+      bookTemplate: {
+        findUnique: jest.fn().mockResolvedValue(template),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 't1' }),
+        update,
+      },
       book: {
-        findMany: jest.fn().mockResolvedValue([]),
+        findMany: jest.fn().mockResolvedValue(
+          options.map((o) => ({
+            ...o,
+            title: null,
+            child: { name: 'Emma' },
+            language: 'de',
+            createdAt: new Date('2026-11-01'),
+          })),
+        ),
         findUnique: jest.fn().mockResolvedValue(book),
       },
       $transaction: (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
     };
-    return { service: makeService(prisma), tx };
+    return { service: makeService(prisma), tx, prisma, update };
   }
 
   const book = (patch: Record<string, unknown> = {}) => ({
@@ -135,10 +185,84 @@ describe('AdminService.updateTemplate samples', () => {
     ...patch,
   });
 
-  it('shows the samples by language', async () => {
+  it("shows the samples by language, global apart from the countries' own", async () => {
     const { service } = setup(null);
-    expect((await service.template('bath-time')).samples).toEqual({
-      ru: 'ru-book',
+    const template = await service.template('bath-time');
+    expect(template.samples).toEqual({ ru: 'ru-book' });
+    expect(template.countrySamples).toEqual({ DE: { de: 'de-book-de' } });
+  });
+
+  const code = (promise: Promise<unknown>) =>
+    promise.then(
+      () => 'ok',
+      (error: { getResponse(): { code: string } }) => error.getResponse().code,
+    );
+
+  it("refuses a manager a catalog book's content and global samples", async () => {
+    const { service, tx } = setup(null);
+    expect(
+      await code(service.updateTemplate('bath-time', { title: 'Neu' }, DE)),
+    ).toBe('scope_forbidden');
+    expect(
+      await code(service.setSample('bath-time', null, 'de', null, DE)),
+    ).toBe('scope_forbidden');
+    expect(
+      await code(service.setSample('bath-time', 'KZ', 'de', null, DE)),
+    ).toBe('scope_forbidden');
+    expect(tx.bookTemplate.update).not.toHaveBeenCalled();
+  });
+
+  it("lets a manager set their country's sample with a book made there", async () => {
+    const deBook = book({ language: 'de' });
+    const { service, tx, prisma } = setup(deBook, [{ id: 'de-book' }]);
+    await service.setSample('bath-time', 'DE', 'de', 'de-book', DE);
+    const [[query]] = prisma.book.findMany.mock.calls as [
+      [{ where: { country?: unknown } }],
+    ];
+    expect(query.where.country).toEqual({ in: ['DE'] });
+    expect(tx.templateSample.deleteMany).toHaveBeenCalledWith({
+      where: { templateId: 't1', language: 'de', country: 'DE' },
+    });
+    expect(tx.templateSample.create).toHaveBeenCalledWith({
+      data: {
+        templateId: 't1',
+        language: 'de',
+        country: 'DE',
+        bookId: 'de-book',
+      },
+    });
+    // A book not among their countries' books.
+    expect(
+      await code(service.setSample('bath-time', 'DE', 'de', 'other', DE)),
+    ).toBe('scope_forbidden');
+  });
+
+  it('shows or hides a catalog book in one country only', async () => {
+    const everywhere = { ...templateRow, countries: [] };
+    let s = setup(null, [], everywhere);
+    await s.service.setVisibility('bath-time', 'DE', false, DE);
+    expect(s.update).toHaveBeenCalledWith({
+      where: { slug: 'bath-time' },
+      data: { countries: ['DE'], countriesMode: 'exclude' },
+    });
+    s = setup(null, [], { ...templateRow, countries: ['KZ', 'DE'] });
+    await s.service.setVisibility('bath-time', 'DE', false, DE);
+    expect(s.update).toHaveBeenCalledWith({
+      where: { slug: 'bath-time' },
+      data: { countries: ['KZ'], countriesMode: 'include' },
+    });
+    s = setup(null, [], { ...templateRow, countries: ['DE'] });
+    expect(
+      await code(s.service.setVisibility('bath-time', 'DE', false, DE)),
+    ).toBe('catalog_last_country');
+    expect(
+      await code(s.service.setVisibility('bath-time', 'KZ', true, DE)),
+    ).toBe('scope_forbidden');
+    s = setup(null, [], { ...templateRow, countries: ['DE'] });
+    await s.service.setVisibility('bath-time', 'KZ', true, SUPER);
+    expect(s.update).toHaveBeenCalledWith({
+      where: { slug: 'bath-time' },
+      data: { countries: ['DE', 'KZ'], countriesMode: 'include' },
     });
   });
 
@@ -148,13 +272,13 @@ describe('AdminService.updateTemplate samples', () => {
       samples: { en: 'en-book', kk: null },
     });
     expect(tx.templateSample.deleteMany).toHaveBeenCalledWith({
-      where: { templateId: 't1', language: 'en' },
+      where: { templateId: 't1', language: 'en', country: '' },
     });
     expect(tx.templateSample.create).toHaveBeenCalledWith({
       data: { templateId: 't1', language: 'en', bookId: 'en-book' },
     });
     expect(tx.templateSample.deleteMany).toHaveBeenCalledWith({
-      where: { templateId: 't1', language: 'kk' },
+      where: { templateId: 't1', language: 'kk', country: '' },
     });
     expect(tx.templateSample.create).toHaveBeenCalledTimes(1);
   });
@@ -181,7 +305,15 @@ describe('AdminService.updateTemplate samples', () => {
     await service.updateTemplate('bath-time', { countries: ['KZ', 'DE'] });
     expect(tx.bookTemplate.update).toHaveBeenCalledWith({
       where: { slug: 'bath-time' },
-      data: { countries: ['KZ', 'DE'] },
+      data: { countries: ['KZ', 'DE'], countriesMode: 'include' },
+    });
+    await service.updateTemplate('bath-time', {
+      countries: ['KZ'],
+      countriesMode: 'exclude',
+    });
+    expect(tx.bookTemplate.update).toHaveBeenLastCalledWith({
+      where: { slug: 'bath-time' },
+      data: { countries: ['KZ'], countriesMode: 'exclude' },
     });
     expect((await service.template('bath-time')).countries).toEqual([
       'KZ',

@@ -101,18 +101,25 @@ describe('TemplatesService.list', () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         published: true,
-        OR: [{ countries: { isEmpty: true } }, { countries: { has: 'KZ' } }],
+        OR: [
+          { countries: { isEmpty: true } },
+          { countriesMode: 'include', countries: { has: 'KZ' } },
+          { countriesMode: 'exclude', NOT: { countries: { has: 'KZ' } } },
+        ],
       },
       orderBy: { sortOrder: 'asc' },
     });
   });
 
-  it('lists only the books listed everywhere without a country', async () => {
+  it('lists the books listed everywhere and the "everywhere except" ones without a country', async () => {
     const { templates, findMany } = listing();
     await templates.list('en', null);
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { published: true, OR: [{ countries: { isEmpty: true } }] },
+        where: {
+          published: true,
+          OR: [{ countries: { isEmpty: true } }, { countriesMode: 'exclude' }],
+        },
       }),
     );
   });
@@ -121,10 +128,14 @@ describe('TemplatesService.list', () => {
 describe('listedWhere', () => {
   it('matches the shared rule', () => {
     expect(listedWhere('DE')).toEqual({
-      OR: [{ countries: { isEmpty: true } }, { countries: { has: 'DE' } }],
+      OR: [
+        { countries: { isEmpty: true } },
+        { countriesMode: 'include', countries: { has: 'DE' } },
+        { countriesMode: 'exclude', NOT: { countries: { has: 'DE' } } },
+      ],
     });
     expect(listedWhere(null)).toEqual({
-      OR: [{ countries: { isEmpty: true } }],
+      OR: [{ countries: { isEmpty: true } }, { countriesMode: 'exclude' }],
     });
   });
 });
