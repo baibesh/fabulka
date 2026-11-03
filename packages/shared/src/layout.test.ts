@@ -23,8 +23,20 @@ import {
   wordsPerPage,
   type BookLayout,
   type RenderableBook,
+  BOOK_CSS,
   chooseLayout,
+  countBreaks,
+  judgePage,
+  pageText,
+  GRID,
+  type PageSubject,
+  type PageTone,
 } from "./index";
+
+/** A hero in the middle of the picture, nothing in its bottom third. */
+const MOCK_SUBJECT_LIKE: PageSubject = { box: { x: 0.4, y: 0.3, w: 0.2, h: 0.3 }, grid: "" };
+/** A light, calm picture. */
+const calmTone: PageTone = { aspect: 1.5, lum: Array(GRID * GRID).fill(230), detail: Array(GRID * GRID).fill(2) };
 
 const book = (pages = 4): RenderableBook => ({
   title: "Айгерим и <звёздная> лошадка",
@@ -206,6 +218,37 @@ describe("a page without its picture", () => {
 
   it("is an old layout's page with no flag: unchanged", () => {
     expect(BookLayoutSchema.parse(JSON.parse(JSON.stringify({ ...layout, pages: { "1": { options: ["split"] } } }))).pages["1"].noArt).toBe(false);
+  });
+});
+
+describe("line breaks in page text", () => {
+  const layout = newLayout("fairy");
+  const withText = (text: string) => ({ ...book(1), pages: [{ page: 1, text, image: "page-1.png" }] });
+  const story = (text: string, hyphenate?: (t: string) => string) =>
+    renderBook(withText(text), layout, { hyphenate }).pages.find((p) => p.key === "story-1")!.html;
+
+  it("keeps intended breaks for the CSS to show (pre-line), tidying the rest", () => {
+    expect(BOOK_CSS).toMatch(/\.fb-text p \{[^}]*white-space: pre-line/);
+    expect(story("Сказал кот.\n«Мяу!»\n«Мур!»")).toContain("Сказал кот.\n«Мяу!»\n«Мур!»");
+    expect(pageText("  Раз. \r\n\n\n\n  Два.\t\n")).toBe("Раз.\n\nДва.");
+    expect(story("Раз.\r\nДва.", (t) => t)).toContain("Раз.\nДва.");
+  });
+
+  it("renders a text without breaks exactly as before", () => {
+    const text = "Бет 1. Айгерим Алматыда.";
+    expect(pageText(text)).toBe(text);
+    expect(story(text)).toContain(`<p data-qa-text>${text}</p>`);
+  });
+
+  it("counts breaks so a text of many short lines is not taken for one that fits", () => {
+    const lines = Array.from({ length: 10 }, (_, i) => `Жол ${i + 1}.`);
+    expect(countBreaks(lines.join("\n"))).toBe(9);
+    expect(countBreaks("Бір. Екі.")).toBe(0);
+    const square = { ...newLayout("fairy"), theme: { ...newLayout("fairy").theme, variants: ["split" as const] } };
+    const judge = (breaks: number) =>
+      judgePage(square, { page: 1, words: 20, breaks, subject: MOCK_SUBJECT_LIKE, tone: calmTone }).verdicts.split;
+    expect(judge(0)?.reason).not.toBe("words");
+    expect(judge(30)?.reason).toBe("words");
   });
 });
 

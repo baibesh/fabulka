@@ -4,6 +4,7 @@ import {
   blankPage,
   bookDocument,
   chooseLayout,
+  countBreaks,
   countWords,
   cropNote,
   printDocument,
@@ -172,6 +173,7 @@ export class PdfService {
           subject: p.subject,
           tone: tones[p.page],
           words: countWords(page?.text ?? ''),
+          breaks: countBreaks(page?.text ?? ''),
           // A page whose picture was refused has none: it becomes a vignette page.
           art: Boolean(page?.image),
         };

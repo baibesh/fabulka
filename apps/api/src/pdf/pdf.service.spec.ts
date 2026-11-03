@@ -295,6 +295,28 @@ describe('PdfService (Chromium), choosing layouts from the pictures', () => {
     expect(page2).toContain('class="fb-vignette" src="hero.svg"');
     expect(page2).not.toContain('fb-empty');
   });
+
+  it('keeps line breaks in page text, and render QA measures them', async () => {
+    const lines = Array.from({ length: 14 }, (_, i) => `Жол ${i + 1}.`);
+    const flat = await pdf.render(
+      'c',
+      book((n) => (n === 1 ? lines.join(' ') : 'Қысқа.')),
+      newLayout('fairy'),
+    );
+    expect(flat.layout.fits['story-1']).toBeUndefined();
+    const broken = await pdf.render(
+      'c',
+      book((n) => (n === 1 ? lines.join('\n') : 'Қысқа.')),
+      newLayout('fairy'),
+    );
+    // Fourteen short lines take far more room than one short paragraph.
+    expect(
+      broken.layout.fits['story-1'] ??
+        (broken.layout.qa.status === 'blocked' ? 0 : 1),
+    ).toBeLessThan(1);
+    const html = await readFile(join(root, 'books/c/book.html'), 'utf8');
+    expect(html).toContain('Жол 1.\nЖол 2.');
+  });
 });
 
 describe('render QA verdict', () => {

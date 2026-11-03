@@ -163,7 +163,7 @@ function Progress({ book }: { book: Book }) {
             ) : (
               <Skeleton as="div" radius="none" className="aspect-[3/2] w-full" />
             )}
-            <p className="p-4 leading-relaxed">{page.text}</p>
+            <p className="whitespace-pre-line p-4 leading-relaxed">{page.text}</p>
           </motion.li>
         ))}
       </ol>

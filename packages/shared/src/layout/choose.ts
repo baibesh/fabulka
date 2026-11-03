@@ -33,6 +33,8 @@ export type PageTone = z.infer<typeof PageToneSchema>;
 export interface PageAnalysis {
   page: number;
   words: number;
+  /** Line breaks the text keeps (countBreaks): each one leaves the rest of its line empty. */
+  breaks?: number;
   subject: PageSubject | null;
   tone: PageTone | null;
   /** False: the page has no picture (it was refused), so it becomes a vignette page. */
@@ -141,6 +143,12 @@ export function capacity(rect: Rect, theme: BookTheme, layout: Pick<BookLayout, 
   return Math.floor((lines * chars) / 6.3);
 }
 
+/** Words one line of a text box holds at the theme's size, roughly. */
+function lineWords(rect: Rect, theme: BookTheme, layout: Pick<BookLayout, "ageGroup"> & Partial<Pick<BookLayout, "format">>): number {
+  const size = formatTypeScale(theme, layout.ageGroup, layout.format);
+  return rect.w / (size.bodyPt * PT_MM * 0.5) / 6.3;
+}
+
 export interface Verdict {
   ok: boolean;
   ink: "dark" | "light";
@@ -181,8 +189,12 @@ export function judgePage(layout: BookLayout, page: PageAnalysis): Partial<PageL
   const ink: PageLayout["ink"] = {};
   let spreadSide: PageLayout["spreadSide"] = "right";
   let plateBand: PageLayout["plateBand"] = "bottom";
-  const fits = (variant: PageVariant, state?: Pick<PageLayout, "plateBand">) =>
-    page.words <= capacity(textRect(variant, format, state), theme, layout) * SHRINK_ROOM;
+  const fits = (variant: PageVariant, state?: Pick<PageLayout, "plateBand">) => {
+    const rect = textRect(variant, format, state);
+    // A kept line break leaves, on average, half a line empty.
+    const load = page.words + ((page.breaks ?? 0) * lineWords(rect, theme, layout)) / 2;
+    return load <= capacity(rect, theme, layout) * SHRINK_ROOM;
+  };
   if (page.art === false) {
     // No picture: nothing to judge; the vignette page's text sits on paper where the plate would.
     return {
@@ -282,6 +294,24 @@ function inGutter(page: PageAnalysis, art: Rect, aspect: number, focus: Focus, f
 /** Words in a text, for the capacity check. */
 export function countWords(text: string): number {
   return text.split(/\s+/u).filter(Boolean).length;
+}
+
+/** Line breaks a page's text keeps when it is rendered (pageText), for the capacity check. */
+export function countBreaks(text: string): number {
+  return (pageText(text).match(/\n/g) ?? []).length;
+}
+
+/**
+ * A page's text as the book prints it: intended line breaks (a caption, then lines of dialogue) are
+ * kept, everything else around them is tidied — Windows line ends, spaces at line ends, more than
+ * one empty line in a row, and breaks at the very start or end.
+ */
+export function pageText(text: string): string {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function clamp(value: number, min: number, max: number): number {

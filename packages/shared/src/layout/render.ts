@@ -3,7 +3,7 @@ import { BOOK_LABELS } from "../labels";
 import type { BookLayout, BookTheme, PageLayout, PageVariant } from "./model";
 import { BOOK_FONTS, formatTypeScale } from "./themes";
 import { type PlannedPage, type Rect, artRect, planBook, textRect } from "./plan";
-import { contrast, luminance, objectPosition } from "./choose";
+import { contrast, luminance, objectPosition, pageText } from "./choose";
 
 /**
  * The one book renderer. It turns a book and its layout into fixed-size HTML pages (millimetres,
@@ -336,9 +336,13 @@ function image(src: string | null | undefined, cls: string, position?: { x: numb
   return `<img class="${cls}" src="${escapeHtml(src)}" alt="" style="${css}">`;
 }
 
-/** Escaped text with optional soft hyphens and marks. */
-function inline(text: string, options: RenderOptions, hyphenate: boolean): string {
-  const fix = (t: string) => escapeHtml(hyphenate && options.hyphenate ? options.hyphenate(t) : t);
+/**
+ * Escaped text with optional marks. Body text (`isBody`) gets soft hyphens and is tidied by pageText,
+ * keeping its intended line breaks for the CSS's pre-line.
+ */
+function inline(raw: string, options: RenderOptions, isBody: boolean): string {
+  const text = isBody ? pageText(raw) : raw;
+  const fix = (t: string) => escapeHtml(isBody && options.hyphenate ? options.hyphenate(t) : t);
   const pieces = options.mark ? options.mark(text) : [text];
   // Marked words (a name, a city) are kept whole: they are proper names, and the hint names them.
   return pieces
@@ -371,7 +375,8 @@ export const BOOK_CSS = `
 .fb-box.fb-bottom { justify-content: flex-end; }
 .fb-center { text-align: center; align-items: stretch; }
 .fb-flow { width: 100%; }
-.fb-text p { font-size: calc(var(--body-size) * var(--fit)); line-height: var(--line); }
+/* Story text keeps its intended line breaks (a caption, then lines of dialogue); render QA measures it so. */
+.fb-text p { font-size: calc(var(--body-size) * var(--fit)); line-height: var(--line); white-space: pre-line; }
 .fb-vignette { position: absolute; object-fit: contain; mix-blend-mode: multiply; }
 .fb-vignette-ornament { position: absolute; display: flex; align-items: center; justify-content: center; margin: 0; }
 .fb-ink-dark { color: var(--ink); text-shadow: 0 0 1.2mm rgba(255,255,255,.85), 0 0 .4mm rgba(255,255,255,.9); }
