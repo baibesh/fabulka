@@ -721,6 +721,121 @@ export const LandingHeroSchema = z.object({
 });
 export type LandingHero = z.infer<typeof LandingHeroSchema>;
 
+/**
+ * The landing's pictures a country may replace: the hero's illustration (shown instead of the pile
+ * of catalog covers) and the three steps of the toy story (the parent's photo, the cut-out, the
+ * drawing). Everything else on the landing is the country's catalog and examples already.
+ */
+export const LANDING_IMAGE_SLOTS = ["hero", "toyPhoto", "toyCutout", "toyCharacter"] as const;
+export const LandingImageSlotSchema = z.enum(LANDING_IMAGE_SLOTS);
+export type LandingImageSlot = z.infer<typeof LandingImageSlotSchema>;
+
+/** The pictures the landing shows where a country has none of its own (the toy story's files); null: the hero's cover pile. */
+export const DEFAULT_LANDING_IMAGES: Record<LandingImageSlot, string | null> = {
+  hero: null,
+  toyPhoto: "/landing/toy-photo.jpg",
+  toyCutout: "/landing/toy-cutout.jpg",
+  toyCharacter: "/landing/toy-character.jpg",
+};
+
+/** Widths a landing picture is stored at (square WebP files); the browser picks one with srcset. */
+export const LANDING_IMAGE_WIDTHS = [384, 640, 960] as const;
+
+/** The largest picture file staff may upload for the landing. */
+export const LANDING_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+
+/** Where stored files are served (the API's StorageService.url). */
+const FILES_PREFIX = "/files/";
+
+/**
+ * A picture staff set for a country's landing: square WebP files at `${path}-${width}.webp` for each
+ * of `widths` (LANDING_IMAGE_WIDTHS up to the source's size), made by the API from an upload or a
+ * finished book's picture.
+ */
+export const LandingImageSchema = z.object({
+  path: z.string().regex(/^landing\/[A-Z]{2}\/[a-zA-Z]+-[a-f0-9]{8,32}$/),
+  widths: z
+    .array(z.number().int().min(16).max(4096))
+    .min(1)
+    .max(LANDING_IMAGE_WIDTHS.length)
+    .refine((list) => list.every((w, i) => i === 0 || w > list[i - 1]), "Widths in increasing order"),
+  /** The finished book it was taken from (its id and which picture), when picked from one. */
+  book: z.object({ id: z.string().max(64), picture: z.string().max(20) }).optional(),
+});
+export type LandingImage = z.infer<typeof LandingImageSchema>;
+
+/** Which pictures of a slot apply: "all" for every language of the country, or one language's own. */
+export const LandingImageLanguageSchema = z.union([z.literal("all"), LanguageSchema]);
+export type LandingImageLanguage = z.infer<typeof LandingImageLanguageSchema>;
+
+/** One slot's pictures in a country: one for all its languages and/or one per language. */
+export const LandingImageSetSchema = z.partialRecord(LandingImageLanguageSchema, LandingImageSchema);
+export type LandingImageSet = z.infer<typeof LandingImageSetSchema>;
+
+/** A stored landing picture as the page writes it: the largest file, the srcset, its width. */
+export interface LandingPicture {
+  src: string;
+  srcSet: string;
+  width: number;
+  /** Where it comes from: the page's language's own picture, or the country's for all languages. */
+  scope: "language" | "country";
+}
+
+/** The files of a stored landing picture. */
+export function landingPicture(image: LandingImage, scope: LandingPicture["scope"] = "country"): LandingPicture {
+  const url = (width: number) => `${FILES_PREFIX}${image.path}-${width}.webp`;
+  const width = image.widths[image.widths.length - 1];
+  return { src: url(width), srcSet: image.widths.map((w) => `${url(w)} ${w}w`).join(", "), width, scope };
+}
+
+/**
+ * The picture a visitor from `country` reading in `language` sees in a slot: the country's picture
+ * for that language, else its picture for all languages, else null (the default: DEFAULT_LANDING_IMAGES).
+ */
+export function landingImageFor(
+  overrides: LandingOverrides | undefined,
+  country: string,
+  language: Language,
+  slot: LandingImageSlot,
+): LandingPicture | null {
+  const set = overrides?.[country]?.images?.[slot];
+  if (set?.[language]) return landingPicture(set[language], "language");
+  if (set?.all) return landingPicture(set.all, "country");
+  return null;
+}
+
+/**
+ * Body of POST /admin/reference/landing/image?country=: a picture for one slot and language ("all":
+ * every language of the country), either an uploaded file (a JPEG, PNG or WebP as a data URL) or a
+ * picture of a finished book (its cover, hero sheet or a page: "cover", "hero", "page-3").
+ */
+export const LandingImageUploadSchema = z
+  .object({
+    slot: LandingImageSlotSchema,
+    language: LandingImageLanguageSchema,
+    image: z
+      .string()
+      .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/, "A JPEG, PNG or WebP data URL")
+      .max(Math.ceil((LANDING_IMAGE_MAX_BYTES * 4) / 3) + 100)
+      .optional(),
+    book: z
+      .object({ id: z.string().min(1).max(64), picture: z.string().regex(/^(cover|hero|page-\d{1,2})$/) })
+      .optional(),
+  })
+  .refine((body) => Boolean(body.image) !== Boolean(body.book), { message: "An upload or a book's picture, one of them" });
+export type LandingImageUpload = z.infer<typeof LandingImageUploadSchema>;
+
+/** A finished book whose pictures a landing picture may be taken from (GET /admin/reference/landing/books). */
+export const LandingBookSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  language: LanguageSchema,
+  /** Why it is offered: an example shown in the country, or a catalog sample (the country's or global). */
+  source: z.enum(["example", "sample"]),
+  pictures: z.array(z.object({ key: z.string(), url: z.string() })),
+});
+export type LandingBook = z.infer<typeof LandingBookSchema>;
+
 /** A question only one country's landing has, in the languages it is written in (shown only in those). */
 export const CountryFaqItemSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
@@ -752,6 +867,11 @@ export const CountryLandingSchema = z.object({
     .array(LandingSectionSchema)
     .default([])
     .refine((list) => new Set(list).size === list.length, "Duplicate section"),
+  /**
+   * The country's own pictures by slot (POST /admin/reference/landing/image sets them; a PUT of the
+   * rest without this field keeps them).
+   */
+  images: z.partialRecord(LandingImageSlotSchema, LandingImageSetSchema).optional(),
 });
 export type CountryLanding = z.infer<typeof CountryLandingSchema>;
 
@@ -842,12 +962,19 @@ export type AdminReference = z.infer<typeof AdminReferenceSchema>;
 /**
  * The default prices of each currency; the seed of reference.prices. Tenge and dollar book prices
  * are those the site launched with; euro book prices and the dollar and euro delivery fees are
- * starting points for countries that move to those currencies.
+ * starting points for countries that move to those currencies. The Canadian and Australian dollar,
+ * ringgit and franc lists (added with the launch countries) sit near the dollar tier and end in .90
+ * as local shops price; their delivery fees wait for print there. Start-up adds a currency missing
+ * from the stored prices (ReferenceService) and never changes one that is stored.
  */
 export const DEFAULT_PRICES: DefaultPrices = {
   KZT: { books: { template: 1_900_00, custom: 2_900_00 }, delivery: 1_500_00 },
   USD: { books: { template: 3_90, custom: 5_90 }, delivery: 9_90 },
   EUR: { books: { template: 3_90, custom: 5_90 }, delivery: 6_90 },
+  CAD: { books: { template: 6_90, custom: 7_90 }, delivery: 12_90 },
+  AUD: { books: { template: 7_90, custom: 8_90 }, delivery: 14_90 },
+  MYR: { books: { template: 19_90, custom: 24_90 }, delivery: 29_90 },
+  CHF: { books: { template: 4_90, custom: 5_90 }, delivery: 8_90 },
 };
 
 /** The cities the site launched with; the seed of reference.cities. */
@@ -864,49 +991,44 @@ export const DEFAULT_CITIES: City[] = [
   { id: "kostanay", country: "KZ", name: { ru: "Костанай", kk: "Қостанай", en: "Kostanay" }, freeDelivery: false },
 ];
 
-const ruEn: Language[] = ["ru", "en"];
-const enRu: Language[] = ["en", "ru"];
-const en: Language[] = ["en"];
-const deEn: Language[] = ["de", "en"];
-const esEn: Language[] = ["es", "en"];
-const abroad = (code: string, languages: Language[]): CountryEntry => ({ code, languages, currency: "USD", print: false });
-
 /**
- * The countries the site launches with; the seed of reference.countries. Kazakhstan first (tenge,
- * print), then the neighbours where Russian is the common language (Russian first), the ones where
- * fewer families read it (English first), the German- and Spanish-speaking ones (their language
- * first, then English), and the rest in English only. Nothing on Meta's list of restricted
- * territories. A stored list still equal to an older seed is upgraded to this one on
- * start (apps/api ReferenceService).
+ * The countries the site launches with; the seed of reference.countries (and what a list still equal
+ * to an older seed becomes on start: apps/api ReferenceService, launch-lineup.ts). Kazakhstan first
+ * (Kazakh, Russian, English; tenge; print), then the English-speaking ones, the German-speaking and
+ * Spain, each in its own currency and without print yet. Everywhere else is "other"; a superadmin
+ * adds countries one at a time in the admin, each with its own content. Nothing on Meta's list of
+ * restricted territories.
  */
 export const DEFAULT_COUNTRIES: CountryEntry[] = [
   { code: "KZ", languages: ["kk", "ru", "en"], currency: "KZT", print: true },
-  abroad("UZ", ruEn),
-  abroad("KG", ruEn),
-  abroad("TJ", ruEn),
-  abroad("TM", ruEn),
-  abroad("AZ", ruEn),
-  abroad("AM", ruEn),
-  abroad("GE", enRu),
-  abroad("MD", enRu),
-  abroad("IL", enRu),
-  abroad("MN", en),
-  abroad("TR", en),
-  abroad("AE", en),
-  abroad("DE", deEn),
-  abroad("AT", deEn),
-  abroad("CH", deEn),
-  abroad("ES", esEn),
-  abroad("MX", esEn),
-  abroad("AR", esEn),
-  abroad("CO", esEn),
-  abroad("CL", esEn),
-  abroad("PL", en),
-  abroad("CZ", en),
-  abroad("GB", en),
-  abroad("US", en),
-  abroad("CA", en),
+  { code: "US", languages: ["en"], currency: "USD", print: false },
+  { code: "CA", languages: ["en"], currency: "CAD", print: false },
+  { code: "MY", languages: ["en"], currency: "MYR", print: false },
+  { code: "AU", languages: ["en"], currency: "AUD", print: false },
+  { code: "DE", languages: ["de", "en"], currency: "EUR", print: false },
+  { code: "AT", languages: ["de", "en"], currency: "EUR", print: false },
+  { code: "CH", languages: ["de", "en"], currency: "CHF", print: false },
+  { code: "ES", languages: ["es", "en"], currency: "EUR", print: false },
 ];
+
+/** Countries paying in euros (the euro area and the states that use it by agreement). */
+const EURO_COUNTRIES = "AD AT BE CY DE EE ES FI FR GR HR IE IT LT LU LV MC ME MT NL PT SI SK SM VA XK".split(" ");
+/** Countries whose own currency the site prices in, besides the euro. */
+const OWN_CURRENCY: Partial<Record<string, Currency>> = { KZ: "KZT", US: "USD", CA: "CAD", AU: "AUD", MY: "MYR", CH: "CHF", LI: "CHF" };
+/** Where German or Spanish is what families read; elsewhere English (Russian is added by hand). */
+const GERMAN = ["DE", "AT", "CH", "LI", "LU"];
+const SPANISH = "ES MX AR CO CL PE VE EC GT CU BO DO HN PY SV NI CR PA UY".split(" ");
+
+/**
+ * What a country the superadmin adds in the Countries tab starts with: its own currency when the site
+ * prices in it (the euro area in euros), else dollars; its language first, then English; no print.
+ * It is priced from that currency's defaults (reference.prices) until it gets its own.
+ */
+export function suggestedCountry(code: string): CountryEntry {
+  const currency: Currency = OWN_CURRENCY[code] ?? (EURO_COUNTRIES.includes(code) ? "EUR" : "USD");
+  const languages: Language[] = code === "KZ" ? ["kk", "ru", "en"] : GERMAN.includes(code) ? ["de", "en"] : SPANISH.includes(code) ? ["es", "en"] : ["en"];
+  return { code, languages, currency, print: false };
+}
 
 const everywhere = { countries: [], excludeCountries: false, published: true };
 const onlyKz = { countries: ["KZ"], excludeCountries: false, published: true };

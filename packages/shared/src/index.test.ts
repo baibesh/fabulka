@@ -388,9 +388,12 @@ describe("countries", () => {
 
   it("maps the visitor's IP country onto ours", () => {
     expect(countryFromIp("KZ", list)).toBe("KZ");
-    expect(countryFromIp("uz", list)).toBe("UZ");
-    expect(countryFromIp("KG", list)).toBe("KG");
+    expect(countryFromIp("ca", list)).toBe("CA");
+    expect(countryFromIp("MY", list)).toBe("MY");
     expect(countryFromIp("DE", list)).toBe("DE");
+    // Not a launch country: "other".
+    expect(countryFromIp("UZ", list)).toBe("other");
+    expect(countryFromIp("FR", list)).toBe("other");
     expect(countryFromIp("NL", list)).toBe("other");
     expect(countryFromIp("other", list)).toBe("other");
     expect(countryFromIp(null, list)).toBe("other");
@@ -416,21 +419,19 @@ describe("countries", () => {
 
   it("offers Kazakh only in Kazakhstan and falls back to the country's first language", () => {
     expect(languageFor("KZ", "kk", list)).toBe("kk");
-    expect(languageFor("UZ", "kk", list)).toBe("ru");
-    expect(languageFor("KG", "en", list)).toBe("en");
+    expect(languageFor("CA", "kk", list)).toBe("en");
     expect(languageFor("DE", "kk", list)).toBe("de");
     expect(languageFor("DE", "ru", list)).toBe("de");
     expect(languageFor("AT", "en", list)).toBe("en");
+    expect(languageFor("CH", "es", list)).toBe("de");
     expect(languageFor("ES", "de", list)).toBe("es");
-    expect(languageFor("MX", "es", list)).toBe("es");
     expect(languageFor("US", "es", list)).toBe("en");
+    expect(languageFor("MY", "ru", list)).toBe("en");
     expect(languageFor("other", "es", list)).toBe("es");
     expect(languageFor("other", "de", list)).toBe("de");
-    // Russian only where many families read it: never in Poland, English first in Georgia.
-    expect(languageFor("PL", "ru", list)).toBe("en");
-    expect(languageFor("GE", "kk", list)).toBe("en");
-    expect(languageFor("GE", "ru", list)).toBe("ru");
-    expect(languageFor("UZ", "en", list)).toBe("en");
+    // A country the site no longer lists gets what "other" gets.
+    expect(languageFor("MX", "es", list)).toBe("es");
+    expect(languageFor("UZ", "ru", list)).toBe("ru");
     expect(languageFor("other", "kk", list)).toBe("en");
     expect(languageFor("other", "ru", list)).toBe("ru");
     expect(list.filter((c) => c.languages.includes("kk")).map((c) => c.code)).toEqual(["KZ"]);
@@ -497,9 +498,10 @@ describe("FAQ", () => {
   });
 
   it("tells print apart by the country's print flag, so opening print flips the answer", () => {
-    const printInUz = DEFAULT_COUNTRIES.map((c) => (c.code === "UZ" ? { ...c, currency: "KZT" as const, print: true } : c));
-    expect(ids("UZ", printInUz)).toContain("print-kz");
-    expect(ids("UZ", printInUz)).not.toContain("print-abroad");
+    const printInDe = DEFAULT_COUNTRIES.map((c) => (c.code === "DE" ? { ...c, print: true } : c));
+    expect(ids("DE")).toContain("print-abroad");
+    expect(ids("DE", printInDe)).toContain("print-kz");
+    expect(ids("DE", printInDe)).not.toContain("print-abroad");
     const noPrintInKz = DEFAULT_COUNTRIES.map((c) => (c.code === "KZ" ? { ...c, print: false } : c));
     expect(ids("KZ", noPrintInKz)).toContain("print-abroad");
     expect(ids("KZ", noPrintInKz)).not.toContain("print-kz");

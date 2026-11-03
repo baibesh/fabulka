@@ -2,6 +2,7 @@ import { z } from "zod";
 import { LANGUAGES, LanguageSchema, type Language } from "./language";
 import { TemplateCountriesSchema } from "./reference";
 import { CountriesModeSchema } from "./country-rules";
+import { CurrencySchema, MoneySchema } from "./money";
 
 // ---- Examples on the home page -----------------------------------------------------------------
 //
@@ -108,7 +109,14 @@ export const VisitorCellSchema = z.object({
 export type VisitorCell = z.infer<typeof VisitorCellSchema>;
 
 /** GET /admin/examples/matrix: per country (an ISO code, or "other"), what a visitor sees per language. */
-export const VisitorMatrixSchema = z.array(z.object({ country: z.string(), cells: z.array(VisitorCellSchema) }));
+export const VisitorMatrixSchema = z.array(
+  z.object({
+    country: z.string(),
+    /** The site lists the country; false for a code staff still hold that it no longer offers (its visitors are "other"). */
+    listed: z.boolean().default(true),
+    cells: z.array(VisitorCellSchema),
+  }),
+);
 export type VisitorMatrix = z.infer<typeof VisitorMatrixSchema>;
 
 /** Body of POST /admin/examples/order: every example's id, in the order the home page shows them. */
@@ -217,3 +225,78 @@ export function transliterate(name: string, language: Language): string {
   }
   return out;
 }
+
+// ---- Country overview: everything a visitor from a country gets (admin, next to the matrix) -----
+
+/**
+ * What the country's content is missing, for the night content job and the owner:
+ * - not_offered: staff hold the country but the site no longer lists it (its visitors are "other");
+ * - no_local_examples: no example is made for the country (listed by its code);
+ * - no_examples: visitors reading this language see no example (samples or nothing instead);
+ * - no_country_samples: no catalog sample of the country's own (only the global ones show);
+ * - missing_samples: some catalog books listed there have no sample in this language at all;
+ * - no_landing_image: the landing shows the default pictures (no hero picture of its own);
+ * - no_landing_title: the hero's title is the default in this language.
+ */
+export const OVERVIEW_GAPS = [
+  "not_offered",
+  "no_local_examples",
+  "no_examples",
+  "no_country_samples",
+  "missing_samples",
+  "no_landing_image",
+  "no_landing_title",
+] as const;
+export const OverviewGapSchema = z.enum(OVERVIEW_GAPS);
+export type OverviewGap = z.infer<typeof OverviewGapSchema>;
+
+/** One catalog book's sample in one language as a visitor sees it: the country's own, the global one, none. */
+export const OverviewSampleSchema = z.object({
+  templateId: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  /** The book offers this language at all (else there is nothing to fill). */
+  offered: z.boolean(),
+  sample: z
+    .object({ bookId: z.string(), title: z.string(), heroImageUrl: z.string().nullable(), scope: z.enum(["country", "global"]) })
+    .nullable(),
+});
+export type OverviewSample = z.infer<typeof OverviewSampleSchema>;
+
+/** One language of a country in the overview. */
+export const OverviewLanguageSchema = z.object({
+  language: LanguageSchema,
+  /** What the home page's examples block shows (the visitor matrix's cell). */
+  examples: VisitorCellSchema.omit({ language: true, offered: true }).extend({
+    /** How many of the shown examples are made for this country (listed by its code). */
+    local: z.number().int(),
+  }),
+  samples: z.array(OverviewSampleSchema),
+  /** The hero as the landing shows it in this language: its own title and lead (null: the default) and picture. */
+  landing: z.object({
+    title: z.string().nullable(),
+    lead: z.string().nullable(),
+    heroImage: z.object({ src: z.string(), scope: z.enum(["language", "country"]) }).nullable(),
+  }),
+});
+export type OverviewLanguage = z.infer<typeof OverviewLanguageSchema>;
+
+/** GET /admin/examples/overview: per country (an ISO code or "other"), everything its visitors get. */
+export const CountryOverviewSchema = z.object({
+  country: z.string(),
+  /** The site lists the country (false: a code staff, examples or catalog books still hold). */
+  listed: z.boolean(),
+  languages: z.array(LanguageSchema),
+  currency: CurrencySchema,
+  print: z.boolean(),
+  /** One more book's prices there, and whether they are the country's own (else its currency's defaults). */
+  prices: z.object({ template: MoneySchema.nullable(), custom: MoneySchema.nullable(), own: z.boolean() }),
+  /** Examples made for the country (listed by its code), shown or not. */
+  localExamples: z.number().int(),
+  /** Catalog samples of the country's own, in any language. */
+  countrySamples: z.number().int(),
+  byLanguage: z.array(OverviewLanguageSchema),
+  gaps: z.array(z.object({ code: OverviewGapSchema, language: LanguageSchema.optional() })),
+});
+export type CountryOverview = z.infer<typeof CountryOverviewSchema>;
+export const CountriesOverviewSchema = z.array(CountryOverviewSchema);

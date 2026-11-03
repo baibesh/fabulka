@@ -9,7 +9,7 @@ import { z } from "zod";
 // Display and input rounding, per currency (`decimals` below):
 // - KZT: ISO 4217 says 2 (tiyn), but tenge prices are whole: they are typed and shown with no
 //   decimals, so every stored KZT price is a multiple of 100 minor units (validated on save).
-// - USD and EUR: 2 decimals, typed and shown as cents.
+// - USD, EUR, CAD, AUD, MYR (sen) and CHF (Rappen): 2 decimals, typed and shown as cents.
 // A computed amount finer than what is shown (an approximate conversion to dollars) is rounded half
 // away from zero when shown, which is Intl.NumberFormat's default ("halfExpand").
 
@@ -20,13 +20,27 @@ export interface CurrencyInfo {
   symbol: string;
   /** Decimals typed and shown; never more than `exponent`. Prices are multiples of 10^(exponent − decimals). */
   decimals: number;
+  /**
+   * How Intl writes the currency in a price: "narrowSymbol" ("$3.90", "19,90 €", "RM 19.90") where
+   * the narrow sign names one currency for our visitors, "symbol" where the narrow one is a bare "$"
+   * that would read as US dollars: Canadian and Australian dollars are "CA$6.90", "A$7.90" (and
+   * "6,90 CAD" in Spanish, which has no CA$).
+   */
+  display: "narrowSymbol" | "symbol";
 }
 
-/** The currencies Fabulka can price in. Adding one is one line here. */
+/**
+ * The currencies Fabulka can price in. Adding one is one line here, plus its default price list
+ * (DEFAULT_PRICES in reference.ts), which start-up adds to the stored prices without touching others.
+ */
 export const CURRENCY_REGISTRY = {
-  KZT: { exponent: 2, symbol: "₸", decimals: 0 },
-  USD: { exponent: 2, symbol: "$", decimals: 2 },
-  EUR: { exponent: 2, symbol: "€", decimals: 2 },
+  KZT: { exponent: 2, symbol: "₸", decimals: 0, display: "narrowSymbol" },
+  USD: { exponent: 2, symbol: "$", decimals: 2, display: "narrowSymbol" },
+  EUR: { exponent: 2, symbol: "€", decimals: 2, display: "narrowSymbol" },
+  CAD: { exponent: 2, symbol: "CA$", decimals: 2, display: "symbol" },
+  AUD: { exponent: 2, symbol: "A$", decimals: 2, display: "symbol" },
+  MYR: { exponent: 2, symbol: "RM", decimals: 2, display: "narrowSymbol" },
+  CHF: { exponent: 2, symbol: "CHF", decimals: 2, display: "narrowSymbol" },
 } as const satisfies Record<string, CurrencyInfo>;
 
 export type Currency = keyof typeof CURRENCY_REGISTRY;
@@ -162,10 +176,11 @@ export function moneyLocale(locale: string): string {
 
 /**
  * Money as a person reads it in `locale` (a BCP 47 tag such as "ru-RU" or "de-DE"), with the
- * currency's shown decimals and narrow symbol: "1 900 ₸", "₸1,900", "19,90 €", "$3.90".
+ * currency's shown decimals and sign (`display`): "1 900 ₸", "₸1,900", "19,90 €", "$3.90",
+ * "CA$6.90", "RM 19.90", "CHF 4.90".
  */
 export function formatMoney(m: Money, locale: string): string {
-  const { decimals } = CURRENCY_REGISTRY[m.currency];
+  const { decimals, display } = CURRENCY_REGISTRY[m.currency];
   const tag = moneyLocale(locale);
   const key = `${tag}|${m.currency}`;
   let format = formatters.get(key);
@@ -173,7 +188,7 @@ export function formatMoney(m: Money, locale: string): string {
     format = new Intl.NumberFormat(tag, {
       style: "currency",
       currency: m.currency,
-      currencyDisplay: "narrowSymbol",
+      currencyDisplay: display,
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     });

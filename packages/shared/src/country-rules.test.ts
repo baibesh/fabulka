@@ -24,6 +24,9 @@ import {
   exampleShownIn,
   heroFor,
   isEverywhere,
+  landingImageFor,
+  LandingImageUploadSchema,
+  suggestedCountry,
   landingFaq,
   normalizeRule,
   ownerCountries,
@@ -119,11 +122,18 @@ describe("country prices", () => {
   const data = { prices: DEFAULT_PRICES, countries: DEFAULT_COUNTRIES };
 
   it("prices a country from its own list in its currency, else its currency's default", () => {
-    expect(bookPrice("template", "DE", { ...data, countryPrices: { DE: de } })).toEqual({ amount: 4_90, currency: "USD" });
-    expect(bookPrice("template", "AT", { ...data, countryPrices: { DE: de } })).toEqual({ amount: 3_90, currency: "USD" });
-    expect(bookPrice("custom", "KZ", { ...data, countryPrices: { DE: de } })).toEqual({ amount: 2_900_00, currency: "KZT" });
-    expect(bookPricesFor("DE", { ...data, countryPrices: { DE: de } })?.own).toBe(true);
-    expect(bookPricesFor("AT", { ...data, countryPrices: { DE: de } })?.own).toBe(false);
+    const us = { currency: "USD" as const, books: { template: 4_90, custom: 6_90 } };
+    expect(bookPrice("template", "US", { ...data, countryPrices: { US: us } })).toEqual({ amount: 4_90, currency: "USD" });
+    expect(bookPrice("template", "other", { ...data, countryPrices: { US: us } })).toEqual({ amount: 3_90, currency: "USD" });
+    expect(bookPrice("custom", "KZ", { ...data, countryPrices: { US: us } })).toEqual({ amount: 2_900_00, currency: "KZT" });
+    expect(bookPricesFor("US", { ...data, countryPrices: { US: us } })?.own).toBe(true);
+    expect(bookPricesFor("AT", { ...data, countryPrices: { US: us } })?.own).toBe(false);
+    // The launch countries in their own currencies, from those currencies' defaults.
+    expect(bookPrice("template", "CA", data)).toEqual({ amount: 6_90, currency: "CAD" });
+    expect(bookPrice("custom", "AU", data)).toEqual({ amount: 8_90, currency: "AUD" });
+    expect(bookPrice("template", "MY", data)).toEqual({ amount: 19_90, currency: "MYR" });
+    expect(bookPrice("custom", "CH", data)).toEqual({ amount: 5_90, currency: "CHF" });
+    expect(bookPrice("template", "AT", data)).toEqual({ amount: 3_90, currency: "EUR" });
   });
 
   it("uses the default of the country's currency, and drops its own list saved in another one", () => {
@@ -158,6 +168,59 @@ describe("country landing overrides", () => {
     expect(heroFor(overrides, "DE", "ru")).toEqual({ title: null, lead: null });
     expect(heroFor(overrides, "KZ", "de")).toEqual({ title: null, lead: null });
     expect(heroFor(undefined, "DE", "de")).toEqual({ title: null, lead: null });
+  });
+
+  it("takes a landing picture for the language, else the country's for all languages, else the default", () => {
+    const landing: LandingOverrides = {
+      DE: CountryLandingSchema.parse({
+        images: {
+          hero: {
+            all: { path: "landing/DE/hero-0123abcd", widths: [384, 640, 960] },
+            en: { path: "landing/DE/hero-89abcdef", widths: [384, 512] },
+          },
+        },
+      }),
+    };
+    expect(landingImageFor(landing, "DE", "de", "hero")).toEqual({
+      src: "/files/landing/DE/hero-0123abcd-960.webp",
+      srcSet:
+        "/files/landing/DE/hero-0123abcd-384.webp 384w, /files/landing/DE/hero-0123abcd-640.webp 640w, /files/landing/DE/hero-0123abcd-960.webp 960w",
+      width: 960,
+      scope: "country",
+    });
+    expect(landingImageFor(landing, "DE", "en", "hero")).toMatchObject({ src: "/files/landing/DE/hero-89abcdef-512.webp", scope: "language" });
+    // Another slot, another country, no data at all: the default.
+    expect(landingImageFor(landing, "DE", "de", "toyPhoto")).toBeNull();
+    expect(landingImageFor(landing, "US", "en", "hero")).toBeNull();
+    expect(landingImageFor(undefined, "DE", "de", "hero")).toBeNull();
+    // A landing saved before pictures has none.
+    expect(landingImageFor(overrides, "DE", "de", "hero")).toBeNull();
+    // Only our own stored files: no other path, no URL.
+    expect(CountryLandingSchema.safeParse({ images: { hero: { all: { path: "https://evil.example/x", widths: [384] } } } }).success).toBe(false);
+    expect(CountryLandingSchema.safeParse({ images: { hero: { all: { path: "landing/DE/../x-0123abcd", widths: [384] } } } }).success).toBe(false);
+  });
+
+  it("takes an upload or a book's picture for a landing slot, not both", () => {
+    const image = "data:image/png;base64,iVBORw0KGgo=";
+    expect(LandingImageUploadSchema.safeParse({ slot: "hero", language: "all", image }).success).toBe(true);
+    expect(LandingImageUploadSchema.safeParse({ slot: "hero", language: "de", book: { id: "b1", picture: "page-3" } }).success).toBe(true);
+    expect(LandingImageUploadSchema.safeParse({ slot: "hero", language: "all", image, book: { id: "b1", picture: "cover" } }).success).toBe(false);
+    expect(LandingImageUploadSchema.safeParse({ slot: "hero", language: "all" }).success).toBe(false);
+    expect(LandingImageUploadSchema.safeParse({ slot: "footer", language: "all", image }).success).toBe(false);
+    expect(LandingImageUploadSchema.safeParse({ slot: "hero", language: "all", image: "data:image/svg+xml;base64,PHN2Zz4=" }).success).toBe(false);
+    expect(LandingImageUploadSchema.safeParse({ slot: "hero", language: "all", book: { id: "b1", picture: "../pdf" } }).success).toBe(false);
+  });
+
+  it("starts a country added in the admin with its own currency and language", () => {
+    expect(suggestedCountry("CA")).toEqual({ code: "CA", languages: ["en"], currency: "CAD", print: false });
+    expect(suggestedCountry("FR")).toEqual({ code: "FR", languages: ["en"], currency: "EUR", print: false });
+    expect(suggestedCountry("LI")).toEqual({ code: "LI", languages: ["de", "en"], currency: "CHF", print: false });
+    expect(suggestedCountry("MX")).toEqual({ code: "MX", languages: ["es", "en"], currency: "USD", print: false });
+    expect(suggestedCountry("GB").currency).toBe("USD");
+    // Each priced from its currency's defaults.
+    for (const code of ["CA", "FR", "LI", "MX", "GB", "NZ"]) {
+      expect(bookPrice("template", code, { prices: DEFAULT_PRICES, countries: [suggestedCountry(code)] })).not.toBeNull();
+    }
   });
 
   it("hides sections only in its country", () => {
@@ -247,7 +310,8 @@ describe("per-country cities, delivery and formats", () => {
         [a5.id]: { prices: { currency: "KZT" as const, soft: 5_000_00, hard: 8_000_00 } },
       },
     };
-    const data = { prices: DEFAULT_PRICES, countries: DEFAULT_COUNTRIES, formats: DEFAULT_FORMATS, countryFormats: own };
+    const dollars = DEFAULT_COUNTRIES.map((c) => (c.code === "DE" ? { ...c, currency: "USD" as const } : c));
+    const data = { prices: DEFAULT_PRICES, countries: dollars, formats: DEFAULT_FORMATS, countryFormats: own };
     const local = formatsFor("DE", data);
     expect(local.find((f) => f.id === square.id)?.published).toBe(false);
     expect(local.find((f) => f.id === a4.id)?.prices).toEqual({ soft: { amount: 50_00, currency: "USD" }, hard: { amount: 80_00, currency: "USD" } });

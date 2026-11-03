@@ -568,7 +568,7 @@ describe('OrdersService: country scope', () => {
 describe('backfilledCountry', () => {
   const kzOnly = DEFAULT_COUNTRIES;
   const twoPrint = DEFAULT_COUNTRIES.map((c) =>
-    c.code === 'UZ' ? { ...c, currency: 'KZT' as const, print: true } : c,
+    c.code === 'AT' ? { ...c, print: true } : c,
   );
 
   it("takes the book's country when it has print, else the only print country", () => {
@@ -580,7 +580,7 @@ describe('backfilledCountry', () => {
   });
 
   it('leaves an order it cannot place without a country', () => {
-    expect(backfilledCountry('UZ', twoPrint)).toBe('UZ');
+    expect(backfilledCountry('AT', twoPrint)).toBe('AT');
     expect(backfilledCountry(null, twoPrint)).toBeNull();
     expect(backfilledCountry('DE', twoPrint)).toBeNull();
     expect(

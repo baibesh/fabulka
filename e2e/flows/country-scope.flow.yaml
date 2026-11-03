@@ -213,7 +213,7 @@ commands:
   - request:
       method: PUT
       url: /admin/reference/countries
-      json: [{ code: DE, languages: [de], currency: USD, print: false }]
+      json: [{ code: DE, languages: [de], currency: EUR, print: false }]
       assert: { status: 403, json: { "$.code": admin_forbidden } }
   - request:
       method: PUT
@@ -449,7 +449,7 @@ commands:
   - assertTrue: ${!output.shown('KZ').includes(globalBook) && output.shown('DE').includes(globalBook) && output.shown('other').includes(globalBook)}
 
   # The superadmin takes Germany's prices, landing, cities and print back (the API's cache too).
-  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": false, \"currency\": \"USD\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
+  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": false, \"currency\": \"EUR\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
   - request:
       method: POST
       url: /admin/login
@@ -465,7 +465,7 @@ after:
   - sql: { exec: "delete from \"Book\" where \"clientKey\" = $1", params: ["e2e-country-scope-${stamp}"] }
   - sql: { exec: "delete from \"Example\" e where not exists (select 1 from \"ExampleVersion\" v where v.\"exampleId\" = e.id)" }
   - sql: { exec: "update \"Setting\" set value = '{}' where key in ('reference.country_prices', 'reference.landing')" }
-  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": false, \"currency\": \"USD\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
+  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": false, \"currency\": \"EUR\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
   - sql: { exec: "update \"Setting\" set value = coalesce((select jsonb_agg(e order by i) from jsonb_array_elements(value) with ordinality as t(e, i) where e->>'country' is distinct from 'DE'), '[]'::jsonb) where key = 'reference.cities'" }
   - sql: { exec: "delete from \"StaffMember\" where email = $1", params: ["${cmEmail}"] }
   - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${cmEmail}"] }

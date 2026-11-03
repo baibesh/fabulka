@@ -12,10 +12,17 @@ import {
 } from '@fabulka/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import { RESTRICTED_COUNTRIES } from '../geo/restricted';
-import { CACHE_MS, ReferenceService, upgradeStored } from './reference.service';
+import { LINEUP_KEY } from './launch-lineup';
+import {
+  CACHE_MS,
+  ReferenceService,
+  addMissingCurrencies,
+  upgradeStored,
+} from './reference.service';
 import {
   SEEDED_COUNTRIES_V1,
   SEEDED_COUNTRIES_V2,
+  SEEDED_COUNTRIES_V3,
   SEEDED_FAQ_V1,
   SEEDED_FAQ_V2,
   SEEDED_FAQ_V3,
@@ -54,6 +61,17 @@ function settingsStore(initial: Record<string, unknown> = {}) {
         return Promise.resolve({});
       },
     ),
+    findUnique: jest.fn(({ where }: { where: { key: string } }) =>
+      Promise.resolve(
+        rows.has(where.key)
+          ? { key: where.key, value: rows.get(where.key) }
+          : null,
+      ),
+    ),
+    create: jest.fn(({ data }: { data: { key: string; value: unknown } }) => {
+      rows.set(data.key, data.value);
+      return Promise.resolve(data);
+    }),
   };
   const service = new ReferenceService({
     setting,
@@ -126,8 +144,10 @@ describe('ReferenceService seeding', () => {
 
     expect(rows.get(REFERENCE_KEYS.countries)).toEqual(DEFAULT_COUNTRIES);
     expect(rows.get(REFERENCE_KEYS.faq)).toEqual(DEFAULT_FAQ);
-    const pl = (await service.countries()).find((c) => c.code === 'PL');
-    expect(pl?.languages).toEqual(['en']);
+    // Poland is not a launch country: its visitors are "other" now.
+    expect(
+      (await service.countries()).find((c) => c.code === 'PL'),
+    ).toBeUndefined();
   });
 
   it('upgrades the seed stored before Spanish and German to today’s', async () => {
@@ -144,7 +164,7 @@ describe('ReferenceService seeding', () => {
       'de',
       'en',
     ]);
-    expect(countries.find((c) => c.code === 'MX')?.languages).toEqual([
+    expect(countries.find((c) => c.code === 'ES')?.languages).toEqual([
       'es',
       'en',
     ]);
@@ -205,6 +225,105 @@ describe('ReferenceService seeding', () => {
     });
     await service.onModuleInit();
     expect(rows.get(REFERENCE_KEYS.countries)).toEqual(DEFAULT_COUNTRIES);
+  });
+
+  it('replaces the 26-country seed by the launch lineup once, keeping Kazakhstan as stored', async () => {
+    const old = structuredClone(SEEDED_COUNTRIES_V3) as {
+      code: string;
+      print: boolean;
+      payment?: string;
+    }[];
+    // The owner's edits: Kazakhstan paid through Kaspi, print opened in Germany.
+    old[0].payment = 'kaspi';
+    old.find((c) => c.code === 'DE')!.print = true;
+    const countryPrices = {
+      UZ: { currency: 'USD', books: { template: 2_90, custom: 4_90 } },
+    };
+    const { service, rows } = settingsStore({
+      [REFERENCE_KEYS.countries]: old,
+      [REFERENCE_KEYS.countryPrices]: countryPrices,
+    });
+    await service.onModuleInit();
+
+    const countries = rows.get(REFERENCE_KEYS.countries) as {
+      code: string;
+      currency: string;
+      print: boolean;
+      payment?: string;
+    }[];
+    expect(countries.map((c) => c.code)).toEqual([
+      'KZ',
+      'US',
+      'CA',
+      'MY',
+      'AU',
+      'DE',
+      'AT',
+      'CH',
+      'ES',
+    ]);
+    expect(countries[0]).toEqual({ ...old[0] });
+    expect(countries.find((c) => c.code === 'DE')).toMatchObject({
+      currency: 'EUR',
+      print: true,
+    });
+    expect(countries.find((c) => c.code === 'CA')?.currency).toBe('CAD');
+    // A removed country's own prices stay stored (unused: its visitors are "other").
+    expect(rows.get(REFERENCE_KEYS.countryPrices)).toEqual(countryPrices);
+    expect(rows.get(LINEUP_KEY)).toMatchObject({
+      outcome: { action: 'applied', added: ['MY', 'AU'] },
+    });
+    expect(
+      (rows.get(LINEUP_KEY) as { outcome: { removed: string[] } }).outcome
+        .removed,
+    ).toHaveLength(19);
+
+    // Once: the owner adds Uzbekistan back to their own list, and a restart keeps it.
+    const own = [
+      ...countries,
+      { code: 'UZ', languages: ['ru', 'en'], currency: 'USD', print: false },
+    ];
+    rows.set(REFERENCE_KEYS.countries, own);
+    await service.onModuleInit();
+    expect(rows.get(REFERENCE_KEYS.countries)).toEqual(own);
+    // Even a list put back to the old seed is the owner's now.
+    rows.set(REFERENCE_KEYS.countries, structuredClone(SEEDED_COUNTRIES_V3));
+    await service.onModuleInit();
+    expect(rows.get(REFERENCE_KEYS.countries)).toEqual(SEEDED_COUNTRIES_V3);
+  });
+
+  it('records a fresh database as on the lineup already', async () => {
+    const { service, rows } = settingsStore();
+    await service.onModuleInit();
+    expect(rows.get(LINEUP_KEY)).toMatchObject({
+      version: '2026-11-launch',
+      outcome: { action: 'already' },
+    });
+  });
+
+  it('adds the new currencies’ default prices and keeps the stored ones', async () => {
+    const stored = {
+      KZT: { books: { template: 2_100_00, custom: 3_100_00 }, delivery: 0 },
+      USD: { books: { template: 4_90, custom: 5_90 }, delivery: 9_90 },
+      EUR: { books: { template: 4_50, custom: 5_90 }, delivery: 6_90 },
+    };
+    const { service, rows } = settingsStore({
+      [REFERENCE_KEYS.prices]: structuredClone(stored),
+    });
+    await service.onModuleInit();
+    expect(rows.get(REFERENCE_KEYS.prices)).toEqual({
+      ...stored,
+      CAD: DEFAULT_PRICES.CAD,
+      AUD: DEFAULT_PRICES.AUD,
+      MYR: DEFAULT_PRICES.MYR,
+      CHF: DEFAULT_PRICES.CHF,
+    });
+    expect(DEFAULT_PRICES.CAD).toEqual({
+      books: { template: 6_90, custom: 7_90 },
+      delivery: 12_90,
+    });
+    // Nothing missing: nothing to change.
+    expect(addMissingCurrencies(DEFAULT_PRICES)).toBeNull();
   });
 
   it('leaves the countries and the FAQ the owner edited alone', async () => {
@@ -322,6 +441,10 @@ describe('ReferenceService seeding', () => {
         delivery: DEFAULT_PRICES.USD!.delivery,
       },
       EUR: DEFAULT_PRICES.EUR,
+      CAD: DEFAULT_PRICES.CAD,
+      AUD: DEFAULT_PRICES.AUD,
+      MYR: DEFAULT_PRICES.MYR,
+      CHF: DEFAULT_PRICES.CHF,
     });
     expect(rows.get(REFERENCE_KEYS.countryPrices)).toEqual({
       DE: { currency: 'USD', books: { template: 4_90, custom: 6_90 } },
@@ -335,9 +458,15 @@ describe('ReferenceService seeding', () => {
       ...DEFAULT_FORMATS[0].prices,
       KZT: { soft: 9_500_00, hard: 14_500_00 },
     });
+    // Germany charges in euros now: its dollar list stays stored but no longer counts.
     expect(await service.bookPrice('template', 'DE')).toEqual({
-      amount: 4_90,
-      currency: 'USD',
+      amount: 3_90,
+      currency: 'EUR',
+    });
+    // Canada charges its own dollars, from their default list.
+    expect(await service.bookPrice('template', 'CA')).toEqual({
+      amount: 6_90,
+      currency: 'CAD',
     });
     expect(await service.bookPrice('template', 'KZ')).toEqual(kzt(2_100_00));
     const order = await quote(service, 'a5-portrait', 'soft', 2, 'shymkent');
@@ -599,10 +728,13 @@ describe('ReferenceService countries', () => {
 
   it('takes the country chosen on the site, else the IP’s, else other', async () => {
     const { service } = settingsStore();
-    expect(await service.visitorCountry('PL', 'KZ')).toBe('PL');
+    expect(await service.visitorCountry('CA', 'KZ')).toBe('CA');
     expect(await service.visitorCountry('other', 'KZ')).toBe('other');
     expect(await service.visitorCountry('NL', 'KZ')).toBe('other');
-    expect(await service.visitorCountry(undefined, 'UZ')).toBe('UZ');
+    // Countries the site no longer offers are "other".
+    expect(await service.visitorCountry('PL', 'KZ')).toBe('other');
+    expect(await service.visitorCountry(undefined, 'MY')).toBe('MY');
+    expect(await service.visitorCountry(undefined, 'UZ')).toBe('other');
     expect(await service.visitorCountry(undefined, null)).toBe('other');
   });
 
@@ -641,7 +773,7 @@ describe('ReferenceService FAQ', () => {
 
 describe('ReferenceService country prices and landing', () => {
   const de = {
-    currency: 'USD' as const,
+    currency: 'EUR' as const,
     books: { template: 4_90, custom: 6_90 },
   };
 
@@ -651,7 +783,12 @@ describe('ReferenceService country prices and landing', () => {
     expect(rows.get(REFERENCE_KEYS.countryPrices)).toEqual({ DE: de });
     expect(await service.bookPrice('template', 'DE')).toEqual({
       amount: 4_90,
-      currency: 'USD',
+      currency: 'EUR',
+    });
+    // Canada charges its own dollars, from their default list.
+    expect(await service.bookPrice('template', 'CA')).toEqual({
+      amount: 6_90,
+      currency: 'CAD',
     });
     expect((await service.bookPrice('template', 'AT'))?.amount).toBe(3_90);
     expect((await service.public()).countryPrices).toEqual({ DE: de });
@@ -662,9 +799,9 @@ describe('ReferenceService country prices and landing', () => {
   it("refuses a country's prices in another currency than it charges in", async () => {
     const { service, setting } = settingsStore();
     await expect(
-      service.setCountryPrices('DE', { ...de, currency: 'EUR' }),
+      service.setCountryPrices('DE', { ...de, currency: 'USD' }),
     ).rejects.toMatchObject({
-      response: { code: 'currency_mismatch', expected: 'USD' },
+      response: { code: 'currency_mismatch', expected: 'EUR' },
     });
     await expect(
       service.setCountryDelivery('KZ', {

@@ -1,11 +1,11 @@
 # Money in each country's currency. The superadmin opens print in Germany priced in euros, all in the
-# admin (no SQL): Germany moves to EUR with print on in Countries, gets its own euro book prices, a
+# admin (no SQL): Germany (in euros since launch) gets print on in Countries, its own euro book prices, a
 # delivery fee with the print partner's cost, a format's euro prices and partner cost, and a Berlin
 # delivery city; a euro rate is set by hand in Exchange rates. A German visitor then sees € prices
 # (the book page, its JSON-LD offer, the order form) and orders a printed book; the order keeps its
 # lines, total and rate in euros, and a Kazakh order stays in tenge. The global dashboard shows the
 # revenue per currency, and Germany's manager sees the euro revenue and the print margin. Germany goes
-# back to dollars and no print at the end.
+# back to no print at the end.
 appId: ${WEB}
 tags: [admin, order, money]
 db: ${DATABASE_URL}
@@ -301,9 +301,9 @@ commands:
   - assertVisible: { css: "[data-testid=country-margin][data-orders='1'][data-amount='1738']" }
   - assertVisible: { text: "≈ $17.38" }
 after:
-  # Germany back to dollars and no print, and its own prices, delivery, formats and cities gone
+  # Germany back to no print (in euros, as launched), and its own prices, delivery, formats and cities gone
   # (through the API afterwards, so its cache is dropped); the rates back to fetched ones.
-  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": false, \"currency\": \"USD\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
+  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": false, \"currency\": \"EUR\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
   - sql: { exec: "update \"Setting\" set value = value - 'DE' where key in ('reference.country_prices', 'reference.country_delivery', 'reference.country_formats')" }
   - sql: { exec: "update \"Setting\" set value = coalesce((select jsonb_agg(e order by i) from jsonb_array_elements(value) with ordinality as t(e, i) where e->>'country' is distinct from 'DE'), '[]'::jsonb) where key = 'reference.cities'" }
   - sql: { exec: "delete from \"Setting\" where key = 'fx.manual'" }

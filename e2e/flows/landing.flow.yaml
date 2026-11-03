@@ -77,11 +77,9 @@ commands:
   - assertVisible: "Тайна снежного барса"
   - assertVisible: { testId: custom-price, text: "2 900 ₸" }
 
-  # In Uzbekistan there is no Kazakh and prices are in dollars: a Kazakh interface gives way to Russian.
   # In Kazakhstan the language dialog offers Kazakh, Russian and English.
   - tapOn: { testId: ui-language }
   - waitForVisible: { testId: ui-language-option-kk }
-  - assertVisible: { testId: ui-language-option-ru }
   - assertVisible: { testId: ui-language-option-en }
   - tapOn: { testId: ui-language-option-kk }
   - waitForVisible: "Кітаптар каталогы"
@@ -94,19 +92,37 @@ commands:
   - inputText: "Өзбек"
   - assertNotVisible: { testId: ui-country-option-DE }
   - assertVisible: { testId: ui-country-option-other }
-  # Found by its name in another language too.
+  # Uzbekistan is not one of the launch countries: its visitors are the rest of the world ("other").
   - eraseText
   - inputText: "uzbek"
-  - waitForVisible: { testId: ui-country-option-UZ }
+  - assertNotVisible: { testId: ui-country-option-UZ }
+  - assertVisible: { testId: ui-country-option-other }
+  # Found by its name in another language too: Canada, English only, in Canadian dollars.
+  - eraseText
+  - inputText: "Канада"
+  - waitForVisible: { testId: ui-country-option-CA }
   - assertNotVisible: { testId: ui-country-option-KZ }
-  - tapOn: { testId: ui-country-option-UZ }
+  - tapOn: { testId: ui-country-option-CA }
+  - waitForVisible: "Book catalog"
+  - assertVisible: { testId: ui-country, contains: "Canada" }
+  - assertVisible: { testId: custom-price, text: "CA$7.90" }
+  - assertVisible: { testId: template-price, text: "CA$6.90", index: 0 }
+  - tapOn: { testId: ui-language }
+  - waitForVisible: { testId: ui-language-option-en }
+  - assertNotVisible: { testId: ui-language-option-ru }
+  - assertNotVisible: { testId: ui-language-option-kk }
+  - pressKey: escape
+  # The rest of the world: dollars, Russian among its languages, written the Russian way on the
+  # Russian page. A Kazakh address still opens in Kazakh (the address decides the language), with
+  # the country's prices.
+  - tapOn: { testId: ui-country }
+  - waitForVisible: { testId: ui-country-option-other }
+  - tapOn: { testId: ui-country-option-other }
+  - extendedWaitUntil: { notVisible: { testId: ui-country-dialog }, timeout: 5000 }
+  - openLink: "${WEB}/ru/catalog"
   - waitForVisible: "Каталог книг"
-  - assertVisible: { testId: ui-country, contains: "Узбекистан" }
-  # Dollars, written the Russian way on the Russian page.
   - assertVisible: { testId: custom-price, text: "5,90 $" }
   - assertVisible: { testId: template-price, text: "3,90 $", index: 0 }
-  # The language dialog now offers Russian and English only; a Kazakh address still opens in Kazakh
-  # (the address decides the language), with the country's prices.
   - tapOn: { testId: ui-language }
   - waitForVisible: { testId: ui-language-option-en }
   - assertNotVisible: { testId: ui-language-option-kk }
@@ -133,16 +149,16 @@ commands:
   - tapOn: "Сколько стоит книга?"
   - waitForVisible: { contains: "книга из каталога стоит 3,90 $, своя история — 5,90 $" }
   - tapOn: "На каких языках можно сделать книгу?"
-  - waitForVisible: { contains: "Язык книги выбирается в форме: Русский, English" }
+  - waitForVisible: { contains: "Язык книги выбирается в форме: English, Español, Deutsch, Русский" }
 
-  # Poland: English only, no tenge and no print prices anywhere; print is planned, the PDF is there.
+  # The United States: English only, no tenge and no print prices anywhere; print is planned, the PDF is there.
   - tapOn: { testId: ui-country }
   - tapOn: { testId: ui-country-search }
-  - inputText: "Польш"
-  - waitForVisible: { testId: ui-country-option-PL }
-  - tapOn: { testId: ui-country-option-PL }
+  - inputText: "Соедин"
+  - waitForVisible: { testId: ui-country-option-US }
+  - tapOn: { testId: ui-country-option-US }
   - waitForVisible: "A book where your child is the hero"
-  - assertVisible: { testId: ui-country, contains: "Poland" }
+  - assertVisible: { testId: ui-country, contains: "United States" }
   - tapOn: { testId: ui-language }
   - waitForVisible: { testId: ui-language-option-en }
   - assertNotVisible: { testId: ui-language-option-ru }

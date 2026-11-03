@@ -68,10 +68,15 @@ import type { ZodType } from 'zod';
 import { sameJson } from '../common/same-json';
 import { GEO_POLICY_URL, RESTRICTED_COUNTRIES } from '../geo/restricted';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  LINEUP_KEY,
+  LINEUP_VERSION,
+  describeLineup,
+  launchLineup,
+  type LineupFlag,
+} from './launch-lineup';
 import { upgradeMoneySettings } from './money-upgrade';
 import {
-  SEEDED_COUNTRIES_V1,
-  SEEDED_COUNTRIES_V2,
   SEEDED_FAQ_V1,
   SEEDED_FAQ_V2,
   SEEDED_FAQ_V3,
@@ -135,10 +140,10 @@ const FIELDS = Object.keys(REFERENCE_KEYS) as (keyof Snapshot)[];
 
 /**
  * Seeds the API stored once, by field. A stored value still equal to one of them was never edited
- * by the owner, so today's default replaces it on start; an edited one is left alone.
+ * by the owner, so today's default replaces it on start; an edited one is left alone. The countries'
+ * older seeds become the launch lineup once (launch-lineup.ts), not here.
  */
 const SEEDED: Partial<Record<keyof Snapshot, unknown[]>> = {
-  countries: [SEEDED_COUNTRIES_V1, SEEDED_COUNTRIES_V2],
   faq: [
     SEEDED_FAQ_V1,
     SEEDED_FAQ_V2,
@@ -148,6 +153,27 @@ const SEEDED: Partial<Record<keyof Snapshot, unknown[]>> = {
     SEEDED_FAQ_V6,
   ],
 };
+
+/**
+ * Stored default prices with a list for every currency the code knows: a currency added since (the
+ * Canadian and Australian dollar, ringgit, franc) gets today's default list; the stored lists are
+ * kept exactly as they are. Null when nothing is missing (or the value is not a price list yet).
+ */
+export function addMissingCurrencies(stored: unknown): DefaultPrices | null {
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored))
+    return null;
+  const parsed = DefaultPricesSchema.safeParse(stored);
+  if (!parsed.success) return null;
+  const missing = (
+    Object.keys(DEFAULT_PRICES) as (keyof typeof DEFAULT_PRICES)[]
+  ).filter((currency) => !parsed.data[currency]);
+  if (!missing.length) return null;
+  const next: DefaultPrices = {
+    ...(stored as DefaultPrices),
+  };
+  for (const currency of missing) next[currency] = DEFAULT_PRICES[currency];
+  return next;
+}
 
 /**
  * What start-up changes in a stored value, or null to leave it: an untouched older seed becomes
@@ -254,7 +280,22 @@ export class ReferenceService implements OnModuleInit {
     });
     for (const [field, value] of Object.entries(money)) {
       changed.set(field as keyof Snapshot, value);
+      values.set(field as keyof Snapshot, value);
     }
+    // Currencies added in code get their default list; stored lists stay as they are.
+    const prices = addMissingCurrencies(values.get('prices'));
+    if (prices) {
+      changed.set('prices', prices);
+      this.logger.log(
+        `added default prices for ${Object.keys(prices)
+          .filter((c) => !(values.get('prices') as Record<string, unknown>)[c])
+          .join(', ')}`,
+      );
+      values.set('prices', prices);
+    }
+    // The launch country lineup, once (launch-lineup.ts).
+    const lineup = await this.applyLineup(values.get('countries'));
+    if (lineup) changed.set('countries', lineup);
     for (const [field, next] of changed) {
       const key = REFERENCE_KEYS[field];
       const json = next as Prisma.InputJsonValue;
@@ -265,6 +306,34 @@ export class ReferenceService implements OnModuleInit {
       });
       this.logger.log(`upgraded ${key}`);
     }
+  }
+
+  /**
+   * The launch lineup, on the first start that has none recorded: the countries it becomes (null
+   * to leave them), with the outcome stored under LINEUP_KEY so it never runs again, whatever the
+   * owner does with the list afterwards.
+   */
+  private async applyLineup(stored: unknown): Promise<CountryEntry[] | null> {
+    const done = await this.prisma.setting.findUnique({
+      where: { key: LINEUP_KEY },
+    });
+    if (done) return null;
+    const { countries, outcome } = launchLineup(stored);
+    const flag: LineupFlag = {
+      version: LINEUP_VERSION,
+      at: new Date().toISOString(),
+      outcome,
+    };
+    await this.prisma.setting.create({
+      data: {
+        key: LINEUP_KEY,
+        value: flag as unknown as Prisma.InputJsonValue,
+      },
+    });
+    const line = describeLineup(outcome);
+    if (outcome.action === 'skipped') this.logger.warn(line);
+    else this.logger.log(line);
+    return countries;
   }
 
   invalidate() {
@@ -635,7 +704,10 @@ export class ReferenceService implements OnModuleInit {
     return (await this.save('countryPrices', next)).countryPrices;
   }
 
-  /** The country's landing overrides, or null to show it the defaults again. */
+  /**
+   * The country's landing overrides, or null to show it the defaults again. Overrides without
+   * `images` keep the pictures the country has (they are set one by one: setLandingImages).
+   */
   async setLanding(
     country: string,
     landing: CountryLanding | null,
@@ -643,9 +715,26 @@ export class ReferenceService implements OnModuleInit {
     await this.assertOffered(country);
     const { landing: all } = await this.snapshot();
     const next = { ...all };
-    if (landing) next[country] = CountryLandingSchema.parse(landing);
-    else delete next[country];
+    if (landing) {
+      const parsed = CountryLandingSchema.parse(landing);
+      const images = parsed.images ?? all[country]?.images;
+      next[country] = { ...parsed, ...(images && { images }) };
+    } else delete next[country];
     return (await this.save('landing', next)).landing;
+  }
+
+  /** The country's landing pictures (by slot and language), the rest of its overrides as they are. */
+  async setLandingImages(
+    country: string,
+    images: NonNullable<CountryLanding['images']>,
+  ): Promise<CountryLanding> {
+    await this.assertOffered(country);
+    const { landing: all } = await this.snapshot();
+    const current = all[country] ?? CountryLandingSchema.parse({});
+    const next = CountryLandingSchema.parse({ ...current, images });
+    return (await this.save('landing', { ...all, [country]: next })).landing[
+      country
+    ];
   }
 
   /** 400 country_unknown unless the site offers the country (reference.countries, less blocked ones). */

@@ -65,11 +65,11 @@ commands:
       headers: { X-Client-Key: "${owner}" }
       json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "other-${parentEmail}", cityId: tirana, address: "ул. Абая, 1", cover: soft, quantity: 1 }
       assert: { status: 400, json: { "$.code": city_unknown } }
-  # Poland and "another country" have no print: refused, whatever the city.
+  # The United States and "another country" have no print: refused, whatever the city.
   - request:
       method: POST
       url: /orders
-      headers: { X-Client-Key: "${owner}", X-Country: PL }
+      headers: { X-Client-Key: "${owner}", X-Country: US }
       json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${parentEmail}", cityId: almaty, address: "ул. Абая, 1", cover: soft, quantity: 1 }
       assert: { status: 400, json: { "$.code": print_unavailable } }
   - request:

@@ -58,13 +58,13 @@ commands:
       method: PUT
       url: /admin/reference/prices
       query: { country: DE }
-      json: { currency: USD, books: { template: 490, custom: 590 } }
+      json: { currency: EUR, books: { template: 490, custom: 590 } }
       assert: { status: 200 }
   - request:
       method: PUT
       url: /admin/reference/prices
       query: { country: DE }
-      json: { currency: USD, books: { template: 520, custom: 590 } }
+      json: { currency: EUR, books: { template: 520, custom: 590 } }
       assert: { status: 200 }
   - request:
       method: PATCH
@@ -75,7 +75,7 @@ commands:
   - request:
       url: /admin/activity
       query: { country: DE, section: reference, limit: 1 }
-      assert: { status: 200, json: { "$.events[0].action": prices.set, "$.events[0].country": DE, "$.events[0].actorEmail": "admin@e2e.test", "$.events[0].summary.changes[0].path": books.template, "$.events[0].summary.changes[0].before": 490, "$.events[0].summary.changes[0].after": 520, "$.events[0].summary.data.currency": USD } }
+      assert: { status: 200, json: { "$.events[0].action": prices.set, "$.events[0].country": DE, "$.events[0].actorEmail": "admin@e2e.test", "$.events[0].summary.changes[0].path": books.template, "$.events[0].summary.changes[0].before": 490, "$.events[0].summary.changes[0].after": 520, "$.events[0].summary.data.currency": EUR } }
   - request:
       url: /admin/activity
       query: { q: "kz-act-${stamp}" }
@@ -108,7 +108,7 @@ commands:
   - tapOn: { css: "[data-testid=activity-row][data-action='prices.set'][data-country=DE]" }
   - waitForVisible: { css: "[data-testid=activity-change][data-path='books.template']" }
   # Amounts in minor units read as money in the change's currency.
-  - assertVisible: { css: "[data-testid=activity-change][data-path='books.template']", containsDescendants: { text: "$5.20" } }
+  - assertVisible: { css: "[data-testid=activity-change][data-path='books.template']", containsDescendants: { text: "€5.20" } }
   - assertVisible: { text: "Changed prices" }
 
   # ---- The German manager: Germany's events, never Kazakhstan's --------------------------------------

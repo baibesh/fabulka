@@ -26,9 +26,13 @@ const eur = (amount: number) => money(amount, "EUR");
 
 describe("currency registry", () => {
   it("keeps ISO 4217 exponents, tenge included, and shows whole tenge", () => {
-    expect(CURRENCIES).toEqual(["KZT", "USD", "EUR"]);
+    expect(CURRENCIES).toEqual(["KZT", "USD", "EUR", "CAD", "AUD", "MYR", "CHF"]);
     // ISO 4217: KZT has two minor digits (tiyn) even though prices are whole tenge.
-    expect(CURRENCY_REGISTRY.KZT).toEqual({ exponent: 2, symbol: "₸", decimals: 0 });
+    expect(CURRENCY_REGISTRY.KZT).toEqual({ exponent: 2, symbol: "₸", decimals: 0, display: "narrowSymbol" });
+    for (const currency of ["CAD", "AUD", "MYR", "CHF"] as const) {
+      expect(CURRENCY_REGISTRY[currency]).toMatchObject({ exponent: 2, decimals: 2 });
+      expect(priceStep(currency)).toBe(1);
+    }
     expect(CURRENCY_REGISTRY.USD.exponent).toBe(2);
     expect(CURRENCY_REGISTRY.EUR.exponent).toBe(2);
     expect(priceStep("KZT")).toBe(100);
@@ -115,6 +119,29 @@ describe("formatting by language", () => {
     expect(formatMoney(eur(1_234_50), "de-DE")).toBe("1.234,50 €");
     expect(formatMoney(eur(18_90), "es-ES")).toBe("18,90 €");
     expect(formatMoney(eur(18_90), "en-US")).toBe("€18.90");
+  });
+
+  it("formats the Canadian and Australian dollar, ringgit and franc in every interface language", () => {
+    // Intl's spaces (no-break, narrow no-break) as plain ones, for readable expectations.
+    const shown = (amount: number, currency: "CAD" | "AUD" | "MYR" | "CHF", locale: string) =>
+      formatMoney(money(amount, currency), locale).replace(/[\u00a0\u202f]/g, " ");
+    const expected: Record<string, Record<"CAD" | "AUD" | "MYR" | "CHF", string>> = {
+      // English pages are en-US: a bare "$" would read as US dollars, so CA$ and A$.
+      "en-US": { CAD: "CA$6.90", AUD: "A$7.90", MYR: "RM 19.90", CHF: "CHF 4.90" },
+      "ru-RU": { CAD: "6,90 CA$", AUD: "7,90 A$", MYR: "19,90 RM", CHF: "4,90 CHF" },
+      // Kazakh is written as Russian-in-Kazakhstan (moneyLocale).
+      "kk-KZ": { CAD: "6,90 CA$", AUD: "7,90 A$", MYR: "19,90 RM", CHF: "4,90 CHF" },
+      "es-ES": { CAD: "6,90 CAD", AUD: "7,90 AUD", MYR: "19,90 RM", CHF: "4,90 CHF" },
+      "de-DE": { CAD: "6,90 CA$", AUD: "7,90 AU$", MYR: "19,90 RM", CHF: "4,90 CHF" },
+    };
+    const amounts = { CAD: 6_90, AUD: 7_90, MYR: 19_90, CHF: 4_90 } as const;
+    for (const [locale, row] of Object.entries(expected)) {
+      for (const currency of ["CAD", "AUD", "MYR", "CHF"] as const) {
+        expect(shown(amounts[currency], currency, locale), `${currency} in ${locale}`).toBe(row[currency]);
+      }
+    }
+    expect(shown(1_234_50, "CHF", "de-DE")).toBe("1.234,50 CHF");
+    expect(shown(24_90, "MYR", "en-US")).toBe("RM 24.90");
   });
 
   it("shows tenge whole, rounding a finer amount half away from zero", () => {

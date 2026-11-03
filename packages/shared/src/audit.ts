@@ -28,6 +28,8 @@ export const AUDIT_ACTIONS = [
   "fx.refresh",
   "landing.set",
   "landing.clear",
+  "landing.image",
+  "landing.image_clear",
   "cities.set",
   "delivery.set",
   "delivery.clear",

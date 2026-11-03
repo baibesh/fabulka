@@ -217,6 +217,40 @@ export const SEEDED_COUNTRIES_V2: unknown = [
   { code: 'CA', languages: ['en'], currency: 'USD', print: false },
 ];
 
+/**
+ * reference.countries as seeded until the launch lineup (November 2026): 26 countries, Kazakhstan in
+ * tenge with print, the rest in dollars without print. launch-lineup.ts replaces a list with these
+ * codes by the launch countries, once.
+ */
+export const SEEDED_COUNTRIES_V3: unknown = [
+  { code: 'KZ', languages: ['kk', 'ru', 'en'], currency: 'KZT', print: true },
+  { code: 'UZ', languages: ['ru', 'en'], currency: 'USD', print: false },
+  { code: 'KG', languages: ['ru', 'en'], currency: 'USD', print: false },
+  { code: 'TJ', languages: ['ru', 'en'], currency: 'USD', print: false },
+  { code: 'TM', languages: ['ru', 'en'], currency: 'USD', print: false },
+  { code: 'AZ', languages: ['ru', 'en'], currency: 'USD', print: false },
+  { code: 'AM', languages: ['ru', 'en'], currency: 'USD', print: false },
+  { code: 'GE', languages: ['en', 'ru'], currency: 'USD', print: false },
+  { code: 'MD', languages: ['en', 'ru'], currency: 'USD', print: false },
+  { code: 'IL', languages: ['en', 'ru'], currency: 'USD', print: false },
+  { code: 'MN', languages: ['en'], currency: 'USD', print: false },
+  { code: 'TR', languages: ['en'], currency: 'USD', print: false },
+  { code: 'AE', languages: ['en'], currency: 'USD', print: false },
+  { code: 'DE', languages: ['de', 'en'], currency: 'USD', print: false },
+  { code: 'AT', languages: ['de', 'en'], currency: 'USD', print: false },
+  { code: 'CH', languages: ['de', 'en'], currency: 'USD', print: false },
+  { code: 'ES', languages: ['es', 'en'], currency: 'USD', print: false },
+  { code: 'MX', languages: ['es', 'en'], currency: 'USD', print: false },
+  { code: 'AR', languages: ['es', 'en'], currency: 'USD', print: false },
+  { code: 'CO', languages: ['es', 'en'], currency: 'USD', print: false },
+  { code: 'CL', languages: ['es', 'en'], currency: 'USD', print: false },
+  { code: 'PL', languages: ['en'], currency: 'USD', print: false },
+  { code: 'CZ', languages: ['en'], currency: 'USD', print: false },
+  { code: 'GB', languages: ['en'], currency: 'USD', print: false },
+  { code: 'US', languages: ['en'], currency: 'USD', print: false },
+  { code: 'CA', languages: ['en'], currency: 'USD', print: false },
+];
+
 /** reference.faq as seeded until the Spanish and German interface: no Spanish or German texts. */
 export const SEEDED_FAQ_V2: unknown = [
   {
