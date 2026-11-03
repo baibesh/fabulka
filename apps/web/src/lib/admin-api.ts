@@ -111,6 +111,15 @@ import {
   type PageFlag,
   type UpdateReference,
 } from "@fabulka/shared";
+import {
+  CountriesOverviewSchema,
+  LandingBookSchema,
+  type CountryOverview,
+  type LandingBook,
+  type LandingImageLanguage,
+  type LandingImageSlot,
+  type LandingImageUpload,
+} from "@fabulka/shared";
 import { z } from "zod";
 import { request } from "./api";
 
@@ -359,6 +368,27 @@ export const clearCountryPrices = (country: string) =>
 /** One country's landing overrides. */
 export async function saveLanding(country: string, landing: CountryLanding): Promise<CountryLanding> {
   return CountryLandingSchema.parse(await request(`/api/admin/reference/landing?country=${encodeURIComponent(country)}`, json("PUT", landing)));
+}
+
+/** One landing picture of the country (a slot in a language, or "all"), from an upload or a finished book. */
+export async function saveLandingImage(country: string, image: LandingImageUpload): Promise<CountryLanding> {
+  return CountryLandingSchema.parse(await request(`/api/admin/reference/landing/image?country=${encodeURIComponent(country)}`, json("POST", image)));
+}
+
+/** The default picture shows again (or the country's for all languages). */
+export async function clearLandingImage(country: string, slot: LandingImageSlot, language: LandingImageLanguage): Promise<CountryLanding | null> {
+  const params = new URLSearchParams({ country, slot, language });
+  return CountryLandingSchema.nullish().parse(await request(`/api/admin/reference/landing/image?${params}`, { method: "DELETE" })) ?? null;
+}
+
+/** Finished books a landing picture may be taken from. */
+export async function landingBooks(country: string): Promise<LandingBook[]> {
+  return LandingBookSchema.array().parse(await request(`/api/admin/reference/landing/books?country=${encodeURIComponent(country)}`));
+}
+
+/** Per country, everything a visitor gets, and the gaps. */
+export async function countriesOverview(): Promise<CountryOverview[]> {
+  return CountriesOverviewSchema.parse(await request("/api/admin/examples/overview"));
 }
 
 /** The country's landing shows the defaults again. */

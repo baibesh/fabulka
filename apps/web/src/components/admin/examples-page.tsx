@@ -42,6 +42,7 @@ import { CountriesField } from "./countries-field";
 import { Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
 import { StaffBudgetNote, useCapError, useRefreshBudget } from "./staff-budget";
 import { useAdminHref, useWorkingCountry } from "./working-country";
+import { NotOffered } from "./not-offered";
 
 /** The admin's examples list (also read by a book's page, which offers to add the book to one). */
 export const EXAMPLES_QUERY = ["admin", "examples"] as const;
@@ -476,6 +477,7 @@ function ExampleCountries({
                 <span key={code} className="flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1">
                   <Flag code={code} />
                   {countryName(code)}
+                  <NotOffered code={code} />
                 </span>
               ))}
             </>

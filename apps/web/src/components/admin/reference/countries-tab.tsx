@@ -12,7 +12,9 @@ import {
   LANGUAGES,
   LANGUAGE_NAMES,
   inLanguageOrder,
+  suggestedCountry,
   type BlockedCountries,
+  type DefaultPrices,
   type CountryEntry,
   type Language,
 } from "@fabulka/shared";
@@ -37,8 +39,8 @@ type CountryDraft = CountryEntry & { key: number };
 const withKey = (country: CountryEntry): CountryDraft => ({ ...country, key: nextKey() });
 
 /** The countries the site offers, in the order the picker lists them: languages, currency, print. */
-export function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; blocked: BlockedCountries }) {
-  const { t, locale } = useAdminI18n();
+export function CountriesTab({ initial, blocked, prices }: { initial: CountryEntry[]; blocked: BlockedCountries; prices: DefaultPrices }) {
+  const { t, locale, money } = useAdminI18n();
   const countryName = useCountryName("admin");
   const saved = useSaved();
   const { rows, setRows, problems, setProblems, update, move, remove } = useRows(() => initial.map(withKey));
@@ -79,7 +81,8 @@ export function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; bl
     update(index, (row) => ({ languages: [language, ...row.languages.filter((l) => l !== language)] }));
   const add = () => {
     if (!pick) return;
-    setRows((list) => [...list, withKey({ code: pick, languages: ["ru", "en"], currency: "USD", print: false })]);
+    // Its own currency (priced from that currency's defaults until it gets its own) and language.
+    setRows((list) => [...list, withKey(suggestedCountry(pick))]);
     setPick("");
   };
 
@@ -133,6 +136,7 @@ export function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; bl
                     <Select
                       small
                       data-testid="country-currency"
+                      data-value={country.currency}
                       value={country.currency}
                       onChange={(e) => update(i, () => ({ currency: e.target.value as CountryEntry["currency"] }))}
                       className="w-auto"
@@ -144,6 +148,14 @@ export function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; bl
                       ))}
                     </Select>
                   </label>
+                  {prices[country.currency] && (
+                    <span data-testid="country-default-prices" className="text-xs text-muted">
+                      {t("admin.reference.country.defaultPrices", {
+                        template: money({ amount: prices[country.currency]!.books.template, currency: country.currency }),
+                        custom: money({ amount: prices[country.currency]!.books.custom, currency: country.currency }),
+                      })}
+                    </span>
+                  )}
                   <span className="flex flex-col gap-1">
                     <label className="flex cursor-pointer items-center gap-2 text-sm whitespace-nowrap">
                       <Checkbox data-testid="country-print" checked={country.print} onChange={(e) => update(i, () => ({ print: e.target.checked }))} />

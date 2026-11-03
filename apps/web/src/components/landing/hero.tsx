@@ -3,11 +3,12 @@
 import { useQuery } from "@/lib/query";
 import { ArrowRight, BookOpen, CirclePause } from "lucide-react";
 import { motion } from "motion/react";
+import { preload } from "react-dom";
 import { LocaleLink } from "@/i18n/routing";
 import { useI18n } from "@/i18n/i18n";
 import { getStatus } from "@/lib/api";
 import { useExamples, useTemplates } from "@/lib/use-catalog";
-import { heroFor } from "@fabulka/shared";
+import { heroFor, landingImageFor, type LandingPicture } from "@fabulka/shared";
 import { useBookPrice, useReference } from "@/lib/use-price";
 import { PriceSkeleton } from "../book/price-skeleton";
 import { LogoMark } from "@/components/layout/logo";
@@ -38,15 +39,21 @@ const SPARKLES = [
   "left-[46%] top-[-8%] size-4 [animation-delay:1.7s]",
 ];
 
+/** How wide the hero's picture is drawn: the right column from md, nearly the screen below. */
+const HERO_SIZES = "(min-width: 768px) 28rem, (min-width: 384px) 24rem, 100vw";
+
 /**
  * The headline, what Fabulka does, the way in, and a pile of catalog covers. The visitor's country
- * may have its own title and lead in this language (reference.landing); else the defaults.
+ * may have its own title and lead in this language (reference.landing), and its own picture in place
+ * of the pile (in this language, else for all its languages); else the defaults.
  */
 export function Hero() {
   const { t, country, info, locale } = useI18n();
   // Print and delivery are promised only where there is print; Kazakhstan's line names it.
   const lead = info.print ? (country === "KZ" ? "landing.hero.lead" : "landing.hero.lead.print") : "landing.hero.lead.pdf";
-  const own = heroFor(useReference().data?.landing, country, locale);
+  const landing = useReference().data?.landing;
+  const own = heroFor(landing, country, locale);
+  const picture = landingImageFor(landing, country, locale, "hero");
   const { data: examples } = useExamples();
   const paused = useQuery({ queryKey: ["status"], queryFn: getStatus }).data?.paused === true;
   const price = useBookPrice("template");
@@ -87,9 +94,41 @@ export function Hero() {
           </div>
           <p className="text-sm text-muted">{price ? t("landing.hero.price", { price }) : <PriceSkeleton className="w-72 max-w-full" />}</p>
         </div>
-        <Covers />
+        {picture ? <HeroPicture picture={picture} /> : <Covers />}
       </div>
     </section>
+  );
+}
+
+/**
+ * The country's own hero picture: the page's largest image, so it is preloaded with its srcset and
+ * fetched first (square WebP files at a few widths, made by the API), and decorative to readers
+ * and search engines alike (the headline says it all).
+ */
+function HeroPicture({ picture }: { picture: LandingPicture }) {
+  preload(picture.src, { as: "image", imageSrcSet: picture.srcSet, imageSizes: HERO_SIZES, fetchPriority: "high" });
+  return (
+    <div className="relative mx-auto aspect-square w-full max-w-sm md:max-w-md">
+      {/* eslint-disable-next-line @next/next/no-img-element -- stored files at fixed widths, with their own srcset */}
+      <img
+        data-testid="hero-image"
+        data-scope={picture.scope}
+        src={picture.src}
+        srcSet={picture.srcSet}
+        sizes={HERO_SIZES}
+        width={picture.width}
+        height={picture.width}
+        alt=""
+        fetchPriority="high"
+        decoding="async"
+        className="size-full rounded-3xl border-4 border-card object-cover shadow-xl"
+      />
+      {SPARKLES.map((place) => (
+        <svg key={place} viewBox="0 0 24 24" aria-hidden className={`animate-twinkle pointer-events-none absolute z-20 text-accent ${place}`}>
+          <path d="M12 0l3.2 8.8L24 12l-8.8 3.2L12 24l-3.2-8.8L0 12l8.8-3.2z" fill="currentColor" />
+        </svg>
+      ))}
+    </div>
   );
 }
 

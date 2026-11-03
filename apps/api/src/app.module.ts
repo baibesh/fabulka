@@ -56,6 +56,8 @@ import { PdfModule } from './pdf/pdf.service';
 import { PrismaModule } from './prisma/prisma.service';
 import { QuotaController } from './quota/quota.controller';
 import { QuotaService } from './quota/quota.service';
+import { LandingImagesController } from './reference/landing-images.controller';
+import { LandingImagesService } from './reference/landing-images.service';
 import { ReferenceController } from './reference/reference.controller';
 import { ReferenceService } from './reference/reference.service';
 import { FlagsService } from './references/flags.service';
@@ -104,6 +106,7 @@ class HealthController {
     ThemesController,
     MethodologiesController,
     ReferenceController,
+    LandingImagesController,
     GeoController,
     StatusController,
     ToysController,
@@ -124,6 +127,7 @@ class HealthController {
   ],
   providers: [
     ReferenceService,
+    LandingImagesService,
     GeoService,
     { provide: APP_GUARD, useClass: GeoGuard },
     BooksService,

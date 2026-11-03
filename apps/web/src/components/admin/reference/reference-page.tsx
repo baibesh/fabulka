@@ -101,7 +101,7 @@ function TabBody({ tab, data, country }: { tab: Tab; data: AdminReference; count
     case "faq":
       return <FaqTab initial={data.faq} countries={data.countries} />;
     case "countries":
-      return <CountriesTab initial={data.countries} blocked={data.blocked} />;
+      return <CountriesTab initial={data.countries} blocked={data.blocked} prices={data.prices} />;
     case "fx":
       return <FxTab />;
     default:

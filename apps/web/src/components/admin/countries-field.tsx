@@ -9,6 +9,7 @@ import { cx } from "@/components/ui/cx";
 import { FlagChips } from "./chips";
 import { QUERY as REFERENCE_QUERY } from "./reference/shared";
 import { useAdminI18n } from "./ui";
+import { NotOffered } from "./not-offered";
 
 /**
  * Countries staff limit something to: chips of countries the site offers (reference.countries, less
@@ -88,6 +89,7 @@ export function CountriesField({
           removeLabel={(country) => t("admin.template.countries.remove", { country })}
           onAdd={(code) => onChange([...value, code])}
           onRemove={(code) => onChange(value.filter((c) => c !== code))}
+          extra={(code) => <NotOffered code={code} />}
           menuClassName="max-h-72 w-64 overflow-y-auto"
         />
       </div>

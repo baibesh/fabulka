@@ -14,6 +14,7 @@ import { useMethodologyName } from "./use-methodologies";
 import { Badge } from "@/components/ui/badge";
 import { ErrorText } from "@/components/ui/notice";
 import { Table, TableFrame } from "@/components/ui/table";
+import { NotOffered } from "./not-offered";
 
 /** A catalog API refusal in the admin's words. */
 export function useCatalogError() {
@@ -149,6 +150,7 @@ function ListedIn({ template }: { template: AdminTemplate }) {
         <span key={code} title={countryName(code)} className="flex items-center gap-1">
           <Flag code={code} />
           {code}
+          <NotOffered code={code} />
         </span>
       ))}
     </span>

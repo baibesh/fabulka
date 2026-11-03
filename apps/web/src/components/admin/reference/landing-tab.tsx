@@ -26,6 +26,7 @@ import { MESSAGES } from "@/i18n/messages";
 import { ApiError } from "@/lib/api";
 import { clearLanding, saveLanding } from "@/lib/admin-api";
 import { Card, useAdminI18n } from "../ui";
+import { LandingImages, PreviewLinks } from "./landing-images";
 import { SaveBar, useSaved } from "./shared";
 
 const EMPTY: CountryLanding = { hero: {}, faqHidden: [], faq: [], hiddenSections: [] };
@@ -39,14 +40,17 @@ const EMPTY: CountryLanding = { hero: {}, faqHidden: [], faq: [], hiddenSections
 export function LandingTab({ reference, country }: { reference: AdminReference; country: string }) {
   const { t } = useAdminI18n();
   const own = reference.landing[country];
+  const languages = countryInfo(country, reference.countries).languages;
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Badge data-testid="landing-own" data-own={own ? "true" : "false"} tone={own ? "success" : "neutral"}>
           {own ? t("admin.reference.landing.own") : t("admin.reference.landing.defaults")}
         </Badge>
+        <PreviewLinks country={country} languages={languages} />
       </div>
       <p className="max-w-3xl text-sm text-muted">{t("admin.reference.landing.hint")}</p>
+      <LandingImages reference={reference} country={country} languages={languages} />
       <LandingForm reference={reference} country={country} />
     </div>
   );
@@ -64,7 +68,12 @@ function LandingForm({ reference, country }: { reference: AdminReference; countr
   const leadKey = info.print ? (country === "KZ" ? "landing.hero.lead" : "landing.hero.lead.print") : "landing.hero.lead.pdf";
 
   const save = useMutation({
-    mutationFn: () => saveLanding(country, CountryLandingSchema.parse(draft)),
+    // The pictures are saved on their own (LandingImages): a save of the texts keeps them as stored.
+    mutationFn: () => {
+      const texts: CountryLanding = { ...draft };
+      delete texts.images;
+      return saveLanding(country, CountryLandingSchema.parse(texts));
+    },
     onSuccess: (landing) => saved({ landing: { ...reference.landing, [country]: landing } }),
   });
   const reset = useMutation({

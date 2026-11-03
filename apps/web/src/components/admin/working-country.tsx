@@ -11,6 +11,7 @@ import { ALL, COUNTRY_PARAM, resolveWorkingCountry, withCountry } from "@/lib/ad
 import { useCountryName } from "@/hooks/use-country-name";
 import { Select } from "@/components/ui/input";
 import { QUERY as REFERENCE_QUERY } from "./reference/shared";
+import { useNotOffered } from "./not-offered";
 import { useAdminI18n } from "./ui";
 
 /** Where this browser remembers the last pick: only the default for a visit whose address has no country. */
@@ -149,6 +150,7 @@ export function WorkingCountrySwitcher({ className }: { className?: string }) {
   const { t } = useAdminI18n();
   const countryName = useCountryName("admin");
   const { country, options, allowAll, follows, setCountry } = useWorkingCountry();
+  const notOffered = useNotOffered();
   if (!follows) return null;
   if (!options.length && !allowAll) return null;
   return (
@@ -164,7 +166,7 @@ export function WorkingCountrySwitcher({ className }: { className?: string }) {
       {allowAll && <option value={ALL}>{t("admin.country.all")}</option>}
       {options.map((code) => (
         <option key={code} value={code}>
-          {countryName(code)}
+          {notOffered(code) ? `${countryName(code)} · ${t("admin.country.notOffered")}` : countryName(code)}
         </option>
       ))}
     </Select>

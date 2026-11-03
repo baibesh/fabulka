@@ -20,6 +20,7 @@ import { CountriesField } from "../countries-field";
 import { Card, formatSpendUsd, useAdminI18n } from "../ui";
 import { usdOrNull } from "./caps-tab";
 import { MEMBERS_QUERY, ROLES_QUERY, useRoleName, useTeamError } from "./shared";
+import { NotOffered } from "../not-offered";
 
 const STATUS_TONE: Record<StaffMember["status"], BadgeTone> = { invited: "warning", active: "success", disabled: "neutral" };
 
@@ -185,6 +186,7 @@ export function PeopleTab({ me }: { me: string | null }) {
                           <span key={code} className="flex items-center gap-1 text-sm" title={countryName(code)}>
                             <Flag code={code} />
                             {code}
+                            <NotOffered code={code} />
                           </span>
                         ))}
                       </div>
