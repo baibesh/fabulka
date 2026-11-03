@@ -23,8 +23,10 @@ describe('AdminAuthService', () => {
       '1.1.1.1',
     );
     expect(service.verify(token)).toEqual({
-      roles: ['admin'],
-      who: 'admin@fabulka.com',
+      email: 'admin@fabulka.com',
+      sub: null,
+      realm: [],
+      emergency: true,
     });
   });
 
@@ -48,7 +50,10 @@ describe('AdminAuthService', () => {
     expect(service.verify(`${forged}.${signature}`)).toBeNull();
     expect(service.verify(`${body}.${signature}x`)).toBeNull();
     expect(service.verify(undefined)).toBeNull();
-    const expired = service.issue(['admin'], null, Date.now() - 13 * 3600_000);
+    const expired = service.issue(
+      { email: null, sub: null, realm: ['admin'] },
+      Date.now() - 13 * 3600_000,
+    );
     expect(service.verify(expired)).toBeNull();
   });
 
@@ -89,12 +94,10 @@ describe('AdminAuthService', () => {
       AUTH_SECRET: 'auth-secret',
       NODE_ENV: 'production',
     });
-    expect(service.verify(service.issue())).toEqual({
-      roles: ['admin'],
-      who: null,
-    });
+    const owner = { email: 'o@x.kz', sub: 'kc-1', realm: ['admin' as const] };
+    expect(service.verify(service.issue(owner))).toEqual(owner);
     expect(() =>
-      auth({ NODE_ENV: 'production', ADMIN_SECRET: '' }).issue(),
+      auth({ NODE_ENV: 'production', ADMIN_SECRET: '' }).issue(owner),
     ).toThrow('not configured');
   });
 
@@ -125,19 +128,33 @@ describe('AdminAuthService', () => {
   });
 });
 
-describe('AdminAuthService roles', () => {
-  it('keeps the roles and who in the session', () => {
+describe('AdminAuthService identity', () => {
+  it('keeps who it is in the cookie, not what they may do', () => {
     const service = auth();
-    expect(service.verify(service.issue(['seo'], 'seo@x.kz'))).toEqual({
-      roles: ['seo'],
-      who: 'seo@x.kz',
-    });
+    const identity = { email: 'seo@x.kz', sub: 'kc-2', realm: [] };
+    expect(service.verify(service.issue(identity))).toEqual(identity);
+    const token = service.issue(identity);
+    const payload = JSON.parse(
+      Buffer.from(token.split('.')[0], 'base64url').toString(),
+    ) as Record<string, unknown>;
+    expect(payload).toMatchObject({ v: 2, e: 'seo@x.kz', k: 'kc-2', r: [] });
+    expect(payload).not.toHaveProperty('countries');
   });
 
-  it('refuses a session with no admin role, and unknown roles', () => {
+  it('refuses an identity with nobody in it, and drops unknown realm roles', () => {
     const service = auth();
-    expect(service.verify(service.issue([], null))).toBeNull();
-    expect(service.verify(service.issue(['owner' as never], null))).toBeNull();
+    expect(
+      service.verify(service.issue({ email: null, sub: null, realm: [] })),
+    ).toBeNull();
+    expect(
+      service.verify(
+        service.issue({
+          email: 'a@x.kz',
+          sub: null,
+          realm: ['owner' as never, 'seo'],
+        }),
+      ),
+    ).toEqual({ email: 'a@x.kz', sub: null, realm: ['seo'] });
   });
 
   it('does not take another signed token of the API (same secret) for a session', () => {
@@ -145,11 +162,11 @@ describe('AdminAuthService roles', () => {
     // A token sealed with the bare secret, as the site session cookie is.
     const { seal } =
       jest.requireActual<typeof import('../common/signed')>('../common/signed');
-    const other = seal('shared', { r: ['admin'] }, 60_000);
+    const other = seal('shared', { v: 2, e: 'a@x.kz', r: ['admin'] }, 60_000);
     expect(service.verify(other)).toBeNull();
   });
 
-  it('still accepts a session made before roles, as admin', () => {
+  it('still accepts the cookies made before staff: before roles as admin, roles as realm roles', () => {
     const service = auth();
     const expires = Date.now() + 60_000;
     const { createHmac } =
@@ -158,9 +175,19 @@ describe('AdminAuthService roles', () => {
       .update(`admin.${expires}`)
       .digest('base64url');
     expect(service.verify(`${expires}.${signature}`)).toEqual({
-      roles: ['admin'],
-      who: null,
+      email: null,
+      sub: null,
+      realm: ['admin'],
     });
+    const { seal } =
+      jest.requireActual<typeof import('../common/signed')>('../common/signed');
+    const key = 'admin-session:test-secret';
+    expect(
+      service.verify(seal(key, { r: ['seo'], w: 'SEO@x.kz' }, 60_000)),
+    ).toEqual({ email: 'seo@x.kz', sub: null, realm: ['seo'] });
+    expect(
+      service.verify(seal(key, { r: [], w: 'x@x.kz' }, 60_000)),
+    ).toBeNull();
   });
 });
 

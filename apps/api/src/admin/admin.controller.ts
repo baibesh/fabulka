@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   Param,
@@ -35,7 +36,11 @@ import {
   type AdminLoginOptions,
   type AdminMe,
   ADMIN_PERMISSIONS,
+  ADMIN_FORBIDDEN,
+  allowedFor,
+  isSuperAdmin,
   permissionsOf,
+  rightsOf,
   type City,
   type CountryEntry,
   type CreateMethodology,
@@ -123,7 +128,11 @@ export class AdminController {
       ok: true,
       who: session.who,
       roles: session.roles,
-      permissions: permissionsOf(session.roles),
+      permissions: permissionsOf(session),
+      rights: rightsOf(session),
+      global: session.global,
+      countries: session.countries,
+      superadmin: isSuperAdmin(session),
     };
   }
 
@@ -351,14 +360,33 @@ export class AdminController {
 
   /** Prices, delivery cities and blocked countries (Meta's, read-only, and the owner's). */
   @Get('reference')
-  @RequirePermission('reference', 'catalog', 'methodologies')
+  @RequirePermission(
+    'reference',
+    'reference.prices',
+    'reference.landing',
+    'catalog',
+    'methodologies',
+  )
   referenceData() {
     return this.reference.admin();
   }
 
+  /**
+   * The prices are one list for every country so far: changing them needs the right everywhere.
+   * Country prices (a later step) will ask allowedFor() with the country being priced.
+   */
   @Put('reference/prices')
-  @RequirePermission('reference')
-  setPrices(@Body(new ZodPipe(PricesSchema)) body: Prices) {
+  @RequirePermission('reference.prices')
+  setPrices(
+    @Body(new ZodPipe(PricesSchema)) body: Prices,
+    @CurrentAdmin() session: AdminSession,
+  ) {
+    if (!allowedFor(session, 'reference.prices', null)) {
+      throw new ForbiddenException({
+        code: ADMIN_FORBIDDEN,
+        message: 'The prices of every country are not yours to change',
+      });
+    }
     return this.reference.setPrices(body);
   }
 

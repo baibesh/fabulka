@@ -1,20 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  ADMIN_ROLES,
   AUTH_ERROR,
   EmailSchema,
-  SUPER_ROLE,
-  adminRolesOf,
-  type AdminRole,
+  REALM_ROLES,
+  isSuperAdmin,
+  realmRolesOf,
   type AuthMe,
+  type RealmRole,
 } from '@fabulka/shared';
 import { randomBytes } from 'node:crypto';
-import { AdminAuthService, readCookie } from '../admin/admin-auth.service';
+import {
+  AdminAuthService,
+  readCookie,
+  SESSION_COOKIE,
+  type AdminSession,
+} from '../admin/admin-auth.service';
 import { anonymousBooksOf } from '../books/books.service';
 import { cookieHeader, sameString, seal, unseal } from '../common/signed';
 import { anonymousOrdersOf } from '../orders/orders.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { StaffAccessService } from '../staff/staff-access.service';
 import {
   clientKeyParam,
   codeChallenge,
@@ -51,8 +57,8 @@ interface SessionPayload {
   uid: string;
   email: string | null;
   name: string | null;
-  /** Admin roles (ADMIN_ROLES in @fabulka/shared). */
-  roles?: AdminRole[];
+  /** Admin realm roles at sign-in (REALM_ROLES in @fabulka/shared). */
+  roles?: RealmRole[];
   /** Before roles: had the realm role admin. */
   admin?: boolean;
 }
@@ -60,7 +66,7 @@ interface SessionPayload {
 interface MockCode {
   state: string;
   email: string;
-  roles: AdminRole[];
+  roles: RealmRole[];
 }
 
 /** What a controller sends back: a redirect plus the cookies to set. */
@@ -90,6 +96,7 @@ export class AuthService {
     config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly admin: AdminAuthService,
+    private readonly staff: StaffAccessService,
   ) {
     const production = config.get('NODE_ENV') === 'production';
     this.publicUrl = config
@@ -205,8 +212,9 @@ export class AuthService {
     let identity: {
       sub: string;
       email: string | null;
+      emailVerified: boolean;
       name: string | null;
-      roles: AdminRole[];
+      roles: RealmRole[];
       idToken?: string;
     };
     try {
@@ -261,12 +269,16 @@ export class AuthService {
           ),
         );
       }
-      // Any admin role opens the admin, each with its own sections (ROLE_PERMISSIONS).
-      if (identity.roles.length) {
-        cookies.push(
-          this.admin.cookie(this.admin.issue(identity.roles, identity.email)),
-        );
-      }
+      // Staff (a row in Team, or a Keycloak realm role admin/seo) get the admin cookie too; what
+      // they may open is read from the database on each admin request.
+      const staff = await this.staff.signIn({
+        sub: identity.sub,
+        email: identity.email,
+        emailVerified: identity.emailVerified,
+        name: identity.name,
+        realmRoles: identity.roles,
+      });
+      if (staff) cookies.push(this.admin.cookie(this.admin.issue(staff)));
       return { location: login.return, cookies };
     } catch (error) {
       return fail(message(error));
@@ -288,7 +300,9 @@ export class AuthService {
       this.cookie(AUTH_SESSION_COOKIE, '', 0),
       this.cookie(ID_TOKEN_COOKIE, '', 0, AUTH_COOKIE_PATH),
     ];
-    if (session?.roles.length) cookies.push(this.admin.clearedCookie());
+    if (readCookie(cookieHeaderValue, SESSION_COOKIE)) {
+      cookies.push(this.admin.clearedCookie());
+    }
     let url = back;
     if (this.oidc && session) {
       url =
@@ -305,15 +319,34 @@ export class AuthService {
     return { url, cookies };
   }
 
-  me(user: SessionUser | null): AuthMe {
+  /** The signed-in parent and, from the admin cookie (rights read now), whether they are staff. */
+  async me(
+    user: SessionUser | null,
+    cookieHeaderValue?: string,
+  ): Promise<AuthMe> {
+    let staff: AdminSession | null = null;
+    if (user) {
+      staff = await this.staff
+        .resolve(
+          this.admin.verify(readCookie(cookieHeaderValue, SESSION_COOKIE)),
+        )
+        .catch(() => null);
+    }
+    // The admin cookie lasts hours, the site session a month: a realm role holder keeps the
+    // admin link after it ends (the admin then signs them in again through Keycloak).
+    const superadmin = staff
+      ? isSuperAdmin(staff)
+      : Boolean(user?.roles.includes('admin'));
+    const isStaff = Boolean(staff) || Boolean(user?.roles.length);
     return {
       enabled: this.enabled,
       user: user
         ? {
             email: user.email,
             name: user.name,
-            admin: user.roles.includes(SUPER_ROLE),
-            seo: user.roles.length > 0 && !user.roles.includes(SUPER_ROLE),
+            admin: superadmin,
+            seo: isStaff && !superadmin,
+            staff: isStaff,
           }
         : null,
     };
@@ -332,9 +365,9 @@ export class AuthService {
       email: session.email ?? null,
       name: session.name ?? null,
       roles: Array.isArray(session.roles)
-        ? adminRolesOf(session.roles)
+        ? realmRolesOf(session.roles)
         : session.admin === true
-          ? [SUPER_ROLE]
+          ? ['admin']
           : [],
     };
   }
@@ -354,8 +387,8 @@ export class AuthService {
     const code: MockCode = {
       state,
       email: email.data.toLowerCase(),
-      roles: adminRolesOf(
-        ADMIN_ROLES.filter((r) => query[r] === 'on' || query[r] === 'true'),
+      roles: realmRolesOf(
+        REALM_ROLES.filter((r) => query[r] === 'on' || query[r] === 'true'),
       ),
     };
     const params = new URLSearchParams({
@@ -373,8 +406,9 @@ export class AuthService {
     return {
       sub: `mock:${mock.email}`,
       email: mock.email,
+      emailVerified: true,
       name: mock.email.split('@')[0],
-      roles: Array.isArray(mock.roles) ? adminRolesOf(mock.roles) : [],
+      roles: Array.isArray(mock.roles) ? realmRolesOf(mock.roles) : [],
     };
   }
 
@@ -388,8 +422,9 @@ export class AuthService {
     return {
       sub: id.sub,
       email: claimString(id, 'email'),
+      emailVerified: id.email_verified === true,
       name: personName(id),
-      roles: adminRolesOf(roles),
+      roles: realmRolesOf(roles),
       idToken,
     };
   }

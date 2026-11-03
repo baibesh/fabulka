@@ -1,6 +1,8 @@
 import type { ConfigService } from '@nestjs/config';
 import { AdminAuthService } from '../admin/admin-auth.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import { StaffAccessService } from '../staff/staff-access.service';
+import { fakeStaffPrisma, staffRow } from '../staff/staff.testing';
 import { AuthService, personName } from './auth.service';
 
 function config(env: Record<string, string>) {
@@ -9,18 +11,22 @@ function config(env: Record<string, string>) {
   } as unknown as ConfigService;
 }
 
-function setup(env: Record<string, string> = {}) {
+function setup(env: Record<string, string> = {}, staffRows = [staffRow()]) {
   const values = { AUTH_MOCK: 'true', AUTH_SECRET: 'test-auth', ...env };
+  const db = fakeStaffPrisma(staffRows);
   const prisma = {
     user: { upsert: jest.fn().mockResolvedValue({ id: 'user-1' }) },
     book: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
     order: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    ...db.prisma,
   };
   const admin = new AdminAuthService(config({ ADMIN_SECRET: 'a', ...values }));
+  const staff = new StaffAccessService(prisma as unknown as PrismaService);
   const auth = new AuthService(
     config(values),
     prisma as unknown as PrismaService,
     admin,
+    staff,
   );
   return { auth, prisma, admin };
 }
@@ -82,17 +88,37 @@ describe('AuthService (mock provider)', () => {
     expect(result.cookies.join('\n')).not.toContain('admin_session=');
   });
 
-  it('opens the admin for the admin role', async () => {
-    const { auth, admin } = setup();
+  it('opens the admin for the realm role admin and makes their staff row', async () => {
+    const { auth, admin, prisma } = setup();
     const result = await signIn(auth, { admin: true });
     const token = /admin_session=([^;]+)/.exec(result.cookies.join(';'))![1];
     expect(admin.verify(token)).toEqual({
-      roles: ['admin'],
-      who: 'parent@example.com',
+      email: 'parent@example.com',
+      sub: 'mock:parent@example.com',
+      realm: ['admin'],
     });
+    const cookies = jar(result.cookies);
+    const me = await auth.me(auth.readSession(cookies) ?? null, cookies);
+    expect(me.user).toMatchObject({ admin: true, staff: true });
     expect(
-      auth.me(auth.readSession(jar(result.cookies)) ?? null).user?.admin,
-    ).toBe(true);
+      prisma.staffMember.rows.find((r) => r.email === 'parent@example.com'),
+    ).toMatchObject({ roles: ['admin'], status: 'active' });
+  });
+
+  it('opens the admin for an invited staff member without any realm role', async () => {
+    const { auth } = setup({}, [
+      staffRow({
+        email: 'parent@example.com',
+        status: 'invited',
+        roles: ['country_manager'],
+        countries: ['DE'],
+      }),
+    ]);
+    const result = await signIn(auth);
+    expect(result.cookies.join('\n')).toContain('admin_session=');
+    const cookies = jar(result.cookies);
+    const me = await auth.me(auth.readSession(cookies) ?? null, cookies);
+    expect(me.user).toMatchObject({ admin: false, seo: true, staff: true });
   });
 
   it('opens the admin with the SEO role only for the realm role seo', async () => {
@@ -100,11 +126,14 @@ describe('AuthService (mock provider)', () => {
     const result = await signIn(auth, { seo: true });
     const token = /admin_session=([^;]+)/.exec(result.cookies.join(';'))![1];
     expect(admin.verify(token)).toEqual({
-      roles: ['seo'],
-      who: 'parent@example.com',
+      email: 'parent@example.com',
+      sub: 'mock:parent@example.com',
+      realm: ['seo'],
     });
-    const user = auth.me(auth.readSession(jar(result.cookies)) ?? null).user;
-    expect(user).toMatchObject({ admin: false, seo: true });
+    const cookies = jar(result.cookies);
+    const user = (await auth.me(auth.readSession(cookies) ?? null, cookies))
+      .user;
+    expect(user).toMatchObject({ admin: false, seo: true, staff: true });
     const out = await auth.logout(jar(result.cookies));
     expect(out.cookies.join('\n')).toMatch(/admin_session=; .*Max-Age=0/);
   });
@@ -166,11 +195,11 @@ describe('AuthService (mock provider)', () => {
     );
   });
 
-  it('refuses the mock in production and is off without configuration', () => {
+  it('refuses the mock in production and is off without configuration', async () => {
     const prod = setup({ NODE_ENV: 'production' }).auth;
     expect(prod.mock).toBe(false);
     expect(prod.enabled).toBe(false);
-    expect(setup({ AUTH_MOCK: 'false' }).auth.me(null)).toEqual({
+    expect(await setup({ AUTH_MOCK: 'false' }).auth.me(null)).toEqual({
       enabled: false,
       user: null,
     });

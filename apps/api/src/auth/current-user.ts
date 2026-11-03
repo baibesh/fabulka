@@ -4,7 +4,7 @@ import {
   type ExecutionContext,
   type NestMiddleware,
 } from '@nestjs/common';
-import type { AdminRole } from '@fabulka/shared';
+import type { RealmRole } from '@fabulka/shared';
 import type { NextFunction, Request, Response } from 'express';
 import { AuthService } from './auth.service';
 
@@ -14,8 +14,8 @@ export interface SessionUser {
   id: string;
   email: string | null;
   name: string | null;
-  /** Admin realm roles (ADMIN_ROLES in @fabulka/shared); empty for a parent. */
-  roles: AdminRole[];
+  /** Admin realm roles at sign-in (REALM_ROLES in @fabulka/shared); what they open is in Team. */
+  roles: RealmRole[];
 }
 
 type RequestWithUser = Request & { sessionUser?: SessionUser };

@@ -409,3 +409,46 @@ model Redirect {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+/// invited: added in Team, has not signed in yet; disabled: no admin, whatever the roles.
+enum StaffStatus {
+  invited
+  active
+  disabled
+}
+
+/// A member of staff: who may open the admin, with which roles and in which countries (admin «Team»).
+/// Keycloak only says who someone is; their rights live here and are read on every admin request.
+model StaffMember {
+  id          String      @id @default(cuid(2))
+  /// Lower-cased; how an invite finds them before their Keycloak user is linked.
+  email       String      @unique
+  /// The Keycloak user (`sub`), linked on their first sign-in.
+  keycloakId  String?     @unique
+  name        String      @default("")
+  status      StaffStatus @default(invited)
+  /// StaffRole keys.
+  roles       String[]    @default([])
+  /// Country codes (reference.countries) their country-scoped roles hold in.
+  countries   String[]    @default([])
+  /// Keycloak realm roles seen at their last sign-in (admin, seo); realm `admin` is always a superadmin.
+  realmRoles  String[]    @default([])
+  lastLoginAt DateTime?
+  /// Who invited them (an email), or "keycloak" for a row made from a realm role at sign-in.
+  createdBy   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+/// A role of the admin: the rights it gives (ADMIN_RIGHTS in @fabulka/shared) and whether they hold
+/// only in the person's countries. Seeded with admin (locked), seo and country_manager.
+model StaffRole {
+  key       String   @id
+  name      String
+  rights    String[] @default([])
+  scoped    Boolean  @default(false)
+  /// The superadmin role: never edited or deleted.
+  locked    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

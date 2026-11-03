@@ -11,8 +11,9 @@ import { ConfigService } from '@nestjs/config';
 import {
   PASSWORD_LOGIN_DISABLED,
   SUPER_ROLE,
-  adminRolesOf,
-  type AdminRole,
+  realmRolesOf,
+  type AdminAccess,
+  type RealmRole,
 } from '@fabulka/shared';
 import { createHmac, randomBytes } from 'node:crypto';
 import {
@@ -30,17 +31,34 @@ const FAILURE_WINDOW_MS = 15 * 60 * 1000;
 const MAX_TRACKED = 10_000;
 
 /**
- * A signed-in admin session: its admin roles (ROLE_PERMISSIONS in @fabulka/shared says what they
- * open) and who it is (an email, when known; for the SEO history).
+ * Who an admin session cookie says the person is. Their rights are not in it: StaffAccessService
+ * reads them from the database on each request, so a change in Team holds at once.
  */
-export interface AdminSession {
-  roles: AdminRole[];
-  who: string | null;
+export interface AdminIdentity {
+  /** Lower-cased email, when known. */
+  email: string | null;
+  /** The Keycloak user (`sub`), when signed in through Keycloak. */
+  sub: string | null;
+  /** Keycloak realm roles at sign-in: `admin` is a superadmin even with no staff row. */
+  realm: RealmRole[];
+  /** The emergency email/password sign-in: a superadmin. */
+  emergency?: boolean;
 }
 
 /**
- * Who may open the admin. The usual way in is Keycloak (realm role `admin` for everything, `seo` for
- * the SEO section only; see AuthService), which calls issue(). The ADMIN_EMAIL / ADMIN_PASSWORD sign-in is an emergency fallback, on only with
+ * A signed-in admin session as the routes see it: what the person may do (AdminAccess, from their
+ * staff row and the roles table) and who it is (an email, when known; for the SEO history).
+ */
+export interface AdminSession extends AdminAccess {
+  who: string | null;
+  /** Their StaffMember row, if they have one. */
+  staffId: string | null;
+}
+
+/**
+ * The admin session cookie. The usual way in is Keycloak (AuthService asks StaffAccessService
+ * whether the person is staff, then calls issue()). The ADMIN_EMAIL / ADMIN_PASSWORD sign-in is an
+ * emergency fallback (always a superadmin), on only with
  * ADMIN_PASSWORD_LOGIN=true. A session is a signed, expiring token in an httpOnly cookie;
  * ADMIN_SECRET (else AUTH_SECRET) signs it (without one, sessions end when the API restarts, and
  * in production there are no sessions at all).
@@ -138,45 +156,75 @@ export class AdminAuthService {
       throw new UnauthorizedException('Неверная почта или пароль');
     }
     this.failures.delete(ip);
-    return this.issue([SUPER_ROLE], this.email, now);
+    return this.issue(
+      { email: this.email, sub: null, realm: [], emergency: true },
+      now,
+    );
   }
 
   /**
-   * A session token for someone already checked elsewhere (Keycloak realm roles): a sealed
-   * { roles, who } with an expiry, signed with a key of its own so no other token of the API passes.
+   * A session token for someone already checked elsewhere: a sealed identity (email, Keycloak id,
+   * realm roles) with an expiry, signed with a key of its own so no other token of the API passes.
    */
-  issue(
-    roles: readonly AdminRole[] = [SUPER_ROLE],
-    who: string | null = null,
-    now = Date.now(),
-  ): string {
+  issue(identity: AdminIdentity, now = Date.now()): string {
     if (!this.sessions) {
       throw new ServiceUnavailableException('The admin is not configured');
     }
-    return seal(this.sessionKey, { r: [...roles], w: who }, SESSION_MS, now);
+    const payload: Record<string, unknown> = {
+      v: 2,
+      e: identity.email,
+      k: identity.sub,
+      r: [...identity.realm],
+    };
+    if (identity.emergency) payload.x = true;
+    return seal(this.sessionKey, payload, SESSION_MS, now);
   }
 
   /**
-   * The session of an unexpired token this service signed, else null. Tokens made before roles
-   * (`<expires>.<signature>`) are admin sessions until they expire.
+   * The identity in an unexpired token this service signed, else null. Older tokens still work
+   * until they expire: `<expires>.<signature>` (before roles) is a superadmin, and `{ r, w }` (roles
+   * frozen in the cookie) is read as realm roles plus an email.
    */
-  verify(token: string | undefined): AdminSession | null {
+  verify(token: string | undefined): AdminIdentity | null {
     if (!token || !this.sessions) return null;
     const [first, signature, extra] = token.split('.');
     if (/^\d+$/.test(first) && signature && extra === undefined) {
       const at = Number(first);
       if (at < Date.now() || !same(signature, this.sign(at))) return null;
-      return { roles: [SUPER_ROLE], who: null };
+      return { email: null, sub: null, realm: [SUPER_ROLE] };
     }
-    const payload = unseal<{ r?: unknown; w?: unknown }>(
-      this.sessionKey,
-      token,
-    );
-    const roles = Array.isArray(payload?.r)
-      ? adminRolesOf(payload.r.filter((r) => typeof r === 'string'))
+    const payload = unseal<{
+      v?: unknown;
+      e?: unknown;
+      k?: unknown;
+      r?: unknown;
+      w?: unknown;
+      x?: unknown;
+    }>(this.sessionKey, token);
+    if (!payload) return null;
+    const text = (value: unknown) =>
+      typeof value === 'string' && value ? value : null;
+    const realm = Array.isArray(payload.r)
+      ? realmRolesOf(payload.r.filter((r) => typeof r === 'string'))
       : [];
-    if (!roles.length) return null;
-    return { roles, who: typeof payload?.w === 'string' ? payload.w : null };
+    const identity: AdminIdentity = {
+      email:
+        text(payload.v === 2 ? payload.e : payload.w)?.toLowerCase() ?? null,
+      sub: payload.v === 2 ? text(payload.k) : null,
+      realm,
+    };
+    if (payload.v === 2 && payload.x === true) identity.emergency = true;
+    if (
+      !identity.email &&
+      !identity.sub &&
+      !realm.length &&
+      !identity.emergency
+    ) {
+      return null;
+    }
+    // A pre-staff cookie without any admin realm role was never a session.
+    if (payload.v !== 2 && !realm.length) return null;
+    return identity;
   }
 
   private get sessionKey(): string {

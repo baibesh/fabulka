@@ -14,6 +14,10 @@ import { AdminAuthController, AdminController } from './admin/admin.controller';
 import { AdminService } from './admin/admin.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
+import { KeycloakAdminService } from './staff/keycloak-admin.service';
+import { StaffAccessService } from './staff/staff-access.service';
+import { TeamController } from './staff/team.controller';
+import { TeamService } from './staff/team.service';
 import { SessionMiddleware } from './auth/current-user';
 import { BooksController } from './books/books.controller';
 import { BooksService } from './books/books.service';
@@ -95,6 +99,7 @@ class HealthController {
     AdminAuthController,
     AdminController,
     ExamplesAdminController,
+    TeamController,
     AuthController,
     TestMailsController,
     VoiceController,
@@ -120,6 +125,9 @@ class HealthController {
     AdminService,
     JournalAdminService,
     AuthService,
+    StaffAccessService,
+    TeamService,
+    KeycloakAdminService,
     MailService,
     VoiceService,
     SeoService,

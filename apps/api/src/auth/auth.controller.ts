@@ -56,10 +56,11 @@ export class AuthController {
   @Get('me')
   me(
     @CurrentUser() user: SessionUser | null,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): AuthMe {
+  ): Promise<AuthMe> {
     response.setHeader('Cache-Control', 'no-store');
-    return this.auth.me(user);
+    return this.auth.me(user, request.headers.cookie);
   }
 
   /**

@@ -22,6 +22,7 @@ export * from "./layout";
 export * from "./locale-path";
 export * from "./seo";
 export * from "./admin-access";
+export * from "./staff";
 export * from "./examples";
 
 /** What the parent tells us about the child. */
@@ -861,10 +862,12 @@ export type ClientErrorGroup = z.infer<typeof ClientErrorGroupSchema>;
 export const AuthUserSchema = z.object({
   email: z.string().nullable(),
   name: z.string().nullable(),
-  /** Has the Keycloak realm role `admin`: the admin session cookie is set too. */
+  /** A superadmin (the admin role in Team, or the Keycloak realm role `admin`). */
   admin: z.boolean(),
-  /** Has the Keycloak realm role `seo` (and not `admin`): the admin opens on its SEO section only. */
+  /** Staff but not a superadmin (e.g. SEO, a country manager): the admin opens on their sections only. */
   seo: z.boolean().default(false),
+  /** May open the admin at all (any role). */
+  staff: z.boolean().default(false),
 });
 export type AuthUser = z.infer<typeof AuthUserSchema>;
 
