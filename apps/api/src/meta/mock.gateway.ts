@@ -145,13 +145,15 @@ const REFUSE_MARK = '[mock-refuse]';
 /**
  * An interest that slows the mock down for one book, so an E2E flow can watch the progress screen:
  * the story takes a moment, the hero sheet longer, and page n takes n × SLOW_PAGE_MS, so the pages
- * finish one by one.
+ * finish one by one. The pages step lasts about 25 s (a refused page 2 is tried three times, 8 s
+ * each): the flow's checks of the steps before it take some 15 s, polling included, and the pages
+ * must still be drawing when it gets there, on a slow CI runner too.
  */
 export const MOCK_SLOW_INTEREST = 'mock-slow';
 const SLOW_MARK = '[mock-slow]';
 const SLOW_STORY_MS = 1500;
 const SLOW_SHEET_MS = 2500;
-const SLOW_PAGE_MS = 1500;
+const SLOW_PAGE_MS = 4000;
 const slowedBy = (prompt: string, ms: number) =>
   prompt.includes(SLOW_MARK) ? sleep(ms) : Promise.resolve();
 

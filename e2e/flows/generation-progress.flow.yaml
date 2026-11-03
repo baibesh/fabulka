@@ -1,7 +1,8 @@
 # While a book is being made the parent sees every real step with its model, the hero and pet
 # sheets as they arrive, a thumbnail for each page as it is drawn (the refused page "redrawing"),
 # the time left, and then the finished book. The interest "mock-slow" slows the mock models down for
-# this book only (page n takes n × 1.5 s), "mock-refuse" puts a scene on page 2 they always refuse.
+# this book only (page n takes n × 4 s, so the pages are still drawing when the flow gets to them,
+# ~15 s in), "mock-refuse" puts a scene on page 2 they always refuse.
 appId: ${WEB}
 tags: [book]
 db: ${DATABASE_URL}
