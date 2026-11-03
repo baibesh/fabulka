@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { BASE_LANGUAGES, FormatsSchema, LANGUAGES, LANGUAGE_NAMES, type Language, type LocalizedText, type PrintFormat } from "@fabulka/shared";
+import { BASE_LANGUAGES, CURRENCIES, FormatsSchema, LANGUAGES, LANGUAGE_NAMES, money, toInputString, type Currency, type Language, type LocalizedText, type PrintFormat } from "@fabulka/shared";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox, ChoiceLabel } from "@/components/ui/choice";
@@ -10,10 +10,11 @@ import { Input } from "@/components/ui/input";
 import type { MessageKey } from "@/i18n/messages";
 import { saveFormats } from "@/lib/admin-api";
 import { Card, useAdminI18n } from "../ui";
-import { errorText, issuesByPath, nextKey, RowActions, SaveBar, useRows, useSaved } from "./shared";
+import { errorText, issuesByPath, nextKey, parsePrice, RowActions, SaveBar, usePriceError, useRows, useSaved } from "./shared";
 
-/** The number fields of a format, as typed: sizes in millimetres, prices in tenge. */
-const NUMBERS = ["widthMm", "heightMm", "bleedMm", "safeMm", "soft", "hard"] as const;
+/** The size fields of a format, as typed, in millimetres. */
+const NUMBERS = ["widthMm", "heightMm", "bleedMm", "safeMm"] as const;
+const COVERS = ["soft", "hard"] as const;
 type NumberField = (typeof NUMBERS)[number];
 
 const LABELS: Record<NumberField, MessageKey> = {
@@ -21,8 +22,6 @@ const LABELS: Record<NumberField, MessageKey> = {
   heightMm: "admin.reference.format.height",
   bleedMm: "admin.reference.format.bleed",
   safeMm: "admin.reference.format.safe",
-  soft: "admin.reference.cover.soft",
-  hard: "admin.reference.cover.hard",
 };
 
 /** Where each number sits in PrintFormat, for the problems the schema reports. */
@@ -31,12 +30,21 @@ const PATHS: Record<NumberField, string> = {
   heightMm: "heightMm",
   bleedMm: "bleedMm",
   safeMm: "safeMm",
-  soft: "prices.soft",
-  hard: "prices.hard",
 };
 
+/** Cover prices as typed, by currency: an empty pair means no price in that currency (not offered there). */
+type PriceDrafts = Record<Currency, { soft: string; hard: string }>;
+
 /** A format in the form: its id is typed for a new one and fixed once saved. */
-type FormatDraft = { key: number; saved: boolean; id: string; name: LocalizedText; published: boolean } & Record<NumberField, string>;
+type FormatDraft = { key: number; saved: boolean; id: string; name: LocalizedText; published: boolean; prices: PriceDrafts } & Record<NumberField, string>;
+
+const priceDrafts = (prices: PrintFormat["prices"]): PriceDrafts =>
+  Object.fromEntries(
+    CURRENCIES.map((c) => {
+      const covers = prices[c];
+      return [c, { soft: covers ? toInputString(money(covers.soft, c)) : "", hard: covers ? toInputString(money(covers.hard, c)) : "" }];
+    }),
+  ) as PriceDrafts;
 
 const withKey = (f: PrintFormat): FormatDraft => ({
   key: nextKey(),
@@ -48,38 +56,59 @@ const withKey = (f: PrintFormat): FormatDraft => ({
   heightMm: String(f.heightMm),
   bleedMm: String(f.bleedMm),
   safeMm: String(f.safeMm),
-  soft: String(f.prices.soft),
-  hard: String(f.prices.hard),
+  prices: priceDrafts(f.prices),
 });
 
 /** "12,5" or "9 900" as typed; an empty field is not zero. */
 const amount = (text: string) => (text.trim() ? Number(text.replace(/\s/g, "").replace(",", ".")) : Number.NaN);
 
-const fromDrafts = (rows: FormatDraft[]) =>
-  rows.map((row) => ({
-    id: row.id.trim(),
-    name: row.name,
-    widthMm: amount(row.widthMm),
-    heightMm: amount(row.heightMm),
-    bleedMm: amount(row.bleedMm),
-    safeMm: amount(row.safeMm),
-    prices: { soft: amount(row.soft), hard: amount(row.hard) },
-    published: row.published,
-  }));
+/**
+ * The formats to save and the price fields that are not prices (`${row}.${currency}.${cover}`). A
+ * currency with both covers empty has no price; one with a single cover filled is a problem.
+ */
+function fromDrafts(rows: FormatDraft[]): { formats: unknown[]; bad: string[] } {
+  const bad: string[] = [];
+  const formats = rows.map((row, i) => {
+    const prices: Partial<Record<Currency, { soft: number; hard: number }>> = {};
+    for (const currency of CURRENCIES) {
+      const draft = row.prices[currency];
+      if (!draft.soft.trim() && !draft.hard.trim()) continue;
+      const soft = parsePrice(draft.soft, currency, 1);
+      const hard = parsePrice(draft.hard, currency, 1);
+      if (soft === null) bad.push(`${i}.${currency}.soft`);
+      if (hard === null) bad.push(`${i}.${currency}.hard`);
+      if (soft !== null && hard !== null) prices[currency] = { soft, hard };
+    }
+    return {
+      id: row.id.trim(),
+      name: row.name,
+      widthMm: amount(row.widthMm),
+      heightMm: amount(row.heightMm),
+      bleedMm: amount(row.bleedMm),
+      safeMm: amount(row.safeMm),
+      prices,
+      published: row.published,
+    };
+  });
+  return { formats, bad };
+}
 
 /**
  * Print formats: the page size, the bleed the printer trims off, the safe zone text stays inside and
- * the price of one copy by cover in tenge. The order form offers the published ones, in this order.
+ * the default price of one copy by cover in each currency. The order form offers the published ones,
+ * in this order, where they have a price in the country's currency.
  */
 export function FormatsTab({ initial }: { initial: PrintFormat[] }) {
   const { t } = useAdminI18n();
   const saved = useSaved();
+  const priceError = usePriceError();
   const { rows, setRows, problems, setProblems, update, move, remove } = useRows(() => initial.map(withKey));
   const save = useMutation({
     mutationFn: async (next: FormatDraft[]) => {
-      const parsed = FormatsSchema.safeParse(fromDrafts(next));
-      setProblems(parsed.success ? {} : issuesByPath(parsed.error.issues));
-      return parsed.success ? saveFormats(parsed.data) : null;
+      const { formats, bad } = fromDrafts(next);
+      const parsed = FormatsSchema.safeParse(formats);
+      setProblems({ ...(parsed.success ? {} : issuesByPath(parsed.error.issues)), ...Object.fromEntries(bad.map((path) => [path, "price"])) });
+      return parsed.success && !bad.length ? saveFormats(parsed.data) : null;
     },
     onSuccess: (formats) => {
       if (!formats) return;
@@ -152,12 +181,12 @@ export function FormatsTab({ initial }: { initial: PrintFormat[] }) {
                   );
                 })}
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {NUMBERS.map((field) => (
                   <Field
                     key={field}
                     label={<span className="text-xs text-muted">{t(LABELS[field])}</span>}
-                    error={problems[`${i}.${PATHS[field]}`] && t(field === "soft" || field === "hard" ? "admin.reference.error.tenge" : "admin.reference.error.size")}
+                    error={problems[`${i}.${PATHS[field]}`] && t("admin.reference.error.size")}
                     errorTestId="reference-error"
                   >
                     <Input
@@ -168,6 +197,31 @@ export function FormatsTab({ initial }: { initial: PrintFormat[] }) {
                     />
                   </Field>
                 ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {CURRENCIES.flatMap((currency) =>
+                  COVERS.map((cover) => (
+                    <Field
+                      key={`${currency}-${cover}`}
+                      label={
+                        <span className="text-xs text-muted">
+                          {t("admin.reference.format.price", { cover: t(cover === "soft" ? "admin.reference.cover.soft" : "admin.reference.cover.hard"), currency })}
+                        </span>
+                      }
+                      error={(problems[`${i}.${currency}.${cover}`] || problems[`${i}.prices.${currency}.${cover}`]) && priceError(currency)}
+                      errorTestId="reference-error"
+                    >
+                      <Input
+                        data-testid={`format-${cover}-${currency}`}
+                        inputMode="decimal"
+                        value={format.prices[currency][cover]}
+                        onChange={(e) =>
+                          update(i, (row) => ({ prices: { ...row.prices, [currency]: { ...row.prices[currency], [cover]: e.target.value } } }))
+                        }
+                      />
+                    </Field>
+                  )),
+                )}
               </div>
             </li>
           ))}
@@ -180,7 +234,7 @@ export function FormatsTab({ initial }: { initial: PrintFormat[] }) {
           onClick={() =>
             setRows((list) => [
               ...list,
-              { key: nextKey(), saved: false, id: "", name: {}, published: false, widthMm: "210", heightMm: "210", bleedMm: "3", safeMm: "12", soft: "", hard: "" },
+              { key: nextKey(), saved: false, id: "", name: {}, published: false, widthMm: "210", heightMm: "210", bleedMm: "3", safeMm: "12", prices: priceDrafts({}) },
             ])
           }
           className="self-start"

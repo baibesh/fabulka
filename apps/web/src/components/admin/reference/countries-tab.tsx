@@ -7,6 +7,8 @@ import {
   CURRENCIES,
   CountriesSchema,
   ISO_COUNTRY_CODES,
+  LIVE_PAYMENT_PROVIDERS,
+  PAYMENT_PROVIDERS,
   LANGUAGES,
   LANGUAGE_NAMES,
   inLanguageOrder,
@@ -49,7 +51,9 @@ export function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; bl
     .sort((a, b) => a.name.localeCompare(b.name, intlLocale(locale)));
   const save = useMutation({
     mutationFn: async (next: CountryDraft[]) => {
-      const parsed = CountriesSchema.safeParse(next.map(({ code, languages, currency, print }) => ({ code, languages, currency, print })));
+      const parsed = CountriesSchema.safeParse(
+        next.map(({ code, languages, currency, print, payment }) => ({ code, languages, currency, print, ...(payment && payment !== "manual" && { payment }) })),
+      );
       setProblems(parsed.success ? {} : issuesByPath(parsed.error.issues));
       return parsed.success ? saveCountries(parsed.data) : null;
     },
@@ -145,13 +149,30 @@ export function CountriesTab({ initial, blocked }: { initial: CountryEntry[]; bl
                       <Checkbox data-testid="country-print" checked={country.print} onChange={(e) => update(i, () => ({ print: e.target.checked }))} />
                       {t("admin.reference.country.print")}
                     </label>
-                    {/* Print is priced in tenge: offered only where the country pays in tenge. */}
-                    {problems[`${i}.print`] && (
-                      <span data-testid="reference-error" className={cx(errorText, "max-w-56")}>
-                        {t("admin.reference.error.printCurrency")}
+                  </span>
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="text-muted">{t("admin.reference.country.payment")}</span>
+                      <Select
+                        small
+                        data-testid="country-payment"
+                        value={country.payment ?? "manual"}
+                        onChange={(e) => update(i, () => ({ payment: e.target.value as CountryEntry["payment"] }))}
+                        className="w-auto"
+                      >
+                        {PAYMENT_PROVIDERS.map((provider) => (
+                          <option key={provider} value={provider}>
+                            {t(`admin.reference.payment.${provider}`)}
+                          </option>
+                        ))}
+                      </Select>
+                    </span>
+                    {country.payment && !LIVE_PAYMENT_PROVIDERS.includes(country.payment) && (
+                      <span data-testid="country-payment-not-live" className={cx(errorText, "max-w-56")}>
+                        {t("admin.reference.payment.notLive")}
                       </span>
                     )}
-                  </span>
+                  </label>
                   <RowActions
                     prefix="country"
                     index={i}

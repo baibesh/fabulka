@@ -1,4 +1,4 @@
-import type { BookStatus, OrderStatus } from "@fabulka/shared";
+import type { BookStatus, Money, OrderStatus } from "@fabulka/shared";
 import type { ComponentProps, ReactNode } from "react";
 import { Card as UiCard } from "@/components/ui/card";
 import { cx } from "@/components/ui/cx";
@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/ui/page";
 import type { BadgeTone } from "@/components/ui/badge";
 import { intlLocale } from "@/i18n/format";
 import { useI18n } from "@/i18n/i18n";
-import { formatDateTime, formatKzt, formatNumber } from "@/lib/format";
+import { formatDateTime, formatNumber, formatPrice } from "@/lib/format";
 
 /** The badge colour of each book status; the label comes from the messages (admin.bookStatus.*). */
 export const BOOK_STATUS_TONE: Record<BookStatus, BadgeTone> = {
@@ -22,7 +22,7 @@ export const BOOK_STATUS_TONE: Record<BookStatus, BadgeTone> = {
 
 /**
  * The admin's words and formats in the chosen language: `t` for messages, then dates, numbers,
- * tenge and durations formatted for that language, and the labels of statuses.
+ * money and durations formatted for that language, and the labels of statuses.
  */
 export function useAdminI18n() {
   const { t, locale } = useI18n("admin");
@@ -32,7 +32,7 @@ export function useAdminI18n() {
     locale,
     date: (iso: string) => formatDateTime(iso, locale),
     number: (value: number) => formatNumber(value, locale),
-    kzt: (amount: number) => formatKzt(amount, locale),
+    money: (money: Money) => formatPrice(money, locale),
     percent: (share: number, digits = 0) =>
       share.toLocaleString(intlLocale(locale), { style: "percent", minimumFractionDigits: digits, maximumFractionDigits: digits }),
     seconds: (seconds: number) => t("admin.seconds", { n: decimal(seconds) }),

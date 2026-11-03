@@ -1,7 +1,8 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import type { AdminReference } from "@fabulka/shared";
+import { CURRENCY_REGISTRY, parseMoneyInput, priceStep, type AdminReference, type Currency } from "@fabulka/shared";
+import { intlLocale } from "@/i18n/format";
 import { ArrowDown, ArrowUp, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button, IconButton } from "@/components/ui/button";
@@ -129,4 +130,33 @@ export function RowActions({
       </IconButton>
     </div>
   );
+}
+
+/**
+ * A price an admin typed, in minor units of `currency` (whole tenge, cents: parseMoneyInput), at
+ * least `minSteps` of the currency's smallest price step; null when it is not one.
+ */
+export function parsePrice(text: string, currency: Currency, minSteps = 0): number | null {
+  const parsed = parseMoneyInput(text, currency);
+  return parsed && parsed.amount >= minSteps * priceStep(currency) ? parsed.amount : null;
+}
+
+/** A currency as the admin names it: "Tenge (KZT, ₸)" in the admin's language. */
+export function useCurrencyLabel() {
+  const { locale } = useAdminI18n();
+  const names = new Intl.DisplayNames([intlLocale(locale)], { type: "currency" });
+  return (currency: Currency) => {
+    const name = names.of(currency) ?? currency;
+    return `${name.charAt(0).toUpperCase()}${name.slice(1)} (${currency}, ${CURRENCY_REGISTRY[currency].symbol})`;
+  };
+}
+
+/** The line under a bad price: what a price in this currency looks like. */
+export function usePriceError() {
+  const { t } = useAdminI18n();
+  return (currency: Currency) =>
+    t("admin.reference.error.price", {
+      currency,
+      rule: t(CURRENCY_REGISTRY[currency].decimals ? "admin.reference.error.price.cents" : "admin.reference.error.price.whole"),
+    });
 }

@@ -14,7 +14,8 @@ import {
   ClientErrorGroupSchema,
   JournalStatsSchema,
   MethodologyPreviewResultSchema,
-  PricesSchema,
+  BookPricesSchema,
+  AdminFxSchema,
   PrintFormatSchema,
   type PrintFormat,
   AdminThemeSchema,
@@ -47,7 +48,9 @@ import {
   type ModelCallPage,
   type OrderStatus,
   type PinLayout,
-  type Prices,
+  type BookPrices,
+  type AdminFx,
+  type Currency,
   type UpdateMethodology,
   type UpdateTemplate,
   AdminMeSchema,
@@ -316,7 +319,7 @@ export async function saveCountryCities(country: string, cities: City[]): Promis
   return CitySchema.array().parse(await request(`/api/admin/reference/cities?country=${encodeURIComponent(country)}`, json("PUT", cities)));
 }
 
-/** A country's own delivery fee and rule, or (country null) the global fee. */
+/** A country's own delivery fee and rule, or (country null) the default fee of `delivery.currency`. */
 export async function saveDelivery(country: string | null, delivery: CountryDelivery): Promise<CountryDelivery> {
   const query = country ? `?country=${encodeURIComponent(country)}` : "";
   return CountryDeliverySchema.parse(await request(`/api/admin/reference/delivery${query}`, json("PUT", delivery)));
@@ -337,9 +340,9 @@ export async function saveCountryFormats(country: string, overrides: CountryForm
 export const clearCountryFormats = (country: string) =>
   request(`/api/admin/reference/country-formats?country=${encodeURIComponent(country)}`, { method: "DELETE" });
 
-/** One country's own prices (its visitors are priced from them instead of the global list). */
-export async function saveCountryPrices(country: string, prices: Prices): Promise<Prices> {
-  return PricesSchema.parse(await request(`/api/admin/reference/prices?country=${encodeURIComponent(country)}`, json("PUT", prices)));
+/** One country's own book prices, in its currency (its visitors are priced from them instead of its currency's default). */
+export async function saveCountryPrices(country: string, prices: BookPrices): Promise<BookPrices> {
+  return BookPricesSchema.parse(await request(`/api/admin/reference/prices?country=${encodeURIComponent(country)}`, json("PUT", prices)));
 }
 
 /** The country is priced from the global list again. */
@@ -355,8 +358,29 @@ export async function saveLanding(country: string, landing: CountryLanding): Pro
 export const clearLanding = (country: string) =>
   request(`/api/admin/reference/landing?country=${encodeURIComponent(country)}`, { method: "DELETE" });
 
-export async function savePrices(prices: Prices): Promise<Prices> {
-  return PricesSchema.parse(await request("/api/admin/reference/prices", json("PUT", prices)));
+/** One currency's default book prices. */
+export async function savePrices(prices: BookPrices): Promise<BookPrices> {
+  return BookPricesSchema.parse(await request("/api/admin/reference/prices", json("PUT", prices)));
+}
+
+/** Exchange rates to USD (reports only): in use, last fetched, overrides. */
+export async function adminFx(): Promise<AdminFx> {
+  return AdminFxSchema.parse(await request("/api/admin/fx"));
+}
+
+/** A superadmin's rate for one currency (dollars for one unit). */
+export async function saveFxRate(currency: Currency, rate: string): Promise<AdminFx> {
+  return AdminFxSchema.parse(await request("/api/admin/fx", json("PUT", { currency, rate })));
+}
+
+/** Back to the fetched rate. */
+export async function clearFxRate(currency: Currency): Promise<AdminFx> {
+  return AdminFxSchema.parse(await request(`/api/admin/fx?currency=${currency}`, { method: "DELETE" }));
+}
+
+/** Fetches today's rates now. */
+export async function refreshFx(): Promise<AdminFx> {
+  return AdminFxSchema.parse(await request("/api/admin/fx/refresh", { method: "POST" }));
 }
 
 export async function adminThemes(): Promise<AdminTheme[]> {

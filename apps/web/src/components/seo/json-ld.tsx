@@ -1,4 +1,4 @@
-import { bookPrice, localePath } from "@fabulka/shared";
+import { bookPrice, localePath, toInputString } from "@fabulka/shared";
 import { format } from "@/i18n/format";
 import { MESSAGES, type MessageKey, type UiLocale } from "@/i18n/messages";
 import { SITE_URL } from "@/lib/seo";
@@ -77,7 +77,7 @@ export async function TemplateJsonLd({ locale, slug }: { locale: UiLocale; slug:
   const template = await templateForSeo(slug, locale);
   if (!template) return null;
   const { country, countries, reference } = await visitorCountry();
-  const price = reference ? bookPrice("template", country, reference.prices, countries, reference.countryPrices) : null;
+  const price = reference ? bookPrice("template", country, { ...reference, countries }) : null;
   const url = absolute(localePath(locale, `/catalog/${slug}`));
   return (
     <>
@@ -96,7 +96,8 @@ export async function TemplateJsonLd({ locale, slug }: { locale: UiLocale; slug:
             ? {
                 offers: {
                   "@type": "Offer",
-                  price: price.amount,
+                  // A decimal string in major units with the currency's shown decimals ("1900", "18.90").
+                  price: toInputString(price),
                   priceCurrency: price.currency,
                   availability: "https://schema.org/InStock",
                   url,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ADMIN_PERMISSIONS, AUDIT_ACTIONS, type AuditAction, type AuditEvent, type AuditQuery } from "@fabulka/shared";
+import { ADMIN_PERMISSIONS, AUDIT_ACTIONS, CurrencySchema, money, type AuditAction, type AuditEvent, type AuditQuery } from "@fabulka/shared";
 import { ChevronDown, ChevronRight, Download } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useEffect, useState } from "react";
@@ -196,8 +196,14 @@ function EventRow({ event }: { event: AuditEvent }) {
 
 /** What changed: each value before and after, or only the changed fields of a big change, then facts. */
 function Details({ event }: { event: AuditEvent }) {
-  const { t } = useAdminI18n();
+  const { t, money: format } = useAdminI18n();
   const { changes, keys, data, truncated } = event.summary;
+  // A price change names its currency: its amounts (minor units) read as money in it.
+  const currency = CurrencySchema.safeParse(data?.currency).data;
+  const showChange = (path: string, value: unknown) =>
+    currency && typeof value === "number" && Number.isSafeInteger(value) && !path.includes("cost") && /(^|\.)(template|custom|fee|delivery|soft|hard)$/.test(path)
+      ? format(money(value, currency))
+      : show(value);
   const history = typeof data?.history === "string" ? data.history : null;
   const facts = Object.entries(data ?? {}).filter(([key]) => key !== "history");
   return (
@@ -208,8 +214,8 @@ function Details({ event }: { event: AuditEvent }) {
           <ul data-testid="activity-changes" className="flex flex-col gap-0.5 font-mono text-xs">
             {changes.map((change) => (
               <li key={change.path} data-testid="activity-change" data-path={change.path}>
-                <span className="text-muted">{change.path}:</span> <span className="text-danger line-through">{show(change.before)}</span> →{" "}
-                <span className="text-success">{show(change.after)}</span>
+                <span className="text-muted">{change.path}:</span> <span className="text-danger line-through">{showChange(change.path, change.before)}</span> →{" "}
+                <span className="text-success">{showChange(change.path, change.after)}</span>
               </li>
             ))}
           </ul>

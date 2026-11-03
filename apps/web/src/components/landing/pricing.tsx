@@ -1,10 +1,10 @@
 "use client";
 
-import { cityName, formatName, lowestCoverPrice } from "@fabulka/shared";
+import { cityName, formatName, lowestCoverPrice, type Money } from "@fabulka/shared";
 import { Check, Gift } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
-import { formatKzt } from "@/lib/format";
+import { formatPrice } from "@/lib/format";
 import { useBookPrice, useCountryPrint } from "@/lib/use-price";
 import { PriceSkeleton } from "../book/price-skeleton";
 import { Section } from "./section";
@@ -26,6 +26,7 @@ export function Pricing() {
   const templatePrice = useBookPrice("template");
   const customPrice = useBookPrice("custom");
   const points = (...keys: MessageKey[]) => keys.map((key) => t(key));
+  const money = (price: Money | null) => (price ? formatPrice(price, locale) : "—");
   const plans: Plan[] = [
     {
       testId: "price-template",
@@ -39,26 +40,26 @@ export function Pricing() {
       price: customPrice,
       points: points("landing.pricing.custom.theme", "landing.pricing.custom.method", "landing.pricing.pdf"),
     },
-    // Print is priced in tenge and offered only where the country has it; elsewhere no prices, a
-    // word that it is planned, and the PDF.
+    // Print is offered only where the country has it, priced in its currency; elsewhere no prices,
+    // a word that it is planned, and the PDF.
     info.print
       ? {
           testId: "price-print",
           title: t("landing.pricing.print.title"),
-          price: reference ? t("landing.pricing.from", { price: formatKzt(lowestCoverPrice(reference.formats, "soft") ?? 0) }) : null,
+          price: reference ? t("landing.pricing.from", { price: money(lowestCoverPrice(reference.formats, "soft")) }) : null,
           points: reference
             ? [
                 t("landing.pricing.print.formats", { formats: reference.formats.map((f) => formatName(f, locale)).join(", ") }),
                 t("landing.pricing.print.covers", {
-                  soft: formatKzt(lowestCoverPrice(reference.formats, "soft") ?? 0),
-                  hard: formatKzt(lowestCoverPrice(reference.formats, "hard") ?? 0),
+                  soft: money(lowestCoverPrice(reference.formats, "soft")),
+                  hard: money(lowestCoverPrice(reference.formats, "hard")),
                 }),
                 t("landing.pricing.print.delivery", {
                   cities: reference.cities
                     .filter((c) => c.freeDelivery)
                     .map((c) => cityName(c, locale))
                     .join(", "),
-                  fee: formatKzt(reference.delivery.freeEverywhere ? 0 : reference.delivery.deliveryKzt),
+                  fee: reference.delivery.freeEverywhere || !reference.delivery.fee ? t("order.free") : money(reference.delivery.fee),
                 }),
               ]
             : [],

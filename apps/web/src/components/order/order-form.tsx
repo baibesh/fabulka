@@ -29,15 +29,19 @@ import { PageHeader } from "../ui/page";
 
 type FormValues = z.input<typeof CreateOrderSchema>;
 
+/** Calling codes the phone field starts with, by country; elsewhere just "+". */
+const CALLING_CODES: Record<string, string> = { KZ: "7", DE: "49", AT: "43", CH: "41", ES: "34", GB: "44", US: "1", CA: "1", PL: "48", CZ: "420" };
+const phonePrefix = (country: string) => `+${CALLING_CODES[country] ?? ""}${CALLING_CODES[country] ? " " : ""}`;
+
 export function OrderForm() {
   const { id } = useParams<{ id: string }>();
   const router = useLocaleRouter();
-  const { t, locale, info } = useI18n();
-  const { kzt: formatKzt } = useFormat();
+  const { t, locale, info, country } = useI18n();
+  const { money } = useFormat();
   const book = useQuery({ queryKey: ["book", id], queryFn: () => getBook(id) });
   const form = useForm<FormValues, unknown, CreateOrderInput>({
     resolver: zodResolver(CreateOrderSchema),
-    defaultValues: { bookId: id, recipientName: "", phone: "+7 ", email: "", cityId: "almaty", address: "", cover: "soft", quantity: 1 },
+    defaultValues: { bookId: id, recipientName: "", phone: phonePrefix(country), email: "", cityId: "almaty", address: "", cover: "soft", quantity: 1 },
   });
   const errors = form.formState.errors;
 
@@ -55,7 +59,7 @@ export function OrderForm() {
   // The book's own format when it is offered, else the first offered one.
   const bookFormat = book.data?.layout.format.id;
   const format = formats.find((f) => f.id === bookFormat)?.id ?? formats[0]?.id;
-  const price = useOrderPrice(format, cover, Number(quantity) || 1, cityId);
+  const price = useOrderPrice(id, format, cover, Number(quantity) || 1, cityId);
   // Another format lays the book out again at that size (the API re-renders it); the preview follows.
   const queryClient = useQueryClient();
   const reformat = useMutation({
@@ -72,7 +76,7 @@ export function OrderForm() {
     onSuccess: (created) => router.push(`/orders/${created.id}`),
   });
 
-  // Print is priced in tenge and offered only where the country has it (the API refuses the rest).
+  // Print is offered only where the country has it, priced in its currency (the API refuses the rest).
   if (!info.print) {
     return (
       <Card data-testid="order-unavailable" radius="lg" padding="lg" className="flex flex-col gap-3">
@@ -114,7 +118,7 @@ export function OrderForm() {
               <span className="flex flex-1 flex-wrap items-baseline justify-between gap-x-3">
                 <span className="font-bold">{formatName(f, locale)}</span>
                 <span className="text-sm text-muted">
-                  {t("order.format.size", { width: f.widthMm / 10, height: f.heightMm / 10 })} · {formatKzt(f.prices[cover])}
+                  {t("order.format.size", { width: f.widthMm / 10, height: f.heightMm / 10 })} · {money(f.prices[cover])}
                 </span>
               </span>
             </ChoiceCard>
@@ -137,7 +141,7 @@ export function OrderForm() {
             <ChoiceCard key={value} control={<Radio value={value} data-testid={`cover-${value}`} {...form.register("cover")} />}>
               <span className="flex flex-col">
                 <span className="font-bold">{t(value === "soft" ? "order.cover.soft" : "order.cover.hard")}</span>
-                <span className="text-muted">{copy !== undefined ? formatKzt(copy) : <PriceSkeleton />}</span>
+                <span className="text-muted">{copy !== undefined ? money(copy) : <PriceSkeleton />}</span>
               </span>
             </ChoiceCard>
           );
@@ -180,15 +184,17 @@ export function OrderForm() {
       <Card data-testid="order-summary" border="none" className="flex flex-col gap-1">
         <div className="flex justify-between">
           <span>{t("order.books")}</span>
-          <span>{price ? formatKzt(price.books) : <PriceSkeleton />}</span>
+          <span>{price ? money(price.subtotal) : <PriceSkeleton />}</span>
         </div>
         <div className="flex justify-between">
           <span>{t("order.delivery")}</span>
-          <span>{price ? (price.delivery ? formatKzt(price.delivery) : t("order.free")) : <PriceSkeleton />}</span>
+          <span>{price ? (price.delivery.amount ? money(price.delivery) : t("order.free")) : <PriceSkeleton />}</span>
         </div>
         <div className="flex justify-between text-lg font-extrabold">
           <span>{t("order.total")}</span>
-          <span data-testid="order-total">{price ? formatKzt(price.total) : <PriceSkeleton className="w-20" />}</span>
+          <span data-testid="order-total" data-currency={price?.currency}>
+            {price ? money(price.total) : <PriceSkeleton className="w-20" />}
+          </span>
         </div>
       </Card>
 

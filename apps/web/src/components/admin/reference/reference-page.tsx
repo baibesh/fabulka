@@ -19,11 +19,12 @@ import { CountryFormatsTab } from "./country-formats-tab";
 import { DeliveryTab } from "./delivery-tab";
 import { FaqTab } from "./faq-tab";
 import { FormatsTab } from "./formats-tab";
+import { FxTab } from "./fx-tab";
 import { LandingTab } from "./landing-tab";
 import { PricesTab } from "./prices-tab";
 import { QUERY } from "./shared";
 
-const TABS = ["prices", "delivery", "formats", "cities", "landing", "faq", "countries", "blocked"] as const;
+const TABS = ["prices", "delivery", "formats", "cities", "landing", "faq", "countries", "fx", "blocked"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -38,6 +39,7 @@ const TAB_RIGHT: Record<Tab, AdminRight> = {
   landing: "reference.landing",
   faq: "reference",
   countries: "reference",
+  fx: "reference",
   blocked: "reference",
 };
 
@@ -100,6 +102,8 @@ function TabBody({ tab, data, country }: { tab: Tab; data: AdminReference; count
       return <FaqTab initial={data.faq} countries={data.countries} />;
     case "countries":
       return <CountriesTab initial={data.countries} blocked={data.blocked} />;
+    case "fx":
+      return <FxTab />;
     default:
       return <BlockedTab initial={data.blocked} />;
   }

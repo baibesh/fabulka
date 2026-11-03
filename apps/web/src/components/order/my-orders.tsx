@@ -19,7 +19,7 @@ import { SectionHeader } from "../ui/section-header";
  */
 export function MyOrders() {
   const { t, info } = useI18n();
-  const { kzt, day } = useFormat();
+  const { money, day } = useFormat();
   const orders = useQuery({
     queryKey: ["my-orders"],
     queryFn: listMyOrders,
@@ -59,7 +59,7 @@ export function MyOrders() {
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="truncate font-bold">{order.bookTitle ?? t("my.orders.title")}</span>
                   <span className="text-sm text-muted">
-                    {t(order.cover === "hard" ? "order.cover.hard" : "order.cover.soft")} × {order.quantity} · {kzt(order.totalKzt)}
+                    {t(order.cover === "hard" ? "order.cover.hard" : "order.cover.soft")} × {order.quantity} · {money(order.total)}
                   </span>
                   <span className="text-xs text-muted">{t("my.orders.placed", { date: day(order.createdAt) })}</span>
                 </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { covers, isSuperAdmin, type AdminStats, type CountrySpend } from "@fabulka/shared";
+import { covers, isSuperAdmin, type AdminStats, type CountrySpend, type Revenue } from "@fabulka/shared";
 import { Grid3x3, Pause, Play } from "lucide-react";
 import Link from "next/link";
 import { adminCountryStats, adminMe, adminStats, setPaused } from "@/lib/admin-api";
@@ -50,6 +50,28 @@ function Bars({ rows }: { rows: { label: string; value: number }[] }) {
   );
 }
 
+/**
+ * Revenue by currency as it was charged (never added across currencies), then roughly in dollars at
+ * each sale's own rate, with how many sales had no rate.
+ */
+function RevenueLines({ revenue, testId }: { revenue: Revenue; testId: string }) {
+  const { t, money } = useAdminI18n();
+  if (!revenue.count) return <p className="text-xs text-muted">{t("admin.dashboard.sales.none")}</p>;
+  return (
+    <ul data-testid={testId} className="flex flex-col gap-0.5 text-xs text-muted">
+      {revenue.byCurrency.map((row) => (
+        <li key={row.currency} data-testid={`${testId}-${row.currency}`} data-amount={row.total.amount} data-count={row.count} className="tabular-nums">
+          {money(row.total)} · {row.count}
+        </li>
+      ))}
+      <li data-testid={`${testId}-usd`} data-amount={revenue.approxUsd.amount} className="font-semibold tabular-nums">
+        {t("admin.dashboard.sales.approx", { amount: money(revenue.approxUsd) })}
+        {revenue.unconverted > 0 && ` (${t("admin.dashboard.sales.unconverted", { count: revenue.unconverted })})`}
+      </li>
+    </ul>
+  );
+}
+
 /** Staff generation today per country, against each country's cap. */
 function StaffSpend({ rows }: { rows: CountrySpend[] }) {
   const { t } = useAdminI18n();
@@ -88,7 +110,7 @@ export function Dashboard() {
 
 /** A country manager's dashboard: their countries' books, orders and spend today. */
 function CountryDashboard() {
-  const { t, number, kzt, bookStatus } = useAdminI18n();
+  const { t, number, money, bookStatus } = useAdminI18n();
   const countryName = useCountryName("admin");
   const { country, options } = useWorkingCountry();
   const stats = useQuery({ queryKey: ["admin", "stats", "countries", country], queryFn: () => adminCountryStats(country), refetchInterval: 10_000 });
@@ -104,7 +126,7 @@ function CountryDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label={t("admin.dashboard.booksToday")} value={number(s.books.today)} hint={t("admin.dashboard.total", { count: number(s.books.total) })} testId="country-books-today" />
         <Stat label={t("admin.dashboard.ordersToday")} value={number(s.orders.today)} hint={t("admin.dashboard.total", { count: number(s.orders.total) })} testId="country-orders-today" />
-        <Stat label={t("admin.dashboard.sales.orders")} value={kzt(s.orders.totalKzt)} testId="country-orders-kzt" />
+        <Stat label={t("admin.dashboard.revenue")} value={`≈ ${money(s.orders.revenue.approxUsd)}`} testId="country-revenue-usd" />
         <Stat label={t("admin.dashboard.booksSpend")} value={formatSpendUsd(s.spend.booksTodayUsd)} testId="country-spend-today" />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
@@ -112,13 +134,33 @@ function CountryDashboard() {
           <Bars rows={Object.entries(s.books.byStatus).map(([status, n]) => ({ label: bookStatus(status as never), value: n }))} />
         </Card>
         <StaffSpend rows={s.spend.staff} />
+        <Card title={t("admin.dashboard.revenue")} data-testid="country-revenue">
+          <p className="text-sm text-muted">{t("admin.dashboard.sales.byCurrency")}</p>
+          <RevenueLines revenue={s.orders.revenue} testId="country-revenue-lines" />
+        </Card>
+        <Card title={t("admin.dashboard.margin")} data-testid="country-margin" data-orders={s.orders.margin?.orders ?? 0} data-amount={s.orders.margin?.margin.amount ?? ""}>
+          {s.orders.margin ? (
+            <>
+              <p className="text-2xl font-extrabold tabular-nums">≈ {money(s.orders.margin.margin)}</p>
+              <p className="text-xs text-muted">
+                {t("admin.dashboard.margin.hint", {
+                  orders: s.orders.margin.orders,
+                  revenue: money(s.orders.margin.revenue),
+                  cost: money(s.orders.margin.cost),
+                })}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted">{t("admin.dashboard.margin.none")}</p>
+          )}
+        </Card>
       </div>
     </>
   );
 }
 
 function GlobalDashboard() {
-  const { t, locale, number, kzt, percent } = useAdminI18n();
+  const { t, locale, number, money, percent } = useAdminI18n();
   const queryClient = useQueryClient();
   const stats = useQuery({ queryKey: ["admin", "stats"], queryFn: adminStats, refetchInterval: 10_000 });
   const me = useQuery({ queryKey: ["admin", "me"], queryFn: adminMe, retry: false });
@@ -191,22 +233,23 @@ function GlobalDashboard() {
           <Meter label={t("admin.dashboard.limits.regular")} used={s.caps.regular.used} limit={s.caps.regular.limit} />
           <Meter label={t("admin.dashboard.limits.demo")} used={s.caps.demo.used} limit={s.caps.demo.limit} />
         </Card>
-        <Card title={t("admin.dashboard.sales")}>
+        <Card title={t("admin.dashboard.sales")} data-testid="sales">
+          <p className="-mt-2 text-xs text-muted">{t("admin.dashboard.sales.byCurrency")}</p>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-muted">{t("admin.dashboard.sales.purchases")}</p>
-              <p className="text-2xl font-extrabold tabular-nums">{number(s.sales.purchases)}</p>
-              <p className="text-xs text-muted">
-                {kzt(s.sales.purchasesKzt)}
-                {s.sales.purchasesUsd > 0 && ` · ${formatSpendUsd(s.sales.purchasesUsd)}`}
-              </p>
+              <p className="text-2xl font-extrabold tabular-nums">{number(s.sales.purchases.books)}</p>
+              <RevenueLines revenue={s.sales.purchases} testId="revenue-purchases" />
             </div>
             <div>
               <p className="text-sm text-muted">{t("admin.dashboard.sales.orders")}</p>
-              <p className="text-2xl font-extrabold tabular-nums">{number(s.sales.orders)}</p>
-              <p className="text-xs text-muted">{kzt(s.sales.ordersKzt)}</p>
+              <p className="text-2xl font-extrabold tabular-nums">{number(s.sales.orders.count)}</p>
+              <RevenueLines revenue={s.sales.orders} testId="revenue-orders" />
             </div>
           </div>
+          <p data-testid="revenue-total-usd" data-amount={s.sales.approxUsd.amount} className="text-sm font-bold">
+            {t("admin.dashboard.sales.approx", { amount: money(s.sales.approxUsd) })}
+          </p>
         </Card>
         <Card title={t("admin.dashboard.countries")}>
           <Bars rows={s.countries.map((c) => ({ label: region(c.country), value: c.books }))} />

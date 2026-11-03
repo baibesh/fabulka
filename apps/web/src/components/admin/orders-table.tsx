@@ -15,7 +15,7 @@ import { Flag } from "@/components/ui/flag";
 import { useWorkingCountry } from "./working-country";
 
 export function OrdersTable() {
-  const { t, date, kzt, orderStatus } = useAdminI18n();
+  const { t, date, money, orderStatus } = useAdminI18n();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<OrderStatus | "">("");
   const [open, setOpen] = useState<string | null>(null);
@@ -101,7 +101,14 @@ export function OrdersTable() {
                       {t("admin.orders.printFile")}
                     </a>
                   </td>
-                  <td className="text-right tabular-nums">{kzt(order.totalKzt)}</td>
+                  <td data-testid="order-total" data-currency={order.total.currency} data-amount={order.total.amount} className="text-right tabular-nums">
+                    {money(order.total)}
+                    {order.lines.map((line, i) => (
+                      <span key={i} data-testid="order-line" data-currency={line.unit.currency} data-unit={line.unit.amount} className="block text-xs text-muted">
+                        {line.format ?? ""} {line.cover} {line.quantity} × {money(line.unit)}
+                      </span>
+                    ))}
+                  </td>
                   <td>
                     <Select
                       small

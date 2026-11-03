@@ -8,15 +8,15 @@ import {
   cityName,
   deliveryFor,
   fillFaq,
-  formatsFor,
   landingFaq,
   lowestCoverPrice,
-  pricesFor,
+  offeredFormats,
   type FaqPlaceholder,
+  type Money,
 } from "@fabulka/shared";
 import { ChevronDown } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
-import { formatKzt, formatPrice } from "@/lib/format";
+import { formatPrice } from "@/lib/format";
 import { regionName } from "@/lib/regions";
 import { useReference } from "@/lib/use-price";
 import { Section } from "./section";
@@ -31,18 +31,19 @@ export function Faq() {
   const { t, locale, country, countries, info } = useI18n();
   const reference = useReference().data;
   const items = reference ? landingFaq(reference.faq, reference.landing, country, countries, locale) : null;
-  const prices = reference ? pricesFor(country, reference.prices, reference.countryPrices) : null;
-  // Print as the country offers it: its formats, delivery fee and cities.
-  const formats = reference ? formatsFor(country, reference.formats, reference.countryFormats).filter((f) => f.published) : [];
-  const delivery = reference ? deliveryFor(country, reference.prices, reference.countryDelivery) : null;
+  const pricing = reference ? { ...reference, countries } : null;
+  // Print as the country offers it, in its currency: its formats, delivery fee and cities.
+  const formats = pricing ? offeredFormats(country, pricing) : [];
+  const delivery = pricing ? deliveryFor(country, pricing) : null;
+  const money = (price: Money | null) => (price ? formatPrice(price, locale) : "—");
   const vars: Partial<Record<FaqPlaceholder, string>> =
-    reference && prices
+    reference && pricing
       ? {
-          templatePrice: formatPrice(bookPrice("template", country, prices, countries)),
-          customPrice: formatPrice(bookPrice("custom", country, prices, countries)),
-          softCover: formatKzt(lowestCoverPrice(formats, "soft") ?? 0, locale),
-          hardCover: formatKzt(lowestCoverPrice(formats, "hard") ?? 0, locale),
-          delivery: formatKzt(delivery?.freeEverywhere ? 0 : (delivery?.deliveryKzt ?? prices.deliveryKzt), locale),
+          templatePrice: money(bookPrice("template", country, pricing)),
+          customPrice: money(bookPrice("custom", country, pricing)),
+          softCover: money(lowestCoverPrice(formats, "soft")),
+          hardCover: money(lowestCoverPrice(formats, "hard")),
+          delivery: delivery?.freeEverywhere || !delivery?.fee ? t("order.free") : money(delivery.fee),
           freeCities: citiesOf(country, reference.cities)
             .filter((c) => c.freeDelivery)
             .map((c) => cityName(c, locale))

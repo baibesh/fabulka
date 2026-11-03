@@ -1,27 +1,13 @@
-import type { Currency } from "@fabulka/shared";
+import { formatMoney, type Money } from "@fabulka/shared";
 import { intlLocale } from "@/i18n/format";
 import type { UiLocale } from "@/i18n/messages";
 
-const kzt = new Map<UiLocale, Intl.NumberFormat>();
-
-/** 14900 → "14 900 ₸" (in English "14,900 ₸") */
-export function formatKzt(amount: number, locale: UiLocale = "ru"): string {
-  let number = kzt.get(locale);
-  if (!number) {
-    number = new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: 0 });
-    kzt.set(locale, number);
-  }
-  return `${number.format(amount)} ₸`;
-}
-
-/** 5.9 → "$5.90" */
-export function formatUsd(amount: number): string {
-  return `$${amount.toFixed(2)}`;
-}
-
-/** A price in its own currency: "1 900 ₸" or "$3.90". */
-export function formatPrice({ amount, currency }: { amount: number; currency: Currency }): string {
-  return currency === "KZT" ? formatKzt(amount) : formatUsd(amount);
+/**
+ * Money in its own currency, as the interface language writes it: "1 900 ₸" in Russian, "₸1,900"
+ * in English, "18,90 €" in German, "$3.90" in English (see formatMoney in @fabulka/shared).
+ */
+export function formatPrice(money: Money, locale: UiLocale): string {
+  return formatMoney(money, intlLocale(locale));
 }
 
 /** A count with the language's digit grouping: 12345 → "12 345" / "12,345". */
