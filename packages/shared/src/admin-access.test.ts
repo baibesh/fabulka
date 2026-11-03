@@ -4,7 +4,9 @@ import {
   ADMIN_RIGHTS,
   BUILTIN_ROLES,
   NO_ACCESS,
+  AdminMeSchema,
   ROLE_PERMISSIONS,
+  accessFromMe,
   accessOf,
   allowed,
   allowedFor,
@@ -15,7 +17,7 @@ import {
   sectionOfRight,
   type RoleDef,
 } from "./admin-access";
-import { CreateStaffRoleSchema, InviteStaffSchema } from "./staff";
+import { CreateStaffRoleSchema, InviteStaffSchema, StaffRoleSchema } from "./staff";
 
 const DEFS: readonly RoleDef[] = BUILTIN_ROLES;
 const superadmin = accessOf(["admin"], DEFS, []);
@@ -201,5 +203,40 @@ describe("Team schemas", () => {
     expect(CreateStaffRoleSchema.safeParse({ key: "xx", name: "X", rights: ["team"], scoped: false }).success).toBe(false);
     expect(CreateStaffRoleSchema.safeParse({ key: "Bad Key", name: "X", rights: ["orders"], scoped: false }).success).toBe(false);
     expect(CreateStaffRoleSchema.safeParse({ key: "empty", name: "X", rights: [], scoped: false }).success).toBe(false);
+  });
+});
+
+describe("responses from a newer release", () => {
+  // A tab left open across a deploy: the API sends a section and a right this bundle does not know.
+  const me = {
+    ok: true,
+    who: "owner@example.com",
+    roles: ["admin"],
+    permissions: ["dashboard", "orders", "audit", "billing"],
+    rights: ["dashboard", "orders", "audit", "billing", "reference.prices", "reference.taxes"],
+    global: ["dashboard", "billing"],
+    countries: ["DE"],
+    superadmin: true,
+  };
+
+  it("parses /admin/me and drops the unknown sections and rights", () => {
+    const parsed = AdminMeSchema.parse(me);
+    expect(parsed.permissions).toEqual(["dashboard", "orders", "audit"]);
+    expect(parsed.rights).toEqual(["dashboard", "orders", "audit", "reference.prices"]);
+    expect(parsed.global).toEqual(["dashboard"]);
+    expect(accessFromMe(parsed).global).toEqual([...ADMIN_RIGHTS]);
+  });
+
+  it("still defaults the lists an older API leaves out and refuses what is not a list of strings", () => {
+    const parsed = AdminMeSchema.parse({ ok: true, who: null, roles: [], permissions: ["seo"] });
+    expect(parsed).toMatchObject({ permissions: ["seo"], rights: [], global: [], countries: [], superadmin: false });
+    expect(AdminMeSchema.safeParse({ ...me, permissions: "dashboard" }).success).toBe(false);
+    expect(AdminMeSchema.safeParse({ ...me, rights: [1] }).success).toBe(false);
+  });
+
+  it("drops unknown rights from a role in the Team list, while a role being saved stays strict", () => {
+    const role = { key: "cm", name: "CM", rights: ["orders", "billing"], scoped: true, locked: false, builtin: false, members: 1 };
+    expect(StaffRoleSchema.parse(role).rights).toEqual(["orders"]);
+    expect(CreateStaffRoleSchema.safeParse({ key: "cm", name: "CM", rights: ["orders", "billing"], scoped: true }).success).toBe(false);
   });
 });

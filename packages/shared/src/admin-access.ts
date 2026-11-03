@@ -182,17 +182,31 @@ export function allowedFor(access: AdminAccess, right: AdminRight, countries: re
   return countries.every((country) => access.countries.includes(country.trim().toUpperCase()));
 }
 
-/** GET /admin/me: who is signed in, their roles, the sections they may open and their countries. */
+/**
+ * A list of known values in a response the admin reads: values this build does not know are dropped
+ * instead of failing the whole response. A page left open across a deploy runs the old bundle while
+ * the API already sends the new release's sections and rights; the rest of the page still works.
+ * For responses only: input the API validates stays strict (AdminRightSchema).
+ */
+export function knownValues<const T extends readonly string[]>(values: T) {
+  const known = new Set<string>(values);
+  return z.array(z.string()).transform((list) => list.filter((value): value is T[number] => known.has(value)));
+}
+
+/**
+ * GET /admin/me: who is signed in, their roles, the sections they may open and their countries.
+ * Sections and rights this build does not know are dropped (knownValues).
+ */
 export const AdminMeSchema = z.object({
   ok: z.literal(true),
   who: z.string().nullable(),
   roles: z.array(z.string()),
   /** Sections for the nav. */
-  permissions: z.array(AdminPermissionSchema),
+  permissions: knownValues(ADMIN_PERMISSIONS),
   /** Every right in some scope, parts included ("reference.prices"). */
-  rights: z.array(AdminRightSchema).default([]),
+  rights: knownValues(ADMIN_RIGHTS).default([]),
   /** Rights that hold everywhere; the rest hold only in `countries`. */
-  global: z.array(AdminRightSchema).default([]),
+  global: knownValues(ADMIN_RIGHTS).default([]),
   /** The countries the country-scoped rights hold in (ISO codes); empty without such a role. */
   countries: z.array(z.string()).default([]),
   superadmin: z.boolean().default(false),

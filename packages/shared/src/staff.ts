@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ASSIGNABLE_RIGHTS, AdminRightSchema, RoleKeySchema } from "./admin-access";
+import { ADMIN_RIGHTS, ASSIGNABLE_RIGHTS, AdminRightSchema, RoleKeySchema, knownValues } from "./admin-access";
 import { CountryCodeSchema } from "./reference";
 
 // ---- Team: staff and roles (admin «Team», superadmin only) -------------------------------------
@@ -76,7 +76,8 @@ export type InviteResult = z.infer<typeof InviteResultSchema>;
 export const StaffRoleSchema = z.object({
   key: z.string(),
   name: z.string(),
-  rights: z.array(AdminRightSchema),
+  /** Rights this build does not know (a newer release's) are dropped. */
+  rights: knownValues(ADMIN_RIGHTS),
   scoped: z.boolean(),
   /** The superadmin role: every right, never edited. */
   locked: z.boolean(),
