@@ -12,12 +12,14 @@ import {
   TemplateBlocksSchema,
   ThemeCheckSchema,
 } from "./layout";
-import { TemplateCountriesSchema, countryInfo, pricesFor, type City, type Country, type CountryEntry, type CountryPrices, type Currency, type PrintFormat, type Prices } from "./reference";
+import { PaymentProviderSchema, TemplateCountriesSchema, bookPricesFor, type City, type Country, type LocalFormat, type PricingData } from "./reference";
+import { CurrencySchema, MoneySchema, RevenueSchema, money, multiplyMoney, type Currency, type Money } from "./money";
 import { CountriesModeSchema } from "./country-rules";
 
 export * from "./language";
 export * from "./methodologies";
 export * from "./reference";
+export * from "./money";
 export * from "./labels";
 export * from "./layout";
 export * from "./locale-path";
@@ -388,20 +390,20 @@ export const BookKindSchema = z.enum(BOOK_KINDS);
 export type BookKind = z.infer<typeof BookKindSchema>;
 
 /**
- * What one more generated (digital) book of this kind costs a visitor from `country`, at the
- * owner's prices (the country's own list in reference.country_prices, else reference.prices) in
- * the currency the owner set for that country (reference.countries; "other" pays in dollars).
+ * What one more generated (digital) book of this kind costs a visitor from `country`, in the
+ * country's currency (reference.countries; "other" pays in dollars): the country's own book prices
+ * when it has them in that currency, else the currency's default (reference.prices). Null when the
+ * currency has no prices at all.
  */
-export function bookPrice(
-  kind: BookKind,
-  country: Country,
-  prices: Prices,
-  countries: readonly CountryEntry[],
-  countryPrices?: CountryPrices,
-): { amount: number; currency: Currency } {
-  const { currency } = countryInfo(country, countries);
-  return { amount: pricesFor(country, prices, countryPrices).books[kind][currency], currency };
+export function bookPrice(kind: BookKind, country: Country, data: Pick<PricingData, "prices" | "countries" | "countryPrices">): Money | null {
+  return bookPricesFor(country, data)?.[kind] ?? null;
 }
+
+/** Body of a 409 from a purchase or an order: the visitor's currency has no price for it. */
+export const PRICE_UNSET = "price_unset";
+
+/** Body of a 503 from a purchase or an order: the country's payment provider is not wired in yet. */
+export const PAYMENT_UNAVAILABLE = "payment_unavailable";
 
 /** An email a parent typed: for order and receipt emails. */
 export const EmailSchema = z.string().trim().max(200).pipe(z.email("Проверьте адрес почты"));
@@ -443,11 +445,11 @@ export type Cover = z.infer<typeof CoverSchema>;
 export const CreateOrderSchema = z.object({
   bookId: z.string().min(1),
   recipientName: z.string().trim().min(2).max(80),
-  /** Kazakhstan mobile number: +7 and 10 digits. */
+  /** A mobile number with its country code: + and 8 to 15 digits (spaces, brackets and dashes are dropped). */
   phone: z
     .string()
     .transform((s) => s.replace(/[\s()-]/g, ""))
-    .pipe(z.string().regex(/^\+7\d{10}$/, "Номер в формате +7 XXX XXX XX XX")),
+    .pipe(z.string().regex(/^\+\d{8,15}$/, "A number with its country code: +7 701 123 45 67")),
   /** The confirmation and status emails go here. */
   email: EmailSchema,
   /** A delivery city's id (reference.cities); the order keeps its Russian name too. */
@@ -462,22 +464,70 @@ export const CreateOrderSchema = z.object({
 });
 export type CreateOrderInput = z.infer<typeof CreateOrderSchema>;
 
+/** One line of a printed order: a book in a format and cover, how many, and the price of one and of all. */
+export interface QuoteLine {
+  bookId: string;
+  format: string;
+  cover: Cover;
+  quantity: number;
+  unit: Money;
+  total: Money;
+  /** The print partner's cost of one copy, when set (any currency). */
+  unitCost: Money | null;
+}
+
+/** What a printed order costs, all in the country's currency: its lines, delivery and the total. */
+export interface OrderQuote {
+  currency: Currency;
+  lines: QuoteLine[];
+  subtotal: Money;
+  delivery: Money;
+  total: Money;
+  /** The print partner's delivery cost, when set and delivery is charged for. */
+  deliveryCost: Money | null;
+}
+
 /**
- * What a printed order costs at the owner's prices: the copies, plus the flat delivery fee unless
- * the city (by id) is one with free delivery.
+ * What a printed order costs at the owner's prices, in the country's currency: the copies of the
+ * book in the format and cover, plus the flat delivery fee unless delivery is free everywhere in the
+ * country or the city (by id) is one with free delivery. Throws for a format with no price in that
+ * currency or a currency without a delivery fee (the API refuses such an order first).
  */
-export function orderPrice(
-  format: PrintFormat,
-  cover: Cover,
-  quantity: number,
-  cityId: string,
-  delivery: { deliveryKzt: number; freeEverywhere?: boolean },
-  cities: readonly City[],
-) {
-  const books = format.prices[cover] * quantity;
-  const free = delivery.freeEverywhere === true || cities.some((c) => c.freeDelivery && c.id === cityId);
-  const fee = free ? 0 : delivery.deliveryKzt;
-  return { books, delivery: fee, total: books + fee };
+export function quoteOrder(input: {
+  bookId: string;
+  format: LocalFormat;
+  cover: Cover;
+  quantity: number;
+  cityId: string;
+  delivery: { fee: Money | null; freeEverywhere?: boolean; cost?: Money | null };
+  cities: readonly City[];
+}): OrderQuote {
+  const { format, cover, quantity, delivery } = input;
+  if (!format.prices) throw new Error(`Format ${format.id} has no price here`);
+  const unit = format.prices[cover];
+  const currency = unit.currency;
+  const free = delivery.freeEverywhere === true || input.cities.some((c) => c.freeDelivery && c.id === input.cityId);
+  if (!free && !delivery.fee) throw new Error(`No delivery fee in ${currency}`);
+  const fee = free ? money(0, currency) : delivery.fee!;
+  if (fee.currency !== currency) throw new Error(`Delivery is priced in ${fee.currency}, the format in ${currency}`);
+  const line: QuoteLine = {
+    bookId: input.bookId,
+    format: format.id,
+    cover,
+    quantity,
+    unit,
+    total: multiplyMoney(unit, quantity),
+    unitCost: format.cost?.[cover] ?? null,
+  };
+  const subtotal = line.total;
+  return {
+    currency,
+    lines: [line],
+    subtotal,
+    delivery: fee,
+    total: money(subtotal.amount + fee.amount, currency),
+    deliveryCost: free ? null : (delivery.cost ?? null),
+  };
 }
 
 /** Body of a 400 from POST /orders: the city is not one we deliver to (reference.cities). */
@@ -502,6 +552,23 @@ export const OrderStatusEventSchema = z.object({
 });
 export type OrderStatusEvent = z.infer<typeof OrderStatusEventSchema>;
 
+/** Where a payment stands with its provider; a manual (demo) payment is paid at once. */
+export const PAYMENT_STATUSES = ["pending", "paid", "failed", "refunded"] as const;
+export const PaymentStatusSchema = z.enum(PAYMENT_STATUSES);
+export type PaymentStatus = z.infer<typeof PaymentStatusSchema>;
+
+/** A line of an order as it was priced when ordered: never repriced. */
+export const OrderLineSchema = z.object({
+  bookId: z.string(),
+  /** The format's id; null for orders made before formats. */
+  format: z.string().nullable(),
+  cover: CoverSchema,
+  quantity: z.number().int(),
+  unit: MoneySchema,
+  total: MoneySchema,
+});
+export type OrderLine = z.infer<typeof OrderLineSchema>;
+
 export const OrderSchema = z.object({
   id: z.string(),
   bookId: z.string(),
@@ -524,9 +591,13 @@ export const OrderSchema = z.object({
   /** The printed size, from the layout frozen with the order; null for orders made before formats. */
   format: z.object({ id: z.string(), widthMm: z.number(), heightMm: z.number(), bleedMm: z.number() }).nullable(),
   quantity: z.number().int(),
-  booksKzt: z.number().int(),
-  deliveryKzt: z.number().int(),
-  totalKzt: z.number().int(),
+  /** What it was priced and paid in: the country's currency when ordered. */
+  currency: CurrencySchema,
+  lines: z.array(OrderLineSchema),
+  subtotal: MoneySchema,
+  delivery: MoneySchema,
+  total: MoneySchema,
+  payment: z.object({ provider: PaymentProviderSchema, status: PaymentStatusSchema }),
   createdAt: z.string(),
 });
 export type Order = z.infer<typeof OrderSchema>;
@@ -597,13 +668,13 @@ export const AdminStatsSchema = z.object({
     regular: z.object({ used: z.number().int(), limit: z.number().int() }),
     demo: z.object({ used: z.number().int(), limit: z.number().int() }),
   }),
+  /** Revenue in each currency as charged, and roughly in dollars at each sale's own rate. */
   sales: z.object({
-    orders: z.number().int(),
-    ordersKzt: z.number().int(),
-    purchases: z.number().int(),
-    purchasesKzt: z.number().int(),
-    /** Books bought in dollars (countries priced in USD), in dollars. */
-    purchasesUsd: z.number(),
+    orders: RevenueSchema,
+    /** Purchases of more books; `books` is how many books they bought. */
+    purchases: RevenueSchema.extend({ books: z.number().int() }),
+    /** Orders and purchases together, roughly in dollars. */
+    approxUsd: MoneySchema,
   }),
   countries: z.array(z.object({ country: z.string(), books: z.number().int() })),
   /** Requests for a printed book from countries without a print partner. */
@@ -651,6 +722,8 @@ export const AdminOrderSchema = OrderSchema.extend({
   country: z.string().nullable().default(null),
   /** True when the status was set by hand rather than by the demo timer. */
   manual: z.boolean(),
+  /** Dollars for one unit of the order's currency when it was placed (reports only); null when no rate was known. */
+  fxToUsd: z.string().nullable().default(null),
 });
 export type AdminOrder = z.infer<typeof AdminOrderSchema>;
 

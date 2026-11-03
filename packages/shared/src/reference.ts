@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LANGUAGES, LanguageSchema, localized, localizedTextSchema, type Language, type LocalizedText } from "./language";
+import { CURRENCIES, CurrencySchema, MinorAmountSchema, isPriceAmount, money, priceStep, type Currency, type Money } from "./money";
 
 // ---- Reference data the owner edits in the admin («Справочники») ----------------------------
 //
@@ -20,55 +21,84 @@ export const REFERENCE_KEYS = {
   countryFormats: "reference.country_formats",
 } as const;
 
-const tenge = z.number().int().min(0).max(10_000_000);
-/** Dollars with at most two decimals: 3.9, 5.90. */
-const dollars = z
-  .number()
-  .min(0)
-  .max(100_000)
-  .refine((n) => Math.abs(Math.round(n * 100) - n * 100) < 1e-6, "At most two decimals");
+/**
+ * Adds an issue at `path` unless `amount` is a price in `currency` (whole tenge, whole cents: see
+ * money.ts) of at least `min` minor units.
+ */
+function checkPrice(ctx: z.RefinementCtx, amount: number, currency: Currency, path: PropertyKey[], min = 0): void {
+  if (!isPriceAmount(amount, currency) || amount < min) {
+    ctx.addIssue({ code: "custom", path, message: `Not a price in ${currency}` });
+  }
+}
 
-/** What one more generated book costs in each currency (tenge in Kazakhstan, dollars elsewhere). */
-export const BookPriceSchema = z.object({ KZT: tenge.min(1), USD: dollars.min(0.01) });
+/** Book prices by kind, in minor units of the list's currency. */
+const BookAmountsSchema = z.object({ template: MinorAmountSchema, custom: MinorAmountSchema });
 
-export const PricesSchema = z.object({
-  /** One more generated (digital) book once the free ones are used, by kind. */
-  books: z.object({ template: BookPriceSchema, custom: BookPriceSchema }),
-  /** Flat delivery fee to a city without free delivery, in tenge. Copies are priced by format (reference.formats). */
-  deliveryKzt: tenge,
+function checkBooks(ctx: z.RefinementCtx, books: { template: number; custom: number }, currency: Currency, path: PropertyKey[]): void {
+  checkPrice(ctx, books.template, currency, [...path, "template"], priceStep(currency));
+  checkPrice(ctx, books.custom, currency, [...path, "custom"], priceStep(currency));
+}
+
+/**
+ * One currency's default prices (reference.prices): what one more digital book costs by kind, and
+ * the flat delivery fee of a printed order to a city without free delivery. A country charging in
+ * this currency pays them unless it has its own. Copies are priced by format (PrintFormat.prices).
+ */
+export const PriceListSchema = z.object({
+  books: BookAmountsSchema,
+  delivery: MinorAmountSchema,
 });
-export type Prices = z.infer<typeof PricesSchema>;
+export type PriceList = z.infer<typeof PriceListSchema>;
+
+/** The default price list of every currency that has one, by ISO code (reference.prices). */
+export const DefaultPricesSchema = z.partialRecord(CurrencySchema, PriceListSchema).superRefine((lists, ctx) => {
+  for (const currency of CURRENCIES) {
+    const list = lists[currency];
+    if (!list) continue;
+    checkBooks(ctx, list.books, currency, [currency, "books"]);
+    checkPrice(ctx, list.delivery, currency, [currency, "delivery"]);
+  }
+});
+export type DefaultPrices = z.infer<typeof DefaultPricesSchema>;
 
 /** An upper-case ISO code as a key of the per-country reference data. */
 const CountryKeySchema = z.string().regex(/^[A-Z]{2}$/);
 
 /**
- * Prices of single countries (reference.country_prices): a country listed here is priced from its
- * own list instead of the global one (a country manager edits their countries' lists).
+ * Body of PUT /admin/reference/prices: book prices in one currency — that currency's default (no
+ * ?country=) or one country's own (?country=XX, in the country's currency only).
  */
-export const CountryPricesSchema = z.record(CountryKeySchema, PricesSchema);
-export type CountryPrices = z.infer<typeof CountryPricesSchema>;
-
-/** The prices for `country`: its own list (reference.country_prices) when it has one, else the global one. */
-export function pricesFor(country: string, prices: Prices, countryPrices: CountryPrices | undefined): Prices {
-  return countryPrices?.[country] ?? prices;
-}
+export const BookPricesSchema = z
+  .object({ currency: CurrencySchema, books: BookAmountsSchema })
+  .superRefine((p, ctx) => checkBooks(ctx, p.books, p.currency, ["books"]));
+export type BookPrices = z.infer<typeof BookPricesSchema>;
 
 /**
- * A country's delivery of printed copies (reference.country_delivery): the flat fee to a city
- * without free delivery, in the print currency (tenge), and whether delivery is free to every city.
- * Which cities deliver free is each city's own flag (reference.cities).
+ * Book prices of single countries (reference.country_prices), each in the currency it was set in: a
+ * country listed here in its current currency is priced from its own list instead of its currency's
+ * default (a country manager edits their countries' lists).
  */
-export const CountryDeliverySchema = z.object({ feeKzt: tenge, freeEverywhere: z.boolean() });
+export const CountryPricesSchema = z.record(CountryKeySchema, BookPricesSchema);
+export type CountryPrices = z.infer<typeof CountryPricesSchema>;
+
+/** A price an admin may save for a country, in any currency the manager picks (print partners' costs). */
+const CostSchema = z
+  .object({ amount: MinorAmountSchema, currency: CurrencySchema })
+  .superRefine((m, ctx) => checkPrice(ctx, m.amount, m.currency, ["amount"]));
+
+/**
+ * A country's delivery of printed copies (reference.country_delivery): the flat fee to a city without
+ * free delivery in the country's currency, whether delivery is free to every city, and optionally what
+ * the print partner charges us for it (any currency, for margins). Which cities deliver free is each
+ * city's own flag (reference.cities). Body of PUT /admin/reference/delivery too: with no ?country=,
+ * `fee` is the default of `currency` (freeEverywhere and cost do not apply).
+ */
+export const CountryDeliverySchema = z
+  .object({ currency: CurrencySchema, fee: MinorAmountSchema, freeEverywhere: z.boolean(), cost: CostSchema.optional() })
+  .superRefine((d, ctx) => checkPrice(ctx, d.fee, d.currency, ["fee"]));
 export type CountryDelivery = z.infer<typeof CountryDeliverySchema>;
 export const CountryDeliveriesSchema = z.record(CountryKeySchema, CountryDeliverySchema);
 export type CountryDeliveries = z.infer<typeof CountryDeliveriesSchema>;
-
-/** The delivery rule for an order from `country`: its own, else the global fee (reference.prices.deliveryKzt), free to the free cities only. */
-export function deliveryFor(country: string, prices: Prices, countryDelivery: CountryDeliveries | undefined): { deliveryKzt: number; freeEverywhere: boolean } {
-  const own = countryDelivery?.[country];
-  return own ? { deliveryKzt: own.feeKzt, freeEverywhere: own.freeEverywhere } : { deliveryKzt: prices.deliveryKzt, freeEverywhere: false };
-}
 
 // ---- Print formats ---------------------------------------------------------------------------
 
@@ -80,10 +110,19 @@ export const FormatIdSchema = z
 
 const millimetres = (min: number, max: number) => z.number().min(min).max(max);
 
+/** One copy's price by cover, in minor units of some currency. */
+const CoverAmountsSchema = z.object({ soft: MinorAmountSchema, hard: MinorAmountSchema });
+
+function checkCovers(ctx: z.RefinementCtx, covers: { soft: number; hard: number }, currency: Currency, path: PropertyKey[], min: number): void {
+  checkPrice(ctx, covers.soft, currency, [...path, "soft"], min);
+  checkPrice(ctx, covers.hard, currency, [...path, "hard"], min);
+}
+
 /**
  * A printed size the parent can order: its page (trim) size, the bleed the printer trims off, the
- * safe zone text stays inside, and the price of one copy by cover — in tenge, as print is offered
- * only where the site charges tenge. Only published ones are offered in the order form.
+ * safe zone text stays inside, and the default price of one copy by cover in each currency that has
+ * one (a country charging in a currency the format has no price in does not offer it, unless the
+ * country prices it itself). Only published ones are offered in the order form.
  */
 export const PrintFormatSchema = z
   .object({
@@ -94,10 +133,16 @@ export const PrintFormatSchema = z
     heightMm: millimetres(90, 420),
     bleedMm: millimetres(0, 10),
     safeMm: millimetres(3, 40),
-    prices: z.object({ soft: tenge.min(1), hard: tenge.min(1) }),
+    prices: z.partialRecord(CurrencySchema, CoverAmountsSchema),
     published: z.boolean(),
   })
-  .refine((f) => 2 * f.safeMm < Math.min(f.widthMm, f.heightMm) - 60, { path: ["safeMm"], message: "The safe zone leaves no room" });
+  .superRefine((f, ctx) => {
+    if (!(2 * f.safeMm < Math.min(f.widthMm, f.heightMm) - 60)) ctx.addIssue({ code: "custom", path: ["safeMm"], message: "The safe zone leaves no room" });
+    for (const currency of CURRENCIES) {
+      const covers = f.prices[currency];
+      if (covers) checkCovers(ctx, covers, currency, ["prices", currency], priceStep(currency));
+    }
+  });
 export type PrintFormat = z.infer<typeof PrintFormatSchema>;
 
 /** Body of PUT /admin/reference/formats: the whole list in the order the order form shows it. */
@@ -114,14 +159,26 @@ export const FormatsSchema = z
     if (!formats.some((f) => f.published)) ctx.addIssue({ code: "custom", path: [0, "published"], message: "Publish at least one format" });
   });
 
+/** Cover prices in one currency: a country's own prices, or a print partner's cost of one copy. */
+const CoverMoneySchema = CoverAmountsSchema.extend({ currency: CurrencySchema });
+export type CoverMoney = z.infer<typeof CoverMoneySchema>;
+
 /**
- * A format in one country (reference.country_formats): whether it is offered there and its cover
- * prices there; whatever is left out follows the global format. Sizes and ids stay global.
+ * A format in one country (reference.country_formats): whether it is offered there, its cover prices
+ * there (in the country's currency), and optionally what the print partner charges us per copy (any
+ * currency the manager picks, for margins); whatever is left out follows the global format. Sizes and
+ * ids stay global.
  */
-export const CountryFormatSchema = z.object({
-  published: z.boolean().optional(),
-  prices: z.object({ soft: tenge.min(1), hard: tenge.min(1) }).optional(),
-});
+export const CountryFormatSchema = z
+  .object({
+    published: z.boolean().optional(),
+    prices: CoverMoneySchema.optional(),
+    cost: CoverMoneySchema.optional(),
+  })
+  .superRefine((o, ctx) => {
+    if (o.prices) checkCovers(ctx, o.prices, o.prices.currency, ["prices"], priceStep(o.prices.currency));
+    if (o.cost) checkCovers(ctx, o.cost, o.cost.currency, ["cost"], 0);
+  });
 export type CountryFormat = z.infer<typeof CountryFormatSchema>;
 /** Body of PUT /admin/reference/country-formats?country=: that country's overrides by format id. */
 export const CountryFormatOverridesSchema = z.record(FormatIdSchema, CountryFormatSchema);
@@ -129,36 +186,137 @@ export type CountryFormatOverrides = z.infer<typeof CountryFormatOverridesSchema
 export const CountryFormatsSchema = z.record(CountryKeySchema, CountryFormatOverridesSchema);
 export type CountryFormats = z.infer<typeof CountryFormatsSchema>;
 
-/** The formats as a visitor from `country` gets them: offered and priced as the country says, else globally. */
-export function formatsFor(country: string, formats: readonly PrintFormat[], countryFormats: CountryFormats | undefined): PrintFormat[] {
-  const own = countryFormats?.[country];
-  if (!own) return [...formats];
-  return formats.map((format) => {
-    const o = own[format.id];
-    return o ? { ...format, published: o.published ?? format.published, prices: o.prices ?? format.prices } : format;
+/** One copy's price (or cost) by cover, as Money. */
+export interface CoverPrices {
+  soft: Money;
+  hard: Money;
+}
+
+const coverMoney = (covers: { soft: number; hard: number }, currency: Currency): CoverPrices => ({
+  soft: money(covers.soft, currency),
+  hard: money(covers.hard, currency),
+});
+
+/**
+ * A format as a country has it: its sizes, whether it is switched on there, its cover prices in the
+ * country's currency (null: no price in that currency, so not offered) and the print partner's cost
+ * per copy (null when not set).
+ */
+export interface LocalFormat {
+  id: string;
+  name: LocalizedText;
+  widthMm: number;
+  heightMm: number;
+  bleedMm: number;
+  safeMm: number;
+  published: boolean;
+  prices: CoverPrices | null;
+  cost: CoverPrices | null;
+}
+
+/** What the pricing helpers read: the reference data, or the part of it they need. */
+export interface PricingData {
+  prices: DefaultPrices;
+  countries: readonly CountryEntry[];
+  countryPrices?: CountryPrices;
+  countryDelivery?: CountryDeliveries;
+  countryFormats?: CountryFormats;
+  formats?: readonly PrintFormat[];
+}
+
+/**
+ * The formats as a visitor from `country` gets them, in its currency: offered and priced as the
+ * country says (its own prices count only in its current currency), else as the format says for that
+ * currency.
+ */
+export function formatsFor(country: string, data: PricingData): LocalFormat[] {
+  const { currency } = countryInfo(country, data.countries);
+  const own = data.countryFormats?.[country];
+  return (data.formats ?? []).map((format) => {
+    const o = own?.[format.id];
+    const ownPrices = o?.prices && o.prices.currency === currency ? o.prices : null;
+    const defaults = format.prices[currency];
+    const covers = ownPrices ?? defaults ?? null;
+    return {
+      id: format.id,
+      name: format.name,
+      widthMm: format.widthMm,
+      heightMm: format.heightMm,
+      bleedMm: format.bleedMm,
+      safeMm: format.safeMm,
+      published: o?.published ?? format.published,
+      prices: covers ? coverMoney(covers, currency) : null,
+      cost: o?.cost ? coverMoney(o.cost, o.cost.currency) : null,
+    };
   });
 }
 
+/** The formats a visitor from `country` can order: switched on there and priced in its currency. */
+export function offeredFormats(country: string, data: PricingData): (LocalFormat & { prices: CoverPrices })[] {
+  return formatsFor(country, data).filter((f): f is LocalFormat & { prices: CoverPrices } => f.published && f.prices !== null);
+}
+
+/**
+ * The book prices of `country`, in its currency: its own list when that is in its currency (a list
+ * saved before the country changed currency no longer counts), else its currency's default; null
+ * when that currency has no default either.
+ */
+export function bookPricesFor(
+  country: string,
+  data: Pick<PricingData, "prices" | "countries" | "countryPrices">,
+): { currency: Currency; template: Money; custom: Money; own: boolean } | null {
+  const { currency } = countryInfo(country, data.countries);
+  const own = data.countryPrices?.[country];
+  const books = own && own.currency === currency ? own.books : data.prices[currency]?.books;
+  if (!books) return null;
+  return { currency, template: money(books.template, currency), custom: money(books.custom, currency), own: books === own?.books };
+}
+
+/**
+ * The delivery rule for an order from `country`, in its currency: its own fee and rule (when saved in
+ * that currency), else its currency's default fee, free to the free cities only; the print partner's
+ * delivery cost when set. `fee` is null when the currency has no default fee.
+ */
+export function deliveryFor(
+  country: string,
+  data: Pick<PricingData, "prices" | "countries" | "countryDelivery">,
+): { fee: Money | null; freeEverywhere: boolean; cost: Money | null; own: boolean } {
+  const { currency } = countryInfo(country, data.countries);
+  const entry = data.countryDelivery?.[country];
+  const cost = entry?.cost ? money(entry.cost.amount, entry.cost.currency) : null;
+  if (entry && entry.currency === currency) {
+    return { fee: money(entry.fee, currency), freeEverywhere: entry.freeEverywhere, cost, own: true };
+  }
+  const fee = data.prices[currency]?.delivery;
+  return { fee: fee === undefined ? null : money(fee, currency), freeEverywhere: false, cost, own: false };
+}
+
 /** The size part of a format, as a book's layout keeps it. */
-export function bookFormatOf(format: PrintFormat): { id: string; widthMm: number; heightMm: number; bleedMm: number; safeMm: number } {
+export function bookFormatOf(format: Pick<PrintFormat, "id" | "widthMm" | "heightMm" | "bleedMm" | "safeMm">): { id: string; widthMm: number; heightMm: number; bleedMm: number; safeMm: number } {
   return { id: format.id, widthMm: format.widthMm, heightMm: format.heightMm, bleedMm: format.bleedMm, safeMm: format.safeMm };
 }
 
 /** The format's name in `language` (falling back to Russian, then English). */
-export function formatName(format: PrintFormat, language: Language): string {
+export function formatName(format: Pick<PrintFormat, "name">, language: Language): string {
   return localized(format.name, language);
 }
 
-/** The cheapest copy with this cover among the published formats: the "from" price on the landing. */
-export function lowestCoverPrice(formats: readonly PrintFormat[], cover: "soft" | "hard"): number | null {
-  const prices = formats.filter((f) => f.published).map((f) => f.prices[cover]);
-  return prices.length ? Math.min(...prices) : null;
+/** The cheapest copy with this cover among the formats offered: the "from" price on the landing. */
+export function lowestCoverPrice(formats: readonly LocalFormat[], cover: "soft" | "hard"): Money | null {
+  let lowest: Money | null = null;
+  for (const f of formats) {
+    if (!f.published || !f.prices) continue;
+    const price = f.prices[cover];
+    if (!lowest || price.amount < lowest.amount) lowest = price;
+  }
+  return lowest;
 }
 
 /**
  * The formats the site launches with; the seed of reference.formats. The square book is today's,
  * at the cover prices the site launched with; A4 landscape and A5 portrait are priced roughly by
- * paper area (A4 ×1.4, A5 ×0.7), rounded to the nearest 1 000 ₸ minus 100.
+ * paper area (A4 ×1.4, A5 ×0.7), rounded to the nearest 1 000 ₸ minus 100. Dollar and euro prices
+ * are starting points for countries that open print later (no print partner has quoted them yet).
  */
 export const DEFAULT_FORMATS: PrintFormat[] = [
   {
@@ -168,7 +326,7 @@ export const DEFAULT_FORMATS: PrintFormat[] = [
     heightMm: 210,
     bleedMm: 3,
     safeMm: 12,
-    prices: { soft: 9900, hard: 14900 },
+    prices: { KZT: { soft: 9_900_00, hard: 14_900_00 }, USD: { soft: 19_90, hard: 29_90 }, EUR: { soft: 18_90, hard: 27_90 } },
     published: true,
   },
   {
@@ -178,7 +336,7 @@ export const DEFAULT_FORMATS: PrintFormat[] = [
     heightMm: 210,
     bleedMm: 3,
     safeMm: 12,
-    prices: { soft: 13900, hard: 19900 },
+    prices: { KZT: { soft: 13_900_00, hard: 19_900_00 }, USD: { soft: 27_90, hard: 39_90 }, EUR: { soft: 25_90, hard: 36_90 } },
     published: true,
   },
   {
@@ -188,7 +346,7 @@ export const DEFAULT_FORMATS: PrintFormat[] = [
     heightMm: 210,
     bleedMm: 3,
     safeMm: 10,
-    prices: { soft: 6900, hard: 10900 },
+    prices: { KZT: { soft: 6_900_00, hard: 10_900_00 }, USD: { soft: 14_90, hard: 21_90 }, EUR: { soft: 13_90, hard: 19_90 } },
     published: true,
   },
 ];
@@ -324,13 +482,20 @@ export const CountryCodeSchema = z
 
 // ---- Countries ---------------------------------------------------------------------------------
 
-export const CURRENCIES = ["KZT", "USD"] as const;
-export const CurrencySchema = z.enum(CURRENCIES);
-export type Currency = z.infer<typeof CurrencySchema>;
+/**
+ * How a country's visitors pay: by hand (the demo: nothing is charged, an order is paid at once), or
+ * through a payment provider. Kaspi and Stripe are placeholders until they are wired in: a country
+ * set to one cannot take orders or purchases yet.
+ */
+export const PAYMENT_PROVIDERS = ["manual", "kaspi", "stripe"] as const;
+export const PaymentProviderSchema = z.enum(PAYMENT_PROVIDERS);
+export type PaymentProviderKey = z.infer<typeof PaymentProviderSchema>;
+/** The providers that work today. */
+export const LIVE_PAYMENT_PROVIDERS: readonly PaymentProviderKey[] = ["manual"];
 
 /**
  * Everywhere not in the owner's list (reference.countries). Always offered, never edited: English
- * first, then Spanish, German and Russian, prices in dollars, no print.
+ * first, then Spanish, German and Russian, prices in dollars, no print, paid by hand.
  */
 export const OTHER_COUNTRY = "other";
 
@@ -340,20 +505,22 @@ export type Country = string;
 export interface CountryInfo {
   /** Interface and book languages offered there; the first is the default. */
   languages: readonly Language[];
+  /** What everything is priced and paid in there; no conversion at checkout. */
   currency: Currency;
   /** A print partner delivers there. */
   print: boolean;
+  /** How orders and purchases are paid there; left out: by hand ("manual"). */
+  payment?: PaymentProviderKey;
 }
 
-export const OTHER_COUNTRY_INFO: CountryInfo = { languages: ["en", "es", "de", "ru"], currency: "USD", print: false };
+export const OTHER_COUNTRY_INFO: CountryInfo = { languages: ["en", "es", "de", "ru"], currency: "USD", print: false, payment: "manual" };
 
-/**
- * The currency print is priced in (reference.formats prices and deliveryKzt are tenge): a country
- * with print must charge in it, so an order's total is always in the currency the site shows.
- */
-export const PRINT_CURRENCY: Currency = "KZT";
+/** The payment provider of a country (by hand when none is set). */
+export function paymentProviderOf(info: Pick<CountryInfo, "payment">): PaymentProviderKey {
+  return info.payment ?? "manual";
+}
 
-/** A country in the owner's list: what the site speaks, charges and prints there. */
+/** A country in the owner's list: what the site speaks, charges, prints there, and how it is paid. */
 export const CountryEntrySchema = z.object({
   code: CountryCodeSchema,
   /** The first is the default. */
@@ -363,7 +530,10 @@ export const CountryEntrySchema = z.object({
     .max(LANGUAGES.length)
     .refine((list) => new Set(list).size === list.length, "Duplicate language"),
   currency: CurrencySchema,
+  /** Print is on: any currency, priced in it (formats, delivery). */
   print: z.boolean(),
+  /** Superadmin only (the Countries tab); left out: by hand. */
+  payment: PaymentProviderSchema.optional(),
 });
 export type CountryEntry = z.infer<typeof CountryEntrySchema>;
 
@@ -377,9 +547,6 @@ export const CountriesSchema = z
     countries.forEach((country, i) => {
       if (seen.has(country.code)) ctx.addIssue({ code: "custom", path: [i, "code"], message: "Duplicate country" });
       seen.add(country.code);
-      if (country.print && country.currency !== PRINT_CURRENCY) {
-        ctx.addIssue({ code: "custom", path: [i, "print"], message: `Print is priced in ${PRINT_CURRENCY}` });
-      }
     });
   });
 
@@ -639,18 +806,19 @@ export function landingFaq(
  * and the owner's), so the site never offers them; "other" is not in it.
  */
 export const ReferenceSchema = z.object({
-  prices: PricesSchema,
+  /** Each currency's default book prices and delivery fee; a country without its own pays its currency's. */
+  prices: DefaultPricesSchema,
   /** Print formats, each with whether it is offered globally; a country may offer and price them its own way (countryFormats, formatsFor). */
   formats: z.array(PrintFormatSchema),
   cities: z.array(CitySchema),
   countries: z.array(CountryEntrySchema),
   /** The landing's questions; the site gets only the published ones and picks those for its country. */
   faq: z.array(FaqItemSchema),
-  /** Countries priced from their own list instead of `prices`. */
+  /** Countries priced from their own book prices (in their currency) instead of their currency's default. */
   countryPrices: CountryPricesSchema.default({}),
   /** Countries' landing overrides (hero, FAQ, sections); the rest of the world gets the defaults. */
   landing: LandingOverridesSchema.default({}),
-  /** Countries' own delivery fee and free-delivery rule; the rest use prices.deliveryKzt. */
+  /** Countries' own delivery fee and free-delivery rule; the rest pay their currency's default fee. */
   countryDelivery: CountryDeliveriesSchema.default({}),
   /** Countries' own format offer and cover prices; the rest use the formats as they are. */
   countryFormats: CountryFormatsSchema.default({}),
@@ -671,13 +839,15 @@ export type BlockedCountries = z.infer<typeof BlockedCountriesSchema>;
 export const AdminReferenceSchema = ReferenceSchema.extend({ blocked: BlockedCountriesSchema });
 export type AdminReference = z.infer<typeof AdminReferenceSchema>;
 
-/** The prices the site launched with; the seed of reference.prices. */
-export const DEFAULT_PRICES: Prices = {
-  books: {
-    template: { KZT: 1900, USD: 3.9 },
-    custom: { KZT: 2900, USD: 5.9 },
-  },
-  deliveryKzt: 1500,
+/**
+ * The default prices of each currency; the seed of reference.prices. Tenge and dollar book prices
+ * are those the site launched with; euro book prices and the dollar and euro delivery fees are
+ * starting points for countries that move to those currencies.
+ */
+export const DEFAULT_PRICES: DefaultPrices = {
+  KZT: { books: { template: 1_900_00, custom: 2_900_00 }, delivery: 1_500_00 },
+  USD: { books: { template: 3_90, custom: 5_90 }, delivery: 9_90 },
+  EUR: { books: { template: 3_90, custom: 5_90 }, delivery: 6_90 },
 };
 
 /** The cities the site launched with; the seed of reference.cities. */
@@ -833,11 +1003,11 @@ export const DEFAULT_FAQ: FaqItem[] = [
       de: "Was kostet ein Buch?",
     },
     a: {
-      ru: "Первые книги — бесплатно. Дальше книга из каталога стоит {templatePrice}, своя история — {customPrice}. Для вашей страны цены указаны в долларах.",
-      kk: "Алғашқы кітаптар — тегін. Одан кейін каталогтағы кітап — {templatePrice}, өз ертегіңіз — {customPrice}. Сіздің еліңіз үшін бағалар долларда көрсетілген.",
-      en: "Your first books are free. After that a catalog book is {templatePrice} and a story of your own {customPrice}. For your country prices are in US dollars.",
-      es: "Los primeros libros son gratis. Después, un libro del catálogo cuesta {templatePrice} y una historia propia, {customPrice}. En tu país, los precios se muestran en dólares estadounidenses.",
-      de: "Die ersten Bücher sind kostenlos. Danach kostet ein Buch aus dem Katalog {templatePrice}, eine eigene Geschichte {customPrice}. Für dein Land werden die Preise in US-Dollar angezeigt.",
+      ru: "Первые книги — бесплатно. Дальше книга из каталога стоит {templatePrice}, своя история — {customPrice}. Цены указаны в валюте вашей страны.",
+      kk: "Алғашқы кітаптар — тегін. Одан кейін каталогтағы кітап — {templatePrice}, өз ертегіңіз — {customPrice}. Бағалар еліңіздің валютасында көрсетілген.",
+      en: "Your first books are free. After that a catalog book is {templatePrice} and a story of your own {customPrice}. Prices are shown in your country's currency.",
+      es: "Los primeros libros son gratis. Después, un libro del catálogo cuesta {templatePrice} y una historia propia, {customPrice}. Los precios se muestran en la moneda de tu país.",
+      de: "Die ersten Bücher sind kostenlos. Danach kostet ein Buch aus dem Katalog {templatePrice}, eine eigene Geschichte {customPrice}. Die Preise werden in der Währung deines Landes angezeigt.",
     },
   },
   {

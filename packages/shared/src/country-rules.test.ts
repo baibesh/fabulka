@@ -10,7 +10,9 @@ import {
   deliveryFor,
   formatsFor,
   lowestCoverPrice,
-  orderPrice,
+  offeredFormats,
+  quoteOrder,
+  bookPricesFor,
   DEFAULT_PRICES,
   CountryLandingSchema,
   EVERYWHERE,
@@ -26,7 +28,6 @@ import {
   normalizeRule,
   ownerCountries,
   pickSample,
-  pricesFor,
   ruleShows,
   sampleInLanguage,
   scopeOf,
@@ -34,7 +35,6 @@ import {
   withCountry,
   type CountryRule,
   type LandingOverrides,
-  type Prices,
 } from "./index";
 
 const inc = (...countries: string[]): CountryRule => ({ mode: "include", countries });
@@ -115,15 +115,27 @@ describe("catalog samples per country", () => {
 });
 
 describe("country prices", () => {
-  const de: Prices = { books: { template: { KZT: 1900, USD: 4.9 }, custom: { KZT: 2900, USD: 6.9 } }, deliveryKzt: 1500 };
+  const de = { currency: "USD" as const, books: { template: 4_90, custom: 6_90 } };
+  const data = { prices: DEFAULT_PRICES, countries: DEFAULT_COUNTRIES };
 
-  it("prices a country from its own list when it has one, else the global one", () => {
-    expect(pricesFor("DE", DEFAULT_PRICES, { DE: de })).toBe(de);
-    expect(pricesFor("KZ", DEFAULT_PRICES, { DE: de })).toBe(DEFAULT_PRICES);
-    expect(pricesFor("DE", DEFAULT_PRICES, undefined)).toBe(DEFAULT_PRICES);
-    expect(bookPrice("template", "DE", DEFAULT_PRICES, DEFAULT_COUNTRIES, { DE: de })).toEqual({ amount: 4.9, currency: "USD" });
-    expect(bookPrice("template", "AT", DEFAULT_PRICES, DEFAULT_COUNTRIES, { DE: de })).toEqual({ amount: 3.9, currency: "USD" });
-    expect(bookPrice("custom", "KZ", DEFAULT_PRICES, DEFAULT_COUNTRIES, { DE: de })).toEqual({ amount: 2900, currency: "KZT" });
+  it("prices a country from its own list in its currency, else its currency's default", () => {
+    expect(bookPrice("template", "DE", { ...data, countryPrices: { DE: de } })).toEqual({ amount: 4_90, currency: "USD" });
+    expect(bookPrice("template", "AT", { ...data, countryPrices: { DE: de } })).toEqual({ amount: 3_90, currency: "USD" });
+    expect(bookPrice("custom", "KZ", { ...data, countryPrices: { DE: de } })).toEqual({ amount: 2_900_00, currency: "KZT" });
+    expect(bookPricesFor("DE", { ...data, countryPrices: { DE: de } })?.own).toBe(true);
+    expect(bookPricesFor("AT", { ...data, countryPrices: { DE: de } })?.own).toBe(false);
+  });
+
+  it("uses the default of the country's currency, and drops its own list saved in another one", () => {
+    const countries = DEFAULT_COUNTRIES.map((c) => (c.code === "DE" ? { ...c, currency: "EUR" as const } : c));
+    // Germany moved to euros: its dollar list no longer counts, the euro default does.
+    expect(bookPrice("template", "DE", { prices: DEFAULT_PRICES, countries, countryPrices: { DE: de } })).toEqual({ amount: 3_90, currency: "EUR" });
+    const euro = { currency: "EUR" as const, books: { template: 4_50, custom: 6_50 } };
+    expect(bookPrice("custom", "DE", { prices: DEFAULT_PRICES, countries, countryPrices: { DE: euro } })).toEqual({ amount: 6_50, currency: "EUR" });
+    // A currency with no default and no own list has no price.
+    expect(bookPrice("template", "DE", { prices: { KZT: DEFAULT_PRICES.KZT }, countries })).toBeNull();
+    // "other" stays in dollars.
+    expect(bookPrice("template", "other", { prices: DEFAULT_PRICES, countries })).toEqual({ amount: 3_90, currency: "USD" });
   });
 });
 
@@ -202,23 +214,53 @@ describe("per-country cities, delivery and formats", () => {
     expect(CitiesSchema.safeParse([...cities, { ...de, country: "AT" }]).success).toBe(false);
   });
 
-  it("delivers at a country's own fee and rule, else the global fee to the non-free cities", () => {
-    const square = DEFAULT_FORMATS[0];
-    expect(deliveryFor("DE", DEFAULT_PRICES, {})).toEqual({ deliveryKzt: 1500, freeEverywhere: false });
-    const own = { DE: { feeKzt: 900, freeEverywhere: false }, AT: { feeKzt: 900, freeEverywhere: true } };
-    expect(orderPrice(square, "soft", 1, "munich", deliveryFor("DE", DEFAULT_PRICES, own), [de]).delivery).toBe(900);
-    expect(orderPrice(square, "soft", 1, "berlin", deliveryFor("DE", DEFAULT_PRICES, own), [de]).delivery).toBe(0);
-    expect(orderPrice(square, "soft", 1, "vienna", deliveryFor("AT", DEFAULT_PRICES, own), []).delivery).toBe(0);
+  it("delivers at a country's own fee and rule, else its currency's default fee to the non-free cities", () => {
+    const countries = DEFAULT_COUNTRIES.map((c) => (c.code === "DE" || c.code === "AT" ? { ...c, currency: "EUR" as const, print: true } : c));
+    const formats = DEFAULT_FORMATS;
+    const square = offeredFormats("DE", { prices: DEFAULT_PRICES, countries, formats })[0];
+    const quote = (country: string, cityId: string, countryDelivery = {}, cities = [de]) =>
+      quoteOrder({ bookId: "b", format: square, cover: "soft", quantity: 1, cityId, delivery: deliveryFor(country, { prices: DEFAULT_PRICES, countries, countryDelivery }), cities });
+    expect(deliveryFor("DE", { prices: DEFAULT_PRICES, countries })).toEqual({ fee: { amount: 6_90, currency: "EUR" }, freeEverywhere: false, cost: null, own: false });
+    const own = {
+      DE: { currency: "EUR" as const, fee: 4_00, freeEverywhere: false, cost: { amount: 3_00, currency: "EUR" as const } },
+      AT: { currency: "EUR" as const, fee: 4_00, freeEverywhere: true },
+    };
+    expect(quote("DE", "munich", own).delivery).toEqual({ amount: 4_00, currency: "EUR" });
+    expect(quote("DE", "munich", own).deliveryCost).toEqual({ amount: 3_00, currency: "EUR" });
+    expect(quote("DE", "berlin", own).delivery).toEqual({ amount: 0, currency: "EUR" });
+    expect(quote("DE", "berlin", own).deliveryCost).toBeNull();
+    expect(quote("AT", "vienna", own, []).delivery.amount).toBe(0);
+    // A fee saved in tenge before Germany moved to euros: the euro default applies.
+    expect(deliveryFor("DE", { prices: DEFAULT_PRICES, countries, countryDelivery: { DE: { currency: "KZT", fee: 900_00, freeEverywhere: true } } })).toMatchObject({
+      fee: { amount: 6_90, currency: "EUR" },
+      freeEverywhere: false,
+      own: false,
+    });
   });
 
-  it("offers and prices formats per country, falling back to the global ones", () => {
-    const [square, a4] = DEFAULT_FORMATS;
-    const own = { DE: { [square.id]: { published: false }, [a4.id]: { prices: { soft: 5000, hard: 8000 } } } };
-    const de = formatsFor("DE", DEFAULT_FORMATS, own);
-    expect(de.find((f) => f.id === square.id)?.published).toBe(false);
-    expect(de.find((f) => f.id === a4.id)?.prices).toEqual({ soft: 5000, hard: 8000 });
-    expect(de.find((f) => f.id === a4.id)?.widthMm).toBe(a4.widthMm);
-    expect(formatsFor("KZ", DEFAULT_FORMATS, own)).toEqual(DEFAULT_FORMATS);
-    expect(lowestCoverPrice(de, "soft")).toBe(Math.min(5000, DEFAULT_FORMATS[2].prices.soft));
+  it("offers and prices formats per country in its currency, falling back to the format's price in it", () => {
+    const [square, a4, a5] = DEFAULT_FORMATS;
+    const own = {
+      DE: {
+        [square.id]: { published: false },
+        [a4.id]: { prices: { currency: "USD" as const, soft: 50_00, hard: 80_00 }, cost: { currency: "EUR" as const, soft: 9_00, hard: 14_00 } },
+        [a5.id]: { prices: { currency: "KZT" as const, soft: 5_000_00, hard: 8_000_00 } },
+      },
+    };
+    const data = { prices: DEFAULT_PRICES, countries: DEFAULT_COUNTRIES, formats: DEFAULT_FORMATS, countryFormats: own };
+    const local = formatsFor("DE", data);
+    expect(local.find((f) => f.id === square.id)?.published).toBe(false);
+    expect(local.find((f) => f.id === a4.id)?.prices).toEqual({ soft: { amount: 50_00, currency: "USD" }, hard: { amount: 80_00, currency: "USD" } });
+    expect(local.find((f) => f.id === a4.id)?.cost?.soft).toEqual({ amount: 9_00, currency: "EUR" });
+    expect(local.find((f) => f.id === a4.id)?.widthMm).toBe(a4.widthMm);
+    // Germany charges dollars: a5's tenge override is ignored, its dollar default applies.
+    expect(local.find((f) => f.id === a5.id)?.prices?.soft).toEqual({ amount: 14_90, currency: "USD" });
+    expect(formatsFor("KZ", data).map((f) => f.prices?.soft.amount)).toEqual([9_900_00, 13_900_00, 6_900_00]);
+    expect(lowestCoverPrice(local, "soft")).toEqual({ amount: 14_90, currency: "USD" });
+    expect(offeredFormats("DE", data).map((f) => f.id)).toEqual([a4.id, a5.id]);
+    // A format with no price in the country's currency is not offered there.
+    const noEuro = DEFAULT_FORMATS.map((f) => ({ ...f, prices: { KZT: f.prices.KZT } }));
+    const euro = DEFAULT_COUNTRIES.map((c) => (c.code === "DE" ? { ...c, currency: "EUR" as const } : c));
+    expect(offeredFormats("DE", { ...data, countries: euro, formats: noEuro, countryFormats: {} })).toEqual([]);
   });
 });

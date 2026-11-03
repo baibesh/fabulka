@@ -44,14 +44,22 @@ import {
   DEFAULT_CITIES,
   DEFAULT_PRICES,
   ISO_COUNTRY_CODES,
-  PricesSchema,
+  DefaultPricesSchema,
+  BookPricesSchema,
+  CountryDeliverySchema,
+  paymentProviderOf,
+  offeredFormats,
+  quoteOrder,
+  deliveryFor,
+  formatsFor,
+  type LocalFormat,
   PurchaseSchema,
   UpdateBlockedSchema,
   StorySchema,
   bookPrice,
   countryFromIp,
   languageFor,
-  orderPrice,
+
   orderStatusAt,
   orderTimeline,
   maskPhone,
@@ -93,34 +101,58 @@ describe("progressFor", () => {
 });
 
 describe("orders", () => {
-  const square = DEFAULT_FORMATS[0];
+  const data = { prices: DEFAULT_PRICES, countries: DEFAULT_COUNTRIES, formats: DEFAULT_FORMATS };
+  const square = offeredFormats("KZ", data)[0];
+  const quote = (format: LocalFormat, cover: "soft" | "hard", quantity: number, cityId: string, prices = DEFAULT_PRICES, cities = DEFAULT_CITIES) =>
+    quoteOrder({ bookId: "b1", format, cover, quantity, cityId, delivery: deliveryFor("KZ", { prices, countries: DEFAULT_COUNTRIES }), cities });
+  const kzt = (amount: number) => ({ amount, currency: "KZT" });
+
   it("prices delivery by city id", () => {
-    expect(orderPrice(square, "hard", 2, "almaty", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 29800, delivery: 0, total: 29800 });
-    expect(orderPrice(square, "soft", 1, "shymkent", DEFAULT_PRICES, DEFAULT_CITIES)).toEqual({ books: 9900, delivery: 1500, total: 11400 });
+    expect(quote(square, "hard", 2, "almaty")).toMatchObject({ currency: "KZT", subtotal: kzt(29_800_00), delivery: kzt(0), total: kzt(29_800_00) });
+    expect(quote(square, "soft", 1, "shymkent")).toMatchObject({ subtotal: kzt(9_900_00), delivery: kzt(1_500_00), total: kzt(11_400_00) });
     // A name is not an id: no free delivery by the Russian name any more.
-    expect(orderPrice(square, "soft", 1, "Алматы", DEFAULT_PRICES, DEFAULT_CITIES).delivery).toBe(1500);
+    expect(quote(square, "soft", 1, "Алматы").delivery).toEqual(kzt(1_500_00));
+  });
+
+  it("snapshots each line: the book, format, cover, quantity, unit price and line total", () => {
+    const order = quote(square, "hard", 3, "shymkent");
+    expect(order.lines).toEqual([{ bookId: "b1", format: "square-210", cover: "hard", quantity: 3, unit: kzt(14_900_00), total: kzt(44_700_00), unitCost: null }]);
+    expect(order.total.amount).toBe(order.lines.reduce((sum, l) => sum + l.total.amount, 0) + order.delivery.amount);
   });
 
   it("prices copies by the format and delivery by the owner's free-delivery cities", () => {
-    const prices = { ...DEFAULT_PRICES, deliveryKzt: 700 };
-    const format = { ...square, prices: { soft: 5000, hard: 8000 } };
+    const prices = { ...DEFAULT_PRICES, KZT: { ...DEFAULT_PRICES.KZT!, delivery: 700_00 } };
+    const format = { ...square, prices: { soft: kzt(5_000_00), hard: kzt(8_000_00) } } as LocalFormat;
     const cities = DEFAULT_CITIES.map((c) => ({ ...c, freeDelivery: c.id === "shymkent" }));
-    expect(orderPrice(format, "soft", 2, "shymkent", prices, cities)).toEqual({ books: 10000, delivery: 0, total: 10000 });
-    expect(orderPrice(format, "hard", 1, "almaty", prices, cities)).toEqual({ books: 8000, delivery: 700, total: 8700 });
+    expect(quote(format, "soft", 2, "shymkent", prices, cities)).toMatchObject({ subtotal: kzt(10_000_00), delivery: kzt(0), total: kzt(10_000_00) });
+    expect(quote(format, "hard", 1, "almaty", prices, cities)).toMatchObject({ subtotal: kzt(8_000_00), delivery: kzt(700_00), total: kzt(8_700_00) });
     // A city that is no longer listed pays the fee.
-    expect(orderPrice(format, "soft", 1, "tirana", prices, cities).delivery).toBe(700);
-    const a4 = DEFAULT_FORMATS.find((f) => f.id === "a4-landscape")!;
-    expect(orderPrice(a4, "soft", 1, "almaty", DEFAULT_PRICES, DEFAULT_CITIES).total).toBe(13900);
+    expect(quote(format, "soft", 1, "tirana", prices, cities).delivery).toEqual(kzt(700_00));
+    const a4 = offeredFormats("KZ", data).find((f) => f.id === "a4-landscape")!;
+    expect(quote(a4, "soft", 1, "almaty").total).toEqual(kzt(13_900_00));
+  });
+
+  it("prices a euro order in euros, and refuses a format with no price there", () => {
+    const countries = DEFAULT_COUNTRIES.map((c) => (c.code === "DE" ? { ...c, currency: "EUR" as const, print: true } : c));
+    const de = offeredFormats("DE", { ...data, countries })[0];
+    const order = quoteOrder({ bookId: "b", format: de, cover: "hard", quantity: 2, cityId: "berlin", delivery: deliveryFor("DE", { prices: DEFAULT_PRICES, countries }), cities: [] });
+    expect(order).toMatchObject({ currency: "EUR", subtotal: { amount: 55_80, currency: "EUR" }, delivery: { amount: 6_90, currency: "EUR" }, total: { amount: 62_70, currency: "EUR" } });
+    expect(() => quoteOrder({ bookId: "b", format: { ...de, prices: null }, cover: "soft", quantity: 1, cityId: "x", delivery: { fee: null }, cities: [] })).toThrow();
   });
 
   it("checks print formats", () => {
     expect(FormatsSchema.safeParse(DEFAULT_FORMATS).success).toBe(true);
     expect(FormatsSchema.safeParse([...DEFAULT_FORMATS, DEFAULT_FORMATS[0]]).success).toBe(false);
     expect(FormatsSchema.safeParse(DEFAULT_FORMATS.map((f) => ({ ...f, published: false }))).success).toBe(false);
-    expect(FormatsSchema.safeParse([{ ...square, prices: { soft: 0, hard: 1 } }]).success).toBe(false);
-    expect(FormatsSchema.safeParse([{ ...square, safeMm: 80 }]).success).toBe(false);
-    expect(lowestCoverPrice(DEFAULT_FORMATS, "soft")).toBe(6900);
-    expect(lowestCoverPrice(DEFAULT_FORMATS.map((f) => ({ ...f, published: f.id === "square-210" })), "hard")).toBe(14900);
+    expect(FormatsSchema.safeParse([{ ...DEFAULT_FORMATS[0], prices: { KZT: { soft: 0, hard: 100 } } }]).success).toBe(false);
+    // Tenge prices are whole tenge, dollar ones whole cents.
+    expect(FormatsSchema.safeParse([{ ...DEFAULT_FORMATS[0], prices: { KZT: { soft: 9_900_50, hard: 14_900_00 } } }]).success).toBe(false);
+    expect(FormatsSchema.safeParse([{ ...DEFAULT_FORMATS[0], prices: { USD: { soft: 19_95, hard: 29_99 } } }]).success).toBe(true);
+    expect(FormatsSchema.safeParse([{ ...DEFAULT_FORMATS[0], prices: { USD: { soft: 19.5, hard: 29_99 } } }]).success).toBe(false);
+    expect(FormatsSchema.safeParse([{ ...DEFAULT_FORMATS[0], safeMm: 80 }]).success).toBe(false);
+    expect(lowestCoverPrice(offeredFormats("KZ", data), "soft")).toEqual(kzt(6_900_00));
+    const onlySquare = DEFAULT_FORMATS.map((f) => ({ ...f, published: f.id === "square-210" }));
+    expect(lowestCoverPrice(formatsFor("KZ", { ...data, formats: onlySquare }), "hard")).toEqual(kzt(14_900_00));
   });
 
   it("makes city ids from Russian and Kazakh names", () => {
@@ -334,7 +366,7 @@ describe("countries", () => {
     expect(countryFromIp("KZ", owners)).toBe("other");
     expect(countryFromIp(null, owners)).toBe("other");
     expect(countryFromIp(null, [])).toBe("other");
-    expect(countryInfo("KZ", owners)).toEqual({ languages: ["en", "es", "de", "ru"], currency: "USD", print: false });
+    expect(countryInfo("KZ", owners)).toEqual({ languages: ["en", "es", "de", "ru"], currency: "USD", print: false, payment: "manual" });
   });
 
   it("never lists Russia or Belarus, and prints only in Kazakhstan", () => {
@@ -377,14 +409,16 @@ describe("countries", () => {
     expect(CountriesSchema.safeParse([{ ...kz, languages: [] }]).success).toBe(false);
     expect(CountriesSchema.safeParse([{ ...kz, languages: ["ru", "ru"] }]).success).toBe(false);
     expect(CountriesSchema.safeParse([{ ...kz, languages: ["fr"] }]).success).toBe(false);
-    expect(CountriesSchema.safeParse([{ ...kz, currency: "EUR" }]).success).toBe(false);
+    expect(CountriesSchema.safeParse([{ ...kz, currency: "GBP" }]).success).toBe(false);
   });
 
-  it("prints only where prices are in tenge, as print is priced in tenge", () => {
+  it("prints in any currency, and takes a payment provider", () => {
     const kz = list[0];
-    const result = CountriesSchema.safeParse([{ ...kz, currency: "USD" }]);
-    expect(result.error?.issues.map((i) => i.path.join("."))).toEqual(["0.print"]);
-    expect(CountriesSchema.safeParse([{ ...kz, currency: "USD", print: false }]).success).toBe(true);
+    expect(CountriesSchema.safeParse([{ ...kz, currency: "USD" }]).success).toBe(true);
+    expect(CountriesSchema.safeParse([{ ...kz, currency: "EUR", print: true, payment: "stripe" }]).success).toBe(true);
+    expect(CountriesSchema.safeParse([{ ...kz, payment: "paypal" }]).success).toBe(false);
+    expect(paymentProviderOf(kz)).toBe("manual");
+    expect(paymentProviderOf({ payment: "kaspi" })).toBe("kaspi");
   });
 });
 
@@ -462,17 +496,18 @@ describe("FAQ", () => {
 });
 
 describe("book prices", () => {
+  const data = { prices: DEFAULT_PRICES, countries: DEFAULT_COUNTRIES };
   it("charges less for a catalog book than for a story of your own", () => {
-    expect(bookPrice("template", "KZ", DEFAULT_PRICES, DEFAULT_COUNTRIES)).toEqual({ amount: 1900, currency: "KZT" });
-    expect(bookPrice("custom", "KZ", DEFAULT_PRICES, DEFAULT_COUNTRIES)).toEqual({ amount: 2900, currency: "KZT" });
-    expect(bookPrice("template", "UZ", DEFAULT_PRICES, DEFAULT_COUNTRIES)).toEqual({ amount: 3.9, currency: "USD" });
-    expect(bookPrice("custom", "other", DEFAULT_PRICES, DEFAULT_COUNTRIES)).toEqual({ amount: 5.9, currency: "USD" });
+    expect(bookPrice("template", "KZ", data)).toEqual({ amount: 1_900_00, currency: "KZT" });
+    expect(bookPrice("custom", "KZ", data)).toEqual({ amount: 2_900_00, currency: "KZT" });
+    expect(bookPrice("template", "UZ", data)).toEqual({ amount: 3_90, currency: "USD" });
+    expect(bookPrice("custom", "other", data)).toEqual({ amount: 5_90, currency: "USD" });
   });
 
   it("uses the prices it is given", () => {
-    const prices = { ...DEFAULT_PRICES, books: { ...DEFAULT_PRICES.books, template: { KZT: 2500, USD: 4.5 } } };
-    expect(bookPrice("template", "KZ", prices, DEFAULT_COUNTRIES)).toEqual({ amount: 2500, currency: "KZT" });
-    expect(bookPrice("template", "KG", prices, DEFAULT_COUNTRIES)).toEqual({ amount: 4.5, currency: "USD" });
+    const prices = { ...DEFAULT_PRICES, KZT: { ...DEFAULT_PRICES.KZT!, books: { template: 2_500_00, custom: 2_900_00 } }, USD: { books: { template: 4_50, custom: 5_90 }, delivery: 0 } };
+    expect(bookPrice("template", "KZ", { ...data, prices })).toEqual({ amount: 2_500_00, currency: "KZT" });
+    expect(bookPrice("template", "KG", { ...data, prices })).toEqual({ amount: 4_50, currency: "USD" });
   });
 
   it("takes only a known kind of book to buy", () => {
@@ -508,16 +543,23 @@ describe("JournalCallsQuerySchema", () => {
 
 describe("reference data", () => {
   it("accepts the defaults it seeds", () => {
-    expect(PricesSchema.parse(DEFAULT_PRICES)).toEqual(DEFAULT_PRICES);
+    expect(DefaultPricesSchema.parse(DEFAULT_PRICES)).toEqual(DEFAULT_PRICES);
     expect(CitiesSchema.parse(DEFAULT_CITIES)).toEqual(DEFAULT_CITIES);
   });
 
   it("refuses prices that are not whole tenge, cents, or positive", () => {
-    const books = DEFAULT_PRICES.books;
-    expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, books: { ...books, template: { KZT: 1900.5, USD: 3.9 } } }).success).toBe(false);
-    expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, books: { ...books, custom: { KZT: 2900, USD: 5.999 } } }).success).toBe(false);
-    expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, deliveryKzt: -1 }).success).toBe(false);
-    expect(PricesSchema.safeParse({ ...DEFAULT_PRICES, deliveryKzt: 0 }).success).toBe(true);
+    const kzt = DEFAULT_PRICES.KZT!;
+    const usd = DEFAULT_PRICES.USD!;
+    expect(DefaultPricesSchema.safeParse({ KZT: { ...kzt, books: { ...kzt.books, template: 1_900_50 } } }).success).toBe(false);
+    expect(DefaultPricesSchema.safeParse({ USD: { ...usd, books: { ...usd.books, custom: 5.999 } } }).success).toBe(false);
+    expect(DefaultPricesSchema.safeParse({ USD: { ...usd, books: { ...usd.books, custom: 0 } } }).success).toBe(false);
+    expect(DefaultPricesSchema.safeParse({ KZT: { ...kzt, delivery: -100 } }).success).toBe(false);
+    expect(DefaultPricesSchema.safeParse({ KZT: { ...kzt, delivery: 0 } }).success).toBe(true);
+    expect(DefaultPricesSchema.safeParse({ GBP: usd }).success).toBe(false);
+    expect(BookPricesSchema.safeParse({ currency: "EUR", books: { template: 4_99, custom: 6_99 } }).success).toBe(true);
+    expect(BookPricesSchema.safeParse({ currency: "KZT", books: { template: 4_99, custom: 6_99 } }).success).toBe(false);
+    expect(CountryDeliverySchema.safeParse({ currency: "KZT", fee: 1_500_00, freeEverywhere: false, cost: { amount: 3_50, currency: "EUR" } }).success).toBe(true);
+    expect(CountryDeliverySchema.safeParse({ currency: "KZT", fee: 1_500_50, freeEverywhere: false }).success).toBe(false);
   });
 
   it("refuses an empty city list, a name without English, bad ids and the same city twice", () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CountryCodeSchema } from "./reference";
+import { MarginSchema, RevenueSchema } from "./money";
 
 // ---- Activity: who changed what in the admin ----------------------------------------------------
 //
@@ -22,6 +23,9 @@ export const AUDIT_ACTIONS = [
   "caps.defaults",
   "prices.set",
   "prices.clear",
+  "fx.set",
+  "fx.clear",
+  "fx.refresh",
   "landing.set",
   "landing.clear",
   "cities.set",
@@ -262,7 +266,10 @@ export const CountryStatsSchema = z.object({
     total: z.number().int(),
     today: z.number().int(),
     byStatus: z.record(z.string(), z.number().int()),
-    totalKzt: z.number().int(),
+    /** Order revenue by currency, and roughly in dollars. */
+    revenue: RevenueSchema,
+    /** Print margin of the orders with print partner costs known; null when none had them. */
+    margin: MarginSchema.nullable(),
   }),
   spend: z.object({
     /** Model spend on books made in these countries today. */
