@@ -36,15 +36,28 @@ commands:
       headers: { X-Client-Key: "${owner}" }
       json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "${parentEmail}", cityId: almaty, address: "ул. Абая, 1", cover: soft, quantity: 1, locale: kk }
       extract: { orderId: "$.id" }
-      # Almaty has free delivery: the copy only, and the order keeps the city's id and Russian name.
-      assert: { status: 201, json: { "$.totalKzt": 9900, "$.deliveryKzt": 0, "$.cityId": almaty, "$.city": Алматы } }
+      # Almaty has free delivery: the copy only, in tenge (minor units: tiyn), and the order keeps the
+      # city's id and Russian name, its line and a paid manual payment.
+      assert:
+        status: 201
+        json:
+          "$.currency": KZT
+          "$.total.amount": 990000
+          "$.total.currency": KZT
+          "$.delivery.amount": 0
+          "$.lines[0].unit.amount": 990000
+          "$.lines[0].quantity": 1
+          "$.payment.provider": manual
+          "$.payment.status": paid
+          "$.cityId": almaty
+          "$.city": Алматы
   # Shymkent pays the flat delivery fee.
   - request:
       method: POST
       url: /orders
       headers: { X-Client-Key: "${owner}" }
       json: { bookId: "${bookId}", recipientName: Айгерим, phone: "+77011234567", email: "other-${parentEmail}", cityId: shymkent, address: "ул. Абая, 1", cover: soft, quantity: 1 }
-      assert: { status: 201, json: { "$.totalKzt": 11400, "$.deliveryKzt": 1500, "$.city": Шымкент } }
+      assert: { status: 201, json: { "$.total.amount": 1140000, "$.delivery.amount": 150000, "$.subtotal.amount": 990000, "$.city": Шымкент } }
   # Only to a city on the owner's list.
   - request:
       method: POST
@@ -101,4 +114,6 @@ commands:
       extract: { germanMail: "$[0].text" }
       timeout: 5000
   - assertTrue: { contains: ["${germanMail}", "2 Exemplare"] }
+  # Tenge written the German way in a German mail.
+  - assertTrue: { contains: ["${germanMail}", "29.800 ₸"] }
   - assertTrue: { contains: ["${germanMail}", "/de/orders/${germanOrderId}"] }

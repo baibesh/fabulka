@@ -1,0 +1,317 @@
+# Money in each country's currency. The superadmin opens print in Germany priced in euros, all in the
+# admin (no SQL): Germany moves to EUR with print on in Countries, gets its own euro book prices, a
+# delivery fee with the print partner's cost, a format's euro prices and partner cost, and a Berlin
+# delivery city; a euro rate is set by hand in Exchange rates. A German visitor then sees € prices
+# (the book page, its JSON-LD offer, the order form) and orders a printed book; the order keeps its
+# lines, total and rate in euros, and a Kazakh order stays in tenge. The global dashboard shows the
+# revenue per currency, and Germany's manager sees the euro revenue and the print margin. Germany goes
+# back to dollars and no print at the end.
+appId: ${WEB}
+tags: [admin, order, money]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  stamp: "${Date.now()}"
+  childName: "Geld ${stamp}"
+  email: "money+${stamp}@e2e.test"
+  kzKey: "e2e-money-kz-${stamp}"
+  cmEmail: "cm-money+${stamp}@e2e.test"
+  cmId: "e2e-cm-money-${stamp}"
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+before:
+  - sql:
+      exec: "insert into \"StaffMember\" (id, email, name, status, roles, countries, \"updatedAt\") values ($1, $2, 'Greta Money', 'active', '{country_manager}', '{DE}', now())"
+      params: ["${cmId}", "${cmEmail}"]
+commands:
+  # ---- The superadmin opens print in Germany, in euros ------------------------------------------
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-email }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card, timeout: 15000 }
+  - tapOn: { testId: admin-nav-reference }
+  - waitForVisible: { testId: reference-tabs }
+  - tapOn: { testId: reference-tab-countries }
+  - waitForVisible: { css: "[data-testid=country-row][data-code=DE]" }
+  # Print no longer has to be priced in tenge: euros and print together save.
+  - scrollUntilVisible: { css: "[data-testid=country-row][data-code=DE] [data-testid=country-currency]", centerElement: true }
+  - selectOption: { css: "[data-testid=country-row][data-code=DE] [data-testid=country-currency]", optionValue: EUR }
+  - tapOn: { css: "[data-testid=country-row][data-code=DE] [data-testid=country-print]" }
+  - scrollUntilVisible: { testId: reference-save }
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-saved }
+  - assertNotVisible: { testId: reference-error }
+  - assertTrue: ${json(http.get(API + '/reference').body).countries.some((c) => c.code === 'DE' && c.currency === 'EUR' && c.print === true)}
+
+  # A euro rate by hand (reports only), recorded in Activity (the page again, from its top).
+  - openLink: "${WEB}/admin/reference"
+  - waitForVisible: { testId: reference-tabs }
+  - tapOn: { testId: reference-tab-fx }
+  - waitForVisible: { testId: reference-fx }
+  - tapOn: { css: "[data-testid=fx-row][data-currency=EUR] [data-testid=fx-manual]" }
+  - inputText: "1,1x"
+  - tapOn: { css: "[data-testid=fx-row][data-currency=EUR] [data-testid=fx-set]" }
+  - waitForVisible: { css: "[data-testid=fx-row][data-currency=EUR] [data-testid=reference-error]" }
+  - tapOn: { css: "[data-testid=fx-row][data-currency=EUR] [data-testid=fx-manual]" }
+  - eraseText: 10
+  - inputText: "1.10"
+  - tapOn: { css: "[data-testid=fx-row][data-currency=EUR] [data-testid=fx-set]" }
+  - waitForVisible: { css: "[data-testid=fx-row][data-currency=EUR][data-rate='1.1'][data-source=manual]" }
+
+  # Germany's own euro book prices: one form, in euros only.
+  - selectOption: { testId: admin-country, optionValue: DE }
+  - waitForVisible: { css: "[data-testid=admin-country][data-value=DE]" }
+  - tapOn: { testId: reference-tab-prices }
+  - waitForVisible: { css: "[data-testid=reference-prices][data-currency=EUR]" }
+  - assertNotVisible: { css: "[data-testid=reference-prices][data-currency=USD]" }
+  - tapOn: { testId: price-template }
+  - eraseText: 10
+  - inputText: "4,50"
+  - tapOn: { testId: price-custom }
+  - eraseText: 10
+  - inputText: "6.90"
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-saved }
+  - waitForVisible: { css: "[data-testid=prices-own][data-own=true]" }
+
+  # Delivery: a 5,90 € fee, the partner charges us 3 €.
+  - tapOn: { testId: reference-tab-delivery }
+  - waitForVisible: { css: "[data-testid=reference-delivery][data-country=DE][data-currency=EUR]" }
+  - tapOn: { testId: delivery-fee }
+  - eraseText: 10
+  - inputText: "5,90"
+  - tapOn: { testId: delivery-cost }
+  - inputText: "3"
+  - selectOption: { testId: delivery-cost-currency, optionValue: EUR }
+  - tapOn: { testId: delivery-save }
+  - waitForVisible: { testId: reference-saved }
+
+  # The square book at 19,90 € / 29,90 €, printed for 7 € / 11 €: the margin shows as typed.
+  - tapOn: { testId: reference-tab-formats }
+  - waitForVisible: { css: "[data-testid=reference-country-formats][data-country=DE][data-currency=EUR]" }
+  - tapOn: { testId: country-format-soft-square-210 }
+  - inputText: "19,90"
+  - tapOn: { testId: country-format-hard-square-210 }
+  - inputText: "29,90"
+  - selectOption: { testId: country-format-cost-currency-square-210, optionValue: EUR }
+  - tapOn: { testId: country-format-cost-soft-square-210 }
+  - inputText: "7"
+  - tapOn: { testId: country-format-cost-hard-square-210 }
+  - inputText: "11"
+  - waitForVisible: { testId: country-format-margin-square-210, contains: "12.90" }
+  - tapOn: { testId: country-formats-save }
+  - waitForVisible: { testId: reference-saved }
+
+  # Berlin, where the order goes.
+  - tapOn: { testId: reference-tab-cities }
+  - waitForVisible: { css: "[data-testid=reference-cities][data-country=DE]" }
+  - tapOn: { testId: city-add }
+  - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-ru]" }
+  - inputText: "Берлин"
+  - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-en]" }
+  - inputText: "Berlin"
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { css: "[data-testid=city-row][data-id=berlin]" }
+  - request:
+      url: ${API}/reference
+      assert:
+        status: 200
+        json:
+          "$.countryPrices.DE.currency": EUR
+          "$.countryPrices.DE.books.template": 450
+          "$.countryPrices.DE.books.custom": 690
+          "$.countryDelivery.DE.currency": EUR
+          "$.countryDelivery.DE.fee": 590
+          "$.countryDelivery.DE.cost.amount": 300
+          "$.countryFormats.DE['square-210'].prices.currency": EUR
+          "$.countryFormats.DE['square-210'].prices.soft": 1990
+          "$.countryFormats.DE['square-210'].cost.hard": 1100
+  # Prices in another currency than Germany's are refused, even through the API.
+  - request:
+      method: POST
+      url: ${API}/admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: PUT
+      url: ${API}/admin/reference/delivery
+      query: { country: DE }
+      json: { currency: USD, fee: 590, freeEverywhere: false }
+      assert: { status: 400, json: { "$.code": currency_mismatch, "$.expected": EUR } }
+  # Price and rate changes are in Activity with their currency.
+  - request: { url: "${API}/admin/activity", query: { country: DE, section: reference, limit: 10 }, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "\"action\":\"prices.set\",\"targetType\":\"prices\",\"targetId\":\"DE\",\"country\":\"DE\",\"summary\":{\"data\":{\"currency\":\"EUR\"}"] }
+  - request: { url: "${API}/admin/activity", query: { section: reference, limit: 30 }, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "\"action\":\"fx.set\",\"targetType\":\"fx\",\"targetId\":\"EUR\",\"country\":null,\"summary\":{\"data\":{\"currency\":\"EUR\"}"] }
+  # A tenge rate too, so the dashboard can add everything up roughly in dollars.
+  - request:
+      method: PUT
+      url: ${API}/admin/fx
+      json: { currency: KZT, rate: "0.002" }
+      assert: { status: 200 }
+
+  # ---- A German visitor: € everywhere, and a printed book in euros -------------------------------
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - runFlow: ../helpers/germany.helper.yaml
+  - openLink: "${WEB}/de/catalog/first-day-kindergarten"
+  - waitForVisible: { testId: template-title }
+  - waitForVisible: { text: "4,50 €", childOf: { testId: book-price } }
+  # The product's offer in its JSON-LD is in euros too, from the first HTML.
+  - request: { url: "${WEB}/de/catalog/first-day-kindergarten", headers: { Cookie: "fabulka_country=DE" }, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "\"price\":\"4.50\",\"priceCurrency\":\"EUR\""] }
+  - openLink: "${WEB}/de/create"
+  - tapOn: { testId: voice-manual }
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "Züge"
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { testId: order-print, timeout: 30000 }
+  - tapOn: { testId: order-print }
+  - waitForVisible: { testId: order-form }
+  - waitForVisible: { css: "[data-testid=city][data-options~=berlin]", timeout: 15000 }
+  - assertVisible: { contains: "· 19,90 €" }
+  # The square book in softcover to Berlin: 19,90 € plus 5,90 € delivery.
+  - waitForVisible: { css: "[data-testid=order-total][data-currency=EUR]", contains: "25,80 €" }
+  - tapOn: { testId: recipient-name }
+  - inputText: "Anna Schmidt"
+  - tapOn: { testId: phone }
+  - inputText: "151 2345 6789"
+  - tapOn: { testId: order-email }
+  - inputText: "${email}"
+  - tapOn: { testId: address }
+  - inputText: "Unter den Linden 1"
+  - tapOn: { testId: place-order }
+  - waitForVisible: { testId: order-step-paid, timeout: 15000 }
+  # The order shows its lines in euros, as priced when ordered.
+  - waitForVisible: { css: "[data-testid=order-line][data-currency=EUR][data-unit='1990'][data-total='1990']" }
+  - assertVisible: { css: "[data-testid=order-total][data-currency=EUR]", contains: "25,80 €" }
+  - sql:
+      query: >-
+        select o.id, o.currency, o."itemsAmount" as items, o."deliveryAmount" as delivery, o."totalAmount" as total,
+        o."fxToUsd"::float8 as fx, o."deliveryCost" as dcost, o."deliveryCostCurrency" as dcur, o.phone, o.country,
+        o."paymentProvider" as provider, o."paymentStatus" as payment,
+        l.format, l.cover::text as cover, l.quantity, l."unitAmount" as unit, l."lineAmount" as line, l."unitCost" as cost, l."costCurrency" as ccur
+        from "Order" o join "OrderLine" l on l."orderId" = o.id join "Book" b on b.id = o."bookId" where b.child->>'name' = $1
+      params: ["${childName}"]
+      readOnly: true
+      extract: { orderId: "$[0].id" }
+      assert:
+        rows: 1
+        first:
+          { currency: EUR, items: 1990, delivery: 590, total: 2580, fx: 1.1, dcost: 300, dcur: EUR, phone: "+4915123456789", country: DE,
+            provider: manual, payment: paid, format: square-210, cover: soft, quantity: 1, unit: 1990, line: 1990, cost: 700, ccur: EUR }
+  # The confirmation mail writes the total the German way.
+  - request:
+      url: "${API}/test/mails"
+      query: { to: "${email}" }
+      retryUntil: { status: 200, json: { "$[0].subject": { contains: "eingegangen" } } }
+      extract: { mailText: "$[0].text" }
+      timeout: 10000
+  - assertTrue: { contains: ["${mailText}", "25,80 €"] }
+  # A later price change never touches the order.
+  - request:
+      method: PUT
+      url: ${API}/admin/reference/delivery
+      query: { country: DE }
+      json: { currency: EUR, fee: 990, freeEverywhere: false }
+      assert: { status: 200 }
+  - request:
+      url: ${API}/admin/orders
+      query: { country: DE }
+      extract: { listed: "$[0].id" }
+      assert: { status: 200, json: { "$[0].total.amount": 2580, "$[0].total.currency": EUR, "$[0].delivery.amount": 590, "$[0].fxToUsd": "1.1", "$[0].lines[0].unit.amount": 1990 } }
+  - assertTrue: { equals: ["${listed}", "${orderId}"] }
+
+  # ---- A Kazakh order stays in tenge -------------------------------------------------------------
+  - request:
+      method: POST
+      url: ${API}/books
+      headers: { X-Client-Key: "${kzKey}", X-Demo-Code: E2E-DEMO }
+      json:
+        child: { name: "${childName} KZ", age: 5, gender: girl, interests: [кошки], city: Алматы, language: ru }
+      extract: { kzBook: "$.id" }
+      assert: { status: 201 }
+  - request: { url: "${API}/books/${kzBook}", headers: { X-Client-Key: "${kzKey}" }, retryUntil: { status: 200, json: { "$.status": done } }, timeout: 30000 }
+  - request:
+      method: POST
+      url: ${API}/orders
+      headers: { X-Client-Key: "${kzKey}", X-Country: KZ }
+      json: { bookId: "${kzBook}", recipientName: Айгерим, phone: "+77011234567", email: "kz-${email}", cityId: shymkent, address: "ул. Абая, 1", cover: hard, quantity: 1 }
+      assert:
+        status: 201
+        json: { "$.currency": KZT, "$.total.amount": 1640000, "$.total.currency": KZT, "$.delivery.amount": 150000, "$.lines[0].unit.amount": 1490000 }
+
+  # ---- Dashboards: revenue per currency, and Germany's margin ------------------------------------
+  - request: { url: "${API}/admin/stats", assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "{\"currency\":\"EUR\",\"count\":"] }
+  - assertTrue: { contains: ["${response.body}", "{\"currency\":\"KZT\",\"count\":"] }
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-email }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: sales, timeout: 15000 }
+  - assertVisible: { testId: revenue-orders-EUR }
+  - assertVisible: { testId: revenue-orders-KZT }
+  - assertVisible: { testId: revenue-total-usd, contains: "≈" }
+  # Germany's manager: euros only, roughly in dollars, and the margin of the order with partner costs:
+  # 25,80 € sold at 1.10 = $28.38; printed and delivered for 10 € = $11.00.
+  - request:
+      url: ${API}/auth/login
+      query: { return: /api/admin/me }
+      headers: { Accept: application/json }
+      extract: { state: "$.state" }
+      assert: { status: 200 }
+  - request:
+      url: ${API}/auth/mock/authorize
+      query: { state: "${state}", email: "${cmEmail}" }
+      assert: { status: 200, json: { "$.countries[0]": DE } }
+  - request:
+      url: ${API}/admin/stats/countries
+      assert: { status: 200, json: { "$.orders.revenue.byCurrency[0].currency": EUR, "$.orders.margin.orders": 1, "$.orders.margin.revenue.amount": 2838, "$.orders.margin.cost.amount": 1100, "$.orders.margin.margin.amount": 1738 } }
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login-keycloak }
+  - tapOn: { testId: admin-login-keycloak }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${cmEmail}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { css: "[data-testid=country-dashboard][data-countries=DE]", timeout: 15000 }
+  # (Other flows may leave German orders behind: the euro line holds at least this one.)
+  - waitForVisible: { testId: country-revenue-lines-EUR }
+  - assertNotVisible: { testId: country-revenue-lines-KZT }
+  - assertVisible: { css: "[data-testid=country-margin][data-orders='1'][data-amount='1738']" }
+  - assertVisible: { text: "≈ $17.38" }
+after:
+  # Germany back to dollars and no print, and its own prices, delivery, formats and cities gone
+  # (through the API afterwards, so its cache is dropped); the rates back to fetched ones.
+  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": false, \"currency\": \"USD\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
+  - sql: { exec: "update \"Setting\" set value = value - 'DE' where key in ('reference.country_prices', 'reference.country_delivery', 'reference.country_formats')" }
+  - sql: { exec: "update \"Setting\" set value = coalesce((select jsonb_agg(e order by i) from jsonb_array_elements(value) with ordinality as t(e, i) where e->>'country' is distinct from 'DE'), '[]'::jsonb) where key = 'reference.cities'" }
+  - sql: { exec: "delete from \"Setting\" where key = 'fx.manual'" }
+  - request:
+      method: POST
+      url: ${API}/admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+  - request: { method: DELETE, url: "${API}/admin/reference/prices", query: { country: DE } }
+  - request: { method: DELETE, url: "${API}/admin/fx", query: { currency: EUR } }
+  - sql: { exec: "delete from \"Book\" where child->>'name' in ($1, $2)", params: ["${childName}", "${childName} KZ"] }
+  - sql: { exec: "delete from \"StaffMember\" where email = $1", params: ["${cmEmail}"] }
+  - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${cmEmail}"] }

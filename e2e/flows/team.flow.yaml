@@ -84,7 +84,7 @@ commands:
   - request:
       method: PUT
       url: ${API}/admin/reference/prices
-      json: { books: { template: { KZT: 1900, USD: 3.9 }, custom: { KZT: 2900, USD: 5.9 } }, deliveryKzt: 1500 }
+      json: { currency: KZT, books: { template: 190000, custom: 290000 } }
       assert: { status: 403, json: { "$.code": scope_forbidden } }
   - request: { url: "${API}/auth/me", assert: { status: 200, json: { "$.user.admin": false, "$.user.staff": true } } }
   - sql:

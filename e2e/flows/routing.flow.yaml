@@ -50,11 +50,13 @@ commands:
   - assertTrue: '${!output.page.includes("The Secret of the Snow Leopard") && !output.page.includes("₸<")}'
   - request: { url: "${WEB}/catalog", headers: { X-Real-IP: "${IP_BR}" }, assert: { status: 200 } }
   - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">$5.90<"] }
+  # Tenge, written the English way on the English page.
   - request: { url: "${WEB}/catalog", headers: { X-Real-IP: "${IP_KZ}" }, assert: { status: 200 } }
-  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">2\u00a0900 ₸<"] }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">₸2,900<"] }
   - assertTrue: { contains: ["${response.body}", "The Secret of the Snow Leopard"] }
+  # Dollars, written the German way on the German page.
   - request: { url: "${WEB}/de/catalog", headers: { X-Real-IP: "${IP_DE}" }, assert: { status: 200 } }
-  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">$5.90<"] }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">5,90\u00a0$<"] }
   - assertTrue: { contains: ["${response.body}", "Der erste Tag in der Kita"] }
   # A crawler gets the same: no redirect by Accept-Language, the English page for "other".
   - request:
@@ -69,12 +71,12 @@ commands:
   # The country cookie: the very first HTML has Germany's prices and Germany's catalog, whatever the
   # address says.
   - request: { url: "${WEB}/de/catalog", headers: { Cookie: "fabulka_country=DE", X-Real-IP: "${IP_KZ}" }, assert: { status: 200 } }
-  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">$5.90<"] }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">5,90\u00a0$<"] }
   - assertTrue: { contains: ["${response.body}", "Der erste Tag in der Kita"] }
   # The language in the address wins even where the country does not offer it.
   - request: { url: "${WEB}/kk/catalog", headers: { Cookie: "fabulka_country=DE" }, assert: { status: 200 } }
   - assertTrue: { contains: ["${response.body}", "Кітаптар каталогы"] }
-  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">$5.90<"] }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">5,90\u00a0$<"] }
 
   # The sitemap: every public page in every language, with hreflang alternates.
   - request: { url: "${WEB}/sitemap.xml", assert: { status: 200 } }
@@ -151,7 +153,7 @@ commands:
   - tapOn: { testId: ui-country-option-DE }
   - waitForVisible: { testId: ui-country, contains: "Deutschland" }
   - openLink: "${WEB}/de/catalog"
-  - waitForVisible: { testId: custom-price, text: "$5.90" }
+  - waitForVisible: { testId: custom-price, text: "5,90 $" }
   - assertVisible: { testId: ui-country, contains: "Deutschland" }
   - assertVisible: "Der erste Tag in der Kita"
   - assertNotVisible: "Das Geheimnis des Schneeleoparden"

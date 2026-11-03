@@ -63,12 +63,12 @@ commands:
         first: { books: 4 }
   - sql:
       query: >-
-        select sum("priceKzt")::int as paid from "Credit"
+        select sum(amount)::int as paid, min(currency) as currency from "Credit"
         where "clientKey" in (select "clientKey" from "Book" where child->>'name' = $1)
       params: ["${childName}"]
       readOnly: true
       assert:
-        first: { paid: 2900 }
+        first: { paid: 290000, currency: KZT }
 after:
   - sql:
       exec: >-

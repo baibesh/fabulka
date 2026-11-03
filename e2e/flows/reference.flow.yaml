@@ -3,7 +3,7 @@
 # the site's list and takes it off again (a Meta-blocked one is refused); edits the home page FAQ
 # and adds a question for Uzbekistan only; blocks one more
 # country on top of Meta's list, which stays read-only and can never be unblocked. Everything is
-# put back afterwards, so the flows that check «1 900 ₸» keep passing.
+# put back afterwards, so the flows that check «1 900 ₸» keep passing. Prices are per currency.
 appId: ${WEB}
 tags: [admin, reference]
 db: ${DATABASE_URL}
@@ -38,31 +38,36 @@ commands:
   - waitForVisible: { testId: reference-prices }
   - assertVisible: "Reference data"
 
-  # A price in fractions of a cent is pointed out next to its field, and nothing is saved.
-  - tapOn: { testId: price-template-kzt }
-  - eraseText
-  - inputText: "2450"
-  - tapOn: { testId: price-template-usd }
+  # "All countries": one default list per currency. A dollar price in fractions of a cent is
+  # pointed out next to its field, and nothing is saved.
+  - assertVisible: { css: "[data-testid=reference-prices][data-currency=EUR]" }
+  - tapOn: { css: "[data-testid=reference-prices][data-currency=USD] [data-testid=price-template]" }
   - eraseText
   - inputText: "4.999"
-  - tapOn: { testId: reference-save }
-  - waitForVisible: { testId: reference-error, contains: "at most two decimals" }
+  - tapOn: { testId: prices-save-USD }
+  - waitForVisible: { css: "[data-testid=reference-prices][data-currency=USD] [data-testid=reference-error]", contains: "at most two decimals" }
   - request:
       url: ${API}/reference
-      assert: { status: 200, json: { "$.prices.books.template.KZT": 1900 } }
+      assert: { status: 200, json: { "$.prices.USD.books.template": 390 } }
 
-  # Fixed and saved: the public reference data has the new price at once.
-  - tapOn: { testId: price-template-usd }
+  # Fixed and saved: the public reference data has the new price at once (in cents).
+  - tapOn: { css: "[data-testid=reference-prices][data-currency=USD] [data-testid=price-template]" }
   - eraseText
   - inputText: "4.90"
-  - tapOn: { testId: reference-save }
-  - waitForVisible: { testId: reference-saved }
+  - tapOn: { testId: prices-save-USD }
+  - waitForVisible: { css: "[data-testid=reference-prices][data-currency=USD] [data-testid=reference-saved]" }
+  # Tenge are whole: typed with a space, kept in tiyn.
+  - tapOn: { css: "[data-testid=reference-prices][data-currency=KZT] [data-testid=price-template]" }
+  - eraseText
+  - inputText: "2 450"
+  - tapOn: { testId: prices-save-KZT }
+  - waitForVisible: { css: "[data-testid=reference-prices][data-currency=KZT] [data-testid=reference-saved]" }
   - assertNotVisible: { testId: reference-error }
   - request:
       url: ${API}/reference
       assert:
         status: 200
-        json: { "$.prices.books.template.KZT": 2450, "$.prices.books.template.USD": 4.9, "$.prices.books.custom.KZT": 2900 }
+        json: { "$.prices.KZT.books.template": 245000, "$.prices.USD.books.template": 490, "$.prices.KZT.books.custom": 290000, "$.prices.EUR.books.template": 390 }
 
   # A new delivery city with free delivery, in three languages: cities are a country's, so
   # Kazakhstan is picked in the admin's working-country switcher first.
@@ -100,13 +105,13 @@ commands:
       method: POST
       url: ${API}/quota/purchase
       headers: { X-Client-Key: "${clientKey}", X-Country: KZ }
-      json: { kind: template, priceKzt: 1 }
+      json: { kind: template, amount: 1 }
       assert: { status: "2xx" }
   - sql:
-      query: select "priceKzt" as price from "Credit" where "clientKey" = $1
+      query: select amount as price, currency from "Credit" where "clientKey" = $1
       params: ["${clientKey}"]
       readOnly: true
-      assert: { rows: 1, first: { price: 2450 } }
+      assert: { rows: 1, first: { price: 245000, currency: KZT } }
   # From a country priced in dollars (chosen on the site), the dollar price.
   - request:
       method: POST
@@ -115,10 +120,10 @@ commands:
       json: { kind: template }
       assert: { status: "2xx" }
   - sql:
-      query: select "priceKzt" as kzt, "priceUsd" as usd from "Credit" where "clientKey" = $1
+      query: select amount, currency, "fxToUsd"::text as fx from "Credit" where "clientKey" = $1
       params: ["${clientKey}-pl"]
       readOnly: true
-      assert: { rows: 1, first: { kzt: 0, usd: 4.9 } }
+      assert: { rows: 1, first: { amount: 490, currency: USD } }
 
   # Countries: Portugal added with English first, offered on the site, then taken off again.
   - openLink: "${WEB}/admin/reference"
@@ -133,11 +138,11 @@ commands:
   - selectOption: { testId: country-add-select, optionValue: PT }
   - tapOn: { testId: country-add }
   - waitForVisible: { css: "[data-testid=country-row][data-code=PT]" }
-  # Print is priced in tenge: not offered with prices in dollars.
-  - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-print]" }
-  - tapOn: { testId: reference-save }
-  - waitForVisible: { testId: reference-error, contains: "Print is priced in tenge" }
-  - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-print]" }
+  # A payment provider that is not wired in yet says so; Portugal stays paid by hand.
+  - selectOption: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-payment]", optionValue: stripe }
+  - waitForVisible: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-payment-not-live]" }
+  - selectOption: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-payment]", optionValue: manual }
+  - assertNotVisible: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-payment-not-live]" }
   - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-default-en]" }
   # Languages are chips: + lists only the ones not added yet.
   - tapOn: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-lang-add]" }
@@ -332,9 +337,12 @@ after:
   - request:
       method: PUT
       url: ${API}/admin/reference/prices
-      json:
-        books: { template: { KZT: 1900, USD: 3.9 }, custom: { KZT: 2900, USD: 5.9 } }
-        deliveryKzt: 1500
+      json: { currency: KZT, books: { template: 190000, custom: 290000 } }
+      assert: { status: 200 }
+  - request:
+      method: PUT
+      url: ${API}/admin/reference/prices
+      json: { currency: USD, books: { template: 390, custom: 590 } }
       assert: { status: 200 }
   - request:
       method: PUT

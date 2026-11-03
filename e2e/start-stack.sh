@@ -9,6 +9,8 @@ export FREE_BOOKS=3 DEMO_CODES=E2E-DEMO ORDER_STAGE_MS="${ORDER_STAGE_MS:-1500}"
 export MOCK_STAFF_COST_USD=0.01
 # Needs apps/api/geoip/country.mmdb: pnpm --filter @fabulka/api geoip
 export GEO_BLOCK=true
+# Exchange rates are not fetched from the ECB and the National Bank in E2E runs (no network); flows set them by hand.
+export FX_REFRESH=off
 # Filling in the form by voice (mocked transcription), for the api-voice flow.
 export VOICE_INPUT=true
 # Test-only admin account for the admin flow (the password sign-in is off unless asked for).

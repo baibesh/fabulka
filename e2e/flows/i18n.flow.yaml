@@ -99,7 +99,7 @@ commands:
   - assertNotVisible: "Das Geheimnis des Schneeleoparden"
   - assertVisible: { testId: ui-country, contains: "Deutschland" }
   - assertVisible: { testId: ui-language, contains: "DE" }
-  - assertVisible: { testId: custom-price, text: "$5.90" }
+  - assertVisible: { testId: custom-price, text: "5,90 $" }
   - tapOn: { testId: ui-language }
   - waitForVisible: { testId: ui-language-option-de }
   - assertVisible: { testId: ui-language-option-en }
@@ -134,7 +134,8 @@ commands:
   - tapOn: { testId: nav-home }
   - waitForVisible: "Un libro en el que tu hijo es el protagonista"
   - tapOn: "¿Cuánto cuesta un libro?"
-  - waitForVisible: { contains: "$3.90" }
+  # Dollars, written the Spanish way.
+  - waitForVisible: { contains: "3,90 $" }
 
   # A book made in the Spanish interface is written in Spanish.
   - tapOn: { testId: nav-create }

@@ -102,8 +102,9 @@ commands:
   - tapOn: { testId: ui-country-option-UZ }
   - waitForVisible: "Каталог книг"
   - assertVisible: { testId: ui-country, contains: "Узбекистан" }
-  - assertVisible: { testId: custom-price, text: "$5.90" }
-  - assertVisible: { testId: template-price, text: "$3.90", index: 0 }
+  # Dollars, written the Russian way on the Russian page.
+  - assertVisible: { testId: custom-price, text: "5,90 $" }
+  - assertVisible: { testId: template-price, text: "3,90 $", index: 0 }
   # The language dialog now offers Russian and English only; a Kazakh address still opens in Kazakh
   # (the address decides the language), with the country's prices.
   - tapOn: { testId: ui-language }
@@ -118,10 +119,10 @@ commands:
   - waitForVisible: { testId: template-first-day-kindergarten }
   - assertUrl: { equals: "${WEB}/kk/catalog" }
   - assertVisible: "Кітаптар каталогы"
-  - assertVisible: { testId: custom-price, text: "$5.90" }
+  - assertVisible: { testId: custom-price, text: "5,90 $" }
   - openLink: "${WEB}/ru"
   - waitForVisible: { testId: hero-covers }
-  - assertVisible: { contains: "Первые книги — бесплатно, дальше — от $3.90" }
+  - assertVisible: { contains: "Первые книги — бесплатно, дальше — от 3,90 $" }
   - assertVisible: "В вашей стране печати пока нет — мы планируем её открыть. А PDF легко распечатать самим."
   # Outside Kazakhstan the FAQ says print is not there yet, and prices are in dollars.
   - assertNotVisible: { contains: "доставкой по Казахстану" }
@@ -130,7 +131,7 @@ commands:
   - tapOn: "Можно ли заказать печатную книгу?"
   - waitForVisible: { contains: "К сожалению, в вашей стране печатные книги пока недоступны" }
   - tapOn: "Сколько стоит книга?"
-  - waitForVisible: { contains: "книга из каталога стоит $3.90, своя история — $5.90" }
+  - waitForVisible: { contains: "книга из каталога стоит 3,90 $, своя история — 5,90 $" }
   - tapOn: "На каких языках можно сделать книгу?"
   - waitForVisible: { contains: "Язык книги выбирается в форме: Русский, English" }
 

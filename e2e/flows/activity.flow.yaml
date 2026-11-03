@@ -45,7 +45,7 @@ commands:
   - request: { url: "/books/${deBook}", retryUntil: { status: 200, json: { "$.status": done } }, timeout: 30000 }
   - sql: { exec: "update \"Book\" set country = 'DE' where id = $1", params: ["${deBook}"] }
   - sql:
-      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, \"booksKzt\", \"deliveryKzt\", \"totalKzt\", \"clientKey\", country) values ($1, $2, 'Айгерим', '+77010000000', 'a@e2e.test', 'Алматы', 'ул. Абая, 1', 'soft', 1, 9900, 0, 9900, 'e2e-activity', 'KZ')"
+      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, currency, \"itemsAmount\", \"deliveryAmount\", \"totalAmount\", \"clientKey\", country) values ($1, $2, 'Айгерим', '+77010000000', 'a@e2e.test', 'Алматы', 'ул. Абая, 1', 'soft', 1, 'KZT', 990000, 0, 990000, 'e2e-activity', 'KZ')"
       params: ["kz-act-${stamp}", "${deBook}"]
 
   # ---- The superadmin: Germany's prices twice (the second change has a before), a Kazakh order -----
@@ -58,13 +58,13 @@ commands:
       method: PUT
       url: /admin/reference/prices
       query: { country: DE }
-      json: { books: { template: { KZT: 2500, USD: 4.9 }, custom: { KZT: 2900, USD: 5.9 } }, deliveryKzt: 1500 }
+      json: { currency: USD, books: { template: 490, custom: 590 } }
       assert: { status: 200 }
   - request:
       method: PUT
       url: /admin/reference/prices
       query: { country: DE }
-      json: { books: { template: { KZT: 2700, USD: 4.9 }, custom: { KZT: 2900, USD: 5.9 } }, deliveryKzt: 1500 }
+      json: { currency: USD, books: { template: 520, custom: 590 } }
       assert: { status: 200 }
   - request:
       method: PATCH
@@ -75,7 +75,7 @@ commands:
   - request:
       url: /admin/activity
       query: { country: DE, section: reference, limit: 1 }
-      assert: { status: 200, json: { "$.events[0].action": prices.set, "$.events[0].country": DE, "$.events[0].actorEmail": "admin@e2e.test", "$.events[0].summary.changes[0].path": books.template.KZT, "$.events[0].summary.changes[0].before": 2500, "$.events[0].summary.changes[0].after": 2700 } }
+      assert: { status: 200, json: { "$.events[0].action": prices.set, "$.events[0].country": DE, "$.events[0].actorEmail": "admin@e2e.test", "$.events[0].summary.changes[0].path": books.template, "$.events[0].summary.changes[0].before": 490, "$.events[0].summary.changes[0].after": 520, "$.events[0].summary.data.currency": USD } }
   - request:
       url: /admin/activity
       query: { q: "kz-act-${stamp}" }
@@ -106,8 +106,9 @@ commands:
   - waitForVisible: { css: "[data-testid=activity-row][data-action='prices.set'][data-country=DE]" }
   - assertVisible: { css: "[data-testid=activity-csv][href*='section=reference']" }
   - tapOn: { css: "[data-testid=activity-row][data-action='prices.set'][data-country=DE]" }
-  - waitForVisible: { css: "[data-testid=activity-change][data-path='books.template.KZT']" }
-  - assertVisible: { css: "[data-testid=activity-change][data-path='books.template.KZT']", containsDescendants: { text: "2700" } }
+  - waitForVisible: { css: "[data-testid=activity-change][data-path='books.template']" }
+  # Amounts in minor units read as money in the change's currency.
+  - assertVisible: { css: "[data-testid=activity-change][data-path='books.template']", containsDescendants: { text: "$5.20" } }
   - assertVisible: { text: "Changed prices" }
 
   # ---- The German manager: Germany's events, never Kazakhstan's --------------------------------------

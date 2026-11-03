@@ -58,11 +58,11 @@ commands:
         json: { "$.limit": 4, "$.remaining": 1 }
   - sql:
       query: >-
-        select sum("priceKzt")::int as paid from "Credit" where "clientKey" = $1
+        select sum(amount)::int as paid, min(currency) as currency, min(kind) as kind, min("paymentStatus") as status from "Credit" where "clientKey" = $1
       params: ["${visitor}"]
       readOnly: true
       assert:
-        first: { paid: 1900 }
+        first: { paid: 190000, currency: KZT, kind: template, status: paid }
   - request:
       method: POST
       url: /books

@@ -70,10 +70,10 @@ commands:
   - sql: { exec: "update \"Book\" set country = 'KZ' where id = $1", params: ["${kzBook}"] }
   # An order from each country.
   - sql:
-      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, \"booksKzt\", \"deliveryKzt\", \"totalKzt\", \"clientKey\", country) values ($1, $2, 'Lena', '+4917000000', 'lena@e2e.test', 'Berlin', 'Str. 1', 'soft', 1, 9900, 0, 9900, 'e2e-country-scope', 'DE')"
+      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, currency, \"itemsAmount\", \"deliveryAmount\", \"totalAmount\", \"clientKey\", country) values ($1, $2, 'Lena', '+4917000000', 'lena@e2e.test', 'Berlin', 'Str. 1', 'soft', 1, 'EUR', 1890, 0, 1890, 'e2e-country-scope', 'DE')"
       params: ["de-order-${stamp}", "${deBook}"]
   - sql:
-      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, \"booksKzt\", \"deliveryKzt\", \"totalKzt\", \"clientKey\", country) values ($1, $2, 'Айгерим', '+77010000000', 'a@e2e.test', 'Алматы', 'ул. Абая, 1', 'soft', 1, 9900, 0, 9900, 'e2e-country-scope', 'KZ')"
+      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, currency, \"itemsAmount\", \"deliveryAmount\", \"totalAmount\", \"clientKey\", country) values ($1, $2, 'Айгерим', '+77010000000', 'a@e2e.test', 'Алматы', 'ул. Абая, 1', 'soft', 1, 'KZT', 990000, 0, 990000, 'e2e-country-scope', 'KZ')"
       params: ["kz-order-${stamp}", "${kzBook}"]
 
   # The superadmin makes a global example (shown everywhere).
@@ -82,8 +82,8 @@ commands:
       url: /admin/login
       json: { email: "${adminEmail}", password: "${adminPassword}" }
       assert: { status: 204 }
-  # Print in Germany for this test (priced in tenge, as print is); the API reads it on the next save.
-  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": true, \"currency\": \"KZT\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
+  # Print in Germany for this test, in euros; the API reads it on the next save.
+  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": true, \"currency\": \"EUR\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
   # Germany starts on the global prices and the default landing, with no cities (through the API: it caches them).
   - request: { method: PUT, url: /admin/reference/cities, query: { country: DE }, json: [], assert: { status: 200 } }
   - request: { method: DELETE, url: /admin/reference/prices, query: { country: DE }, assert: { status: 204 } }
@@ -187,8 +187,15 @@ commands:
       method: PUT
       url: /admin/reference/prices
       query: { country: KZ }
-      json: { books: { template: { KZT: 990, USD: 1.9 }, custom: { KZT: 990, USD: 1.9 } }, deliveryKzt: 0 }
+      json: { currency: KZT, books: { template: 99000, custom: 99000 } }
       assert: { status: 403, json: { "$.code": scope_forbidden } }
+  # Germany's prices only in Germany's currency (euros for this test).
+  - request:
+      method: PUT
+      url: /admin/reference/prices
+      query: { country: DE }
+      json: { currency: KZT, books: { template: 99000, custom: 99000 } }
+      assert: { status: 400, json: { "$.code": currency_mismatch, "$.expected": EUR } }
   # Cities: Germany's only; never Kazakhstan's, the whole list, nor the countries list.
   - request:
       method: PUT
@@ -210,7 +217,7 @@ commands:
       method: PUT
       url: /admin/reference/delivery
       query: { country: KZ }
-      json: { feeKzt: 0, freeEverywhere: true }
+      json: { currency: KZT, fee: 0, freeEverywhere: true }
       assert: { status: 403, json: { "$.code": scope_forbidden } }
   # Landing: Germany's only.
   - request:
@@ -289,22 +296,23 @@ commands:
   - assertNotVisible: { testId: reference-tab-faq }
   - assertNotVisible: { testId: reference-tab-blocked }
   - assertVisible: { css: "[data-testid=prices-own][data-own=false]" }
-  # Germany charges tenge for this test (print is priced in it): only the tenge fields.
-  - assertNotVisible: { testId: price-template-usd }
-  - tapOn: { testId: price-template-kzt }
+  # Germany charges euros for this test: one form, in euros, typed the German way.
+  - assertVisible: { css: "[data-testid=reference-prices][data-currency=EUR]" }
+  - assertNotVisible: { css: "[data-testid=reference-prices][data-currency=KZT]" }
+  - tapOn: { testId: price-template }
   - eraseText: 10
-  - inputText: "2490"
+  - inputText: "4,90"
   - tapOn: { testId: reference-save }
   - waitForVisible: { testId: reference-saved }
   - waitForVisible: { css: "[data-testid=prices-own][data-own=true]" }
-  - request: { url: /reference, assert: { status: 200, json: { "$.countryPrices.DE.books.template.KZT": 2490 } } }
+  - request: { url: /reference, assert: { status: 200, json: { "$.countryPrices.DE.currency": EUR, "$.countryPrices.DE.books.template": 490 } } }
   - assertTrue: ${json(http.get(API + '/reference').body).countryPrices.KZ === undefined}
 
   # Germany's own delivery city. They see Germany's country entry read-only, and no Countries tab.
   - assertNotVisible: { testId: reference-tab-countries }
   - tapOn: { testId: reference-tab-cities }
   - waitForVisible: { css: "[data-testid=reference-cities][data-country=DE]" }
-  - assertVisible: { testId: reference-country-entry, contains: "KZT" }
+  - assertVisible: { testId: reference-country-entry, contains: "EUR" }
   - assertNotVisible: { css: "[data-testid=city-row][data-id=almaty]" }
   - tapOn: { testId: city-add }
   - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-ru]" }
