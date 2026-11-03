@@ -1,0 +1,410 @@
+# Country scope in the admin: a country manager for Germany sees only German orders, may not touch a
+# global example (403, and a read-only card) but makes and translates one of their own, hides a
+# catalog book in Germany only, sets Germany's sample, changes Germany's prices (not Kazakhstan's)
+# and a German hero title that a visitor from Germany sees and one from Kazakhstan does not. The
+# visitor matrix shows their example under Germany × Deutsch. With print opened in Germany for the
+# test, the manager adds a German delivery city that a German order form lists and a Kazakh one does
+# not; Kazakhstan's cities and the countries list stay out of their reach. The superadmin's
+# working-country switcher narrows the orders and is remembered; "everywhere except Kazakhstan" hides
+# an example there. Everything is reset at the end.
+appId: ${WEB}
+tags: [admin, team, examples, catalog, reference]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  stamp: "${Date.now()}"
+  cmEmail: "cm-de+${stamp}@e2e.test"
+  cmId: "e2e-cm-de-${stamp}"
+  childName: "Scope ${stamp}"
+  slug: bath-time
+  heroTitle: "Bücher für Emma ${stamp}"
+  # The test-only admin account from e2e/start-stack.sh (the emergency sign-in: a superadmin).
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+  headers:
+    X-Client-Key: "e2e-country-scope-${stamp}"
+    X-Demo-Code: E2E-DEMO
+before:
+  - sql: { exec: "update \"BookTemplate\" set countries = '{}', \"countriesMode\" = 'include' where slug = $1", params: ["${slug}"] }
+  - sql:
+      exec: "insert into \"StaffMember\" (id, email, name, status, roles, countries, \"updatedAt\") values ($1, $2, 'Emma Manager', 'active', '{country_manager}', '{DE}', now())"
+      params: ["${cmId}", "${cmEmail}"]
+commands:
+  # Three finished (mock) books: a German one and a Kazakh one from the catalog book, and a story of
+  # its own for a global example.
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${childName}", age: 3, gender: girl, interests: [Enten], city: Berlin, language: de }
+        template: ${slug}
+        answers: { toy: Gummiente }
+      extract: { deBook: "$.id" }
+      assert: { status: 201 }
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${childName}", age: 3, gender: boy, interests: [утята], city: Алматы, language: ru }
+        template: ${slug}
+        answers: { toy: резиновый утёнок }
+      extract: { kzBook: "$.id" }
+      assert: { status: 201 }
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${childName}", age: 6, gender: girl, interests: [звёзды], city: Алматы, language: ru }
+      extract: { globalBook: "$.id" }
+      assert: { status: 201 }
+  - request: { url: "/books/${deBook}", retryUntil: { status: 200, json: { "$.status": done } }, timeout: 30000 }
+  - request: { url: "/books/${kzBook}", retryUntil: { status: 200, json: { "$.status": done } }, timeout: 30000 }
+  - request: { url: "/books/${globalBook}", retryUntil: { status: 200, json: { "$.status": done } }, timeout: 30000 }
+  # Where they were made (the test browser's address has no country).
+  - sql: { exec: "update \"Book\" set country = 'DE' where id = $1", params: ["${deBook}"] }
+  - sql: { exec: "update \"Book\" set country = 'KZ' where id = $1", params: ["${kzBook}"] }
+  # An order from each country.
+  - sql:
+      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, \"booksKzt\", \"deliveryKzt\", \"totalKzt\", \"clientKey\", country) values ($1, $2, 'Lena', '+4917000000', 'lena@e2e.test', 'Berlin', 'Str. 1', 'soft', 1, 9900, 0, 9900, 'e2e-country-scope', 'DE')"
+      params: ["de-order-${stamp}", "${deBook}"]
+  - sql:
+      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, \"booksKzt\", \"deliveryKzt\", \"totalKzt\", \"clientKey\", country) values ($1, $2, 'Айгерим', '+77010000000', 'a@e2e.test', 'Алматы', 'ул. Абая, 1', 'soft', 1, 9900, 0, 9900, 'e2e-country-scope', 'KZ')"
+      params: ["kz-order-${stamp}", "${kzBook}"]
+
+  # The superadmin makes a global example (shown everywhere).
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  # Print in Germany for this test (priced in tenge, as print is); the API reads it on the next save.
+  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": true, \"currency\": \"KZT\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
+  # Germany starts on the global prices and the default landing, with no cities (through the API: it caches them).
+  - request: { method: PUT, url: /admin/reference/cities, query: { country: DE }, json: [], assert: { status: 200 } }
+  - request: { method: DELETE, url: /admin/reference/prices, query: { country: DE }, assert: { status: 204 } }
+  - request: { method: DELETE, url: /admin/reference/landing, query: { country: DE }, assert: { status: 204 } }
+  - request:
+      method: POST
+      url: /admin/examples
+      json: { bookId: "${globalBook}" }
+      extract: { globalExample: "$.id" }
+      assert: { status: 201 }
+
+  # ---- The German manager through the API ------------------------------------------------------
+  - request:
+      url: ${API}/auth/login
+      query: { return: /api/admin/me }
+      headers: { Accept: application/json }
+      extract: { state: "$.state" }
+      assert: { status: 200 }
+  - request:
+      url: ${API}/auth/mock/authorize
+      query: { state: "${state}", email: "${cmEmail}" }
+      assert: { status: 200, json: { "$.countries[0]": DE, "$.superadmin": false } }
+
+  # Orders: Germany's only; another country's is refused.
+  - request: { url: /admin/orders, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "de-order-${stamp}"] }
+  - assertTrue: ${!http.get(API + '/admin/orders').body.includes('kz-order-' + stamp)}
+  - request: { url: /admin/orders, query: { country: KZ }, assert: { status: 200 } }
+  - assertTrue: { equals: ["${response.body}", "[]"] }
+  - request:
+      method: PATCH
+      url: /admin/orders/kz-order-${stamp}
+      json: { status: printing }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+  - request:
+      method: PATCH
+      url: /admin/orders/de-order-${stamp}
+      json: { status: printing }
+      assert: { status: 200, json: { "$.status": printing, "$.country": DE } }
+
+  # Examples: the global one is read-only for them (403 on every change).
+  - request:
+      method: PATCH
+      url: /admin/examples/${globalExample}
+      json: { countries: [DE] }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+  - request:
+      method: POST
+      url: /admin/examples/${globalExample}/translate
+      json: { languages: [en] }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+  - request: { method: DELETE, url: "/admin/examples/${globalExample}", assert: { status: 403 } }
+  # A book from Kazakhstan is not theirs to publish; the German one becomes a German example.
+  - request:
+      method: POST
+      url: /admin/examples
+      json: { bookId: "${kzBook}" }
+      assert: { status: 404, json: { "$.code": example_book_not_found } }
+  - request:
+      method: POST
+      url: /admin/examples
+      json: { bookId: "${deBook}", countries: [DE, KZ] }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+  - request:
+      method: POST
+      url: /admin/examples
+      json: { bookId: "${deBook}" }
+      extract: { deExample: "$.id" }
+      assert: { status: 201, json: { "$.countries[0]": DE, "$.editable": true } }
+  - request:
+      method: POST
+      url: /admin/examples/${deExample}/translate
+      json: { languages: [en] }
+      assert: { status: 201, json: { "$.versions[0].language": en } }
+  # Never everywhere, nor "everywhere except…".
+  - request:
+      method: PATCH
+      url: /admin/examples/${deExample}
+      json: { countries: [KZ], mode: exclude }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+
+  # Catalog: not the book's content, not Kazakhstan's visibility, not the global samples.
+  - request:
+      method: PATCH
+      url: /admin/templates/${slug}
+      json: { title: "Neu" }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+  - request:
+      method: PUT
+      url: /admin/templates/${slug}/visibility
+      json: { country: KZ, visible: false }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+  - request:
+      method: PUT
+      url: /admin/templates/${slug}/samples
+      json: { country: null, language: de, bookId: "${deBook}" }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+
+  # Prices: Germany's, never Kazakhstan's (nor the global list, see team.flow).
+  - request:
+      method: PUT
+      url: /admin/reference/prices
+      query: { country: KZ }
+      json: { books: { template: { KZT: 990, USD: 1.9 }, custom: { KZT: 990, USD: 1.9 } }, deliveryKzt: 0 }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+  # Cities: Germany's only; never Kazakhstan's, the whole list, nor the countries list.
+  - request:
+      method: PUT
+      url: /admin/reference/cities
+      query: { country: KZ }
+      json: []
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+  - request:
+      method: PUT
+      url: /admin/reference/cities
+      json: [{ id: almaty, country: KZ, name: { ru: Алматы, en: Almaty }, freeDelivery: true }]
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+  - request:
+      method: PUT
+      url: /admin/reference/countries
+      json: [{ code: DE, languages: [de], currency: USD, print: false }]
+      assert: { status: 403, json: { "$.code": admin_forbidden } }
+  - request:
+      method: PUT
+      url: /admin/reference/delivery
+      query: { country: KZ }
+      json: { feeKzt: 0, freeEverywhere: true }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+  # Landing: Germany's only.
+  - request:
+      method: PUT
+      url: /admin/reference/landing
+      query: { country: KZ }
+      json: { hero: { ru: { title: "Нет" } } }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
+
+  # ---- The German manager in the browser -------------------------------------------------------
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login-keycloak }
+  - tapOn: { testId: admin-login-keycloak }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${cmEmail}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { testId: orders-table, timeout: 15000 }
+  # Their working country is Germany; the orders are Germany's.
+  - assertVisible: { css: "[data-testid=admin-country][data-value=DE]" }
+  - waitForVisible: { css: "[data-testid=order-row][data-country=DE]" }
+  - assertNotVisible: { css: "[data-testid=order-row][data-country=KZ]" }
+
+  # Examples: the global one is read-only; theirs is not.
+  - tapOn: { testId: admin-nav-examples }
+  - waitForVisible: { css: "[data-testid='example-${globalExample}'][data-editable=false]" }
+  - assertVisible: { testId: "example-${globalExample}-readonly" }
+  - assertVisible: { css: "[data-testid='example-${globalExample}-remove']:disabled" }
+  - assertVisible: { css: "[data-testid='example-${globalExample}-countries']:disabled" }
+  - assertVisible: { css: "[data-testid='example-${deExample}'][data-editable=true]" }
+  - assertVisible: { css: "[data-testid='example-${deExample}-remove']:enabled" }
+
+  # What a visitor sees: their example under Germany × Deutsch, Germany their only row.
+  - tapOn: { testId: examples-matrix-link }
+  - waitForVisible: { testId: visitor-matrix }
+  - assertVisible: { css: "[data-testid=matrix-DE-de][data-kind=example] [data-book-id='${deBook}']" }
+  - assertNotVisible: { testId: matrix-row-KZ }
+
+  # Catalog: hide the book in Germany only.
+  - tapOn: { testId: admin-nav-catalog }
+  - waitForVisible: { css: "[data-testid=catalog-visible-${slug}][data-visible=true]" }
+  - assertVisible: { css: "[data-testid=publish-${slug}]:disabled" }
+  - tapOn: { testId: "catalog-visible-${slug}" }
+  - waitForVisible: { css: "[data-testid=catalog-visible-${slug}][data-visible=false]" }
+  - sql:
+      query: "select \"countriesMode\"::text as mode, array_to_string(countries, ',') as countries from \"BookTemplate\" where slug = $1"
+      params: ["${slug}"]
+      readOnly: true
+      assert: { first: { mode: exclude, countries: DE } }
+  - evalScript: >-
+      output.listed = (country) => json(http.get(API + '/templates?lang=en&country=' + country).body).map((t) => t.slug)
+  - assertTrue: ${!output.listed('DE').includes(slug) && output.listed('KZ').includes(slug) && output.listed('AT').includes(slug)}
+
+  # Germany's sample: read-only content, the sample saved at once.
+  - openLink: "${WEB}/admin/catalog/${slug}"
+  - waitForVisible: { testId: template-readonly }
+  - assertNotVisible: { testId: template-save }
+  - assertVisible: { css: "[data-testid=template-samples][data-country=DE]" }
+  - selectOption: { testId: template-sample-de, optionValue: "${deBook}" }
+  - waitForVisible: { testId: template-sample-saved }
+  - request: { url: "/templates/${slug}", query: { lang: de, country: DE }, extract: { deSample: "$.sampleBookId" }, assert: { status: 200 } }
+  - assertTrue: { equals: ["${deSample}", "${deBook}"] }
+  - assertTrue: ${json(http.get(API + '/templates/' + slug + '?lang=de&country=AT').body).sampleBookId !== deBook}
+
+  # Reference: the per-country tabs only, Germany's (the working country).
+  - tapOn: { testId: admin-nav-reference }
+  - waitForVisible: { testId: reference-prices }
+  - assertVisible: { css: "[data-testid=reference-scope][data-country=DE]" }
+  - assertVisible: { testId: reference-tab-delivery }
+  - assertVisible: { testId: reference-tab-formats }
+  - assertVisible: { testId: reference-tab-cities }
+  - assertNotVisible: { testId: reference-tab-faq }
+  - assertNotVisible: { testId: reference-tab-blocked }
+  - assertVisible: { css: "[data-testid=prices-own][data-own=false]" }
+  # Germany charges tenge for this test (print is priced in it): only the tenge fields.
+  - assertNotVisible: { testId: price-template-usd }
+  - tapOn: { testId: price-template-kzt }
+  - eraseText: 10
+  - inputText: "2490"
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-saved }
+  - waitForVisible: { css: "[data-testid=prices-own][data-own=true]" }
+  - request: { url: /reference, assert: { status: 200, json: { "$.countryPrices.DE.books.template.KZT": 2490 } } }
+  - assertTrue: ${json(http.get(API + '/reference').body).countryPrices.KZ === undefined}
+
+  # Germany's own delivery city. They see Germany's country entry read-only, and no Countries tab.
+  - assertNotVisible: { testId: reference-tab-countries }
+  - tapOn: { testId: reference-tab-cities }
+  - waitForVisible: { css: "[data-testid=reference-cities][data-country=DE]" }
+  - assertVisible: { testId: reference-country-entry, contains: "KZT" }
+  - assertNotVisible: { css: "[data-testid=city-row][data-id=almaty]" }
+  - tapOn: { testId: city-add }
+  - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-ru]" }
+  - inputText: "Берлин"
+  - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-en]" }
+  - inputText: "Berlin"
+  - tapOn: { testId: reference-save }
+  - waitForVisible: { testId: reference-saved }
+  - waitForVisible: { css: "[data-testid=city-row][data-id=berlin]" }
+  - assertTrue: ${json(http.get(API + '/reference').body).cities.some((c) => c.id === 'berlin' && c.country === 'DE')}
+  - assertTrue: ${json(http.get(API + '/reference').body).cities.some((c) => c.id === 'almaty' && c.country === 'KZ')}
+
+  # Germany's hero title, in German.
+  - tapOn: { testId: reference-tab-landing }
+  - waitForVisible: { css: "[data-testid=reference-landing][data-country=DE]" }
+  - tapOn: { testId: landing-hero-title-de }
+  - inputText: "${heroTitle}"
+  - tapOn: { testId: landing-save }
+  - waitForVisible: { testId: reference-saved }
+  - waitForVisible: { css: "[data-testid=landing-own][data-own=true]" }
+
+  # ---- Visitors ---------------------------------------------------------------------------------
+  # From Germany: the German title on the German landing.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - runFlow: ../helpers/germany.helper.yaml
+  - openLink: "${WEB}/de"
+  - waitForVisible: { testId: hero-title, contains: "${heroTitle}" }
+  # Germany's order form lists the German city.
+  - openLink: "${WEB}/de/books/${deBook}/order"
+  - waitForVisible: { css: "[data-testid=city][data-options~=berlin]", timeout: 15000 }
+  - assertNotVisible: { css: "[data-testid=city][data-options~=almaty]" }
+  # From Kazakhstan: the default title.
+  - runFlow: ../helpers/kazakhstan.helper.yaml
+  - openLink: "${WEB}/ru"
+  - waitForVisible: { testId: hero-title }
+  - assertNotVisible: { text: "${heroTitle}" }
+  - assertVisible: { testId: hero-title, contains: "Книга, где ваш ребёнок" }
+  # Kazakhstan's order form: its own cities, not the German one.
+  - openLink: "${WEB}/ru/books/${deBook}/order"
+  - waitForVisible: { css: "[data-testid=city][data-options~=almaty]", timeout: 15000 }
+  - assertNotVisible: { css: "[data-testid=city][data-options~=berlin]" }
+
+  # ---- The superadmin ---------------------------------------------------------------------------
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-email }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card, timeout: 15000 }
+  # The switcher: all countries at first, then Germany, which the orders follow and the browser keeps.
+  - waitForVisible: { css: "[data-testid=admin-country][data-value=all][data-loaded=true]" }
+  - tapOn: { testId: admin-nav-orders }
+  - waitForVisible: { css: "[data-testid=order-row][data-country=KZ]" }
+  - selectOption: { testId: admin-country, optionValue: DE }
+  - waitForVisible: { css: "[data-testid=admin-country][data-value=DE]" }
+  - waitForVisible: { css: "[data-testid=order-row][data-country=DE]" }
+  - assertNotVisible: { css: "[data-testid=order-row][data-country=KZ]" }
+  - openLink: "${WEB}/admin/orders"
+  - waitForVisible: { css: "[data-testid=admin-country][data-value=DE]" }
+  - waitForVisible: { css: "[data-testid=order-row][data-country=DE]" }
+  - assertNotVisible: { css: "[data-testid=order-row][data-country=KZ]" }
+  - selectOption: { testId: admin-country, optionValue: all }
+  - waitForVisible: { css: "[data-testid=admin-country][data-value=all]" }
+
+  # "Everywhere except Kazakhstan": the global example leaves Kazakhstan only.
+  - tapOn: { testId: admin-nav-examples }
+  - waitForVisible: { css: "[data-testid='example-${globalExample}-countries'][data-loaded=true]" }
+  - tapOn: { testId: "example-${globalExample}-country-add" }
+  - waitForVisible: { testId: "example-${globalExample}-country-menu" }
+  - tapOn: { testId: "example-${globalExample}-country-option-KZ" }
+  - waitForVisible: { css: "[data-testid='example-${globalExample}-countries'][data-value=KZ][data-mode=include]" }
+  - tapOn: { testId: "example-${globalExample}-countries-mode-exclude" }
+  - waitForVisible: { css: "[data-testid='example-${globalExample}-countries'][data-value=KZ][data-mode=exclude]" }
+  - sql:
+      query: "select \"countriesMode\"::text as mode, array_to_string(countries, ',') as countries from \"Example\" where id = $1"
+      params: ["${globalExample}"]
+      readOnly: true
+      assert: { first: { mode: exclude, countries: KZ } }
+  - evalScript: >-
+      output.shown = (country) => json(http.get(API + '/books/examples?lang=ru&country=' + country).body).map((b) => b.id)
+  - assertTrue: ${!output.shown('KZ').includes(globalBook) && output.shown('DE').includes(globalBook) && output.shown('other').includes(globalBook)}
+
+  # The superadmin takes Germany's prices, landing, cities and print back (the API's cache too).
+  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": false, \"currency\": \"USD\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request: { method: PUT, url: /admin/reference/cities, query: { country: DE }, json: [], assert: { status: 200 } }
+  - request: { method: DELETE, url: /admin/reference/prices, query: { country: DE }, assert: { status: 204 } }
+  - request: { method: DELETE, url: /admin/reference/landing, query: { country: DE }, assert: { status: 204 } }
+  - request: { url: /reference, assert: { status: 200, json: { "$.countryPrices": {}, "$.landing": {} } } }
+after:
+  - sql: { exec: "update \"BookTemplate\" set countries = '{}', \"countriesMode\" = 'include' where slug = $1", params: ["${slug}"] }
+  - sql: { exec: "delete from \"Book\" where id in (select v.\"bookId\" from \"ExampleVersion\" v join \"ExampleVersion\" mine on mine.\"exampleId\" = v.\"exampleId\" join \"Book\" b on b.id = mine.\"bookId\" where b.\"clientKey\" = $1)", params: ["e2e-country-scope-${stamp}"] }
+  - sql: { exec: "delete from \"Book\" where \"clientKey\" = $1", params: ["e2e-country-scope-${stamp}"] }
+  - sql: { exec: "delete from \"Example\" e where not exists (select 1 from \"ExampleVersion\" v where v.\"exampleId\" = e.id)" }
+  - sql: { exec: "update \"Setting\" set value = '{}' where key in ('reference.country_prices', 'reference.landing')" }
+  - sql: { exec: "update \"Setting\" set value = (select jsonb_agg(case when e->>'code' = 'DE' then e || '{\"print\": false, \"currency\": \"USD\"}'::jsonb else e end order by i) from jsonb_array_elements(value) with ordinality as t(e, i)) where key = 'reference.countries'" }
+  - sql: { exec: "update \"Setting\" set value = coalesce((select jsonb_agg(e order by i) from jsonb_array_elements(value) with ordinality as t(e, i) where e->>'country' is distinct from 'DE'), '[]'::jsonb) where key = 'reference.cities'" }
+  - sql: { exec: "delete from \"StaffMember\" where email = $1", params: ["${cmEmail}"] }
+  - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${cmEmail}"] }

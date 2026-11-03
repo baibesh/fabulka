@@ -64,9 +64,12 @@ commands:
         status: 200
         json: { "$.prices.books.template.KZT": 2450, "$.prices.books.template.USD": 4.9, "$.prices.books.custom.KZT": 2900 }
 
-  # A new delivery city with free delivery, in three languages.
+  # A new delivery city with free delivery, in three languages: cities are a country's, so
+  # Kazakhstan is picked in the admin's working-country switcher first.
+  - selectOption: { testId: admin-country, optionValue: KZ }
+  - waitForVisible: { css: "[data-testid=admin-country][data-value=KZ]" }
   - tapOn: { testId: reference-tab-cities }
-  - waitForVisible: { testId: reference-cities }
+  - waitForVisible: { css: "[data-testid=reference-cities][data-country=KZ]" }
   - assertVisible: { css: "[data-testid=city-row][data-id=almaty]" }
   - tapOn: { testId: city-add }
   - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-ru]" }

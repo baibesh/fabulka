@@ -1,0 +1,13 @@
+# Picks Germany in the footer, as a visitor would (see kazakhstan.helper.yaml: it picks on the short
+# "create" page, as a tap on the footer of the long home page can miss). The site turns German.
+commands:
+  - openLink: "${WEB}/create"
+  - waitForVisible: { testId: voice-manual }
+  - scrollUntilVisible: { testId: ui-country }
+  - tapOn: { testId: ui-country }
+  - waitForVisible: { testId: ui-country-search }
+  - tapOn: { testId: ui-country-search }
+  - inputText: "Germ"
+  - waitForVisible: { testId: ui-country-option-DE }
+  - tapOn: { testId: ui-country-option-DE }
+  - extendedWaitUntil: { notVisible: { testId: ui-country-dialog }, timeout: 5000 }

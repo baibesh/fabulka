@@ -77,12 +77,12 @@ commands:
   - request: { url: "${API}/admin/seo/pages?lang=de", assert: { status: 403 } }
   - request: { url: "${API}/admin/team", assert: { status: 403 } }
   - request: { method: PUT, url: "${API}/admin/reference/faq", json: [], assert: { status: 403 } }
-  # The prices are one list for every country: not a country manager's to change.
+  # The global prices are every country's: not a country manager's to change.
   - request:
       method: PUT
       url: ${API}/admin/reference/prices
       json: { books: { template: { KZT: 1900, USD: 3.9 }, custom: { KZT: 2900, USD: 5.9 } }, deliveryKzt: 1500 }
-      assert: { status: 403, json: { "$.code": admin_forbidden } }
+      assert: { status: 403, json: { "$.code": scope_forbidden } }
   - request: { url: "${API}/auth/me", assert: { status: 200, json: { "$.user.admin": false, "$.user.staff": true } } }
   - sql:
       query: "select status::text as status, (\"keycloakId\" is not null) as linked from \"StaffMember\" where email = $1"
@@ -109,10 +109,19 @@ commands:
   - assertNotVisible: { testId: admin-nav-seo }
   - assertNotVisible: { testId: admin-nav-journal }
   - assertNotVisible: { testId: admin-nav-team }
-  # Reference: only their countries' prices and landing, which come later; a note for now.
+  # Their working country, Germany, with no "All countries".
+  - assertVisible: { css: "[data-testid=admin-country][data-value=DE]" }
+  - assertNotVisible: { css: "[data-testid=admin-country] option[value=all]" }
+  # Reference: only their countries' data (prices, delivery, formats' offer and prices, cities,
+  # landing), never the global lists.
   - tapOn: { testId: admin-nav-reference }
-  - waitForVisible: { testId: reference-scoped }
-  - assertNotVisible: { testId: reference-tabs }
+  - waitForVisible: { testId: reference-tabs }
+  - assertVisible: { testId: reference-tab-prices }
+  - assertVisible: { testId: reference-tab-landing }
+  - assertVisible: { testId: reference-tab-cities }
+  - assertNotVisible: { testId: reference-tab-blocked }
+  - assertNotVisible: { testId: reference-tab-countries }
+  - assertNotVisible: { testId: reference-tab-faq }
   - openLink: "${WEB}/admin/team"
   - waitForVisible: { testId: admin-forbidden, timeout: 15000 }
 
