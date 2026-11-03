@@ -7,7 +7,8 @@ import { LocaleLink } from "@/i18n/routing";
 import { useI18n } from "@/i18n/i18n";
 import { getStatus } from "@/lib/api";
 import { useExamples, useTemplates } from "@/lib/use-catalog";
-import { useBookPrice } from "@/lib/use-price";
+import { heroFor } from "@fabulka/shared";
+import { useBookPrice, useReference } from "@/lib/use-price";
 import { PriceSkeleton } from "../book/price-skeleton";
 import { LogoMark } from "@/components/layout/logo";
 import { primaryButton, secondaryButton } from "./section";
@@ -37,11 +38,15 @@ const SPARKLES = [
   "left-[46%] top-[-8%] size-4 [animation-delay:1.7s]",
 ];
 
-/** The headline, what Fabulka does, the way in, and a pile of catalog covers. */
+/**
+ * The headline, what Fabulka does, the way in, and a pile of catalog covers. The visitor's country
+ * may have its own title and lead in this language (reference.landing); else the defaults.
+ */
 export function Hero() {
-  const { t, country, info } = useI18n();
+  const { t, country, info, locale } = useI18n();
   // Print and delivery are promised only where there is print; Kazakhstan's line names it.
   const lead = info.print ? (country === "KZ" ? "landing.hero.lead" : "landing.hero.lead.print") : "landing.hero.lead.pdf";
+  const own = heroFor(useReference().data?.landing, country, locale);
   const { data: examples } = useExamples();
   const paused = useQuery({ queryKey: ["status"], queryFn: getStatus }).data?.paused === true;
   const price = useBookPrice("template");
@@ -62,8 +67,12 @@ export function Hero() {
               {t("form.paused.title")}
             </a>
           )}
-          <h1 className="text-4xl font-extrabold leading-tight sm:text-5xl">{t("landing.hero.title")}</h1>
-          <p className="text-lg text-muted sm:text-xl">{t(lead)}</p>
+          <h1 data-testid="hero-title" className="text-4xl font-extrabold leading-tight sm:text-5xl">
+            {own.title ?? t("landing.hero.title")}
+          </h1>
+          <p data-testid="hero-lead" className="text-lg text-muted sm:text-xl">
+            {own.lead ?? t(lead)}
+          </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <LocaleLink href="/catalog" data-testid="hero-cta" className={primaryButton}>
               {t("landing.hero.cta")}

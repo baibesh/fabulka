@@ -44,7 +44,8 @@ export async function CountryData({
     need.includes("examples") &&
       load(["examples", locale, country], `/api/books/examples?${new URLSearchParams({ lang: locale, country })}`, ExampleBookSchema.array()),
     need.includes("methodologies") && load(["methodologies", locale], `/api/methodologies?lang=${locale}`, MethodologySchema.array()),
-    slug && load(["template", slug, locale], `/api/templates/${encodeURIComponent(slug)}?lang=${locale}`, TemplateSchema),
+    slug &&
+      load(["template", slug, locale, country], `/api/templates/${encodeURIComponent(slug)}?${new URLSearchParams({ lang: locale, country })}`, TemplateSchema),
   ]);
 
   return (

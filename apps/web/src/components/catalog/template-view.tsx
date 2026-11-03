@@ -23,8 +23,8 @@ const FORM_ID = "book-form-section";
  * pending when React renders this part on the client (it then waits on the prerendered shell). */
 export function TemplateView() {
   const { slug } = useParams<{ slug: string }>();
-  const { t, locale } = useI18n();
-  const { data: template, error } = useQuery({ queryKey: ["template", slug, locale], queryFn: () => getTemplate(slug, locale) });
+  const { t, locale, country } = useI18n();
+  const { data: template, error } = useQuery({ queryKey: ["template", slug, locale, country], queryFn: () => getTemplate(slug, locale, country) });
   const sampleId = template?.sampleBookId;
   const { data: sample } = useQuery({
     queryKey: ["book", sampleId],

@@ -3,7 +3,7 @@
 import { orderTimeline, type Order, type OrderStatus } from "@fabulka/shared";
 import { CheckCircle2, Circle, Home, PackageCheck, Printer, Truck } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
-import { cityName, useCities } from "@/lib/cities";
+import { cityName, useAllCities } from "@/lib/cities";
 import { useFormat } from "@/hooks/use-format";
 
 const ICONS: Record<OrderStatus, typeof Circle> = { paid: PackageCheck, printing: Printer, shipped: Truck, delivered: Home };
@@ -63,7 +63,7 @@ export function OrderTimeline({ order, compact = false }: { order: Order; compac
 /** Who gets the order and where: recipient, masked phone, city in the visitor's language, address. */
 export function OrderAddress({ order }: { order: Order }) {
   const { t, locale } = useI18n();
-  const cities = useCities();
+  const cities = useAllCities();
   return (
     <dl data-testid="order-address" className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
       <dt className="text-muted">{t("order.recipient")}</dt>

@@ -15,7 +15,7 @@ import { useI18n } from "@/i18n/i18n";
 import { useFormat } from "@/hooks/use-format";
 import { useMe } from "@/lib/auth";
 import { useCities } from "@/lib/cities";
-import { useOrderPrice, useReference } from "@/lib/use-price";
+import { useCountryFormats, useOrderPrice } from "@/lib/use-price";
 import { PriceSkeleton } from "../book/price-skeleton";
 import { BookPage, BookStyles, PX_PER_MM, useRenderedBook } from "../book/book-pages";
 import { Spinner } from "../ui/spinner";
@@ -49,9 +49,9 @@ export function OrderForm() {
   }, [user, form]);
   const [cover, quantity, cityId] = useWatch({ control: form.control, name: ["cover", "quantity", "cityId"] });
   // Shown for the parent to check; the API prices the order again from the same reference data.
-  const reference = useReference();
+  // The visitor's country's cities and formats (offered there, at its prices).
   const cities = useCities();
-  const formats = reference.data?.formats ?? [];
+  const formats = useCountryFormats();
   // The book's own format when it is offered, else the first offered one.
   const bookFormat = book.data?.layout.format.id;
   const format = formats.find((f) => f.id === bookFormat)?.id ?? formats[0]?.id;
@@ -155,7 +155,7 @@ export function OrderForm() {
           <Input data-testid="order-email" type="email" autoComplete="email" placeholder={t("order.email.placeholder")} {...form.register("email")} />
         </Field>
         <Field label={t("order.city")}>
-          <Select data-testid="city" {...form.register("cityId")} value={cityId}>
+          <Select data-testid="city" data-options={cities.map((c) => c.id).join(" ")} {...form.register("cityId")} value={cityId}>
             {cities.map((city) => (
               <option key={city.id} value={city.id}>
                 {cityName(city, locale)}

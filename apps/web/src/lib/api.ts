@@ -160,8 +160,9 @@ export async function listTemplates(lang: Language, country: Country): Promise<T
   return TemplateSummarySchema.array().parse(await request(`/api/templates?${query}`));
 }
 
-export async function getTemplate(slug: string, lang: Language): Promise<Template> {
-  return TemplateSchema.parse(await request(`/api/templates/${encodeURIComponent(slug)}?lang=${lang}`));
+/** A catalog book in `lang`, with the sample a visitor from `country` sees (their country's, else the global one). */
+export async function getTemplate(slug: string, lang: Language, country: Country): Promise<Template> {
+  return TemplateSchema.parse(await request(`/api/templates/${encodeURIComponent(slug)}?${new URLSearchParams({ lang, country })}`));
 }
 
 /** The story methods on offer (published), with their names and summaries in `lang`. */

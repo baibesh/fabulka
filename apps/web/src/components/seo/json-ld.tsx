@@ -77,7 +77,7 @@ export async function TemplateJsonLd({ locale, slug }: { locale: UiLocale; slug:
   const template = await templateForSeo(slug, locale);
   if (!template) return null;
   const { country, countries, reference } = await visitorCountry();
-  const price = reference ? bookPrice("template", country, reference.prices, countries) : null;
+  const price = reference ? bookPrice("template", country, reference.prices, countries, reference.countryPrices) : null;
   const url = absolute(localePath(locale, `/catalog/${slug}`));
   return (
     <>

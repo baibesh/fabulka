@@ -7,6 +7,7 @@ import { CatalogPreview } from "@/components/landing/catalog-preview";
 import { Faq } from "@/components/landing/faq";
 import { FinalCta } from "@/components/landing/final-cta";
 import { Hero } from "@/components/landing/hero";
+import { CountrySection } from "@/components/landing/landing-section";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { LiveExample } from "@/components/landing/live-example";
 import { Methods } from "@/components/landing/methods";
@@ -43,14 +44,31 @@ function Landing() {
       <Hero />
       <TrustStrip />
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-20 px-4 py-16 sm:gap-24">
-        <HowItWorks />
-        <LiveExample />
-        <Examples />
-        <ToyStory />
-        <CatalogPreview />
-        <Methods />
-        <Pricing />
-        <Faq />
+        {/* A country's landing may leave sections out (reference.landing); the hero always shows. */}
+        <CountrySection id="howItWorks">
+          <HowItWorks />
+        </CountrySection>
+        <CountrySection id="liveExample">
+          <LiveExample />
+        </CountrySection>
+        <CountrySection id="examples">
+          <Examples />
+        </CountrySection>
+        <CountrySection id="toyStory">
+          <ToyStory />
+        </CountrySection>
+        <CountrySection id="catalog">
+          <CatalogPreview />
+        </CountrySection>
+        <CountrySection id="methods">
+          <Methods />
+        </CountrySection>
+        <CountrySection id="pricing">
+          <Pricing />
+        </CountrySection>
+        <CountrySection id="faq">
+          <Faq />
+        </CountrySection>
       </div>
       <FinalCta />
     </main>

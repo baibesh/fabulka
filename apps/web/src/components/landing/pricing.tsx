@@ -5,7 +5,7 @@ import { Check, Gift } from "lucide-react";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
 import { formatKzt } from "@/lib/format";
-import { useBookPrice, useReference } from "@/lib/use-price";
+import { useBookPrice, useCountryPrint } from "@/lib/use-price";
 import { PriceSkeleton } from "../book/price-skeleton";
 import { Section } from "./section";
 
@@ -21,7 +21,8 @@ interface Plan {
 /** The two kinds of books, the printed copy, and the free books every visitor starts with. */
 export function Pricing() {
   const { t, locale, info } = useI18n();
-  const reference = useReference().data;
+  // Print as the visitor's country offers it: its formats, cities and delivery fee.
+  const reference = useCountryPrint();
   const templatePrice = useBookPrice("template");
   const customPrice = useBookPrice("custom");
   const points = (...keys: MessageKey[]) => keys.map((key) => t(key));
@@ -57,7 +58,7 @@ export function Pricing() {
                     .filter((c) => c.freeDelivery)
                     .map((c) => cityName(c, locale))
                     .join(", "),
-                  fee: formatKzt(reference.prices.deliveryKzt),
+                  fee: formatKzt(reference.delivery.freeEverywhere ? 0 : reference.delivery.deliveryKzt),
                 }),
               ]
             : [],
