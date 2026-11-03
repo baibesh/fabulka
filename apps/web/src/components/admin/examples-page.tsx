@@ -41,7 +41,7 @@ import { cx } from "@/components/ui/cx";
 import { CountriesField } from "./countries-field";
 import { Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
 import { StaffBudgetNote, useCapError, useRefreshBudget } from "./staff-budget";
-import { useWorkingCountry } from "./working-country";
+import { useAdminHref, useWorkingCountry } from "./working-country";
 
 /** The admin's examples list (also read by a book's page, which offers to add the book to one). */
 export const EXAMPLES_QUERY = ["admin", "examples"] as const;
@@ -76,6 +76,7 @@ export function exampleRule(example: AdminExample) {
  * countries is read-only for a country manager. While a translation runs the list refreshes itself.
  */
 export function ExamplesPage() {
+  const adminHref = useAdminHref();
   const { t } = useAdminI18n();
   const queryClient = useQueryClient();
   const errorText = useExampleError();
@@ -106,7 +107,7 @@ export function ExamplesPage() {
     <>
       <PageTitle
         aside={
-          <Link href="/admin/examples/matrix" data-testid="examples-matrix-link" className={buttonClass({ variant: "secondary", size: "sm" })}>
+          <Link href={adminHref("/admin/examples/matrix")} data-testid="examples-matrix-link" className={buttonClass({ variant: "secondary", size: "sm" })}>
             <Grid3x3 className="size-4" />
             {t("admin.matrix.title")}
           </Link>
@@ -204,6 +205,7 @@ function ExampleCard({
   moving: boolean;
   onMove: (by: -1 | 1) => void;
 }) {
+  const adminHref = useAdminHref();
   const { t, locale } = useAdminI18n();
   const queryClient = useQueryClient();
   const errorText = useExampleError();
@@ -249,7 +251,7 @@ function ExampleCard({
         )}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           {shown && books ? (
-            <Link href={`/admin/books/${shown.bookId}`} data-testid={`example-${example.id}-title`} className="font-bold hover:text-accent">
+            <Link href={adminHref(`/admin/books/${shown.bookId}`)} data-testid={`example-${example.id}-title`} className="font-bold hover:text-accent">
               {shown.title ?? t("admin.untitled")}
             </Link>
           ) : shown ? (
@@ -374,6 +376,7 @@ function LanguageChip({
   onTranslate: () => void;
   onRemove: () => void;
 }) {
+  const adminHref = useAdminHref();
   const { t } = useAdminI18n();
   const state = version?.state ?? "missing";
   const name = LANGUAGE_NAMES[language];
@@ -387,7 +390,7 @@ function LanguageChip({
   return (
     <li data-testid={testId} data-state={state} title={version?.error ?? name} className={cx("flex items-center gap-1.5 rounded-full border py-1 pr-1 pl-3 text-sm", tone)}>
       {version && state === "done" && linked ? (
-        <Link href={`/admin/books/${version.bookId}`} className="font-bold hover:text-accent" title={version.title ?? name}>
+        <Link href={adminHref(`/admin/books/${version.bookId}`)} className="font-bold hover:text-accent" title={version.title ?? name}>
           {language.toUpperCase()}
         </Link>
       ) : (

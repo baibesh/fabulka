@@ -11,8 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { ErrorText } from "@/components/ui/notice";
 import { Table, TableEmpty, TableFrame } from "@/components/ui/table";
 import { Input, Select } from "@/components/ui/input";
+import { useAdminHref } from "./working-country";
 
 export function BooksTable() {
+  const adminHref = useAdminHref();
   const { t, date, bookStatus } = useAdminI18n();
   const [status, setStatus] = useState<BookStatus | "">("");
   const [query, setQuery] = useState("");
@@ -69,7 +71,7 @@ export function BooksTable() {
             {visible?.map((book) => (
               <tr key={book.id} className="hover:bg-background/60">
                 <td>
-                  <Link href={`/admin/books/${book.id}`} className="font-semibold hover:text-accent">
+                  <Link href={adminHref(`/admin/books/${book.id}`)} className="font-semibold hover:text-accent">
                     {book.title ?? t("admin.untitled")}
                   </Link>
                   <div className="text-xs text-muted">

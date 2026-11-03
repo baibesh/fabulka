@@ -116,6 +116,7 @@ commands:
   # Their working country, Germany, with no "All countries".
   - assertVisible: { css: "[data-testid=admin-country][data-value=DE]" }
   - assertNotVisible: { css: "[data-testid=admin-country] option[value=all]" }
+  - assertUrl: { contains: "?country=DE" }
   # Reference: only their countries' data (prices, delivery, formats' offer and prices, cities,
   # landing), never the global lists.
   - tapOn: { testId: admin-nav-reference }

@@ -14,7 +14,7 @@ import { useCountryName } from "@/hooks/use-country-name";
 import { activity, activityActors, activityCsvUrl } from "@/lib/admin-api";
 import { Card, PageTitle, useAdminI18n } from "./ui";
 import { useRightName } from "./team/shared";
-import { useWorkingCountry } from "./working-country";
+import { useAdminHref, useWorkingCountry } from "./working-country";
 
 const isAction = (code: string): code is AuditAction => (AUDIT_ACTIONS as readonly string[]).includes(code);
 
@@ -196,6 +196,7 @@ function EventRow({ event }: { event: AuditEvent }) {
 
 /** What changed: each value before and after, or only the changed fields of a big change, then facts. */
 function Details({ event }: { event: AuditEvent }) {
+  const adminHref = useAdminHref();
   const { t, money: format } = useAdminI18n();
   const { changes, keys, data, truncated } = event.summary;
   // A price change names its currency: its amounts (minor units) read as money in it.
@@ -244,7 +245,7 @@ function Details({ event }: { event: AuditEvent }) {
       )}
       {truncated && <p className="text-xs text-muted">{t("admin.activity.truncated")}</p>}
       {history && (
-        <Link href="/admin/seo" data-testid="activity-seo-history" className="self-start font-semibold text-accent hover:underline">
+        <Link href={adminHref("/admin/seo")} data-testid="activity-seo-history" className="self-start font-semibold text-accent hover:underline">
           {t("admin.activity.seoHistory")}
         </Link>
       )}

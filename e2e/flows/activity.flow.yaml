@@ -136,6 +136,8 @@ commands:
   - tapOn: { testId: mock-login-submit }
   - waitForVisible: { css: "[data-testid=country-dashboard][data-countries=DE]", timeout: 15000 }
   - tapOn: { testId: admin-nav-activity }
+  # Their working country, Germany, is in the address and filters the events.
+  - assertUrl: { contains: "/admin/activity?country=DE" }
   - waitForVisible: { css: "[data-testid=activity-row][data-action='prices.set'][data-country=DE]" }
   - assertNotVisible: { css: "[data-testid=activity-row][data-country=KZ]" }
   - assertNotVisible: { css: "[data-testid=activity-row][data-target='kz-act-${stamp}']" }

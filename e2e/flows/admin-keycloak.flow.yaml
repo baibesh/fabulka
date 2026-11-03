@@ -26,7 +26,8 @@ commands:
   - check: { testId: mock-login-admin }
   - tapOn: { testId: mock-login-submit }
   - waitForVisible: { testId: pause-card, timeout: 15000 }
-  - assertUrl: { equals: "${WEB}/admin" }
+  # The dashboard, with the superadmin's default working country (all) filled into the address.
+  - assertUrl: { equals: "${WEB}/admin?country=all" }
   # The same account reaches the admin from the site's account menu.
   - openLink: "${WEB}/ru"
   - waitForVisible: { testId: hero-covers }

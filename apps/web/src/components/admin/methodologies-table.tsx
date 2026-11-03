@@ -9,8 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { ErrorText } from "@/components/ui/notice";
 import { buttonClass } from "@/components/ui/button";
 import { Table, TableEmpty, TableFrame } from "@/components/ui/table";
+import { useAdminHref } from "./working-country";
 
 export function MethodologiesTable() {
+  const adminHref = useAdminHref();
   const { t, locale } = useAdminI18n();
   const methods = useAdminMethodologies();
 
@@ -18,7 +20,7 @@ export function MethodologiesTable() {
     <>
       <PageTitle
         aside={
-          <Link href="/admin/methodologies/new" data-testid="methodology-new" className={buttonClass()}>
+          <Link href={adminHref("/admin/methodologies/new")} data-testid="methodology-new" className={buttonClass()}>
             <Plus className="size-4" />
             {t("admin.methods.create")}
           </Link>
@@ -42,7 +44,7 @@ export function MethodologiesTable() {
             {methods.data?.map((m) => (
               <tr key={m.slug} data-testid="methodology-row" data-slug={m.slug} className="hover:bg-background/60">
                 <td>
-                  <Link href={`/admin/methodologies/${m.slug}`} className="font-semibold hover:text-accent">
+                  <Link href={adminHref(`/admin/methodologies/${m.slug}`)} className="font-semibold hover:text-accent">
                     {methodologyText(m.texts, locale).name || m.slug}
                   </Link>
                   <div className="font-mono text-xs text-muted">{m.slug}</div>

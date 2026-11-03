@@ -70,6 +70,7 @@ commands:
   # Germany's own euro book prices: one form, in euros only.
   - selectOption: { testId: admin-country, optionValue: DE }
   - waitForVisible: { css: "[data-testid=admin-country][data-value=DE]" }
+  - assertUrl: { contains: "/admin/reference?country=DE" }
   - tapOn: { testId: reference-tab-prices }
   - waitForVisible: { css: "[data-testid=reference-prices][data-currency=EUR]" }
   - assertNotVisible: { css: "[data-testid=reference-prices][data-currency=USD]" }

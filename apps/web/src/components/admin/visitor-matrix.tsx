@@ -11,7 +11,7 @@ import { QueryState } from "@/components/ui/query-state";
 import { Table, TableFrame } from "@/components/ui/table";
 import { cx } from "@/components/ui/cx";
 import { PageTitle, useAdminI18n } from "./ui";
-import { useWorkingCountry } from "./working-country";
+import { useAdminHref, useWorkingCountry } from "./working-country";
 
 /**
  * «What a visitor sees»: for each country (the session's; every offered one and "other" for global
@@ -21,6 +21,7 @@ import { useWorkingCountry } from "./working-country";
  * switched to another one).
  */
 export function VisitorMatrixPage() {
+  const adminHref = useAdminHref();
   const { t } = useAdminI18n();
   const countryName = useCountryName("admin");
   const { country } = useWorkingCountry();
@@ -28,7 +29,7 @@ export function VisitorMatrixPage() {
 
   return (
     <>
-      <BackLink href="/admin/examples">{t("admin.matrix.back")}</BackLink>
+      <BackLink href={adminHref("/admin/examples")}>{t("admin.matrix.back")}</BackLink>
       <PageTitle>{t("admin.matrix.title")}</PageTitle>
       <p className="max-w-3xl text-sm text-muted">{t("admin.matrix.lead")}</p>
       {!matrix.data ? (

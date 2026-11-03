@@ -22,6 +22,7 @@ import { BookReader } from "@/components/book/book-reader";
 import { LANGUAGE_NAMES, PAGE_VARIANTS, displayVersion, type AdminBook, type LayoutQa, type PageVariant } from "@fabulka/shared";
 import { themeName } from "@/lib/themes";
 import { Select } from "@/components/ui/input";
+import { useAdminHref } from "./working-country";
 
 const QA_TONE: Record<LayoutQa["status"], "success" | "warning" | "danger" | "neutral"> = {
   ok: "success",
@@ -118,6 +119,7 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
  * example…», listing the examples with no version in the book's language.
  */
 function ExampleActions({ book }: { book: AdminBook }) {
+  const adminHref = useAdminHref();
   const { t } = useAdminI18n();
   const queryClient = useQueryClient();
   const errorText = useExampleError();
@@ -132,7 +134,7 @@ function ExampleActions({ book }: { book: AdminBook }) {
 
   if (book.example) {
     return (
-      <Link href="/admin/examples" data-testid="book-example" data-example-id={book.example.id} className={buttonClass({ variant: "secondary" })}>
+      <Link href={adminHref("/admin/examples")} data-testid="book-example" data-example-id={book.example.id} className={buttonClass({ variant: "secondary" })}>
         <Sparkles className="size-4" />
         {t("admin.book.example.is", { language: LANGUAGE_NAMES[book.example.language] })}
       </Link>
@@ -215,13 +217,14 @@ function BookCalls({ id, generating }: { id: string; generating: boolean }) {
 }
 
 export function BookDetail() {
+  const adminHref = useAdminHref();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { t, date, bookStatus } = useAdminI18n();
   const book = useQuery({ queryKey: ["admin", "book", id], queryFn: () => adminBook(id) });
   const methodName = useMethodologyName();
   const [confirming, setConfirming] = useState(false);
-  const remove = useMutation({ mutationFn: () => deleteBook(id), onSuccess: () => router.replace("/admin/books"), onSettled: () => setConfirming(false) });
+  const remove = useMutation({ mutationFn: () => deleteBook(id), onSuccess: () => router.replace(adminHref("/admin/books")), onSettled: () => setConfirming(false) });
   if (!book.data) return <QueryState error={book.error} scope="admin" />;
   const b = book.data;
   const facts: [string, string][] = [
@@ -247,7 +250,7 @@ export function BookDetail() {
 
   return (
     <>
-      <BackLink href="/admin/books">{t("admin.book.back")}</BackLink>
+      <BackLink href={adminHref("/admin/books")}>{t("admin.book.back")}</BackLink>
       <PageTitle
         aside={
           <div className="flex flex-wrap gap-2">

@@ -78,7 +78,7 @@ commands:
   - inputText: "The hero tries something new."
   - tapOn: { testId: methodology-save }
   - waitForVisible: { testId: methodology-usage }
-  - assertUrl: { equals: "${WEB}/admin/methodologies/${slug}" }
+  - assertUrl: { equals: "${WEB}/admin/methodologies/${slug}?country=all" }
   - sql:
       query: >-
         select published, "ageMin" as min, "ageMax" as max, coalesce(texts->'kk'->>'name', '') as kk, jsonb_array_length(structure) as beats

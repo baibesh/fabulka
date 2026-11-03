@@ -17,6 +17,7 @@ import { useAdminI18n } from "../ui";
 import { RedirectsTab } from "./redirects-tab";
 import { SettingsTab } from "./settings-tab";
 import { LanguageFlags } from "./shared";
+import { useAdminHref } from "../working-country";
 
 const TABS = ["pages", "redirects", "settings"] as const;
 type Tab = (typeof TABS)[number];
@@ -43,9 +44,10 @@ export function SeoSection() {
   const pathname = usePathname();
   const tabs = useTabsId();
   const { language, tab } = useSeoParams();
+  const adminHref = useAdminHref();
   const go = (next: { lang?: Language; tab?: Tab }) => {
     const query = new URLSearchParams({ version: next.lang ?? language, ...((next.tab ?? tab) !== "pages" ? { tab: next.tab ?? tab } : {}) });
-    router.replace(`${pathname}?${query}`);
+    router.replace(adminHref(`${pathname}?${query}`));
   };
 
   return (
@@ -102,6 +104,7 @@ function PagesTab({ language, onLanguage }: { language: Language; onLanguage: (l
 }
 
 function PagesTable({ pages, language }: { pages: AdminSeoPage[]; language: Language }) {
+  const adminHref = useAdminHref();
   const { t } = useAdminI18n();
   const name = (page: AdminSeoPage) =>
     page.kind === "static" ? t(`admin.seo.page.${page.key as "home" | "catalog" | "create" | "privacy" | "terms"}`) : (page.label ?? page.key);
@@ -148,7 +151,7 @@ function PagesTable({ pages, language }: { pages: AdminSeoPage[]; language: Lang
                 </td>
                 <td className="text-right">
                   <Link
-                    href={`/admin/seo/edit?${new URLSearchParams({ key: page.key, version: language })}`}
+                    href={adminHref(`/admin/seo/edit?${new URLSearchParams({ key: page.key, version: language })}`)}
                     data-testid={`seo-edit-${page.key}`}
                     className="font-semibold text-accent hover:underline"
                   >

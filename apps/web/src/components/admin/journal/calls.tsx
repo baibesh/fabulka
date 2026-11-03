@@ -12,9 +12,11 @@ import { journalCalls } from "@/lib/admin-api";
 import { Card, formatSpendUsd, useAdminI18n } from "../ui";
 import { CallDetail } from "./call-detail";
 import { CallStatus, useUsage } from "./call-status";
+import { useAdminHref } from "../working-country";
 
 /** Every model call of the period, newest first, filtered by kind and outcome; a row opens its details. */
 export function Calls({ period }: { period: JournalPeriod }) {
+  const adminHref = useAdminHref();
   const { t, date, ms } = useAdminI18n();
   const usage = useUsage();
   const [kind, setKind] = useState<ModelCallKind | "">("");
@@ -103,7 +105,7 @@ export function Calls({ period }: { period: JournalPeriod }) {
                 <td className="text-right tabular-nums">{formatSpendUsd(call.costUsd)}</td>
                 <td>
                   {call.bookId ? (
-                    <Link href={`/admin/books/${call.bookId}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-accent">
+                    <Link href={adminHref(`/admin/books/${call.bookId}`)} onClick={(e) => e.stopPropagation()} className="font-semibold text-accent">
                       {t("admin.journal.open")}
                     </Link>
                   ) : (

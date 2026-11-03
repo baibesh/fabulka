@@ -4,9 +4,11 @@
 # and a German hero title that a visitor from Germany sees and one from Kazakhstan does not. The
 # visitor matrix shows their example under Germany × Deutsch. With print opened in Germany for the
 # test, the manager adds a German delivery city that a German order form lists and a Kazakh one does
-# not; Kazakhstan's cities and the countries list stay out of their reach. The superadmin's
-# working-country switcher narrows the orders and is remembered; "everywhere except Kazakhstan" hides
-# an example there. Everything is reset at the end.
+# not; Kazakhstan's cities and the countries list stay out of their reach; a link to Kazakhstan's
+# orders gives them Germany's. The superadmin's working country lives in the address (?country=DE):
+# it narrows the orders, survives moving between sections, Back and a reload, and the browser's last
+# pick fills in an address without one; "everywhere except Kazakhstan" hides an example there.
+# Everything is reset at the end.
 appId: ${WEB}
 tags: [admin, team, examples, catalog, reference]
 db: ${DATABASE_URL}
@@ -240,13 +242,24 @@ commands:
   - waitForVisible: { css: "[data-testid=country-dashboard][data-countries=DE]", timeout: 15000 }
   - tapOn: { testId: admin-nav-orders }
   - waitForVisible: { testId: orders-table, timeout: 15000 }
-  # Their working country is Germany; the orders are Germany's.
+  # Their working country is Germany, in the address too; the orders are Germany's.
+  - assertVisible: { css: "[data-testid=admin-country][data-value=DE]" }
+  - assertUrl: { contains: "/admin/orders?country=DE" }
+  - waitForVisible: { css: "[data-testid=order-row][data-country=DE]" }
+  - assertNotVisible: { css: "[data-testid=order-row][data-country=KZ]" }
+  # A link to Kazakhstan's orders gives them Germany back, with a notice; never a broken page.
+  - openLink: "${WEB}/admin/orders?country=KZ"
+  - waitForVisible: { css: "[data-testid=admin-country-notice][data-requested=KZ][data-shown=DE]", timeout: 15000 }
+  - assertUrl: { contains: "/admin/orders?country=DE" }
   - assertVisible: { css: "[data-testid=admin-country][data-value=DE]" }
   - waitForVisible: { css: "[data-testid=order-row][data-country=DE]" }
   - assertNotVisible: { css: "[data-testid=order-row][data-country=KZ]" }
+  - tapOn: { testId: admin-country-notice-close }
+  - assertNotVisible: { testId: admin-country-notice }
 
-  # Examples: the global one is read-only; theirs is not.
+  # Examples: the global one is read-only; theirs is not. The section keeps the country.
   - tapOn: { testId: admin-nav-examples }
+  - assertUrl: { contains: "/admin/examples?country=DE" }
   - waitForVisible: { css: "[data-testid='example-${globalExample}'][data-editable=false]" }
   - assertVisible: { testId: "example-${globalExample}-readonly" }
   - assertVisible: { css: "[data-testid='example-${globalExample}-remove']:disabled" }
@@ -257,6 +270,8 @@ commands:
   # What a visitor sees: their example under Germany × Deutsch, Germany their only row.
   - tapOn: { testId: examples-matrix-link }
   - waitForVisible: { testId: visitor-matrix }
+  - assertUrl: { contains: "/admin/examples/matrix?country=DE" }
+  - assertVisible: { css: "[data-testid=matrix-row-DE][data-selected=true]" }
   - assertVisible: { css: "[data-testid=matrix-DE-de][data-kind=example] [data-book-id='${deBook}']" }
   - assertNotVisible: { testId: matrix-row-KZ }
 
@@ -365,20 +380,55 @@ commands:
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
   - waitForVisible: { testId: pause-card, timeout: 15000 }
-  # The switcher: all countries at first, then Germany, which the orders follow and the browser keeps.
+  # The switcher lives in the address: all countries at first, then Germany, which the orders follow.
   - waitForVisible: { css: "[data-testid=admin-country][data-value=all][data-loaded=true]" }
+  - assertUrl: { contains: "/admin?country=all" }
   - tapOn: { testId: admin-nav-orders }
+  - assertUrl: { contains: "/admin/orders?country=all" }
   - waitForVisible: { css: "[data-testid=order-row][data-country=KZ]" }
   - selectOption: { testId: admin-country, optionValue: DE }
   - waitForVisible: { css: "[data-testid=admin-country][data-value=DE]" }
+  - assertUrl: { contains: "/admin/orders?country=DE" }
   - waitForVisible: { css: "[data-testid=order-row][data-country=DE]" }
   - assertNotVisible: { css: "[data-testid=order-row][data-country=KZ]" }
-  - openLink: "${WEB}/admin/orders"
+  # A pick is a history entry: Back returns to all countries; then Germany again.
+  - back
+  - waitForVisible: { css: "[data-testid=admin-country][data-value=all]" }
+  - assertUrl: { contains: "/admin/orders?country=all" }
+  - waitForVisible: { css: "[data-testid=order-row][data-country=KZ]" }
+  - selectOption: { testId: admin-country, optionValue: DE }
   - waitForVisible: { css: "[data-testid=admin-country][data-value=DE]" }
+  # Another section keeps it, and so does the way back.
+  - tapOn: { testId: admin-nav-activity }
+  - waitForVisible: { testId: activity-table }
+  - assertUrl: { contains: "/admin/activity?country=DE" }
+  - assertVisible: { css: "[data-testid=admin-country][data-value=DE]" }
+  - tapOn: { testId: admin-nav-orders }
+  - assertUrl: { contains: "/admin/orders?country=DE" }
   - waitForVisible: { css: "[data-testid=order-row][data-country=DE]" }
   - assertNotVisible: { css: "[data-testid=order-row][data-country=KZ]" }
+  # A reload keeps it.
+  - openLink: "${WEB}/admin/orders?country=DE"
+  - waitForVisible: { css: "[data-testid=admin-country][data-value=DE][data-loaded=true]", timeout: 15000 }
+  - waitForVisible: { css: "[data-testid=order-row][data-country=DE]" }
+  - assertNotVisible: { css: "[data-testid=order-row][data-country=KZ]" }
+  # The address wins over the browser's last pick (Germany): a shared link to all countries.
+  - openLink: "${WEB}/admin/orders?country=all"
+  - waitForVisible: { css: "[data-testid=admin-country][data-value=all][data-loaded=true]", timeout: 15000 }
+  - waitForVisible: { css: "[data-testid=order-row][data-country=KZ]" }
+  # With no country in the address, the browser's last pick is filled in.
+  - openLink: "${WEB}/admin/orders"
+  - waitForVisible: { css: "[data-testid=admin-country][data-value=DE][data-loaded=true]", timeout: 15000 }
+  - assertUrl: { contains: "/admin/orders?country=DE" }
+  - waitForVisible: { css: "[data-testid=order-row][data-country=DE]" }
+  - assertNotVisible: { css: "[data-testid=order-row][data-country=KZ]" }
+  # Something that is not a country falls back too, with a notice that a pick clears.
+  - openLink: "${WEB}/admin/orders?country=germany"
+  - waitForVisible: { css: "[data-testid=admin-country-notice][data-requested=germany][data-shown=DE]", timeout: 15000 }
+  - assertUrl: { contains: "/admin/orders?country=DE" }
   - selectOption: { testId: admin-country, optionValue: all }
   - waitForVisible: { css: "[data-testid=admin-country][data-value=all]" }
+  - assertNotVisible: { testId: admin-country-notice }
 
   # "Everywhere except Kazakhstan": the global example leaves Kazakhstan only.
   - tapOn: { testId: admin-nav-examples }

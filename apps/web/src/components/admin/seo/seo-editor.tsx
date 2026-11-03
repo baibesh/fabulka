@@ -33,6 +33,7 @@ import { LANGUAGE_FLAGS } from "@/lib/regions";
 import { defaultSeo, resolveSeo } from "@/lib/seo-meta";
 import { Card, PageTitle, useAdminI18n } from "../ui";
 import { Counter, GooglePreview, HistoryList, SocialPreview, seoWarnings } from "./shared";
+import { useAdminHref } from "../working-country";
 
 /** /admin/seo/edit?key=catalog&version=de: one page's SEO in one language, with live previews and its history. */
 export function SeoEditor() {
@@ -53,6 +54,7 @@ const fileToDataUrl = (file: File) =>
   });
 
 function Editor({ page, language }: { page: AdminSeoPage; language: Language }) {
+  const adminHref = useAdminHref();
   const { t } = useAdminI18n();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<SeoFields>(page.draft);
@@ -121,7 +123,7 @@ function Editor({ page, language }: { page: AdminSeoPage; language: Language }) 
 
   return (
     <div data-testid="seo-editor" className="flex flex-col gap-6">
-      <BackLink href={`/admin/seo?version=${language}`}>{t("admin.seo.back")}</BackLink>
+      <BackLink href={adminHref(`/admin/seo?version=${language}`)}>{t("admin.seo.back")}</BackLink>
       <PageTitle
         aside={
           <div className="flex flex-wrap items-center gap-3">

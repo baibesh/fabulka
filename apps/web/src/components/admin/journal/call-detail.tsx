@@ -8,9 +8,11 @@ import { QueryState } from "@/components/ui/query-state";
 import { journalCall } from "@/lib/admin-api";
 import { formatSpendUsd, useAdminI18n } from "../ui";
 import { CallStatus, useUsage } from "./call-status";
+import { useAdminHref } from "../working-country";
 
 /** One call in full, in a side sheet: the error and, for a failed call, what was sent and what came back. */
 export function CallDetail({ id, onClose }: { id: string; onClose: () => void }) {
+  const adminHref = useAdminHref();
   const { t, date, ms } = useAdminI18n();
   const usage = useUsage();
   const call = useQuery({ queryKey: ["admin", "journal", "call", id], queryFn: () => journalCall(id) });
@@ -50,7 +52,7 @@ export function CallDetail({ id, onClose }: { id: string; onClose: () => void })
             <dt className="text-muted">{t("admin.journal.book")}</dt>
             <dd>
               {c.bookId ? (
-                <Link href={`/admin/books/${c.bookId}`} className="font-semibold text-accent">
+                <Link href={adminHref(`/admin/books/${c.bookId}`)} className="font-semibold text-accent">
                   {c.bookTitle ?? t("admin.untitled")}
                 </Link>
               ) : (

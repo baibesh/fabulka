@@ -12,9 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 import { Flag } from "@/components/ui/flag";
-import { useWorkingCountry } from "./working-country";
+import { useAdminHref, useWorkingCountry } from "./working-country";
 
 export function OrdersTable() {
+  const adminHref = useAdminHref();
   const { t, date, money, orderStatus } = useAdminI18n();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<OrderStatus | "">("");
@@ -69,7 +70,7 @@ export function OrdersTable() {
                 <tr data-testid="order-row" data-country={order.country ?? ""}>
                   <td>
                     {books ? (
-                      <Link href={`/admin/books/${order.bookId}`} className="font-semibold hover:text-accent">
+                      <Link href={adminHref(`/admin/books/${order.bookId}`)} className="font-semibold hover:text-accent">
                         {order.bookTitle ?? t("admin.untitled")}
                       </Link>
                     ) : (

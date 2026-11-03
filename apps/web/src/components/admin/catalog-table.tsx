@@ -9,7 +9,7 @@ import { ApiError } from "@/lib/api";
 import { useCountryName } from "@/hooks/use-country-name";
 import { Flag } from "@/components/ui/flag";
 import { PageTitle, useAdminI18n } from "./ui";
-import { useWorkingCountry } from "./working-country";
+import { useAdminHref, useWorkingCountry } from "./working-country";
 import { useMethodologyName } from "./use-methodologies";
 import { Badge } from "@/components/ui/badge";
 import { ErrorText } from "@/components/ui/notice";
@@ -33,6 +33,7 @@ export function useCatalogError() {
  * only global staff change it.
  */
 export function CatalogTable() {
+  const adminHref = useAdminHref();
   const { t, number } = useAdminI18n();
   const queryClient = useQueryClient();
   const errorText = useCatalogError();
@@ -70,7 +71,7 @@ export function CatalogTable() {
             {templates.data?.map((item) => (
               <tr key={item.slug}>
                 <td>
-                  <Link href={`/admin/catalog/${item.slug}`} className="flex items-center gap-3 font-semibold hover:text-accent">
+                  <Link href={adminHref(`/admin/catalog/${item.slug}`)} className="flex items-center gap-3 font-semibold hover:text-accent">
                     {item.coverUrl && (
                       // eslint-disable-next-line @next/next/no-img-element -- covers are static files of any size
                       <img src={item.coverUrl} alt="" className="size-10 rounded-lg object-cover" />

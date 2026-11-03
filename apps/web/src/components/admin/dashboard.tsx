@@ -11,7 +11,7 @@ import { QueryState } from "@/components/ui/query-state";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Stat } from "@/components/ui/stat";
 import { useCountryName } from "@/hooks/use-country-name";
-import { useWorkingCountry } from "./working-country";
+import { useAdminHref, useWorkingCountry } from "./working-country";
 
 function Meter({ label, used, limit, format }: { label: string; used: number; limit: number; format?: (n: number) => string }) {
   const { t, number } = useAdminI18n();
@@ -160,6 +160,7 @@ function CountryDashboard() {
 }
 
 function GlobalDashboard() {
+  const adminHref = useAdminHref();
   const { t, locale, number, money, percent } = useAdminI18n();
   const queryClient = useQueryClient();
   const stats = useQuery({ queryKey: ["admin", "stats"], queryFn: adminStats, refetchInterval: 10_000 });
@@ -181,7 +182,7 @@ function GlobalDashboard() {
       <PageTitle
         aside={
           me.data?.permissions.includes("examples") && (
-            <Link href="/admin/examples/matrix" data-testid="dashboard-matrix-link" className={buttonClass({ variant: "secondary", size: "sm" })}>
+            <Link href={adminHref("/admin/examples/matrix")} data-testid="dashboard-matrix-link" className={buttonClass({ variant: "secondary", size: "sm" })}>
               <Grid3x3 className="size-4" />
               {t("admin.matrix.title")}
             </Link>
