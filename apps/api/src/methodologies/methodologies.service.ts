@@ -63,6 +63,7 @@ export class MethodologiesService implements OnModuleInit {
         structure: m.structure,
         rules: m.rules,
         avoid: m.avoid,
+        maxWordsPerPage: m.maxWordsPerPage ?? null,
         sortOrder: i * 10,
       })),
       skipDuplicates: true,
@@ -264,6 +265,7 @@ export class MethodologiesService implements OnModuleInit {
           structure: draft.structure,
           rules: draft.rules,
           avoid: draft.avoid,
+          maxWordsPerPage: draft.maxWordsPerPage,
         },
         age,
       ),
@@ -299,6 +301,7 @@ export function toData(row: MethodologyRow): MethodologyData {
     structure: row.structure as string[],
     rules: row.rules as string[],
     avoid: row.avoid as string[],
+    maxWordsPerPage: row.maxWordsPerPage,
   };
 }
 
@@ -318,6 +321,7 @@ function toPublic(row: MethodologyRow, lang: Language): Methodology {
 function toAdmin(row: MethodologyRow, usage: Usage): AdminMethodology {
   return {
     ...toData(row),
+    maxWordsPerPage: row.maxWordsPerPage,
     published: row.published,
     sortOrder: row.sortOrder,
     templates: usage.templates.get(row.slug) ?? 0,

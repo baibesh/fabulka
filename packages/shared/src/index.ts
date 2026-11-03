@@ -30,10 +30,14 @@ export * from "./examples";
 export * from "./country-rules";
 export * from "./audit";
 
+/** Ages a book is written for (the form's picker, catalog books' ranges, the voice prefill). */
+export const CHILD_AGE_MIN = 2;
+export const CHILD_AGE_MAX = 12;
+
 /** What the parent tells us about the child. */
 export const ChildProfileSchema = z.object({
   name: z.string().trim().min(1).max(40),
-  age: z.coerce.number().int().min(2).max(10),
+  age: z.coerce.number().int().min(CHILD_AGE_MIN).max(CHILD_AGE_MAX),
   gender: z.enum(["boy", "girl"]),
   interests: z.array(z.string().trim().min(1).max(40)).min(1).max(5),
   pet: z.string().trim().max(60).optional(),
@@ -802,8 +806,8 @@ export const UpdateTemplateSchema = z
   .object({
     title: z.string().trim().min(1).max(120),
     summary: z.string().trim().min(1).max(400),
-    ageMin: z.number().int().min(2).max(10),
-    ageMax: z.number().int().min(2).max(10),
+    ageMin: z.number().int().min(CHILD_AGE_MIN).max(CHILD_AGE_MAX),
+    ageMax: z.number().int().min(CHILD_AGE_MIN).max(CHILD_AGE_MAX),
     methodology: MethodologySlugSchema,
     theme: z.string().trim().min(3).max(300),
     plot: z.array(z.string().trim().min(3).max(300)).min(3).max(12),

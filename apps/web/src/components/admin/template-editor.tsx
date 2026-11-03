@@ -9,6 +9,8 @@ import {
   DEFAULT_BLOCKS,
   OPTIONAL_KINDS,
   BOOK_THEMES,
+  CHILD_AGE_MAX,
+  CHILD_AGE_MIN,
   DEFAULT_LANGUAGE,
   LANGUAGES,
   LANGUAGE_NAMES,
@@ -42,7 +44,7 @@ import { Notice } from "@/components/ui/notice";
 import { useCatalogError } from "./catalog-table";
 import { CountriesField } from "./countries-field";
 import { Card, PageTitle, useAdminI18n } from "./ui";
-import { useAdminHref, useWorkingCountry } from "./working-country";
+import { useWorkingCountry } from "./working-country";
 import { useAdminMethodologies } from "./use-methodologies";
 import { ErrorText } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
@@ -61,7 +63,6 @@ export function TemplateEditor() {
 }
 
 function Editor({ initial }: { initial: AdminTemplate }) {
-  const adminHref = useAdminHref();
   const { t, locale } = useAdminI18n();
   const queryClient = useQueryClient();
   const { access } = useWorkingCountry();
@@ -119,7 +120,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
       }}
       className="flex flex-col gap-6"
     >
-      <BackLink href={adminHref("/admin/catalog")}>{t("admin.template.back")}</BackLink>
+      <BackLink href="/admin/catalog">{t("admin.template.back")}</BackLink>
       <PageTitle
         aside={
           <div className="flex items-center gap-3">
@@ -149,10 +150,10 @@ function Editor({ initial }: { initial: AdminTemplate }) {
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label={t("admin.template.ageMin")}>
-                <Input type="number" min={2} max={10} value={draft.ageMin} onChange={(e) => set("ageMin", Number(e.target.value))} />
+                <Input type="number" min={CHILD_AGE_MIN} max={CHILD_AGE_MAX} value={draft.ageMin} onChange={(e) => set("ageMin", Number(e.target.value))} />
               </Field>
               <Field label={t("admin.template.ageMax")}>
-                <Input type="number" min={2} max={10} value={draft.ageMax} onChange={(e) => set("ageMax", Number(e.target.value))} />
+                <Input type="number" min={CHILD_AGE_MIN} max={CHILD_AGE_MAX} value={draft.ageMax} onChange={(e) => set("ageMax", Number(e.target.value))} />
               </Field>
             </div>
             <ChoiceLabel strong>
@@ -471,7 +472,6 @@ function SamplesCard({
   global: boolean;
   onChange: (samples: TemplateSamples) => void;
 }) {
-  const adminHref = useAdminHref();
   const { t, date } = useAdminI18n();
   const queryClient = useQueryClient();
   const countryName = useCountryName("admin");
@@ -532,7 +532,7 @@ function SamplesCard({
                 ))}
               </Select>
               {current && books ? (
-                <Link href={adminHref(`/admin/books/${current}`)} className="flex items-center gap-1 text-sm font-semibold text-accent">
+                <Link href={`/admin/books/${current}`} className="flex items-center gap-1 text-sm font-semibold text-accent">
                   <ExternalLink className="size-4" />
                   {t("admin.template.samples.open")}
                 </Link>

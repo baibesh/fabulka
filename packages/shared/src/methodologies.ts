@@ -20,6 +20,9 @@ export type MethodologySlug = z.infer<typeof MethodologySlugSchema>;
 /** Ages a method can be set for. */
 export const METHODOLOGY_AGE_MIN = 2;
 export const METHODOLOGY_AGE_MAX = 12;
+/** What a method's own words-per-page limit may be set to (MethodologyData.maxWordsPerPage). */
+export const METHODOLOGY_WORDS_MIN = 5;
+export const METHODOLOGY_WORDS_MAX = 150;
 
 const MethodologyTextSchema = z.object({
   name: z.string().trim().max(80),
@@ -64,6 +67,11 @@ export interface MethodologyData {
   structure: string[];
   rules: string[];
   avoid: string[];
+  /**
+   * The method's own limit on words a page (a comic's short captions): it caps the age norm and the
+   * layout's room, and replaces the age's sentence count in the prompt. Null or left out: none.
+   */
+  maxWordsPerPage?: number | null;
 }
 
 /** One item per line in the editor; each goes into the prompt as a list item. */
@@ -78,6 +86,7 @@ const MethodologyFieldsSchema = z.object({
   structure: promptLines(400).min(1, "Нужен хотя бы один шаг сюжета"),
   rules: promptLines(400),
   avoid: promptLines(200),
+  maxWordsPerPage: z.number().int().min(METHODOLOGY_WORDS_MIN).max(METHODOLOGY_WORDS_MAX).nullable().default(null),
   published: z.boolean(),
   sortOrder: z.number().int().min(0).max(1000),
 });
@@ -123,6 +132,7 @@ export const MethodologyPreviewSchema = MethodologyFieldsSchema.pick({
   structure: true,
   rules: true,
   avoid: true,
+  maxWordsPerPage: true,
 }).extend({
   slug: z.string().trim().max(40),
   source: z.string().trim().max(300),
@@ -143,6 +153,7 @@ export const AdminMethodologySchema = z.object({
   structure: z.array(z.string()),
   rules: z.array(z.string()),
   avoid: z.array(z.string()),
+  maxWordsPerPage: z.number().int().nullable(),
   published: z.boolean(),
   sortOrder: z.number().int(),
   /** Catalog books and books that follow the method; while there are any it cannot be deleted. */
@@ -295,7 +306,7 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
     },
     source: "CASEL social and emotional learning framework; emotion coaching by John Gottman",
     ageMin: 4,
-    ageMax: 10,
+    ageMax: 12,
     structure: [
       "An ordinary day; something happens that gives the hero a strong feeling (anger, fear, sadness, jealousy or disappointment).",
       "The hero names the feeling and notices it in the body.",
@@ -338,7 +349,7 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
     },
     source: "Growth mindset research by Carol Dweck",
     ageMin: 5,
-    ageMax: 10,
+    ageMax: 12,
     structure: [
       "The hero wants to do something hard that is linked to the child's interests.",
       "The first try fails; the hero is frustrated and says \"I can't\".",
@@ -380,7 +391,7 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
     },
     source: "\"Mirrors, windows and sliding glass doors\" by Rudine Sims Bishop",
     ageMin: 4,
-    ageMax: 10,
+    ageMax: 12,
     structure: [
       "Mirror: the hero's own world with real details of their city and Kazakh culture (places, food, traditions, words).",
       "The hero meets someone or something from another place, culture or way of life.",
@@ -421,7 +432,7 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
     },
     source: "The hero's journey (Campbell, Vogler), adapted for picture books",
     ageMin: 4,
-    ageMax: 10,
+    ageMax: 12,
     structure: [
       "The hero's ordinary world in their home city.",
       "A call to adventure linked to the child's interests.",
@@ -469,6 +480,17 @@ export const AGE_BANDS: readonly AgeBand[] = [
     sentencesPerPage: "3 to 6 sentences",
     maxWordsPerPage: 100,
     guidance: ["Richer vocabulary and dialogue.", "A small twist is welcome.", "Light suspense is fine."],
+  },
+  {
+    ageMin: 11,
+    ageMax: 12,
+    sentencesPerPage: "4 to 7 sentences",
+    maxWordsPerPage: 120,
+    guidance: [
+      "Vocabulary of a good chapter book; natural dialogue that shows each character's voice.",
+      "A real choice the hero thinks through; humour and a twist are welcome.",
+      "Suspense is fine; keep it free of gore, cruelty and romance.",
+    ],
   },
 ];
 

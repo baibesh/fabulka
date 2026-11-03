@@ -348,23 +348,25 @@ model ExampleVersion {
 /// @fabulka/shared. Books and catalog books refer to it by slug (no foreign key: the slug is checked
 /// when a book is made, and a method that is in use cannot be deleted, only unpublished).
 model Methodology {
-  slug      String   @id
+  slug            String   @id
   /// Name and summary by interface language: { ru, kk, en } of { name, summary }.
-  texts     Json
+  texts           Json
   /// Where the method comes from.
-  source    String
-  ageMin    Int
-  ageMax    Int
+  source          String
+  ageMin          Int
+  ageMax          Int
   /// Story beats in order (string[], English); Muse Spark spreads the pages across them.
-  structure Json
+  structure       Json
   /// Rules the story keeps (string[], English).
-  rules     Json     @default("[]")
+  rules           Json     @default("[]")
   /// What the story avoids (string[], English).
-  avoid     Json     @default("[]")
-  published Boolean  @default(true)
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  avoid           Json     @default("[]")
+  /// The method's own limit on words a page; caps the age norm. Null: none.
+  maxWordsPerPage Int?
+  published       Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 /// Someone outside Kazakhstan asked for a printed copy: demand for print partners abroad.

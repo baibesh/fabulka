@@ -122,6 +122,52 @@ describe('prompts', () => {
     );
   });
 
+  it("lets the method's own word limit win over the age norm and the layout", () => {
+    const comics = {
+      ...method('adventure-quest'),
+      rules: [
+        'Each page is one comic panel: a short caption and a line or two of speech.',
+      ],
+      maxWordsPerPage: 30,
+    };
+    const prompt = storyPrompt({
+      ...brief({ age: 9 }),
+      methodology: comics,
+      wordsPerPage: 70,
+    });
+    expect(prompt).toContain('at most 30 words a page, as the method asks');
+    expect(prompt).not.toContain('3 to 6 sentences, at most');
+    expect(prompt).not.toContain('or it will not fit');
+    expect(prompt).toContain("the method's rules win");
+    // The layout's room is tighter than the method's limit: the layout decides.
+    const tight = storyPrompt({
+      ...brief({ age: 9 }),
+      methodology: comics,
+      wordsPerPage: 20,
+    });
+    expect(tight).toContain('at most 20 words');
+    expect(tight).toContain('keep every page within 20 words');
+    // A limit above the age norm changes nothing.
+    const loose = storyPrompt({
+      ...brief({ age: 4 }),
+      methodology: { ...comics, maxWordsPerPage: 80 },
+    });
+    expect(loose).toContain(
+      'each page is 1 to 2 short sentences, at most 25 words',
+    );
+  });
+
+  it('has age norms for 11 and 12, leaving 8 to 10 as they were', () => {
+    expect(storyPrompt(brief({ age: 11 }))).toContain(
+      'each page is 4 to 7 sentences, at most 120 words',
+    );
+    expect(storyPrompt(brief({ age: 12 }))).toContain('chapter book');
+    expect(storyPrompt(brief({ age: 10 }))).toContain(
+      'each page is 3 to 6 sentences, at most 100 words',
+    );
+    expect(storyPrompt(brief({ age: 12 }))).toContain('a 12-year-old girl');
+  });
+
   it('tells the story to show mishaps safely in scene prompts', () => {
     expect(STORY_INSTRUCTIONS).toContain('Show a mishap safely');
     expect(STORY_INSTRUCTIONS).toContain(

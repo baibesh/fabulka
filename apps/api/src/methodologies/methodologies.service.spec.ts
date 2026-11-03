@@ -91,6 +91,7 @@ const calm: CreateMethodology = {
   structure: ['The hero is upset.'],
   rules: [],
   avoid: [],
+  maxWordsPerPage: null,
   published: true,
   sortOrder: 100,
 };
@@ -224,6 +225,7 @@ describe('MethodologiesService', () => {
       });
       await service.update('growth-mindset', {
         ...DEFAULT_METHODOLOGIES.find((m) => m.slug === 'growth-mindset')!,
+        maxWordsPerPage: null,
         texts: {
           ...DEFAULT_METHODOLOGIES[3].texts,
           en: { name: '', summary: '' },
@@ -373,6 +375,7 @@ describe('MethodologiesService', () => {
       );
       await service.update('adventure-quest', {
         ...DEFAULT_METHODOLOGIES[5],
+        maxWordsPerPage: null,
         published: false,
         sortOrder: 50,
       });

@@ -56,7 +56,7 @@ Return only JSON of this exact shape:
 /** What the prompt takes from a story method (a Methodology row). */
 export type MethodologyPrompt = Pick<
   MethodologyData,
-  'slug' | 'source' | 'structure' | 'rules' | 'avoid'
+  'slug' | 'source' | 'structure' | 'rules' | 'avoid' | 'maxWordsPerPage'
 >;
 
 /** What a story is written from: the child, the method and, optionally, the parent's theme. */
@@ -95,9 +95,24 @@ export function storyPrompt(brief: StoryBrief): string {
   ].join('\n');
 }
 
+/** Words a page may have: the age norm, capped by the layout's room and the method's own limit. */
+export function pageWords(
+  method: Pick<MethodologyPrompt, 'maxWordsPerPage'>,
+  age: number,
+  wordsPerPage?: number,
+): number {
+  return Math.min(
+    ageBand(age).maxWordsPerPage,
+    wordsPerPage ?? Infinity,
+    method.maxWordsPerPage ?? Infinity,
+  );
+}
+
 /**
  * The part of the story prompt the method and the child's age decide: beats, rules, age norms and
- * the kinds of talk questions. The admin's preview shows it for a sample child.
+ * the kinds of talk questions. The admin's preview shows it for a sample child. The method wins
+ * over the age norm: its own word limit replaces the age's sentence count, and its rules are said
+ * to take precedence over the default length.
  */
 export function methodPrompt(
   method: MethodologyPrompt,
@@ -105,8 +120,10 @@ export function methodPrompt(
   wordsPerPage?: number,
 ): string {
   const band = ageBand(age);
-  // The layout may leave less room than the age norm allows; never more.
-  const words = Math.min(band.maxWordsPerPage, wordsPerPage ?? Infinity);
+  // The layout may leave less room than the age norm allows; never more. The method may ask for less.
+  const words = pageWords(method, age, wordsPerPage);
+  const methodCap = method.maxWordsPerPage ?? Infinity;
+  const byMethod = methodCap < band.maxWordsPerPage && methodCap <= words;
   const list = (items: readonly string[]) =>
     items.map((item) => `- ${item}`).join('\n');
   return [
@@ -115,8 +132,15 @@ export function methodPrompt(
     ...(method.rules.length ? ['Rules:', list(method.rules)] : []),
     ...(method.avoid.length ? [`Avoid: ${method.avoid.join('; ')}.`] : []),
     '',
-    `Age norms: each page is ${band.sentencesPerPage}, at most ${words} words.`,
-    ...(words < band.maxWordsPerPage
+    ...(method.rules.length
+      ? [
+          "Where the method's rules ask for shorter pages or another form than the age norms below, the method's rules win.",
+        ]
+      : []),
+    byMethod
+      ? `Page length: at most ${words} words a page, as the method asks; this replaces the usual ${band.sentencesPerPage} for this age.`
+      : `Age norms: each page is ${band.sentencesPerPage}, at most ${words} words.`,
+    ...(words < band.maxWordsPerPage && !byMethod
       ? [
           `The page text is printed over or beside the picture: keep every page within ${words} words, or it will not fit.`,
         ]
@@ -397,7 +421,7 @@ Return only JSON of this shape, leaving out keys the parent did not mention:
   "answers": { [questionKey]: string }
 }
 
-- "age" is a whole number of years from 2 to 10.
+- "age" is a whole number of years from 2 to 12.
 - "gender" follows from what the parent said (son or daughter, he or she, the name's grammar).
 - "interests" are up to 5 short noun phrases in their dictionary form ("динозавры", not
   "динозавров" as in "любит динозавров").
@@ -450,7 +474,7 @@ export function themeInstructions(fonts: {
   const weights = Object.entries(fonts.weights)
     .map(([family, w]) => `${family} (${w.join(', ')})`)
     .join('; ');
-  return `You design the look of printed personalized picture books for children aged 2–10, in Russian, Kazakh, English, Spanish and German.
+  return `You design the look of printed personalized picture books for children aged 2–12, in Russian, Kazakh, English, Spanish and German.
 Answer with one JSON object only, no prose, with exactly these keys:
 {
   "name": { "ru": "…", "kk": "…", "en": "…", "es": "…", "de": "…" },   // 1–3 words each, the same idea in each language

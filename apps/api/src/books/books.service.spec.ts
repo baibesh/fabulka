@@ -320,6 +320,25 @@ describe('BooksService', () => {
       expect(middle.data.layout.qa.status).toBe('pending');
     });
 
+    it('writes a book for an 11-year-old with the oldest theme and age norms', async () => {
+      const older = await briefFor({ age: 11 });
+      expect(older.book.methodology).toBe('adventure-quest');
+      expect(older.brief.child.age).toBe(11);
+      expect(older.data.layout.theme.id).toBe('adventure');
+      expect(older.data.layout.ageGroup).toBe('older');
+      expect(older.brief.wordsPerPage).toBeGreaterThan(50);
+      const twelve = await briefFor({ age: 12, methodology: 'sel-emotions' });
+      expect(twelve.book.methodology).toBe('sel-emotions');
+    });
+
+    it("passes the method's own word limit on to the story", async () => {
+      const methods = methodRows().map((m) =>
+        m.slug === 'adventure-quest' ? { ...m, maxWordsPerPage: 20 } : m,
+      );
+      const { brief } = await briefFor({ age: 9 }, methods);
+      expect(brief.methodology.maxWordsPerPage).toBe(20);
+    });
+
     it('writes fewer words a page when the default format is the smaller A5', async () => {
       const a5 = await briefFor({ age: 6, format: 'a5-portrait' });
       expect(a5.data.layout.format.id).toBe('a5-portrait');
@@ -364,7 +383,7 @@ describe('BooksService', () => {
       ).rejects.toEqual(refusal('methodology_unknown'));
       await expect(
         briefFor({ methodology: 'growth-mindset', age: 3 }),
-      ).rejects.toThrow('для возраста 5–10 лет');
+      ).rejects.toThrow('для возраста 5–12 лет');
       await expect(
         briefFor({ methodology: 'growth-mindset', age: 3 }),
       ).rejects.toEqual(refusal('methodology_age'));

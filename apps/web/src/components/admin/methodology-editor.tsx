@@ -5,6 +5,8 @@ import {
   CreateMethodologySchema,
   METHODOLOGY_AGE_MAX,
   METHODOLOGY_AGE_MIN,
+  METHODOLOGY_WORDS_MAX,
+  METHODOLOGY_WORDS_MIN,
   METHODOLOGY_IN_USE,
   BASE_LANGUAGES,
   DEFAULT_LANGUAGE,
@@ -32,7 +34,6 @@ import { Field } from "@/components/ui/field";
 import { Input, Textarea } from "@/components/ui/input";
 import { BackLink, PageHeader } from "@/components/ui/page";
 import { tabPanelProps, Tabs, useTabsId } from "@/components/ui/tabs";
-import { useAdminHref } from "./working-country";
 
 /** Languages a method must have to be published; the others are optional. */
 const isBase = (language: Language) => (BASE_LANGUAGES as readonly Language[]).includes(language);
@@ -48,6 +49,8 @@ interface Draft {
   structure: string;
   rules: string;
   avoid: string;
+  /** The method's own words-per-page limit, as typed; "" for none (the age norm). */
+  maxWords: string;
   published: boolean;
   /** Null for a new method until the owner types one: it then goes after the existing ones. */
   sortOrder: number | null;
@@ -62,12 +65,14 @@ const toDraft = (m: AdminMethodology): Draft => ({
   structure: m.structure.join("\n"),
   rules: m.rules.join("\n"),
   avoid: m.avoid.join("\n"),
+  maxWords: m.maxWordsPerPage === null ? "" : String(m.maxWordsPerPage),
   published: m.published,
   sortOrder: m.sortOrder,
 });
 
 const empty = { name: "", summary: "" };
 const lines = (text: string) => text.split("\n").map((line) => line.trim()).filter(Boolean);
+const maxWords = (d: Draft) => (d.maxWords.trim() ? Number(d.maxWords) : null);
 const fields = (d: Draft, sortOrder: number) => ({
   texts: d.texts,
   source: d.source,
@@ -76,6 +81,7 @@ const fields = (d: Draft, sortOrder: number) => ({
   structure: lines(d.structure),
   rules: lines(d.rules),
   avoid: lines(d.avoid),
+  maxWordsPerPage: maxWords(d),
   published: d.published,
   sortOrder,
 });
@@ -97,7 +103,6 @@ function inUseCounts(error: Error): { templates: number; books: number } {
 
 /** Edits a method, or with no `initial` creates one. */
 export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
-  const adminHref = useAdminHref();
   const router = useRouter();
   const { t, locale } = useAdminI18n();
   const queryClient = useQueryClient();
@@ -114,6 +119,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
           structure: "",
           rules: "",
           avoid: "",
+          maxWords: "",
           published: false,
           sortOrder: null,
         },
@@ -138,6 +144,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
     const path = issue.path.join(".");
     if (issue.code === "too_small" && path === "source") return t("admin.method.error.source");
     if (issue.code === "too_small" && path === "structure") return t("admin.method.error.structure");
+    if (path === "maxWordsPerPage") return t("admin.method.error.maxWords", { min: METHODOLOGY_WORDS_MIN, max: METHODOLOGY_WORDS_MAX });
     if (issue.code !== "custom") return issue.message;
     if (path === "ageMax") return t("admin.method.error.ages");
     if (path === "texts.ru.name") return t("admin.method.error.ruName");
@@ -164,7 +171,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
     onSuccess: (saved) => {
       if (!saved) return;
       refresh(saved);
-      if (!initial) router.replace(adminHref(`/admin/methodologies/${saved.slug}`));
+      if (!initial) router.replace(`/admin/methodologies/${saved.slug}`);
     },
   });
 
@@ -178,6 +185,8 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
         structure: lines(draft.structure),
         rules: lines(draft.rules),
         avoid: lines(draft.avoid),
+        // A limit the schema would refuse is left out of the preview; saving shows the problem.
+        maxWordsPerPage: Number.isInteger(maxWords(draft)) ? maxWords(draft) : null,
       }),
   });
 
@@ -186,7 +195,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "methodologies"] });
       void queryClient.invalidateQueries({ queryKey: ["methodologies"] });
-      router.push(adminHref("/admin/methodologies"));
+      router.push("/admin/methodologies");
     },
     onSettled: () => setConfirming(false),
   });
@@ -206,7 +215,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
       }}
       className="flex flex-col gap-6"
     >
-      <BackLink href={adminHref("/admin/methodologies")}>{t("admin.method.back")}</BackLink>
+      <BackLink href="/admin/methodologies">{t("admin.method.back")}</BackLink>
       <PageHeader
         size="sm"
         title={initial ? methodologyText(initial.texts, locale).name || initial.slug : t("admin.method.newTitle")}
@@ -354,6 +363,16 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
               />
             </Field>
           </div>
+          <Field label={t("admin.method.maxWords")} hint={t("admin.method.maxWordsHint")} error={problems["maxWordsPerPage"]}>
+            <Input
+              type="number"
+              data-testid="methodology-max-words"
+              min={METHODOLOGY_WORDS_MIN}
+              max={METHODOLOGY_WORDS_MAX}
+              value={draft.maxWords}
+              onChange={(e) => set("maxWords", e.target.value)}
+            />
+          </Field>
           <Field label={t("admin.method.sortOrder")} error={problems["sortOrder"]}>
             <Input
               type="number"

@@ -1,0 +1,53 @@
+# A book for an 11-year-old through the form: ages now go up to 12, with the oldest age band's norms,
+# the oldest theme and a method that covers the age (mock models).
+appId: ${WEB}
+tags: [book]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Тимур ${Date.now()}"
+commands:
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/ru/create"
+  - tapOn: { testId: voice-manual }
+  - waitForVisible: { css: "[data-step=child]" }
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  # The picker goes up to 12.
+  - selectOption: { testId: child-age, option: "12" }
+  - selectOption: { testId: child-age, option: "11" }
+  - tapOn: { testId: child-interests }
+  - inputText: "скейтборд, роботы"
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { css: "[data-step=story]" }
+  # A method that covers 11 is offered.
+  - selectOption: { testId: book-methodology, optionValue: growth-mindset }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { testId: wizard-review }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "Книга готова", timeout: 30000 }
+  - waitForVisible: { testId: book-reader }
+  - assertVisible: { testId: download-pdf }
+  - sql:
+      query: >-
+        select status::text as status, (child->>'age')::int as age, methodology, layout->'theme'->>'id' as theme,
+        layout->>'ageGroup' as "ageGroup", jsonb_array_length(pages) as pages
+        from "Book" where child->>'name' = $1
+      params: ["${childName}"]
+      readOnly: true
+      assert:
+        rows: 1
+        first: { status: done, age: 11, methodology: growth-mindset, theme: adventure, ageGroup: older, pages: 4 }
+  # 13 is still refused by the API.
+  - request:
+      method: POST
+      url: ${API}/books
+      headers: { X-Client-Key: "e2e-${childName}", X-Demo-Code: E2E-DEMO }
+      json: { child: { name: "${childName}", age: 13, gender: boy, interests: [скейт], city: Алматы } }
+      assert: { status: 400 }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

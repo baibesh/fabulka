@@ -29,6 +29,9 @@ import {
   cityName,
   upgradeCities,
   ChildProfileSchema,
+  CHILD_AGE_MAX,
+  CHILD_AGE_MIN,
+  VoicePrefillSchema,
   ClientErrorReportSchema,
   CreateBookSchema,
   CreateMethodologySchema,
@@ -83,6 +86,22 @@ describe("ChildProfileSchema", () => {
     expect(
       ChildProfileSchema.safeParse({ name: "A", age: 5, gender: "boy", interests: [], city: "X" }).success,
     ).toBe(false);
+  });
+
+  it("takes ages from 2 to 12 everywhere a child or an age range is given", () => {
+    const child = (age: number) => ({ name: "Тимур", age, gender: "boy", interests: ["скейт"], city: "Алматы" });
+    for (const age of [2, 10, 11, 12]) {
+      expect(ChildProfileSchema.safeParse(child(age)).success).toBe(true);
+      expect(CreateBookSchema.safeParse({ child: child(age) }).success).toBe(true);
+      expect(VoicePrefillSchema.safeParse({ transcript: "…", child: { age } }).success).toBe(true);
+    }
+    for (const age of [1, 13]) {
+      expect(ChildProfileSchema.safeParse(child(age)).success).toBe(false);
+      expect(VoicePrefillSchema.safeParse({ transcript: "…", child: { age } }).success).toBe(false);
+    }
+    expect(UpdateTemplateSchema.safeParse({ ageMin: 8, ageMax: 12 }).success).toBe(true);
+    expect(UpdateTemplateSchema.safeParse({ ageMax: 13 }).success).toBe(false);
+    expect([CHILD_AGE_MIN, CHILD_AGE_MAX]).toEqual([2, 12]);
   });
 });
 
@@ -247,14 +266,23 @@ describe("methodologies", () => {
   const child = { name: "Арман", age: 3, gender: "boy", interests: ["машинки"], city: "Астана" };
   const method = (slug: string, ageMin: number, ageMax: number) => ({ slug, ageMin, ageMax });
 
-  it("covers every age from 2 to 10 with a default that fits", () => {
-    for (let age = 2; age <= 10; age++) {
+  it("covers every age from 2 to 12 with a default that fits", () => {
+    for (let age = 2; age <= 12; age++) {
       const picked = defaultMethodology(DEFAULT_METHODOLOGIES, age);
       expect(picked && fitsAge(picked, age)).toBe(true);
       expect(ageBand(age).ageMin).toBeLessThanOrEqual(age);
     }
     expect(defaultMethodology(DEFAULT_METHODOLOGIES, 3)?.slug).toBe("toddler-routine");
     expect(defaultMethodology(DEFAULT_METHODOLOGIES, 7)?.slug).toBe("adventure-quest");
+    expect(defaultMethodology(DEFAULT_METHODOLOGIES, 11)?.slug).toBe("adventure-quest");
+  });
+
+  it("has an age band for 11–12 and leaves the bands up to 10 as they were", () => {
+    expect(ageBand(11)).toMatchObject({ ageMin: 11, ageMax: 12, maxWordsPerPage: 120 });
+    expect(ageBand(12).ageMin).toBe(11);
+    expect(ageBand(10)).toMatchObject({ ageMin: 8, ageMax: 10, maxWordsPerPage: 100, sentencesPerPage: "3 to 6 sentences" });
+    expect(ageBand(6)).toMatchObject({ maxWordsPerPage: 60 });
+    expect(ageBand(3)).toMatchObject({ maxWordsPerPage: 25 });
   });
 
   it("falls back to the first method that fits when the usual one is not offered", () => {
@@ -299,6 +327,14 @@ describe("methodologies", () => {
     it("accepts a full method", () => {
       expect(problems(input)).toEqual([]);
       expect(CreateMethodologySchema.safeParse({ ...input, slug: "calm" }).success).toBe(true);
+    });
+
+    it("takes an optional words-per-page limit of the method's own, within reason", () => {
+      expect(UpdateMethodologySchema.parse(input).maxWordsPerPage).toBeNull();
+      expect(UpdateMethodologySchema.parse({ ...input, maxWordsPerPage: 30 }).maxWordsPerPage).toBe(30);
+      expect(problems({ ...input, maxWordsPerPage: 2 })).toEqual(["maxWordsPerPage"]);
+      expect(problems({ ...input, maxWordsPerPage: 500 })).toEqual(["maxWordsPerPage"]);
+      expect(problems({ ...input, maxWordsPerPage: 12.5 })).toEqual(["maxWordsPerPage"]);
     });
 
     it("keeps ages in order and within 2–12", () => {

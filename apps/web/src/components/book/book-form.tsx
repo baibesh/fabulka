@@ -4,6 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@/lib/query";
 import {
+  CHILD_AGE_MAX,
+  CHILD_AGE_MIN,
   GENERATION_PAUSED,
   LIMIT_REACHED,
   answersProblem,
@@ -36,7 +38,7 @@ import { Button } from "../ui/button";
 export function BookForm({ template }: { template?: Template }) {
   const router = useLocaleRouter();
   const { t, locale, info } = useI18n();
-  const ageOptions = template ? ages(template.ageMin, template.ageMax) : ages(2, 10);
+  const ageOptions = template ? ages(template.ageMin, template.ageMax) : ages(CHILD_AGE_MIN, CHILD_AGE_MAX);
   const form = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
