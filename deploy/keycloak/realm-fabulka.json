@@ -67,7 +67,9 @@
       "baseUrl": "/",
       "redirectUris": [
         "http://localhost:3000/api/auth/callback",
-        "https://fabulka.com/api/auth/callback"
+        "https://fabulka.com/api/auth/callback",
+        "http://localhost:3000/admin/login",
+        "https://fabulka.com/admin/login"
       ],
       "webOrigins": [
         "http://localhost:3000",

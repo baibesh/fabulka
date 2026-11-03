@@ -12,11 +12,18 @@
 #   2. sets the secret of the OIDC client fabulka-web (KEYCLOAK_CLIENT_SECRET)
 #   3. sets the Google identity provider client id/secret and the auto-link-by-email flow
 #   4. sets the SMTP password (RESEND_API_KEY) when it is present
-#   5. creates the realm roles of the admin and grants them, with 2FA: admin (everything) to
+#   5. creates the realm roles of the admin and grants them, with 2FA: admin (superadmin) to
 #      FABULKA_ADMINS, seo (the SEO section only) to FABULKA_SEO (comma-separated emails each).
-#      What a role opens is ROLE_PERMISSIONS in packages/shared/src/admin-access.ts.
+#      These are the bootstrap only: staff, their roles and countries live in Fabulka's database
+#      (admin → Team). A realm role holder gets a staff row with that role on their next sign-in,
+#      and realm `admin` is always a superadmin, so the owner can never be locked out.
 #   6. sets the realm's languages (supportedLocales, defaultLocale) from realm-fabulka.json, which
 #      is imported only once, so a language added later reaches the live realm here
+#   7. the confidential client fabulka-staff, whose service account (realm-management manage-users,
+#      view-users, query-users only) lets the Fabulka API invite staff: create the Keycloak user and
+#      send the set-password / authenticator email. Its secret is KEYCLOAK_STAFF_CLIENT_SECRET in
+#      ./.env, generated and stored there (never printed) when empty; copy it to the API's .env.
+#      Also lets fabulka-web send people back to <site>/admin/login after that email.
 set -euo pipefail
 cd "$(dirname "$0")"
 umask 077
@@ -174,9 +181,10 @@ else
 fi
 
 # --- 5. admin roles ----------------------------------------------------------------
-# Holders of these realm roles get into fabulka.com/admin (each sees only the sections its role opens,
-# ROLE_PERMISSIONS in packages/shared/src/admin-access.ts); each must set up an authenticator app.
-# A new role: add it to ROLE_PERMISSIONS and a line below.
+# Holders of these realm roles get into fabulka.com/admin; each must set up an authenticator app.
+# They are the bootstrap: on sign-in the API gives them a staff row with the role of the same name
+# (admin = superadmin, seo = the SEO section). Everyone else is invited from the admin's Team
+# section, where roles, countries and new roles are managed too — no new lines here for that.
 grant_role() { # role, description, comma-separated emails
     local role=$1 description=$2 emails=$3 user uid
     if ! kc get "realms/$REALM/roles/$role" >/dev/null 2>&1; then
@@ -205,5 +213,48 @@ realm = json.load(open("realm-fabulka.json"))
 print(json.dumps({k: realm[k] for k in ("internationalizationEnabled", "supportedLocales", "defaultLocale")}))
 ' | kc update "realms/$REALM" --merge -f - >/dev/null
 echo "realm: languages $(python3 -c 'import json; print(",".join(json.load(open("realm-fabulka.json"))["supportedLocales"]))')"
+
+# --- 7. staff invitations: client fabulka-staff -----------------------------------
+STAFF_CLIENT=fabulka-staff
+STAFF_SECRET=$(env_get KEYCLOAK_STAFF_CLIENT_SECRET)
+if [[ -z $STAFF_SECRET ]]; then
+    STAFF_SECRET=$(python3 -c 'import secrets; print(secrets.token_urlsafe(36))')
+    # Store it in ./.env (replacing an empty KEYCLOAK_STAFF_CLIENT_SECRET= line), never on screen.
+    S="$STAFF_SECRET" python3 - <<'PY'
+import os
+path, key = ".env", "KEYCLOAK_STAFF_CLIENT_SECRET"
+lines = open(path).read().splitlines()
+lines = [l for l in lines if not l.startswith(key + "=")]
+lines.append(key + "=" + os.environ["S"])
+with open(path, "w") as f:
+    f.write("\n".join(lines) + "\n")
+PY
+    echo "staff: generated KEYCLOAK_STAFF_CLIENT_SECRET into .env (not shown)"
+fi
+staff_cid=$(kc get clients -r "$REALM" -q clientId="$STAFF_CLIENT" --fields id --format csv --noquotes)
+if [[ -z $staff_cid ]]; then
+    kc create clients -r "$REALM" -s clientId="$STAFF_CLIENT" -s name='Fabulka staff invitations' \
+        -s enabled=true -s protocol=openid-connect -s publicClient=false \
+        -s clientAuthenticatorType=client-secret -s serviceAccountsEnabled=true \
+        -s standardFlowEnabled=false -s implicitFlowEnabled=false -s directAccessGrantsEnabled=false \
+        -s 'description=Service account of the Fabulka API: invites staff (create users, send set-up emails)' >/dev/null
+    staff_cid=$(kc get clients -r "$REALM" -q clientId="$STAFF_CLIENT" --fields id --format csv --noquotes)
+    echo "staff: client $STAFF_CLIENT created"
+fi
+S="$STAFF_SECRET" json secret=S | kc update "clients/$staff_cid" -r "$REALM" --merge -f - >/dev/null
+kc add-roles -r "$REALM" --uusername "service-account-$STAFF_CLIENT" --cclientid realm-management \
+    --rolename manage-users --rolename view-users --rolename query-users >/dev/null
+echo "staff: $STAFF_CLIENT secret set, service account may manage/view/query users"
+
+# The set-up email's link ends on the admin's sign-in page: fabulka-web must accept that redirect.
+kc get "clients/$cid" -r "$REALM" --fields redirectUris | python3 -c '
+import json, sys
+uris = json.load(sys.stdin).get("redirectUris", [])
+for site in ("http://localhost:3000", "https://fabulka.com"):
+    uri = site + "/admin/login"
+    if uri not in uris:
+        uris.append(uri)
+print(json.dumps({"redirectUris": uris}))' | kc update "clients/$cid" -r "$REALM" --merge -f - >/dev/null
+echo "client: fabulka-web accepts /admin/login after the set-up email"
 
 echo "done"

@@ -32,6 +32,11 @@ services:
       GEO_BLOCK: "true"
       # Where the API tells the web app to re-render after an SEO publish (REVALIDATE_SECRET in .env).
       WEB_INTERNAL_URL: http://web:3000
+      # Staff invitations through Keycloak's Admin REST API (client fabulka-staff, made by
+      # deploy/keycloak/configure.sh, whose secret is copied into .env). Without the secret an
+      # invite saves the person in Team but sends no email.
+      KEYCLOAK_STAFF_CLIENT_ID: ${KEYCLOAK_STAFF_CLIENT_ID:-fabulka-staff}
+      KEYCLOAK_STAFF_CLIENT_SECRET: ${KEYCLOAK_STAFF_CLIENT_SECRET:-}
     volumes:
       - storage:/data/storage
     depends_on:
