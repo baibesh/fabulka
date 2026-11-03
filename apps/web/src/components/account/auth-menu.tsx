@@ -84,7 +84,7 @@ export function AuthMenu({ pathname }: { pathname: string }) {
             <Package className="size-4 text-accent" />
             {t("auth.orders")}
           </LocaleLink>
-          {(user.admin || user.seo) && (
+          {(user.admin || user.staff || user.seo) && (
             <LocaleLink href="/admin" role="menuitem" data-testid="auth-admin" onClick={close} className={menuItemClass}>
               <ShieldCheck className="size-4 text-accent" />
               {t("auth.admin")}

@@ -5,7 +5,8 @@ import { useState } from "react";
 import { QueryState } from "@/components/ui/query-state";
 import { PageHeader } from "@/components/ui/page";
 import { tabPanelProps, Tabs, useTabsId } from "@/components/ui/tabs";
-import { adminReference } from "@/lib/admin-api";
+import { Notice } from "@/components/ui/notice";
+import { adminMe, adminReference } from "@/lib/admin-api";
 import { useAdminI18n } from "../ui";
 import { BlockedTab } from "./blocked-tab";
 import { CitiesTab } from "./cities-tab";
@@ -18,8 +19,26 @@ import { QUERY } from "./shared";
 const TABS = ["prices", "formats", "countries", "faq", "cities", "blocked"] as const;
 type Tab = (typeof TABS)[number];
 
-/** /admin/reference: prices, countries, the landing's FAQ, delivery cities and blocked countries, edited without touching code. */
+/**
+ * /admin/reference: prices, countries, the landing's FAQ, delivery cities and blocked countries,
+ * edited without touching code. Someone with only parts of it (a country manager: their countries'
+ * prices and landing data) sees a note instead until those exist per country.
+ */
 export function ReferencePage() {
+  const { t } = useAdminI18n();
+  const me = useQuery({ queryKey: ["admin", "me"], queryFn: adminMe, retry: false });
+  if (me.data && !me.data.rights.includes("reference")) {
+    return (
+      <>
+        <PageHeader size="sm" title={t("admin.reference.title")} />
+        <Notice data-testid="reference-scoped">{t("admin.reference.scoped")}</Notice>
+      </>
+    );
+  }
+  return <FullReference />;
+}
+
+function FullReference() {
   const { t } = useAdminI18n();
   const tabs = useTabsId();
   const [tab, setTab] = useState<Tab>("prices");

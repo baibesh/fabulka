@@ -69,6 +69,16 @@ import {
   type SeoHistoryEntry,
   type SeoImageResult,
   type SeoSettings,
+  InviteResultSchema,
+  StaffMemberSchema,
+  StaffRoleSchema,
+  type CreateStaffRole,
+  type InviteResult,
+  type InviteStaff,
+  type StaffMember,
+  type StaffRole,
+  type UpdateStaff,
+  type UpdateStaffRole,
 } from "@fabulka/shared";
 import { z } from "zod";
 import { request } from "./api";
@@ -326,3 +336,39 @@ export async function saveSeoSettings(settings: SeoSettings): Promise<SeoSetting
   const saved = (await request("/api/admin/seo/settings", json("PUT", settings))) as { revalidated?: unknown };
   return { ...SeoSettingsSchema.parse(saved), revalidated: saved.revalidated === true };
 }
+
+// ---- Team (superadmin) ---------------------------------------------------------------------------
+
+export async function teamMembers(): Promise<StaffMember[]> {
+  return z.array(StaffMemberSchema).parse(await request("/api/admin/team"));
+}
+
+export async function inviteStaff(invite: InviteStaff): Promise<InviteResult> {
+  return InviteResultSchema.parse(await request("/api/admin/team", json("POST", invite)));
+}
+
+export async function updateStaff(id: string, patch: UpdateStaff): Promise<StaffMember> {
+  return StaffMemberSchema.parse(await request(`/api/admin/team/${encodeURIComponent(id)}`, json("PATCH", patch)));
+}
+
+export async function setStaffEnabled(id: string, enabled: boolean): Promise<StaffMember> {
+  return StaffMemberSchema.parse(await request(`/api/admin/team/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`, { method: "POST" }));
+}
+
+export async function resendInvite(id: string): Promise<InviteResult> {
+  return InviteResultSchema.parse(await request(`/api/admin/team/${encodeURIComponent(id)}/resend`, { method: "POST" }));
+}
+
+export async function staffRoles(): Promise<StaffRole[]> {
+  return z.array(StaffRoleSchema).parse(await request("/api/admin/team/roles"));
+}
+
+export async function createStaffRole(role: CreateStaffRole): Promise<StaffRole> {
+  return StaffRoleSchema.parse(await request("/api/admin/team/roles", json("POST", role)));
+}
+
+export async function updateStaffRole(key: string, role: UpdateStaffRole): Promise<StaffRole> {
+  return StaffRoleSchema.parse(await request(`/api/admin/team/roles/${encodeURIComponent(key)}`, json("PUT", role)));
+}
+
+export const deleteStaffRole = (key: string) => request(`/api/admin/team/roles/${encodeURIComponent(key)}`, { method: "DELETE" });

@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { AdminPermission } from "@fabulka/shared";
-import { BookOpen, GraduationCap, LayoutDashboard, Library, ListChecks, LogOut, Package, ScrollText, Palette, Search, ShieldAlert, Sparkles } from "lucide-react";
+import { BookOpen, GraduationCap, LayoutDashboard, Library, ListChecks, LogOut, Package, ScrollText, Palette, Search, ShieldAlert, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
@@ -13,7 +13,7 @@ import { ApiError } from "@/lib/api";
 import { LanguagePicker } from "@/components/layout/locale-pickers";
 import { useAdminI18n } from "./ui";
 
-/** The admin's sections; each is a permission (ROLE_PERMISSIONS in @fabulka/shared says who opens it). */
+/** The admin's sections; each is a permission (the roles in Team say who opens it; /admin/me lists them). */
 const NAV: { href: string; label: MessageKey; icon: typeof BookOpen; permission: AdminPermission }[] = [
   { href: "/admin", label: "admin.nav.dashboard", icon: LayoutDashboard, permission: "dashboard" },
   { href: "/admin/books", label: "admin.nav.books", icon: BookOpen, permission: "books" },
@@ -25,6 +25,7 @@ const NAV: { href: string; label: MessageKey; icon: typeof BookOpen; permission:
   { href: "/admin/reference", label: "admin.nav.reference", icon: ListChecks, permission: "reference" },
   { href: "/admin/journal", label: "admin.nav.journal", icon: ScrollText, permission: "journal" },
   { href: "/admin/seo", label: "admin.nav.seo", icon: Search, permission: "seo" },
+  { href: "/admin/team", label: "admin.nav.team", icon: Users, permission: "team" },
 ];
 
 /** The section a path belongs to: the nav entry whose address it is or is under. */
