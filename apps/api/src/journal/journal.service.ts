@@ -39,6 +39,8 @@ export interface CallStart {
   prompt?: string;
   /** 1 for the first try; our own retries count up. */
   attempt?: number;
+  /** Illustrator references (their ids) sent with the call as pictures. */
+  references?: string[];
 }
 
 /** What came back from a model call. */
@@ -216,6 +218,7 @@ export class ModelCallTimer {
       images: outcome.images ?? 0,
       costUsd: outcome.costUsd,
       responseId: outcome.responseId ?? null,
+      references: this.call.references ?? [],
     };
   }
 

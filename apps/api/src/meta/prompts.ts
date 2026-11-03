@@ -1,5 +1,6 @@
 import {
   LANGUAGE_MODEL_NAMES,
+  type ReferenceKind,
   ageBand,
   talkQuestionKinds,
   type ChildProfile,
@@ -27,8 +28,10 @@ Return only JSON of this exact shape:
   "title": string,
   "hero_description": string,
   "pet_description": string | null,
-  "pages": [{ "page": number, "text": string, "scene_prompt": string }],
-  "talk_questions": string[]
+  "pages": [{ "page": number, "beat": number, "text": string, "scene_prompt": string }],
+  "talk_questions": string[],
+  "cover_scene": string,
+  "blurb": string
 }
 
 - "title" and every "text" are in the language the user asks for.
@@ -49,6 +52,13 @@ Return only JSON of this exact shape:
   tells of one.
   Any other character that appears on more than one page is described with the exact same
   words (species, colors, distinctive details) in every scene_prompt it appears in.
+- "beat" is the number of the method's beat the page tells: 1 for the first beat in the user's list,
+  2 for the second and so on, in order.
+- "cover_scene" is in English, one sentence for the front cover's picture: the hero in the story's
+  most joyful, dynamic moment, in its most recognisable place; the pet or the toy only if they are
+  main characters. Name them as in "scene_prompt". The hero appears once.
+- "blurb" is in the book's language: two short sentences for the back cover that make a parent want
+  to read the book aloud, without giving away the ending.
 - "talk_questions" are 3 to 5 short questions, in the book's language, that the parent asks
   the child after reading, of the kinds the user lists. They speak to the child as "you"
   with the grammatical gender of the child (Russian "ты хотела" for a girl, "ты хотел" for a boy).`;
@@ -208,6 +218,72 @@ export function toyPrompt(toyDescription: string, style = ART_STYLE): string {
     'Draw the same toy as in the reference photo, as a friendly storybook character, ' +
     `full body, front view, plain white background, centered, ${style}`
   );
+}
+
+/**
+ * The front cover's own picture, chained from the character sheets: the hero once, in a lively
+ * scene, low in the picture, with the top calm for the child's name and the title. ("The top 40
+ * percent is calm, empty open sky" kept more of it empty than a cover layout sketch did.)
+ */
+export function coverPrompt(
+  coverScene: string,
+  companions: Companions,
+  style = ART_STYLE,
+): string {
+  const pet = companions.pet
+    ? ' The pet is the same animal as in the pet character sheet shown earlier.'
+    : '';
+  const toy = companions.toy
+    ? ' The toy is the same toy as in the toy character sheet shown earlier.'
+    : '';
+  return (
+    `The front cover illustration of a picture book: ${coverScene.replace(/[.\s]+$/, '')}. ` +
+    'The hero is the same child as in the hero character sheet shown earlier, drawn exactly once, ' +
+    `full body, in a dynamic, joyful pose.${pet}${toy} ` +
+    'Composition: the hero is in the lower half of the picture; the top 40 percent is calm, empty open ' +
+    'sky (or a plain wall) with nothing in it, kept free for the title. No text, no letters, no title. ' +
+    style
+  );
+}
+
+/**
+ * What the prompt says about the illustrator's reference pictures sent with it (selectReferences
+ * gives their order): what each one is for, and that none of them is the hero. The hero's character
+ * sheet stays the only authority on the child's face, hair, skin and clothes.
+ */
+export function referenceNotes(
+  kinds: readonly ReferenceKind[],
+  target: 'hero' | 'page' | 'cover',
+): string {
+  if (!kinds.length) return '';
+  const where = (kind: ReferenceKind) => {
+    const at = kinds
+      .map((k, i) => (k === kind ? i + 1 : 0))
+      .filter((i) => i > 0);
+    if (!at.length) return '';
+    return at.length === 1
+      ? `picture ${at[0]}`
+      : `pictures ${at.join(' and ')}`;
+  };
+  const notes = [' Attached reference pictures, in order:'];
+  if (where('composition'))
+    notes.push(
+      ` ${where('composition')}: a rough staging sketch — follow only its camera distance, angle and where the figures stand in the frame; its blank figures are placeholders for this scene's characters.`,
+    );
+  if (where('style'))
+    notes.push(
+      ` ${where('style')}: style references — follow their palette, line, brush texture and lighting, never copy a figure, face, animal, object or scene from them.`,
+    );
+  if (where('character_guide'))
+    notes.push(
+      ` ${where('character_guide')}: a character proportion guide — follow only its body proportions (head size, height in heads, hands); draw one child, not its several views.`,
+    );
+  notes.push(
+    target === 'hero'
+      ? " The references guide style and proportions only: the child's face, hair, skin and clothes come only from the description above."
+      : " The references guide style and composition only: the hero's face, hair, skin, body and clothes come only from the hero character sheet shown earlier, never from the reference pictures.",
+  );
+  return notes.join('');
 }
 
 /** Where the book's theme prints text over the picture, so the picture leaves that part calm. */

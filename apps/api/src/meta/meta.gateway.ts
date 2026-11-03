@@ -18,6 +18,7 @@ import type {
   GeneratedStory,
   ModelGateway,
   PrefillFields,
+  ReferenceImage,
 } from './model-gateway';
 import {
   type CallJournal,
@@ -49,7 +50,9 @@ import {
   type Companions,
   type StoryBrief,
   type TextSpace,
+  coverPrompt,
   heroPrompt,
+  referenceNotes,
   ornamentPrompt,
   themeInstructions,
   themePrompt,
@@ -255,6 +258,8 @@ export class MetaGateway implements ModelGateway {
 
   async findSubject(
     image: Buffer,
+    _ext?: GeneratedImage['ext'],
+    kind: 'page-mask' | 'cover-mask' = 'page-mask',
   ): Promise<{ subject: PageSubject; costUsd: number }> {
     const sam = await import('@meta-sam/parser');
     const size = jpegSize(image);
@@ -262,7 +267,7 @@ export class MetaGateway implements ModelGateway {
     const found = await Promise.all(
       SUBJECT_CONCEPTS.map(async (concept) => {
         const call = this.journal.start({
-          kind: 'page-mask',
+          kind,
           model: this.options.samModel,
           prompt: concept,
         });
@@ -446,8 +451,24 @@ export class MetaGateway implements ModelGateway {
     );
   }
 
-  drawHero(heroDescription: string, style?: string): Promise<GeneratedImage> {
-    return this.draw('hero', heroPrompt(heroDescription, style), '1024x1024');
+  drawHero(
+    heroDescription: string,
+    style?: string,
+    references: ReferenceImage[] = [],
+  ): Promise<GeneratedImage> {
+    return this.draw(
+      'hero',
+      heroPrompt(heroDescription, style) +
+        referenceNotes(
+          references.map((r) => r.kind),
+          'hero',
+        ),
+      '1024x1024',
+      undefined,
+      undefined,
+      {},
+      references,
+    );
   }
 
   drawPet(
@@ -470,12 +491,43 @@ export class MetaGateway implements ModelGateway {
     companions: Companions,
     style?: string,
     textSpace?: TextSpace,
+    references: ReferenceImage[] = [],
   ): Promise<GeneratedImage> {
     return this.draw(
       'page',
-      pagePrompt(scenePrompt, companions, style, textSpace),
+      pagePrompt(scenePrompt, companions, style, textSpace) +
+        referenceNotes(
+          references.map((r) => r.kind),
+          'page',
+        ),
       '1536x1024',
       anchorRef,
+      undefined,
+      {},
+      references,
+    );
+  }
+
+  /** One try, square: the renderer crops it to the format, keeping SAM's hero in view. */
+  drawCover(
+    coverScene: string,
+    anchorRef: string,
+    companions: Companions,
+    style?: string,
+    references: ReferenceImage[] = [],
+  ): Promise<GeneratedImage> {
+    return this.draw(
+      'cover',
+      coverPrompt(coverScene, companions, style) +
+        referenceNotes(
+          references.map((r) => r.kind),
+          'cover',
+        ),
+      '1024x1024',
+      anchorRef,
+      undefined,
+      {},
+      references,
     );
   }
 
@@ -689,7 +741,11 @@ export class MetaGateway implements ModelGateway {
     return { text: parsed.data.text, costUsd: tokenCost(response) };
   }
 
-  /** One picture; a refused reference to the earlier picture is asked again (REFERENCE_ATTEMPTS). */
+  /**
+   * One picture; a refused reference to the earlier picture is asked again (REFERENCE_ATTEMPTS).
+   * `reference` is the toy photo; `references` the illustrators' pictures, sent after the prompt in
+   * their order and recorded in the journal by id.
+   */
   private async draw(
     kind: ModelCallKind,
     prompt: string,
@@ -697,6 +753,7 @@ export class MetaGateway implements ModelGateway {
     previousResponseId?: string,
     reference?: Buffer,
     extra: { output_format?: 'png' } = {},
+    references: ReferenceImage[] = [],
   ): Promise<GeneratedImage> {
     for (let attempt = 1; ; attempt++) {
       try {
@@ -707,6 +764,7 @@ export class MetaGateway implements ModelGateway {
           previousResponseId,
           reference,
           extra,
+          references,
         );
       } catch (error) {
         if (
@@ -727,6 +785,7 @@ export class MetaGateway implements ModelGateway {
     previousResponseId?: string,
     reference?: Buffer,
     extra: { output_format?: 'png' } = {},
+    references: ReferenceImage[] = [],
   ): Promise<GeneratedImage> {
     // Web and image search add latency and nothing for invented characters.
     const tool = {
@@ -742,22 +801,27 @@ export class MetaGateway implements ModelGateway {
       kind,
       model: this.options.imageModel,
       prompt,
+      references: references.map((r) => r.id),
     });
+    // A reference photo and the illustrators' pictures go in as image parts after the prompt.
+    const pictures = [
+      ...(reference ? [reference] : []),
+      ...references.map((r) => r.data),
+    ];
     const response = await call.request(
       this.client.responses.create({
         model: this.options.imageModel,
-        // A reference photo goes in as an image part next to the prompt.
-        input: reference
+        input: pictures.length
           ? [
               {
                 role: 'user',
                 content: [
                   { type: 'input_text', text: prompt },
-                  {
-                    type: 'input_image',
-                    image_url: dataUrl(reference),
-                    detail: 'auto',
-                  },
+                  ...pictures.map((picture) => ({
+                    type: 'input_image' as const,
+                    image_url: dataUrl(picture),
+                    detail: 'auto' as const,
+                  })),
                 ],
               },
             ]

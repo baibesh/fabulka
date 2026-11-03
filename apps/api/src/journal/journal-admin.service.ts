@@ -192,6 +192,7 @@ function toDto(row: Omit<ModelCallRow, 'prompt' | 'output'>): ModelCall {
     responseId: row.responseId,
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,
+    references: row.references ?? [],
     createdAt: row.createdAt.toISOString(),
   };
 }

@@ -58,6 +58,9 @@ import { QuotaController } from './quota/quota.controller';
 import { QuotaService } from './quota/quota.service';
 import { ReferenceController } from './reference/reference.controller';
 import { ReferenceService } from './reference/reference.service';
+import { FlagsService } from './references/flags.service';
+import { ReferencesController } from './references/references.controller';
+import { ReferencesService } from './references/references.service';
 import { SettingsService } from './settings/settings.service';
 import { StatusController } from './settings/status.controller';
 import { StorageModule } from './storage/storage.service';
@@ -107,6 +110,7 @@ class HealthController {
     AdminAuthController,
     AdminController,
     ExamplesAdminController,
+    ReferencesController,
     TeamController,
     AuditController,
     AuthController,
@@ -146,6 +150,8 @@ class HealthController {
     ExamplesService,
     TranslatorService,
     StaffCapsService,
+    ReferencesService,
+    FlagsService,
     AuditService,
     AuditCleaner,
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },

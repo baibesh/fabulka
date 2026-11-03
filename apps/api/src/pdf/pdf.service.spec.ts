@@ -3,6 +3,10 @@ import {
   blankPage,
   newLayout,
   printPageSize,
+  coverWrap,
+  interiorPages,
+  planBook,
+  wrapSheetSize,
   withFormat,
   type RenderableBook,
 } from '@fabulka/shared';
@@ -115,30 +119,40 @@ describe('PdfService (Chromium)', () => {
     expect(file.toString('latin1')).toContain('/DCTDecode');
   });
 
-  it('prints the print file with bleed and crop marks at the sheet size', async () => {
+  it('prints the cover wrap, then the pages between the covers with bleed and crop marks', async () => {
     const layout = withFormat(newLayout('fairy'), BOOK_FORMATS['a5-portrait']);
+    const story = book((n) => `${n}-бет. Айгерим Алматыда.`);
     const path = await pdf.renderPrint(
       'b',
-      book((n) => `${n}-бет. Айгерим Алматыда.`),
+      story,
       layout,
       'orders/o1/print.pdf',
       'Fabulka · o1',
+      'hard',
     );
     const file = await readFile(join(root, path));
     expect(file.subarray(0, 5).toString()).toBe('%PDF-');
+    const pt = (mm: number) => (mm / 25.4) * 72;
+    const doc = await PDFDocument.load(file);
+    const inside = interiorPages(planBook(story, layout)).length;
+    expect(inside % 4).toBe(0);
+    expect(doc.getPageCount()).toBe(inside + 1);
+    // The first sheet is the hardcover wrap: two boards, two hinges and the spine, turned in round it.
+    const wrap = coverWrap(layout.format, inside, 'hard');
+    const [first, ...pages] = doc.getPages();
+    const sheet = wrapSheetSize(wrap);
+    expect(first.getMediaBox().width).toBeCloseTo(pt(sheet.widthMm), 0);
+    expect(first.getMediaBox().height).toBeCloseTo(pt(sheet.heightMm), 0);
+    expect(first.getTrimBox().width).toBeCloseTo(pt(wrap.widthMm), 1);
+    expect(first.getBleedBox().width).toBeCloseTo(pt(wrap.widthMm + 30), 1);
+    const html = await readFile(join(root, 'books/b/print.html'), 'utf8');
+    expect(html).toContain('data-testid="spine-text"');
     // Points: (148 + 2 × (3 + 10)) mm × (210 + 2 × (3 + 10)) mm.
     const size = printPageSize(layout.format);
-    const pt = (mm: number) => (mm / 25.4) * 72;
-    const box = /\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/.exec(
-      file.toString('latin1'),
-    );
-    expect(box).not.toBeNull();
-    expect(Number(box![1])).toBeCloseTo(pt(size.widthMm), 0);
-    expect(Number(box![2])).toBeCloseTo(pt(size.heightMm), 0);
+    expect(pages[0].getMediaBox().width).toBeCloseTo(pt(size.widthMm), 0);
+    expect(pages[0].getMediaBox().height).toBeCloseTo(pt(size.heightMm), 0);
     // The trim and the bleed are marked for the print shop's preflight on every page.
-    const doc = await PDFDocument.load(file);
-    expect(doc.getPageCount()).toBeGreaterThan(4);
-    for (const page of doc.getPages()) {
+    for (const page of pages) {
       const trim = page.getTrimBox();
       const bleed = page.getBleedBox();
       expect(trim.width).toBeCloseTo(pt(148), 1);

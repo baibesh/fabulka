@@ -1,6 +1,10 @@
 import { Logger } from '@nestjs/common';
 import type { Language } from '@fabulka/shared';
-import type { GeneratedImage, ModelGateway } from '../meta/model-gateway';
+import type {
+  GeneratedImage,
+  ModelGateway,
+  ReferenceImage,
+} from '../meta/model-gateway';
 import type { Companions, TextSpace } from '../meta/prompts';
 import { softenScene } from '../meta/prompts';
 import { isSafetyRefusal } from '../meta/refusal';
@@ -31,6 +35,8 @@ export interface PageToIllustrate {
   companions: (scene: string) => Companions;
   style?: string;
   textSpace?: TextSpace;
+  /** The illustrators' pictures for this page (its beat's sketch, the theme's style), every try. */
+  references?: ReferenceImage[];
   /**
    * Called before the picture is drawn again after a refusal (the gentler scene, then the
    * rewritten one), so the progress screen can say the page is being redrawn. A throw stops the page.
@@ -60,6 +66,7 @@ export async function illustratePage(
       page.companions(scene),
       page.style,
       page.textSpace,
+      page.references,
     );
   let costUsd = 0;
   const drawn = (image: GeneratedImage, outcome: ArtOutcome) => ({

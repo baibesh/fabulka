@@ -222,21 +222,21 @@ export class AdminController {
   }
 
   @Get('books')
-  @RequirePermission('books')
+  @RequirePermission('books', 'books.review')
   books(@Query('status') status?: string) {
     return this.admin.listBooks(status);
   }
 
   /** For a country manager (catalog), only a public book or one made in their countries. */
   @Get('books/:id')
-  @RequirePermission('books', 'catalog')
+  @RequirePermission('books', 'catalog', 'books.review')
   book(@Param('id') id: string, @CurrentAdmin() session: AdminSession) {
     return this.admin.book(id, session);
   }
 
   /** The book's model calls in order: the timeline on its admin page. */
   @Get('books/:id/calls')
-  @RequirePermission('books')
+  @RequirePermission('books', 'books.review')
   bookCalls(@Param('id') id: string) {
     return this.journal.bookCalls(id);
   }
@@ -346,7 +346,7 @@ export class AdminController {
 
   /** Curated themes (read-only) and the ones Muse Spark proposed, with their checks and previews. */
   @Get('themes')
-  @RequirePermission('themes', 'catalog')
+  @RequirePermission('themes', 'catalog', 'themes.read')
   listThemes() {
     return this.themes.adminList();
   }
@@ -464,7 +464,7 @@ export class AdminController {
   }
 
   @Get('methodologies')
-  @RequirePermission('methodologies', 'catalog')
+  @RequirePermission('methodologies', 'catalog', 'methodologies.read')
   listMethodologies() {
     return this.methodologies.adminList();
   }
@@ -481,7 +481,7 @@ export class AdminController {
   }
 
   @Get('methodologies/:slug')
-  @RequirePermission('methodologies')
+  @RequirePermission('methodologies', 'methodologies.read')
   methodology(@Param('slug') slug: string) {
     return this.methodologies.adminGet(slug);
   }

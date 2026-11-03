@@ -234,3 +234,95 @@ describe('softenScene', () => {
     );
   });
 });
+
+describe('MetaGateway illustrator references', () => {
+  /** A journal that keeps what each call started with. */
+  function journaled(create: jest.Mock) {
+    const started: { kind: string; references?: string[] }[] = [];
+    const journal = {
+      start: (call: { kind: string; references?: string[] }) => {
+        started.push(call);
+        return {
+          request: <T>(p: Promise<T>) => p,
+          ok: () => undefined,
+          fail: () => undefined,
+        };
+      },
+    };
+    const gateway = new MetaGateway(OPTIONS, journal as never, 0);
+    (gateway as unknown as { client: unknown }).client = {
+      responses: { create },
+    };
+    return { gateway, started };
+  }
+  const sketch = {
+    id: 'ref-beat-2',
+    kind: 'composition' as const,
+    data: Buffer.from('sketch'),
+  };
+  const style = {
+    id: 'ref-style-1',
+    kind: 'style' as const,
+    data: Buffer.from('style'),
+  };
+
+  it('sends the pictures after the prompt, says what each is for and records their ids', async () => {
+    const create = jest.fn().mockResolvedValue(picture('p1'));
+    const { gateway, started } = journaled(create);
+    await gateway.drawPage(
+      'the hero sits on the grass',
+      'hero-1',
+      { pet: false, toy: false },
+      undefined,
+      'top',
+      [sketch, style],
+    );
+    const request = (create.mock.calls as unknown[][])[0][0] as {
+      input: {
+        content: { type: string; text?: string; image_url?: string }[];
+      }[];
+      previous_response_id: string;
+    };
+    expect(request.previous_response_id).toBe('hero-1');
+    const [text, ...images] = request.input[0].content;
+    expect(images.map((i) => i.image_url)).toEqual([
+      `data:image/jpeg;base64,${Buffer.from('sketch').toString('base64')}`,
+      `data:image/jpeg;base64,${Buffer.from('style').toString('base64')}`,
+    ]);
+    expect(text.text).toContain('picture 1: a rough staging sketch');
+    expect(text.text).toContain('picture 2: style references');
+    // The hero sheet stays the only authority on the child's look.
+    expect(text.text).toContain(
+      "the hero's face, hair, skin, body and clothes come only from the hero character sheet",
+    );
+    expect(started).toEqual([
+      expect.objectContaining({
+        kind: 'page',
+        references: ['ref-beat-2', 'ref-style-1'],
+      }),
+    ]);
+  });
+
+  it('draws as before without references, and the cover chained like a page', async () => {
+    const create = jest.fn().mockResolvedValue(picture('c1'));
+    const { gateway, started } = journaled(create);
+    await gateway.drawHero('a girl in a yellow T-shirt');
+    await gateway.drawCover('the hero on a bike', 'hero-1', {
+      pet: false,
+      toy: false,
+    });
+    const requests = (create.mock.calls as { input: unknown }[][]).map(
+      (call) => call[0],
+    );
+    expect(typeof requests[0].input).toBe('string');
+    expect(requests[1]).toMatchObject({
+      previous_response_id: 'hero-1',
+      tools: [expect.objectContaining({ size: '1024x1024' })],
+    });
+    expect(requests[1].input).toContain('the top 40 percent is calm');
+    expect(started.map((s) => [s.kind, s.references])).toEqual([
+      ['hero', []],
+      ['cover', []],
+    ]);
+  });
+});

@@ -1,9 +1,18 @@
 import { Global, Injectable, Logger, Module } from '@nestjs/common';
 import {
+  COVER_MAX_OVERLAP,
   GRID,
   blankPage,
   bookDocument,
+  chooseCover,
   chooseLayout,
+  coverOverlap,
+  coverWrap,
+  interiorPages,
+  planBook,
+  renderCoverWrap,
+  type Binding,
+  type Rect,
   countBreaks,
   countWords,
   cropNote,
@@ -41,6 +50,10 @@ export interface PageCheck {
   overflow: { page: string; detail: string }[];
   /** Pages where some text was drawn with a font the book does not embed. */
   fallback: { page: string; detail: string }[];
+  /** The cover's lettering as rendered (mm on the page), when the book has a designed cover. */
+  coverText?: Rect | null;
+  /** The lettering lies over the hero on the cover art even in the banner (should never happen). */
+  coverOverlap?: { page: string; detail: string }[];
 }
 
 export interface RenderResult {
@@ -48,6 +61,14 @@ export interface RenderResult {
   layout: BookLayout;
   /** Each story page's tone, measured now or passed in: the caller keeps them for next time. */
   tones: Record<number, PageTone | null>;
+  /** The cover illustration's tone, measured now or passed in; null without one. */
+  coverTone: PageTone | null;
+}
+
+/** What is known of the cover illustration: SAM's mask (null: SAM failed) and its tone, if measured. */
+export interface CoverPicture {
+  subject: PageSubject | null;
+  tone: PageTone | null;
 }
 
 /** What is known of a story page's picture: SAM's mask (null: SAM failed) and its tone, if measured. */
@@ -98,6 +119,7 @@ export class PdfService {
     layout: BookLayout,
     pictures: PagePicture[] = [],
     hooks: RenderHooks = {},
+    cover: CoverPicture | null = null,
   ): Promise<RenderResult> {
     const call = this.journal.start({ kind: 'render', model: 'chromium' });
     const browser = await chromium.launch();
@@ -108,6 +130,7 @@ export class PdfService {
         check,
         notes,
         tones,
+        coverTone,
       } = await this.layOut(
         page,
         `books/${bookId}`,
@@ -115,6 +138,7 @@ export class PdfService {
         book,
         layout,
         pictures,
+        cover,
       );
       await hooks.printing?.();
       // The PDF is printed from the page as checked: the shrink is already applied there.
@@ -137,7 +161,12 @@ export class PdfService {
       } else {
         call.ok({ costUsd: 0 });
       }
-      return { pdfPath, layout: { ...current, fits: check.fits, qa }, tones };
+      return {
+        pdfPath,
+        layout: { ...current, fits: check.fits, qa },
+        tones,
+        coverTone,
+      };
     } catch (error) {
       call.fail(error);
       throw error;
@@ -163,6 +192,7 @@ export class PdfService {
     book: RenderableBook,
     layout: BookLayout,
     pictures: PagePicture[],
+    cover: CoverPicture | null = null,
   ) {
     const hyphenate = hyphenatorFor(book.language);
     const tones = await measureTones(
@@ -171,7 +201,26 @@ export class PdfService {
       book,
       pictures,
     );
-    let current: BookLayout = { ...layout, fits: {} };
+    // The cover's lettering goes where SAM says the hero is not (chooseCover); none without its art.
+    const coverTone =
+      cover && book.coverImage
+        ? (cover.tone ??
+          (await measureTone(
+            page,
+            join(this.storage.root, folder, book.coverImage),
+          )))
+        : null;
+    let current: BookLayout = {
+      ...layout,
+      fits: {},
+      cover:
+        cover && book.coverImage
+          ? chooseCover(layout, cover.subject, coverTone, {
+              name: book.childName,
+              title: book.title ?? '',
+            })
+          : null,
+    };
     const notes: LayoutQa['notes'] = [];
     if (pictures.length) {
       const analyses = pictures.map((p) => {
@@ -224,11 +273,33 @@ export class PdfService {
       });
       await page.evaluate(() => document.fonts.ready);
       check = await checkPages(page, current.theme.minFit);
+      // The lettering as rendered must not lie over the hero: over the picture, it moves to its own band.
+      const overlap =
+        current.cover && check.coverText
+          ? coverOverlap(
+              current,
+              current.cover,
+              cover?.subject ?? null,
+              check.coverText,
+            )
+          : 0;
+      if (overlap > COVER_MAX_OVERLAP && current.cover) {
+        if (current.cover.mode === 'overlay') {
+          current = { ...current, cover: { ...current.cover, mode: 'banner' } };
+          continue;
+        }
+        check.coverOverlap = [
+          {
+            page: 'cover',
+            detail: `${Math.round(overlap * 100)}% of the lettering over the hero`,
+          },
+        ];
+      }
       const next = demote(current, rendered.pages, check.overflow);
       if (!next) break;
       current = next;
     }
-    return { layout: current, check, notes, tones };
+    return { layout: current, check, notes, tones, coverTone };
   }
 
   /**
@@ -349,9 +420,10 @@ export class PdfService {
   }
 
   /**
-   * The print file of a frozen layout: every page with the format's bleed (pictures run on past the
-   * trim), on a sheet with crop marks and a label outside the bleed, with TrimBox and BleedBox set for
-   * the print shop's preflight. Nothing is chosen or checked
+   * The print file of a frozen layout: first the cover wrap for the order's binding (back cover,
+   * spine as wide as the book is thick, front cover), then every page between the covers with the
+   * format's bleed (pictures run on past the trim), each on a sheet with crop marks and a label
+   * outside the bleed, with TrimBox and BleedBox set for the print shop's preflight. Nothing is chosen or checked
    * again — the layout, its page picks and its shrink are the ones the order froze. Written to
    * `outPath` (a storage path); returns it.
    */
@@ -361,19 +433,24 @@ export class PdfService {
     layout: BookLayout,
     outPath: string,
     label: string,
+    binding: Binding = 'soft',
   ): Promise<string> {
     const hyphenate = hyphenatorFor(book.language);
-    const rendered = renderBook(book, layout, {
-      hyphenate,
-      bleed: true,
-      asset: this.asset,
-    });
+    const options = { hyphenate, asset: this.asset };
+    const rendered = renderBook(book, layout, { ...options, bleed: true });
+    // The outside of the book first: back, spine and front as wide as the inside is thick.
+    const spec = coverWrap(
+      layout.format,
+      interiorPages(planBook(book, layout)).length,
+      binding,
+    );
     const html = printDocument(rendered, {
       title: book.title ?? '',
       language: book.language,
       fontCss: this.fontCss,
       format: layout.format,
       label,
+      wrap: { html: renderCoverWrap(book, layout, spec, options), spec },
     });
     // Next to book.html, so the pictures' relative paths resolve the same way.
     const htmlPath = await this.storage.save(
@@ -396,12 +473,20 @@ export class PdfService {
       });
       return await this.storage.save(
         outPath,
-        await withPrintBoxes(pdf, layout.format),
+        await withPrintBoxes(pdf, layout.format, spec),
       );
     } finally {
       await browser.close();
     }
   }
+}
+
+/** One picture's tone (measureTones), or null when the file cannot be read. */
+async function measureTone(page: Page, file: string): Promise<PageTone | null> {
+  const data = await readFile(file).catch(() => null);
+  if (!data) return null;
+  const url = `data:${MIME[extname(file)] ?? 'image/jpeg'};base64,${data.toString('base64')}`;
+  return toneOf(page, url);
 }
 
 /**
@@ -419,55 +504,53 @@ async function measureTones(
     tones[picture.page] = picture.tone;
     const file = book.pages.find((p) => p.page === picture.page)?.image;
     if (picture.tone || !file) continue;
-    const data = await readFile(join(folder, file)).catch(() => null);
-    if (!data) continue;
-    const url = `data:${MIME[extname(file)] ?? 'image/jpeg'};base64,${data.toString('base64')}`;
-    tones[picture.page] = await page.evaluate(
-      async ({ url, grid }) => {
-        const img = new Image();
-        img.src = url;
-        await img.decode();
-        // 16×16 samples a cell: their mean is the cell's lightness, their spread its texture.
-        const n = 16;
-        const side = grid * n;
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = side;
-        const context = canvas.getContext('2d')!;
-        context.imageSmoothingQuality = 'high';
-        context.drawImage(img, 0, 0, side, side);
-        const { data } = context.getImageData(0, 0, side, side);
-        const lum: number[] = [];
-        const detail: number[] = [];
-        for (let gy = 0; gy < grid; gy++) {
-          for (let gx = 0; gx < grid; gx++) {
-            let sum = 0;
-            let squares = 0;
-            for (let y = gy * n; y < gy * n + n; y++) {
-              for (let x = gx * n; x < gx * n + n; x++) {
-                const i = (y * side + x) * 4;
-                const l =
-                  0.2126 * data[i] +
-                  0.7152 * data[i + 1] +
-                  0.0722 * data[i + 2];
-                sum += l;
-                squares += l * l;
-              }
-            }
-            const mean = sum / (n * n);
-            lum.push(Math.round(mean));
-            detail.push(
-              Math.round(
-                Math.sqrt(Math.max(0, squares / (n * n) - mean * mean)),
-              ),
-            );
-          }
-        }
-        return { aspect: img.naturalWidth / img.naturalHeight, lum, detail };
-      },
-      { url, grid: GRID },
-    );
+    tones[picture.page] = await measureTone(page, join(folder, file));
   }
   return tones;
+}
+
+/** A picture's tone grid, from its data URL. */
+function toneOf(page: Page, url: string): Promise<PageTone> {
+  return page.evaluate(
+    async ({ url, grid }) => {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      // 16×16 samples a cell: their mean is the cell's lightness, their spread its texture.
+      const n = 16;
+      const side = grid * n;
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = side;
+      const context = canvas.getContext('2d')!;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(img, 0, 0, side, side);
+      const { data } = context.getImageData(0, 0, side, side);
+      const lum: number[] = [];
+      const detail: number[] = [];
+      for (let gy = 0; gy < grid; gy++) {
+        for (let gx = 0; gx < grid; gx++) {
+          let sum = 0;
+          let squares = 0;
+          for (let y = gy * n; y < gy * n + n; y++) {
+            for (let x = gx * n; x < gx * n + n; x++) {
+              const i = (y * side + x) * 4;
+              const l =
+                0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+              sum += l;
+              squares += l * l;
+            }
+          }
+          const mean = sum / (n * n);
+          lum.push(Math.round(mean));
+          detail.push(
+            Math.round(Math.sqrt(Math.max(0, squares / (n * n) - mean * mean))),
+          );
+        }
+      }
+      return { aspect: img.naturalWidth / img.naturalHeight, lum, detail };
+    },
+    { url, grid: GRID },
+  );
 }
 
 export function verdict(
@@ -478,6 +561,10 @@ export function verdict(
   const issues: RenderIssue[] = [
     ...check.overflow.map((o) => ({ ...o, kind: 'overflow' as const })),
     ...check.fallback.map((f) => ({ ...f, kind: 'fallback-font' as const })),
+    ...(check.coverOverlap ?? []).map((c) => ({
+      ...c,
+      kind: 'cover-overlap' as const,
+    })),
   ];
   const status = issues.length
     ? 'blocked'
@@ -556,7 +643,40 @@ async function checkPages(page: Page, minFit: number): Promise<PageCheck> {
       document.querySelectorAll<HTMLElement>('[data-qa-text]').forEach((el) => {
         keys.push(el.closest<HTMLElement>('.fb-page')?.dataset.key ?? '?');
       });
-      return { fits, overflow, keys };
+      // Where the cover's lettering ended up, in millimetres from the page's top left (96 px an inch).
+      const cover = document.querySelector<HTMLElement>(
+        '.fb-page[data-key="cover"]',
+      );
+      const letters = cover?.querySelector<HTMLElement>(
+        '[data-cover-text] .fb-flow',
+      );
+      let coverText: { x: number; y: number; w: number; h: number } | null =
+        null;
+      if (cover && letters) {
+        const page = cover.getBoundingClientRect();
+        // The flow is as wide as its box; the lines themselves are what may cover someone.
+        const lines = Array.from(
+          letters.querySelectorAll<HTMLElement>('h1, p'),
+        ).map((el) => {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          return range.getBoundingClientRect();
+        });
+        if (lines.length) {
+          const mm = 25.4 / 96;
+          const x0 = Math.min(...lines.map((r) => r.left));
+          const y0 = Math.min(...lines.map((r) => r.top));
+          const x1 = Math.max(...lines.map((r) => r.right));
+          const y1 = Math.max(...lines.map((r) => r.bottom));
+          coverText = {
+            x: (x0 - page.left) * mm,
+            y: (y0 - page.top) * mm,
+            w: (x1 - x0) * mm,
+            h: (y1 - y0) * mm,
+          };
+        }
+      }
+      return { fits, overflow, keys, coverText };
     },
     { minFit, step: SHRINK_STEP },
   );

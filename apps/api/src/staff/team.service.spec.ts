@@ -222,6 +222,7 @@ describe('TeamService roles', () => {
       ['admin', true, true, 1],
       ['seo', false, true, 0],
       ['country_manager', false, false, 0],
+      ['illustrator', false, false, 0],
     ]);
   });
 
@@ -287,7 +288,7 @@ describe('TeamService roles', () => {
     expect(await code(team.deleteRole('seo'))).toBe('role_builtin');
     expect(await code(team.deleteRole('country_manager'))).toBe('role_in_use');
     expect(await code(team.deleteRole('ghost'))).toBe('role_not_found');
-    expect(prisma.staffRole.rows).toHaveLength(3);
+    expect(prisma.staffRole.rows).toHaveLength(4);
   });
 
   it('refuses to make a role country-scoped while a holder has no countries', async () => {

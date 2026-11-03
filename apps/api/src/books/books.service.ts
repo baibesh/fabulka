@@ -20,6 +20,7 @@ import {
   answersProblem,
   arrangeBlocks,
   availableVariants,
+  beatOf,
   blankPage,
   bookFormatOf,
   calmSpace,
@@ -43,6 +44,8 @@ import {
   type PageLayout,
   type PageSubject,
   type PageTone,
+  PageSubjectSchema,
+  PageToneSchema,
   type PinLayout,
   type PhotoRefusal,
   type PhotoUpload,
@@ -77,6 +80,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ReferenceService } from '../reference/reference.service';
 import { StorageService } from '../storage/storage.service';
 import { ThemesService } from '../themes/themes.service';
+import { isSafetyRefusal } from '../meta/refusal';
+import { softenScene, type Companions } from '../meta/prompts';
+import {
+  type BookReferences,
+  ReferencesService,
+} from '../references/references.service';
 
 /** Body of a 400 from PATCH /books/:id/layout: the new block order breaks the template's rules. */
 export const BLOCKS_REFUSED = 'blocks_refused';
@@ -91,6 +100,8 @@ const PHOTO_MESSAGES: Record<PhotoRefusal, string> = {
 /** A page as stored in Book.pages. */
 export interface StoredPage {
   page: number;
+  /** The method beat the page tells (1 = the first); missing for books made before beats. */
+  beat?: number | null;
   text: string;
   scenePrompt: string;
   imagePath: string | null;
@@ -169,6 +180,7 @@ export class BooksService implements OnModuleInit {
     private readonly journal: JournalService,
     private readonly reference: ReferenceService,
     private readonly themes: ThemesService,
+    private readonly references: ReferencesService,
     config: ConfigService,
   ) {
     this.pageCount = Number(config.get('PAGE_COUNT', 10));
@@ -532,6 +544,7 @@ export class BooksService implements OnModuleInit {
         pdfPath: result.pdfPath,
         layout: json(result.layout),
         pages: json(result.pages),
+        ...(result.coverTone && { coverTone: json(result.coverTone) }),
       },
     });
   }
@@ -546,6 +559,7 @@ export class BooksService implements OnModuleInit {
     const labels = BOOK_LABELS[book.language];
     const checked = withHeadingCheck(layout, [
       book.title ?? '',
+      book.childName,
       layout.dedication ?? labels.madeFor(book.childName),
       layout.photo?.caption ?? '',
       labels.talk,
@@ -557,8 +571,14 @@ export class BooksService implements OnModuleInit {
       subject: p.subject ?? null,
       tone: p.tone ?? null,
     }));
+    const cover = row.coverImagePath
+      ? {
+          subject: PageSubjectSchema.safeParse(row.coverSubject).data ?? null,
+          tone: PageToneSchema.safeParse(row.coverTone).data ?? null,
+        }
+      : null;
     const result = await this.journal.run({ bookId: row.id }, () =>
-      this.pdf.render(row.id, book, checked, pictures, hooks),
+      this.pdf.render(row.id, book, checked, pictures, hooks, cover),
     );
     // The tones are measured once and kept with the pages.
     const pages = stored.map((p) => ({
@@ -685,8 +705,11 @@ export class BooksService implements OnModuleInit {
     await step('story');
     const { story, costUsd: storyCost } = await this.models.writeStory(brief);
     spent.usd += storyCost;
+    // Each page's beat of the method: Spark's tag, else spread over the beats in order.
+    const beats = brief.methodology.structure.length;
     const pages: StoredPage[] = story.pages.map((p) => ({
       page: p.page,
+      beat: beatOf(p.beat, p.page, story.pages.length, beats),
       text: p.text,
       scenePrompt: p.scene_prompt,
       imagePath: null,
@@ -696,6 +719,7 @@ export class BooksService implements OnModuleInit {
     gen.pages = pages.length;
     await save({
       title: story.title,
+      blurb: story.blurb,
       heroDescription: story.hero_description,
       pages: json(pages),
       talkQuestions: story.talk_questions,
@@ -716,8 +740,18 @@ export class BooksService implements OnModuleInit {
       );
     }
 
+    // The illustrators' pictures for this theme and method (none: drawn as before).
+    const references = await this.references.forBook({
+      theme: theme.id,
+      methodology: brief.methodology.slug,
+    });
+
     await step('hero');
-    const hero = await this.models.drawHero(story.hero_description, style);
+    const hero = await this.models.drawHero(
+      story.hero_description,
+      style,
+      await references.for({ kind: 'hero' }),
+    );
     spent.usd += hero.costUsd;
     const heroImagePath = await this.storage.save(
       `books/${id}/hero.${hero.ext}`,
@@ -767,6 +801,20 @@ export class BooksService implements OnModuleInit {
     }
 
     await step('pages', { progress: progressFor('pages', 0, pages.length) });
+    // The cover is drawn alongside the pages, chained from the same sheets: it adds no wait of its own.
+    const companions = (scene: string): Companions => ({
+      pet: withPet && petInScene(scene),
+      toy: toyReference !== null && toyInScene(scene),
+    });
+    const coverJob = this.drawCover(
+      id,
+      story.cover_scene ?? pages[0]?.scenePrompt ?? story.title,
+      anchorRef,
+      companions,
+      style,
+      references,
+      spent,
+    );
     let done = 0;
     const settle = (n: number) => {
       gen.drawing = gen.drawing.filter((p) => p !== n);
@@ -782,12 +830,13 @@ export class BooksService implements OnModuleInit {
         scenePrompt: page.scenePrompt,
         language: child.language,
         anchorRef,
-        companions: (scene) => ({
-          pet: withPet && petInScene(scene),
-          toy: toyReference !== null && toyInScene(scene),
-        }),
+        companions,
         style,
         textSpace,
+        references: await references.for({
+          kind: 'page',
+          beat: page.beat ?? null,
+        }),
         onRetry: () => {
           if (!gen.redrawing.includes(page.page)) gen.redrawing.push(page.page);
           return save();
@@ -820,10 +869,15 @@ export class BooksService implements OnModuleInit {
       });
     });
 
+    const cover = await coverJob;
     const row = await step('check', {
       pages: json(pages),
       costUsd: spent.usd,
       progress: progressFor('pdf'),
+      ...(cover && {
+        coverImagePath: cover.path,
+        coverSubject: cover.subject ? json(cover.subject) : Prisma.DbNull,
+      }),
     });
     const rendered = await this.renderPdf(row, layoutOf(row.layout), {
       printing: () => step('pdf', { progress: 97 }),
@@ -833,12 +887,66 @@ export class BooksService implements OnModuleInit {
       pdfPath: rendered.pdfPath,
       layout: json(rendered.layout),
       pages: json(rendered.pages),
+      ...(rendered.coverTone && { coverTone: json(rendered.coverTone) }),
       progress: 100,
       generation: Prisma.DbNull,
     });
     this.logger.log(
       `book ${id} done: ${pages.length} pages, $${spent.usd.toFixed(3)}`,
     );
+  }
+
+  /**
+   * The front cover's own illustration and SAM's mask of it. Never throws: a refused or failed cover
+   * leaves the book with the older cover (the hero's sheet on the theme's sky), logged. A refused
+   * scene is tried once more in its gentler form.
+   */
+  private async drawCover(
+    id: string,
+    scene: string,
+    anchorRef: string,
+    companions: (scene: string) => Companions,
+    style: string | undefined,
+    references: BookReferences,
+    spent: Spend,
+  ): Promise<{ path: string; subject: PageSubject | null } | null> {
+    const pictures = await references.for({ kind: 'cover' });
+    const draw = (text: string) =>
+      this.models.drawCover(text, anchorRef, companions(text), style, pictures);
+    try {
+      let image: GeneratedImage;
+      try {
+        image = await draw(scene);
+      } catch (error) {
+        if (!isSafetyRefusal(error)) throw error;
+        image = await draw(softenScene(scene));
+      }
+      spent.usd += image.costUsd;
+      const path = await this.storage.save(
+        `books/${id}/cover.${image.ext}`,
+        image.data,
+      );
+      let subject: PageSubject | null = null;
+      try {
+        const found = await this.models.findSubject(
+          image.data,
+          image.ext,
+          'cover-mask',
+        );
+        spent.usd += found.costUsd;
+        subject = found.subject;
+      } catch (error) {
+        this.logger.warn(
+          `book ${id} cover: no mask (${error instanceof Error ? error.message : String(error)}); the lettering gets its own band`,
+        );
+      }
+      return { path, subject };
+    } catch (error) {
+      this.logger.warn(
+        `book ${id}: no cover illustration (${error instanceof Error ? error.message : String(error)}); the older cover instead`,
+      );
+      return null;
+    }
   }
 
   /** SAM's mask of a page's characters; null when SAM failed (logged). */
@@ -904,6 +1012,8 @@ export class BooksService implements OnModuleInit {
       template: row.template?.slug ?? null,
       talkQuestions: row.talkQuestions as string[],
       heroImageUrl: this.storage.url(row.heroImagePath),
+      coverImageUrl: this.storage.url(row.coverImagePath),
+      blurb: row.blurb,
       toy: row.toyPhotoPath
         ? {
             name: row.toyName,
@@ -988,6 +1098,8 @@ export function storedBook(row: BookRow) {
     childName: child.name,
     language: row.language as Language,
     heroImage: local(row.heroImagePath),
+    coverImage: local(row.coverImagePath),
+    blurb: row.blurb,
     pages: (row.pages as unknown as StoredPage[]).map((p) => ({
       page: p.page,
       text: p.text,

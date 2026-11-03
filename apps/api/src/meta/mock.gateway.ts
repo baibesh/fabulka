@@ -1,5 +1,6 @@
 import {
   GRID,
+  beatOf,
   countWords,
   encodeGrid,
   transliterate,
@@ -14,6 +15,7 @@ import type {
   GeneratedStory,
   ModelGateway,
   PrefillFields,
+  ReferenceImage,
 } from './model-gateway';
 import type { BookTranslation } from '../examples/translation';
 import type {
@@ -55,10 +57,13 @@ const MOCK_TEXT: Record<
     title: (name: string) => string;
     page: (n: number, name: string, city: string) => string;
     questions: string[];
+    blurb: (name: string) => string;
   }
 > = {
   ru: {
     title: (name) => `${name} и звёздное путешествие`,
+    blurb: (name) =>
+      `${name} отправляется туда, где светят звёзды. Что ждёт в пути?`,
     page: (n, name, city) =>
       `Страница ${n}. ${name} отправляется в новое приключение в городе ${city}.`,
     questions: [
@@ -69,6 +74,8 @@ const MOCK_TEXT: Record<
   },
   kk: {
     title: (name) => `${name} және жұлдызды сапар`,
+    blurb: (name) =>
+      `${name} жұлдыздар жарқыраған жерге аттанады. Жолда не күтіп тұр?`,
     page: (n, name, city) =>
       `${n}-бет. ${name} ${city} қаласында жаңа шытырман оқиғаны бастайды.`,
     questions: [
@@ -79,6 +86,8 @@ const MOCK_TEXT: Record<
   },
   en: {
     title: (name) => `${name} and the Starry Journey`,
+    blurb: (name) =>
+      `${name} sets off to where the stars shine. What waits on the way?`,
     page: (n, name, city) =>
       `Page ${n}. ${name} sets off on a new adventure in ${city}.`,
     questions: [
@@ -89,6 +98,8 @@ const MOCK_TEXT: Record<
   },
   es: {
     title: (name) => `${name} y el viaje de las estrellas`,
+    blurb: (name) =>
+      `${name} parte hacia donde brillan las estrellas. ¿Qué le espera en el camino?`,
     page: (n, name, city) =>
       `Página ${n}. ${name} empieza una nueva aventura en ${city}.`,
     questions: [
@@ -99,6 +110,8 @@ const MOCK_TEXT: Record<
   },
   de: {
     title: (name) => `${name} und die Sternenreise`,
+    blurb: (name) =>
+      `${name} macht sich auf zu den Sternen. Was wartet unterwegs?`,
     page: (n, name, city) =>
       `Seite ${n}. ${name} bricht in ${city} zu einem neuen Abenteuer auf.`,
     questions: [
@@ -234,8 +247,13 @@ export class MockGateway implements ModelGateway {
     kind: ModelCallKind,
     images = 0,
     costUsd = 0,
+    references: ReferenceImage[] = [],
   ): Promise<void> {
-    const call = this.journal.start({ kind, model: 'mock' });
+    const call = this.journal.start({
+      kind,
+      model: 'mock',
+      references: references.map((r) => r.id),
+    });
     await sleep(this.delayMs);
     call.ok({ costUsd, images });
   }
@@ -245,6 +263,7 @@ export class MockGateway implements ModelGateway {
     pageCount,
     template,
     toy,
+    methodology,
   }: StoryBrief): Promise<GeneratedStory> {
     const asked = (interest: string) =>
       child.interests.some((i) => i.trim().toLowerCase() === interest);
@@ -261,6 +280,9 @@ export class MockGateway implements ModelGateway {
       pet_description: child.pet ? 'a small ginger cat with white paws' : null,
       pages: Array.from({ length: pageCount }, (_, i) => ({
         page: i + 1,
+        beat:
+          beatOf(undefined, i + 1, pageCount, methodology.structure.length) ??
+          undefined,
         text: text.page(i + 1, child.name, child.city),
         scene_prompt:
           i + 1 === refused
@@ -268,6 +290,8 @@ export class MockGateway implements ModelGateway {
             : `the hero${toy ? ' and the toy' : ''} exploring ${child.city}, scene ${i + 1}${slow}`,
       })),
       talk_questions: text.questions,
+      cover_scene: `the hero laughing on a hill above ${child.city}${slow}`,
+      blurb: text.blurb(child.name),
     };
     return { story, costUsd: 0 };
   }
@@ -300,9 +324,13 @@ export class MockGateway implements ModelGateway {
     };
   }
 
-  async drawHero(description = ''): Promise<GeneratedImage> {
+  async drawHero(
+    description = '',
+    _style?: string,
+    references: ReferenceImage[] = [],
+  ): Promise<GeneratedImage> {
     await slowedBy(description, SLOW_SHEET_MS);
-    await this.pretend('hero', 1);
+    await this.pretend('hero', 1, 0, references);
     return {
       data: placeholder('hero', '#FFFFFF'),
       ext: 'svg',
@@ -422,11 +450,12 @@ export class MockGateway implements ModelGateway {
    * The hero is the white disc every placeholder page draws: the same mask, every run. Two journal
    * entries, like the real SAM calls (people, then animals).
    */
-  async findSubject(): Promise<{ subject: PageSubject; costUsd: number }> {
-    await Promise.all([
-      this.pretend('page-mask', 1),
-      this.pretend('page-mask', 1),
-    ]);
+  async findSubject(
+    _image?: Buffer,
+    _ext?: GeneratedImage['ext'],
+    kind: 'page-mask' | 'cover-mask' = 'page-mask',
+  ): Promise<{ subject: PageSubject; costUsd: number }> {
+    await Promise.all([this.pretend(kind, 1), this.pretend(kind, 1)]);
     return { subject: MOCK_SUBJECT, costUsd: 0 };
   }
 
@@ -436,7 +465,32 @@ export class MockGateway implements ModelGateway {
     return { scene: `the hero standing calmly, ${scene}`, costUsd: 0 };
   }
 
-  async drawPage(scenePrompt: string): Promise<GeneratedImage> {
+  /** The cover's placeholder: the same white disc as the pages, so SAM's mock mask fits it too. */
+  async drawCover(
+    coverScene: string,
+    _anchorRef?: string,
+    _companions?: unknown,
+    _style?: string,
+    references: ReferenceImage[] = [],
+  ): Promise<GeneratedImage> {
+    await slowedBy(coverScene, SLOW_SHEET_MS);
+    await this.pretend('cover', 1, 0, references);
+    return {
+      data: placeholder('cover', '#CFE6F5'),
+      ext: 'svg',
+      ref: 'mock-cover',
+      costUsd: 0,
+    };
+  }
+
+  async drawPage(
+    scenePrompt: string,
+    _anchorRef?: string,
+    _companions?: unknown,
+    _style?: string,
+    _textSpace?: unknown,
+    references: ReferenceImage[] = [],
+  ): Promise<GeneratedImage> {
     const n = Number(/scene (\d+)/.exec(scenePrompt)?.[1] ?? 1);
     await slowedBy(scenePrompt, n * SLOW_PAGE_MS);
     if (scenePrompt.includes(REFUSE_MARK)) {
@@ -450,7 +504,7 @@ export class MockGateway implements ModelGateway {
       call.fail(error);
       throw error;
     }
-    await this.pretend('page', 1);
+    await this.pretend('page', 1, 0, references);
     return {
       data: placeholder(`page ${n}`, COLORS[(n - 1) % COLORS.length]),
       ext: 'svg',

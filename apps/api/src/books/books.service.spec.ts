@@ -4,6 +4,7 @@ import {
   DEFAULT_FORMATS,
   DEFAULT_METHODOLOGIES,
   PHOTO_REFUSED,
+  defaultThemeId,
   newLayout,
   type BookLayout,
   type GenerationState,
@@ -28,6 +29,10 @@ import {
   toyInScene,
   type StoredPage,
 } from './books.service';
+import {
+  NO_REFERENCES,
+  ReferencesService,
+} from '../references/references.service';
 
 const child = {
   name: 'Арман',
@@ -57,7 +62,12 @@ function makeService(
   models: unknown = new MockGateway(0),
   methods = methodRows(),
   template: Record<string, unknown> = {},
-  files: { storage?: unknown; pdf?: unknown; format?: string } = {},
+  files: {
+    storage?: unknown;
+    pdf?: unknown;
+    format?: string;
+    references?: unknown;
+  } = {},
 ) {
   const templates = {
     find: jest.fn().mockResolvedValue({
@@ -87,6 +97,9 @@ function makeService(
         ),
     } as unknown as ReferenceService,
     curatedThemes(),
+    (files.references ?? {
+      forBook: () => Promise.resolve(NO_REFERENCES),
+    }) as ReferencesService,
     { get: () => 2 } as unknown as ConfigService,
   );
 }
@@ -266,6 +279,131 @@ describe('BooksService', () => {
       pages: { image: string | null }[];
     };
     expect(book.pages.map((p) => p.image)).toEqual(['page-1.svg', null]);
+  });
+
+  it("sends the illustrators' references with the hero, each page and the cover, records them, and draws the cover", async () => {
+    // Pages 1 and 2 of a 2-page growth-mindset book tell beats 1 and 4 (spread over the six beats).
+    const theme = defaultThemeId(child.age);
+    const refs = [
+      { id: 'style-a', kind: 'style', theme, sortOrder: 0 },
+      { id: 'style-b', kind: 'style', theme, sortOrder: 1 },
+      { id: 'style-c', kind: 'style', theme, sortOrder: 2 },
+      {
+        id: 'beat-1',
+        kind: 'composition',
+        methodology: 'growth-mindset',
+        beat: 1,
+      },
+      {
+        id: 'beat-3',
+        kind: 'composition',
+        methodology: 'growth-mindset',
+        beat: 3,
+      },
+      { id: 'guide', kind: 'character_guide' },
+    ].map((r) => ({
+      theme: null,
+      methodology: null,
+      beat: null,
+      enabled: true,
+      sortOrder: 0,
+      modelPath: `references/${r.id}/model.jpg`,
+      ...r,
+    }));
+    const calls: { kind: string; references: string[] }[] = [];
+    const callTable = {
+      create: jest.fn(
+        ({ data }: { data: { kind: string; references: string[] } }) => {
+          calls.push(data);
+          return Promise.resolve({});
+        },
+      ),
+    };
+    const models = new MockGateway(
+      0,
+      new JournalService({ modelCall: callTable } as never),
+    );
+    const row: Record<string, unknown> = {
+      id: 'b11',
+      status: 'queued',
+      child,
+      language: 'ru',
+      pages: [],
+      layout: null,
+      createdAt: new Date(),
+    };
+    const render = jest.fn((_id: string, _book: unknown, layout: BookLayout) =>
+      Promise.resolve({
+        pdfPath: 'books/b11/book.pdf',
+        layout,
+        tones: {},
+        coverTone: null,
+      }),
+    );
+    const storage = {
+      url: () => null,
+      save: (path: string) => Promise.resolve(path),
+      read: (path: string) => Promise.resolve(Buffer.from(path)),
+    };
+    const service = makeService(
+      {
+        book: {
+          create: jest.fn(({ data }: { data: object }) => {
+            Object.assign(row, data);
+            return Promise.resolve({ ...row });
+          }),
+          update: jest.fn(({ data }: { data: object }) => {
+            Object.assign(row, data);
+            return Promise.resolve({ ...row });
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        modelCall: { create: jest.fn().mockResolvedValue({}) },
+      },
+      models,
+      methodRows(),
+      {},
+      {
+        storage,
+        pdf: { render },
+        references: new ReferencesService(
+          {
+            illustratorReference: {
+              findMany: jest.fn().mockResolvedValue(refs),
+            },
+          } as unknown as PrismaService,
+          storage as unknown as StorageService,
+          {} as never,
+          {} as never,
+        ),
+      },
+    );
+
+    await service.create({ child, methodology: 'growth-mindset' }, 'k', false);
+    for (let i = 0; i < 50 && row.status !== 'done'; i++)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(row.status).toBe('done');
+    const sent = (kind: string) =>
+      calls.filter((c) => c.kind === kind).map((c) => c.references);
+    expect(sent('hero')).toEqual([['style-a', 'style-b', 'guide']]);
+    // Each page: its beat's sketch first, then two style pictures; a beat nobody drew gets style only.
+    expect(sent('page')).toEqual(
+      expect.arrayContaining([
+        ['beat-1', 'style-a', 'style-b'],
+        ['style-a', 'style-b'],
+      ]),
+    );
+    expect(sent('cover')).toEqual([['style-a', 'style-b']]);
+    expect(sent('story')).toEqual([[]]);
+    expect((row.pages as StoredPage[]).map((p) => p.beat)).toEqual([1, 4]);
+    // The cover illustration, SAM's mask of it, and the back cover's blurb.
+    expect(row.coverImagePath).toBe('books/b11/cover.svg');
+    expect(typeof (row.coverSubject as { grid: unknown }).grid).toBe('string');
+    expect(sent('cover-mask')).toHaveLength(2);
+    expect(row.blurb).toContain('Арман');
+    const book = render.mock.calls[0][1] as { coverImage: string | null };
+    expect(book.coverImage).toBe('cover.svg');
   });
 
   describe('the progress screen', () => {

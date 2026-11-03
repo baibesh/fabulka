@@ -23,8 +23,15 @@ import {
   type UpdateTemplate,
   TemplateBlocksSchema,
 } from '@fabulka/shared';
-import { Prisma } from '@prisma/client';
-import { BooksService, withTemplate } from '../books/books.service';
+import { Prisma, type Book as BookRow } from '@prisma/client';
+import {
+  coverWrap,
+  interiorPages,
+  planBook,
+  type Binding,
+} from '@fabulka/shared';
+import { BooksService, storedBook, withTemplate } from '../books/books.service';
+import { layoutOf } from '../layout/layout';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { QuotaService, startOfDay } from '../quota/quota.service';
@@ -290,6 +297,7 @@ export class AdminService {
         : null,
       costUsd: row.costUsd,
       clientKey: row.clientKey,
+      print: printOf(row),
     };
   }
 
@@ -645,8 +653,26 @@ export function bookVisible(
   session: AdminAccess,
   book: { country: string | null; sampleOf: unknown; exampleOf: unknown },
 ): boolean {
-  if (!listScope(session, 'books')) return true;
+  if (!listScope(session, 'books', 'books.review')) return true;
   if (book.sampleOf || book.exampleOf) return true;
   const scope = listScope(session, 'catalog', 'examples', 'books');
   return !scope || (!!book.country && scope.includes(book.country));
+}
+
+/** The pages between the covers and each binding's cover wrap (spine width, finished size). */
+export function printOf(row: BookRow): AdminBook['print'] {
+  if (!Array.isArray(row.pages) || !Array.isArray(row.talkQuestions))
+    return undefined;
+  const layout = layoutOf(row.layout);
+  const inside = interiorPages(planBook(storedBook(row), layout)).length;
+  const wrap = (binding: Binding) => {
+    const spec = coverWrap(layout.format, inside, binding);
+    return {
+      spineMm: spec.spineMm,
+      spineText: spec.spineText,
+      widthMm: spec.widthMm,
+      heightMm: spec.heightMm,
+    };
+  };
+  return { interiorPages: inside, soft: wrap('soft'), hard: wrap('hard') };
 }

@@ -45,7 +45,15 @@ model Book {
   toyDescription  String?
   toyImagePath    String?
   petImagePath    String?
-  /// BookPage[]: { page, text, scenePrompt, imagePath }
+  /// The front cover's own illustration (the hero in a scene from the story), chained from the sheets.
+  coverImagePath  String?
+  /// SAM's mask of the characters on the cover illustration (PageSubject), so the lettering keeps off them.
+  coverSubject    Json?
+  /// How light the cover illustration is where (PageTone), measured at the first render.
+  coverTone       Json?
+  /// The back cover's two sentences, in the book's language (Muse Spark writes them with the story).
+  blurb           String?
+  /// BookPage[]: { page, beat, text, scenePrompt, imagePath }
   pages           Json            @default("[]")
   /// Questions for the parent to ask after reading (dialogic reading).
   talkQuestions   Json            @default("[]")
@@ -72,6 +80,8 @@ model Book {
   printInterest   PrintInterest[]
   /// Every request to the models made for this book (the journal in the admin).
   modelCalls      ModelCall[]
+  /// Pages illustrators flagged in review.
+  flags           PageFlag[]
   /// The catalog book this one is the sample of (in its language), if the admin picked it.
   sampleOf        TemplateSample?
   /// The home page example this book is the version of (in its language), if staff made it one.
@@ -414,6 +424,8 @@ model ModelCall {
   /// email) and the country it was for; staff daily caps sum these.
   staffEmail   String?
   staffCountry String?
+  /// Illustrator references (IllustratorReference ids) sent with the call as pictures.
+  references   String[] @default([])
   createdAt    DateTime @default(now())
 
   @@index([bookId])
@@ -586,4 +598,55 @@ model StaffRole {
   locked    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// A picture an illustrator prepared for Muse Image (admin «References»): a theme's style, a method
+/// beat's staging sketch, or the global character guide. Generation sends the enabled ones of a slot
+/// next to the prompt (selectReferences in @fabulka/shared). The file is stored at two sizes: a
+/// preview for the admin and a small copy for the model.
+model IllustratorReference {
+  id          String   @id @default(cuid(2))
+  /// REFERENCE_KINDS: style, composition, character_guide.
+  kind        String
+  /// The theme (BookTheme id) of a style picture.
+  theme       String?
+  /// The method (Methodology slug) and its beat (1 = the first of its structure) of a composition sketch.
+  methodology String?
+  beat        Int?
+  /// Storage paths: the preview and the copy sent to the model.
+  path        String
+  modelPath   String
+  width       Int
+  height      Int
+  /// The preview's size in bytes.
+  bytes       Int
+  note        String   @default("")
+  enabled     Boolean  @default(true)
+  /// Order inside the slot: the first ones are sent first.
+  sortOrder   Int      @default(0)
+  /// Who uploaded it (an email).
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([kind, theme])
+  @@index([kind, methodology, beat])
+}
+
+/// A page an illustrator flagged while reviewing a book, with a note (admin «References» → flags).
+model PageFlag {
+  id         String    @id @default(cuid(2))
+  book       Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  bookId     String
+  /// The page's key: cover, back, story-3…
+  page       String
+  note       String
+  resolved   Boolean   @default(false)
+  /// Who flagged it (an email).
+  createdBy  String?
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  @@index([resolved, createdAt])
+  @@index([bookId])
 }

@@ -483,6 +483,7 @@ export class OrdersService implements OnModuleInit {
       layout,
       path,
       `Fabulka · ${row.id} · ${layout.format.id} ${layout.format.widthMm}×${layout.format.heightMm} mm + ${layout.format.bleedMm} mm bleed · ${row.cover} ×${row.quantity}`,
+      row.cover,
     );
     return { path, name };
   }

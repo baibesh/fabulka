@@ -56,6 +56,7 @@ describe('illustratePage', () => {
       { pet: true, toy: false },
       undefined,
       undefined,
+      undefined,
     );
     expect(rewriteScene).not.toHaveBeenCalled();
   });

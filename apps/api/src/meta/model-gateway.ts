@@ -1,6 +1,8 @@
 import type {
   Language,
+  ModelCallKind,
   PageSubject,
+  ReferenceKind,
   Story,
   VoicePrefill,
 } from '@fabulka/shared';
@@ -23,6 +25,16 @@ export interface GeneratedImage {
   /** Response id that later generations chain from (previous_response_id). */
   ref: string;
   costUsd: number;
+}
+
+/**
+ * An illustrator's reference picture sent with an image call (selectReferences picks them): its id
+ * for the journal, its kind for the prompt's note, and the small copy made for the model.
+ */
+export interface ReferenceImage {
+  id: string;
+  kind: ReferenceKind;
+  data: Buffer;
 }
 
 /** The form fields a voice recording filled in, everything but the transcript. */
@@ -59,8 +71,15 @@ export interface ModelGateway {
     anchorRef: string,
     style?: string,
   ): Promise<GeneratedImage>;
-  /** The hero character sheet every page is anchored on. */
-  drawHero(heroDescription: string, style?: string): Promise<GeneratedImage>;
+  /**
+   * The hero character sheet every page is anchored on. `references`: the illustrators' style
+   * pictures and character guide, sent next to the prompt (never the child's look).
+   */
+  drawHero(
+    heroDescription: string,
+    style?: string,
+    references?: ReferenceImage[],
+  ): Promise<GeneratedImage>;
   /** The pet character sheet, chained from the hero sheet so both stay in the conversation. */
   drawPet(
     petDescription: string,
@@ -79,6 +98,19 @@ export interface ModelGateway {
     companions: Companions,
     style?: string,
     textSpace?: TextSpace,
+    references?: ReferenceImage[],
+  ): Promise<GeneratedImage>;
+  /**
+   * The front cover's own illustration, chained from the last character sheet like a page: the hero
+   * once, in a scene from the story, low in the picture with the top left calm for the lettering.
+   * One try; a refusal throws (isSafetyRefusal) and the caller decides.
+   */
+  drawCover(
+    coverScene: string,
+    anchorRef: string,
+    companions: Companions,
+    style?: string,
+    references?: ReferenceImage[],
   ): Promise<GeneratedImage>;
   /**
    * SAM finds the characters (people and animals) in a page illustration, once per page: a coarse
@@ -88,6 +120,7 @@ export interface ModelGateway {
   findSubject(
     image: Buffer,
     ext: GeneratedImage['ext'],
+    kind?: Extract<ModelCallKind, 'page-mask' | 'cover-mask'>,
   ): Promise<{ subject: PageSubject; costUsd: number }>;
   /**
    * Muse Spark proposes a book theme for the owner's brief, as JSON (ProposedTheme in

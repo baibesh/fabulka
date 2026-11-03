@@ -42,6 +42,10 @@ export function sourceRow(patch: Partial<BookRow> = {}): BookRow {
     toyDescription: 'a plush leopard',
     toyImagePath: 'books/src/toy.jpeg',
     petImagePath: null,
+    coverImagePath: null,
+    coverSubject: null,
+    coverTone: null,
+    blurb: null,
     pages: [
       {
         page: 1,
