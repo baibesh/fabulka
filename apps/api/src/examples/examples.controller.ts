@@ -24,6 +24,7 @@ import {
   type TranslateExample,
   type UpdateExample,
   type VisitorMatrix,
+  type CountryOverview,
 } from '@fabulka/shared';
 import type { AdminSession } from '../admin/admin-auth.service';
 import {
@@ -116,6 +117,16 @@ export class ExamplesAdminController {
   @RequirePermission('examples')
   matrix(@CurrentAdmin() session: AdminSession): Promise<VisitorMatrix> {
     return this.examples.matrix(session);
+  }
+
+  /**
+   * Per country, everything a visitor gets (languages, currency and prices, examples and catalog
+   * samples per language, the landing's hero) and the gaps. Declared before :id.
+   */
+  @Get('overview')
+  @RequirePermission('examples', 'catalog', 'reference.landing')
+  overview(@CurrentAdmin() session: AdminSession): Promise<CountryOverview[]> {
+    return this.examples.overview(session);
   }
 
   /** Finished books a new example may be made from (?country= narrows to one). Declared before :id. */

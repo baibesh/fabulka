@@ -10,7 +10,12 @@ import type { Prisma } from '@prisma/client';
 import {
   LANGUAGES,
   OTHER_COUNTRY,
+  bookPricesFor,
   countryInfo,
+  heroFor,
+  landingImageFor,
+  type CountryOverview,
+  type OverviewLanguage,
   exampleVersionState,
   inLanguageOrder,
   normalizeRule,
@@ -134,6 +139,7 @@ export class ExamplesService {
       const { languages } = countryInfo(code, offered);
       return {
         country: code,
+        listed: code === OTHER_COUNTRY || offered.some((c) => c.code === code),
         cells: LANGUAGES.map((language) => {
           const items = this.siteExamples(
             data,
@@ -151,6 +157,153 @@ export class ExamplesService {
             })),
           };
         }),
+      };
+    });
+  }
+
+  /**
+   * Everything a visitor from each country gets (the admin's country overview, next to the matrix):
+   * its languages, currency and prices, the examples and catalog samples per language (the
+   * country's own sample or the global fallback), the landing's hero per language, and what is
+   * missing (OVERVIEW_GAPS). For the session's countries, like the matrix; a code the site no longer
+   * offers is listed as not offered.
+   */
+  async overview(session: AdminAccess): Promise<CountryOverview[]> {
+    const scope = listScope(
+      session,
+      'examples',
+      'catalog',
+      'reference.landing',
+    );
+    const [offered, reference, data, templates] = await Promise.all([
+      this.reference.countries(),
+      this.reference.admin(),
+      this.siteData(),
+      this.prisma.bookTemplate.findMany({
+        where: { published: true },
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          translations: true,
+          languages: true,
+          countries: true,
+          countriesMode: true,
+        },
+      }),
+    ]);
+    const codes = scope ?? [...offered.map((c) => c.code), OTHER_COUNTRY];
+    const pricing = { ...reference, countries: offered };
+    return codes.map((code): CountryOverview => {
+      const other = code === OTHER_COUNTRY;
+      const listed = other || offered.some((c) => c.code === code);
+      const info = countryInfo(code, offered);
+      const country = other ? null : code;
+      const prices = bookPricesFor(code, pricing);
+      const listedHere = templates.filter((t) =>
+        ruleShows({ mode: t.countriesMode, countries: t.countries }, country),
+      );
+      // Examples made for this country: its code in their own include list.
+      const local = new Set(
+        data.candidates
+          .filter(
+            (c) => c.rule.mode === 'include' && c.rule.countries.includes(code),
+          )
+          .map((c) => c.id),
+      );
+      const localExamples = local.size;
+      const countrySamples = other
+        ? 0
+        : data.samples.filter((row) => row.country === code).length;
+      const byLanguage = info.languages.map((language): OverviewLanguage => {
+        const items = this.siteExamples(data, country, language);
+        const picked = pickExamples(data.candidates, country, language);
+        const hero = heroFor(reference.landing, code, language);
+        const image = landingImageFor(
+          reference.landing,
+          code,
+          language,
+          'hero',
+        );
+        return {
+          language,
+          examples: {
+            kind: items[0]?.kind ?? 'empty',
+            items: items.map(({ id, title, heroImageUrl }) => ({
+              id,
+              title,
+              heroImageUrl,
+            })),
+            local: picked.filter((p) => local.has(p.exampleId)).length,
+          },
+          samples: listedHere.map((t) => {
+            const rows = data.samples
+              .filter((row) => row.template.id === t.id)
+              .map((row) => ({
+                row,
+                language: row.language as Language,
+                country: row.country || null,
+              }));
+            const found = sampleInLanguage(rows, language, country);
+            const translated = (
+              t.translations as Record<string, { title?: string } | undefined>
+            )?.[language]?.title;
+            return {
+              templateId: t.id,
+              slug: t.slug,
+              title: translated || t.title,
+              offered: t.languages.includes(language),
+              sample: found
+                ? {
+                    bookId: found.row.book.id,
+                    title: found.row.book.title ?? '',
+                    heroImageUrl: this.storage.url(
+                      found.row.book.heroImagePath,
+                    ),
+                    scope: found.country ? 'country' : 'global',
+                  }
+                : null,
+            };
+          }),
+          landing: {
+            title: hero.title,
+            lead: hero.lead,
+            heroImage: image ? { src: image.src, scope: image.scope } : null,
+          },
+        };
+      });
+      const gaps: CountryOverview['gaps'] = [];
+      if (!listed) gaps.push({ code: 'not_offered' });
+      if (!other && listed) {
+        if (!localExamples) gaps.push({ code: 'no_local_examples' });
+        if (!countrySamples) gaps.push({ code: 'no_country_samples' });
+        if (!byLanguage.some((l) => l.landing.heroImage))
+          gaps.push({ code: 'no_landing_image' });
+      }
+      for (const l of byLanguage) {
+        if (l.examples.kind !== 'example')
+          gaps.push({ code: 'no_examples', language: l.language });
+        if (l.samples.some((s) => s.offered && !s.sample))
+          gaps.push({ code: 'missing_samples', language: l.language });
+        if (!other && listed && !l.landing.title)
+          gaps.push({ code: 'no_landing_title', language: l.language });
+      }
+      return {
+        country: code,
+        listed,
+        languages: [...info.languages],
+        currency: info.currency,
+        print: info.print,
+        prices: {
+          template: prices?.template ?? null,
+          custom: prices?.custom ?? null,
+          own: prices?.own ?? false,
+        },
+        localExamples,
+        countrySamples,
+        byLanguage,
+        gaps,
       };
     });
   }

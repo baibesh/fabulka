@@ -1,0 +1,207 @@
+# The launch countries: Kazakhstan, the US, Canada, Malaysia, Australia, Germany, Austria, Switzerland
+# and Spain, each in its own currency; everyone else is "other". A Canadian visitor sees Canadian
+# dollars, a French one (by address or by a saved choice) the rest of the world's dollars. In the
+# admin Germany gets a hero picture of its own on the landing: "Preview as a visitor" from Germany
+# shows it, an American visitor keeps the default pile of covers, and the visitor matrix lists the
+# launch countries with the gaps the night content job is to fill.
+appId: ${WEB}
+tags: [landing, admin, money]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+  # Addresses in the DB-IP country database: Canada and France (France is not a launch country).
+  IP_CA: 24.48.0.1
+  IP_FR: 90.0.0.1
+  childName: "Lineup ${Date.now()}"
+http:
+  baseUrl: ${API}
+  headers:
+    X-Client-Key: "e2e-${childName}"
+before:
+  # A finished German book, an example shown everywhere: its cover is what the admin picks below.
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${childName}", age: 5, gender: girl, interests: [Laternen], city: Berlin, language: de }
+      extract: { bookId: "$.id" }
+      assert: { status: 201 }
+  - request:
+      url: /books/${bookId}
+      retryUntil:
+        status: 200
+        json: { "$.status": done }
+      timeout: 30000
+  - sql: { exec: "insert into \"Example\" (id, \"sortOrder\") values ('lineup-' || $1, 1000)", params: ["${bookId}"] }
+  - sql: { exec: "insert into \"ExampleVersion\" (\"exampleId\", language, \"bookId\") values ('lineup-' || $1, 'de', $1)", params: ["${bookId}"] }
+commands:
+  # ---- The lineup and its currencies ------------------------------------------------------------
+  - request:
+      url: ${API}/reference
+      assert:
+        status: 200
+        json:
+          "$.countries[0].code": KZ
+          "$.countries[0].currency": KZT
+          "$.countries[2].code": CA
+          "$.countries[2].currency": CAD
+          "$.countries[3].code": MY
+          "$.countries[3].currency": MYR
+          "$.countries[4].code": AU
+          "$.countries[4].currency": AUD
+          "$.countries[7].code": CH
+          "$.countries[7].currency": CHF
+          "$.prices.CAD.books.template": 690
+          "$.prices.MYR.books.custom": 2490
+  - assertTrue: ${json(http.get(API + '/reference').body).countries.map((c) => c.code).join(' ') === 'KZ US CA MY AU DE AT CH ES'}
+  - assertTrue: ${json(http.get(API + '/reference').body).countries.filter((c) => c.print).map((c) => c.code).join(' ') === 'KZ'}
+
+  # A Canadian visitor (by address, and by a saved choice) gets Canadian dollars in the first HTML.
+  - request: { url: "${API}/geo", headers: { X-Real-IP: "${IP_CA}" }, assert: { status: 200, json: { "$.country": CA } } }
+  - request: { url: "${WEB}/catalog", headers: { X-Real-IP: "${IP_CA}" }, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">CA$7.90<"] }
+  - request: { url: "${WEB}/catalog", headers: { Cookie: "fabulka_country=CA" }, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">CA$7.90<"] }
+  # A French one is the rest of the world: dollars, by address and by a saved choice alike.
+  - request: { url: "${API}/geo", headers: { X-Real-IP: "${IP_FR}" }, assert: { status: 200, json: { "$.country": FR } } }
+  - request: { url: "${WEB}/catalog", headers: { X-Real-IP: "${IP_FR}" }, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">$5.90<"] }
+  - request: { url: "${WEB}/catalog", headers: { Cookie: "fabulka_country=FR" }, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"custom-price\">$5.90<"] }
+
+  # The same in the browser, through "Preview as a visitor" (it only sets the country cookie).
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/preview?country=CA&lang=en"
+  - waitForVisible: { testId: hero-covers }
+  - assertUrl: { equals: "${WEB}/" }
+  - assertVisible: { contains: "Your first books are free, then from CA$6.90" }
+  - assertVisible: { testId: ui-country, contains: "Canada" }
+  - openLink: "${WEB}/admin/preview?country=FR&lang=en&page=catalog"
+  - waitForVisible: { testId: template-first-day-kindergarten }
+  - assertUrl: { equals: "${WEB}/catalog" }
+  - assertVisible: { testId: custom-price, text: "$5.90" }
+  - assertVisible: { testId: ui-country, contains: "Another country" }
+  # Anything else is refused and sets nothing.
+  - request: { url: "${WEB}/admin/preview?country=DE&lang=de&page=https://example.com", assert: { status: 400 } }
+
+  # ---- Germany's own hero picture, set in the admin -----------------------------------------------
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - openLink: "${WEB}/admin/reference?country=DE"
+  - waitForVisible: { testId: reference-tabs }
+  - tapOn: { testId: reference-tab-landing }
+  - waitForVisible: { css: "[data-testid=landing-images][data-country=DE]" }
+  - assertVisible: { css: "[data-testid=landing-image-hero-all][data-own=false]" }
+  # One picture for all of Germany's languages, uploaded; German then shows it as inherited.
+  - uploadFile: { css: "[data-testid=landing-image-hero-all-file]", files: "${PWD}/e2e/fixtures/child.jpg" }
+  - waitForVisible: { css: "[data-testid=landing-image-hero-all][data-own=true]", timeout: 20000 }
+  - assertVisible: { css: "[data-testid=landing-image-hero-de][data-own=false][data-src*='/files/landing/DE/hero-']" }
+  - request:
+      url: ${API}/reference
+      extract: { heroPath: "$.landing.DE.images.hero.all.path" }
+      assert: { status: 200 }
+  - assertTrue: ${/^landing\/DE\/hero-[a-f0-9]+$/.test(heroPath)}
+  # German gets its own, taken from the finished book's cover.
+  - tapOn: { testId: landing-image-hero-de-pick }
+  - waitForVisible: { css: "[data-testid=landing-book][data-book-id='${bookId}']" }
+  - tapOn: { css: "[data-testid=landing-book][data-book-id='${bookId}'] [data-testid=landing-book-picture-cover]" }
+  - waitForVisible: { css: "[data-testid=landing-image-hero-de][data-own=true]", timeout: 20000 }
+  - request:
+      url: ${API}/reference
+      extract: { dePath: "$.landing.DE.images.hero.de.path" }
+      assert: { status: 200, json: { "$.landing.DE.images.hero.de.book.picture": cover } }
+  # The change is in Activity, as Germany's.
+  - request:
+      method: POST
+      url: ${API}/admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      url: ${API}/admin/activity
+      query: { country: DE, limit: 1 }
+      assert: { status: 200, json: { "$.events[0].action": landing.image, "$.events[0].country": DE, "$.events[0].summary.data.slot": hero } }
+  # "Preview as a visitor" links to the site as a German visitor in German (a new tab: opened here).
+  - assertVisible: { css: "[data-testid=preview-visitor-de][href='/admin/preview?country=DE&lang=de'][target=_blank]" }
+  - assertVisible: { css: "[data-testid=preview-visitor-en][href='/admin/preview?country=DE&lang=en']" }
+  - openLink: "${WEB}/admin/preview?country=DE&lang=de"
+  - waitForVisible: { testId: hero-image }
+  - assertUrl: { equals: "${WEB}/de" }
+  - assertVisible: { css: "[data-testid=hero-image][src*='${dePath}-'][data-scope=language]" }
+  - assertNotVisible: { testId: hero-covers }
+  # In English, Germany's picture for all its languages.
+  - openLink: "${WEB}/admin/preview?country=DE&lang=en"
+  - waitForVisible: { testId: hero-image }
+  - assertUrl: { equals: "${WEB}/" }
+  - assertVisible: { css: "[data-testid=hero-image][src*='${heroPath}-'][data-scope=country]" }
+  # In the first HTML, preloaded with its sizes: the largest picture comes first.
+  - request: { url: "${WEB}/", headers: { Cookie: "fabulka_country=DE" }, assert: { status: 200 } }
+  - assertTrue: { contains: ["${response.body}", "data-testid=\"hero-image\""] }
+  - assertTrue: { contains: ["${response.body}", "${heroPath}-384.webp 384w"] }
+  - assertTrue: { contains: ["${response.body}", "<link rel=\"preload\" as=\"image\" fetchPriority=\"high\" imageSrcSet=\"/files/${heroPath}-384.webp 384w\""] }
+  # An American visitor keeps the default pile of catalog covers.
+  - openLink: "${WEB}/admin/preview?country=US&lang=en"
+  - waitForVisible: { testId: hero-covers }
+  - assertNotVisible: { testId: hero-image }
+  - evalScript: "output.us = http.get(WEB + '/', { headers: { Cookie: 'fabulka_country=US' } }).body"
+  - assertTrue: ${!output.us.includes('/files/landing/')}
+
+  # ---- The matrix: the launch countries and their gaps ---------------------------------------------
+  - openLink: "${WEB}/admin/examples/matrix?country=all"
+  - waitForVisible: { testId: visitor-matrix }
+  - waitForVisible: { testId: countries-overview }
+  - assertVisible: { testId: matrix-row-MY }
+  - assertVisible: { testId: matrix-row-AU }
+  - assertVisible: { testId: matrix-row-CH }
+  - assertVisible: { testId: matrix-row-other }
+  - assertNotVisible: { testId: matrix-row-UZ }
+  - assertVisible: { testId: matrix-currency-CA, contains: "CAD" }
+  - assertVisible: { testId: matrix-currency-MY, contains: "RM 19.90" }
+  - assertVisible: { css: "[data-testid=matrix-preview-CH-de][href='/admin/preview?country=CH&lang=de']" }
+  # Malaysia has nothing of its own yet: no local examples, no samples of its own, no picture.
+  - scrollUntilVisible: { testId: overview-MY, centerElement: true }
+  - assertVisible: { css: "[data-testid=overview-MY] [data-testid=gap][data-gap=no_local_examples]" }
+  - assertVisible: { css: "[data-testid=overview-MY] [data-testid=gap][data-gap=no_country_samples]" }
+  - assertVisible: { css: "[data-testid=overview-MY] [data-testid=gap][data-gap=no_landing_image]" }
+  - assertVisible: { css: "[data-testid=overview-MY] [data-testid=overview-prices][data-currency=MYR]" }
+  # Germany has its picture now: that gap is gone, and its overview shows the picture for German.
+  - scrollUntilVisible: { testId: overview-DE, centerElement: true }
+  - assertNotVisible: { css: "[data-testid=overview-DE] [data-testid=gap][data-gap=no_landing_image]" }
+  - assertVisible: { css: "[data-testid=overview-DE] [data-testid=gap][data-gap=no_landing_title][data-language=de]" }
+  - tapOn: { css: "[data-testid=overview-DE] summary" }
+  - waitForVisible: { css: "[data-testid=overview-DE-de] [data-testid=overview-landing][data-image=language]" }
+  - assertVisible: { css: "[data-testid=overview-DE-de] [data-testid=overview-sample]" }
+
+  # ---- Reset to the default ------------------------------------------------------------------------
+  - openLink: "${WEB}/admin/reference?country=DE"
+  - waitForVisible: { testId: reference-tabs }
+  - tapOn: { testId: reference-tab-landing }
+  - waitForVisible: { css: "[data-testid=landing-image-hero-all][data-own=true]" }
+  - tapOn: { testId: landing-image-hero-all-reset }
+  - waitForVisible: { css: "[data-testid=landing-image-hero-all][data-own=false]" }
+  - tapOn: { testId: landing-image-hero-de-reset }
+  - waitForVisible: { css: "[data-testid=landing-image-hero-de][data-own=false]" }
+  - evalScript: "output.de = http.get(WEB + '/de', { headers: { Cookie: 'fabulka_country=DE' } }).body"
+  - assertTrue: ${!output.de.includes('data-testid="hero-image"')}
+after:
+  # Germany's landing back to the defaults (through the API, so its cache is dropped).
+  - request:
+      method: POST
+      url: ${API}/admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+  - request: { method: DELETE, url: "${API}/admin/reference/landing/image", query: { country: DE, slot: hero, language: all } }
+  - request: { method: DELETE, url: "${API}/admin/reference/landing/image", query: { country: DE, slot: hero, language: de } }
+  - request: { method: DELETE, url: "${API}/admin/reference/landing", query: { country: DE } }
+  - sql: { exec: "delete from \"Example\" where id = 'lineup-' || $1", params: ["${bookId}"] }
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

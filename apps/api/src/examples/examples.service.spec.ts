@@ -1,6 +1,7 @@
 import {
   BUILTIN_ROLES,
   DEFAULT_COUNTRIES,
+  DEFAULT_PRICES,
   SUPER_ROLE,
   accessOf,
 } from '@fabulka/shared';
@@ -71,6 +72,24 @@ function makeService(prisma: Record<string, unknown>) {
     } as unknown as StorageService,
     {
       countries: () => Promise.resolve(DEFAULT_COUNTRIES),
+      admin: () =>
+        Promise.resolve({
+          prices: DEFAULT_PRICES,
+          countryPrices: {},
+          landing: {
+            DE: {
+              hero: { de: { title: 'Bücher für Emma' } },
+              faqHidden: [],
+              faq: [],
+              hiddenSections: [],
+              images: {
+                hero: {
+                  all: { path: 'landing/DE/hero-0123abcd', widths: [384] },
+                },
+              },
+            },
+          },
+        }),
     } as unknown as ReferenceService,
     translator as unknown as TranslatorService,
     { revalidate } as unknown as SeoWebService,
@@ -524,6 +543,96 @@ describe('ExamplesService: country scope', () => {
     expect(full.at(-1)!.country).toBe('other');
     const kzRow = full.find((row) => row.country === 'KZ')!;
     expect(kzRow.cells.find((c) => c.language === 'ru')!.kind).toBe('empty');
+    expect(full.every((row) => row.listed)).toBe(true);
+    // A manager still holding a country the site no longer offers: listed false, not an error.
+    const old = await service.matrix(
+      accessOf(['country_manager'], BUILTIN_ROLES, ['UZ']),
+    );
+    expect(old).toMatchObject([{ country: 'UZ', listed: false }]);
+  });
+
+  it('gives the country overview: prices, examples, samples with their scope, the landing hero, and the gaps', async () => {
+    const template = (id: string, countries: string[] = []) => ({
+      id,
+      countries,
+      countriesMode: 'include',
+    });
+    const sample = (id: string, language: string, country: string) => ({
+      language,
+      country,
+      book: { id, title: `Sample ${id}`, heroImagePath: null },
+      template: template('t1'),
+    });
+    const { service } = makeService({
+      example: { findMany: jest.fn().mockResolvedValue([de]) },
+      templateSample: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            sample('s-de', 'de', 'DE'),
+            sample('s-en', 'en', ''),
+          ]),
+      },
+      bookTemplate: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            ...template('t1'),
+            slug: 'bath-time',
+            title: 'Купание',
+            translations: { de: { title: 'Badezeit' } },
+            languages: ['ru', 'en', 'de'],
+          },
+        ]),
+      },
+    });
+    const overview = await service.overview(SUPER);
+    expect(overview.map((row) => row.country)).toEqual([
+      ...DEFAULT_COUNTRIES.map((c) => c.code),
+      'other',
+    ]);
+    const germany = overview.find((row) => row.country === 'DE')!;
+    expect(germany).toMatchObject({
+      listed: true,
+      languages: ['de', 'en'],
+      currency: 'EUR',
+      prices: {
+        template: { amount: 3_90, currency: 'EUR' },
+        own: false,
+      },
+      countrySamples: 1,
+    });
+    const [deutsch, english] = germany.byLanguage;
+    expect(deutsch.samples).toHaveLength(1);
+    expect(deutsch.samples[0]).toMatchObject({
+      title: 'Badezeit',
+      sample: { bookId: 's-de', scope: 'country' },
+    });
+    expect(english.samples[0].sample).toMatchObject({
+      bookId: 's-en',
+      scope: 'global',
+    });
+    expect(deutsch.landing).toEqual({
+      title: 'Bücher für Emma',
+      lead: null,
+      heroImage: {
+        src: '/files/landing/DE/hero-0123abcd-384.webp',
+        scope: 'country',
+      },
+    });
+    expect(germany.gaps).toContainEqual({
+      code: 'no_landing_title',
+      language: 'en',
+    });
+    expect(germany.gaps).not.toContainEqual({ code: 'no_landing_image' });
+    const canada = overview.find((row) => row.country === 'CA')!;
+    expect(canada.prices.template).toEqual({ amount: 6_90, currency: 'CAD' });
+    expect(canada.gaps.map((g) => g.code)).toEqual(
+      expect.arrayContaining([
+        'no_local_examples',
+        'no_country_samples',
+        'no_landing_image',
+      ]),
+    );
   });
 });
 
