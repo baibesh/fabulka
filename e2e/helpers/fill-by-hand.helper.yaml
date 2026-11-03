@@ -1,0 +1,12 @@
+# Leaves the wizard's voice step for the form, on a /create or catalog book page just opened. The
+# voice step is known only once the form runs in the browser and GET /status answered (the form's
+# data-voice turns "on" or "off"): until then the page shows the child step from the server HTML,
+# which a slow CI runner can keep up for seconds. With voice input off there is no voice step, and
+# the form already starts at the child step. Flows about the voice step itself check it on their own.
+commands:
+  - waitForVisible: { css: "[data-testid=book-form][data-voice=on], [data-testid=book-form][data-voice=off]", timeout: 20000 }
+  - runFlow:
+      when: { visible: { css: "[data-testid=book-form][data-voice=on]" } }
+      commands:
+        - tapOn: { testId: voice-manual }
+  - waitForVisible: { css: "[data-testid=wizard-step][data-step=child]" }

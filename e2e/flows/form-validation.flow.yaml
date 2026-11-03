@@ -10,7 +10,7 @@ commands:
   - waitForVisible: { testId: hero-covers }
   - openLink: "${WEB}/ru/create"
   # Voice input is on in e2e: the first step offers a recording, the link skips it.
-  - waitForVisible: { css: "[data-step=voice]" }
+  - waitForVisible: { css: "[data-step=voice]", timeout: 20000 }
   - assertVisible: { contains: "Шаг 1 из 5", childOf: { testId: wizard-step } }
   - assertVisible: "Мы не сохраняем запись — только распознаём текст."
   - tapOn: { testId: voice-manual }

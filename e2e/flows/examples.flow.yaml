@@ -100,7 +100,7 @@ commands:
   - waitForVisible: { testId: paused-notice }
   - assertVisible: "Создание новых книг временно приостановлено"
   # The wizard can still be filled in, but its last step will not start the book.
-  - tapOn: { testId: voice-manual }
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
   - tapOn: { testId: child-interests }
@@ -121,7 +121,7 @@ commands:
   - openLink: "${WEB}/ru/create"
   - waitForVisible: { testId: book-form }
   - assertNotVisible: { testId: paused-notice }
-  - tapOn: { testId: voice-manual }
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
   - tapOn: { testId: child-interests }

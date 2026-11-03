@@ -18,7 +18,7 @@ commands:
   # A book of your own from the wizard (a 5-year-old: «Сказка»).
   - launchApp: { appId: "${WEB}", clearState: true }
   - openLink: "${WEB}/ru/create"
-  - tapOn: { testId: voice-manual }
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
   - tapOn: { testId: child-interests }

@@ -98,7 +98,7 @@ commands:
   # On the Kazakh /create it is offered for a 6-year-old, by its Russian name, and follows the
   # parent's choice to the review.
   - openLink: "${WEB}/create?lang=kk"
-  - waitForVisible: { css: "[data-step=voice]" }
+  - waitForVisible: { css: "[data-step=voice]", timeout: 20000 }
   - tapOn: { testId: voice-manual }
   - waitForVisible: { css: "[data-step=child]" }
   - tapOn: { testId: child-name }

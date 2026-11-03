@@ -15,7 +15,7 @@ commands:
   # The test browser's address has no country: the visitor picks Kazakhstan (tenge, print).
   - runFlow: ../helpers/kazakhstan.helper.yaml
   - openLink: "${WEB}/ru/create"
-  - tapOn: { testId: voice-manual }
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
   - tapOn: { testId: child-interests }

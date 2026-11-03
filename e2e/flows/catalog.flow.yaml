@@ -21,7 +21,7 @@ commands:
   - assertVisible: { contains: "Социальная история" }
   # A catalog book costs less than a story of your own.
   - assertVisible: { text: "1 900 ₸", childOf: { testId: book-price } }
-  - tapOn: { testId: voice-manual }
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
   - tapOn: { testId: child-interests }

@@ -2,7 +2,8 @@
 # "create" page, as a tap on the footer of the long home page can miss). The site turns German.
 commands:
   - openLink: "${WEB}/create"
-  - waitForVisible: { testId: voice-manual }
+  # The page runs in the browser (the form knows whether it starts with the voice step).
+  - waitForVisible: { css: "[data-testid=book-form][data-voice=on], [data-testid=book-form][data-voice=off]", timeout: 20000 }
   - scrollUntilVisible: { testId: ui-country }
   - tapOn: { testId: ui-country }
   - waitForVisible: { testId: ui-country-search }

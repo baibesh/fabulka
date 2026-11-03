@@ -76,6 +76,9 @@ export function BookForm({ template }: { template?: Template }) {
   const paused = status.data?.paused === true;
 
   const steps = STEPS.filter((s) => s !== "voice" || status.data?.voice === true);
+  // Whether the voice step is known yet: it comes once the form runs in the browser and the API
+  // answered, so until then the form starts at the child step (E2E flows wait for "on" or "off").
+  const voice = status.isPending ? "pending" : status.data?.voice ? "on" : "off";
   const [chosen, setChosen] = useState<Step | null>(null);
   const step = chosen && steps.includes(chosen) ? chosen : steps[0];
   const index = steps.indexOf(step);
@@ -207,6 +210,7 @@ export function BookForm({ template }: { template?: Template }) {
     )}
     <form
       data-testid="book-form"
+      data-voice={voice}
       // Enter in a field moves to the next step; only the last step creates the book.
       onSubmit={(e) => {
         if (step === "review") return void submit(e);

@@ -43,6 +43,7 @@ commands:
 
   # A book made while the interface is in English defaults to an English book.
   - tapOn: { testId: nav-create }
+  - waitForVisible: { css: "[data-step=voice]", timeout: 20000 }
   - tapOn: { testId: voice-manual, contains: "Fill in by hand" }
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
@@ -139,6 +140,7 @@ commands:
 
   # A book made in the Spanish interface is written in Spanish.
   - tapOn: { testId: nav-create }
+  - waitForVisible: { css: "[data-step=voice]", timeout: 20000 }
   - tapOn: { testId: voice-manual, contains: "Rellenar a mano" }
   - tapOn: { testId: child-name }
   - inputText: "${childName} ES"

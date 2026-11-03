@@ -170,7 +170,7 @@ commands:
   - request: { url: "${WEB}/de/catalog/first-day-kindergarten", headers: { Cookie: "fabulka_country=DE" }, assert: { status: 200 } }
   - assertTrue: { contains: ["${response.body}", "\"price\":\"4.50\",\"priceCurrency\":\"EUR\""] }
   - openLink: "${WEB}/de/create"
-  - tapOn: { testId: voice-manual }
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
   - tapOn: { testId: child-interests }

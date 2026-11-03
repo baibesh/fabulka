@@ -5,7 +5,7 @@ tags: [smoke, voice]
 commands:
   - launchApp: { appId: "${WEB}", clearState: true }
   - openLink: "${WEB}/ru/catalog/first-day-kindergarten?voiceTest=1"
-  - waitForVisible: { css: "[data-step=voice]" }
+  - waitForVisible: { css: "[data-step=voice]", timeout: 20000 }
   - assertVisible: "Мы не сохраняем запись — только распознаём текст."
   - assertVisible: { testId: voice-start }
   - tapOn: { testId: voice-sample }

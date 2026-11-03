@@ -22,7 +22,7 @@ commands:
       times: 3
       commands:
         - openLink: "${WEB}/ru/create"
-        - tapOn: { testId: voice-manual }
+        - runFlow: ../helpers/fill-by-hand.helper.yaml
         - tapOn: { testId: child-name }
         - inputText: "${childName}"
         - tapOn: { testId: child-interests }
@@ -35,7 +35,7 @@ commands:
         - tapOn: { testId: create-book }
         - waitForVisible: { testId: book-status }
   - openLink: "${WEB}/ru/create"
-  - tapOn: { testId: voice-manual }
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
   - tapOn: { testId: child-interests }

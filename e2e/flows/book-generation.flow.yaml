@@ -15,8 +15,8 @@ commands:
   - waitForVisible: { testId: hero-covers }
   # The header link: the home page below the hero may still grow as example books arrive.
   - tapOn: { testId: nav-create }
-  # The wizard: voice input is on in e2e, so it starts by offering a recording.
-  - tapOn: { testId: voice-manual }
+  # The wizard: voice input is on in e2e, so it starts by offering a recording; skip it.
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
   - tapOn: { testId: child-interests }

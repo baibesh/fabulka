@@ -121,7 +121,7 @@ commands:
 
   # A parent switches their book to it in the reader.
   - openLink: "${WEB}/ru/create"
-  - tapOn: { testId: voice-manual }
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
   - tapOn: { testId: child-interests }

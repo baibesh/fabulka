@@ -19,7 +19,7 @@ commands:
   - waitForVisible: { testId: auth-login }
 
   - openLink: "${WEB}/ru/create"
-  - tapOn: { testId: voice-manual }
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
   - tapOn: { testId: child-name }
   - inputText: "${childName}"
   - tapOn: { testId: child-interests }
