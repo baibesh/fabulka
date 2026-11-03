@@ -114,6 +114,20 @@ describe('illustratePage', () => {
     expect(drawPage).toHaveBeenCalledTimes(2);
   });
 
+  it('says when the page is drawn again, so the progress screen can show it', async () => {
+    const { models } = gateway([mockRefusal(), mockRefusal(), picture('p3')]);
+    const onRetry = jest.fn();
+    const done = await illustratePage(models, { ...PAGE, onRetry });
+    expect(done.outcome).toBe('rewritten');
+    expect(onRetry.mock.calls).toEqual([['softened'], ['rewritten']]);
+    const first = gateway([picture('p1')]);
+    await illustratePage(first.models, {
+      ...PAGE,
+      onRetry: (onRetry.mockClear(), onRetry),
+    });
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
   it('passes on errors that are not refusals', async () => {
     const outage = Object.assign(new Error('503 unavailable'), { status: 503 });
     const { models, rewriteScene } = gateway([mockRefusal(), outage]);

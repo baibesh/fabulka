@@ -85,6 +85,7 @@ export function sourceRow(patch: Partial<BookRow> = {}): BookRow {
     }),
     pdfPath: 'books/src/book.pdf',
     error: null,
+    generation: null,
     costUsd: 0.4,
     clientKey: 'parent',
     userId: 'u1',

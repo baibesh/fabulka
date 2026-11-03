@@ -65,6 +65,12 @@ const MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
 };
 
+/** Told how far a render has got, for the progress screen. */
+export interface RenderHooks {
+  /** The pages are laid out and checked; the PDF is printed next. */
+  printing?: () => unknown;
+}
+
 /**
  * Prints a book to PDF with headless Chromium (Playwright is a renderer here, not a test runner),
  * from the same HTML pages the site shows, and checks the result: text that overflows its box is
@@ -91,6 +97,7 @@ export class PdfService {
     book: RenderableBook,
     layout: BookLayout,
     pictures: PagePicture[] = [],
+    hooks: RenderHooks = {},
   ): Promise<RenderResult> {
     const call = this.journal.start({ kind: 'render', model: 'chromium' });
     const browser = await chromium.launch();
@@ -109,6 +116,7 @@ export class PdfService {
         layout,
         pictures,
       );
+      await hooks.printing?.();
       // The PDF is printed from the page as checked: the shrink is already applied there.
       const pdf = await page.pdf({
         width: `${current.format.widthMm}mm`,

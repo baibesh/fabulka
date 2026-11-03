@@ -54,6 +54,9 @@ model Book {
   layout          Json?
   pdfPath         String?
   error           String?
+  /// While the book is being made: its step, pages being drawn or redrawn, when the step began
+  /// (GenerationState in @fabulka/shared). Null for books made before it.
+  generation      Json?
   /// Model spend for this book, in US dollars.
   costUsd         Float           @default(0)
   /// Anonymous visitor key the free limit is counted against.

@@ -8,11 +8,13 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Book as BookRow, BookStatus, Prisma } from '@prisma/client';
+import { Prisma, type Book as BookRow, type BookStatus } from '@prisma/client';
 import {
   BOOK_LABELS,
   BOOK_THEMES,
+  GenerationStateSchema,
   LAYOUT_LOCKED,
+  PAGE_CONCURRENCY,
   PHOTO_REFUSED,
   TemplateBlocksSchema,
   answersProblem,
@@ -22,13 +24,19 @@ import {
   bookFormatOf,
   calmSpace,
   defaultThemeId,
+  generationView,
   newLayout,
   planBook,
   progressFor,
+  stateOfStatus,
+  statusOfStep,
   withFormat,
   withTheme,
   wordsPerPage,
   type BookTheme,
+  type GenerationState,
+  type GenerationStep,
+  type GenerationView,
   type TemplateBlocks,
   type Book,
   type BookLayout,
@@ -53,6 +61,7 @@ import {
   type ModelGateway,
 } from '../meta/model-gateway';
 import { type ArtOutcome, illustratePage } from './illustrate';
+import { GenerationTimings } from './timings';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import type { StoryBrief } from '../meta/prompts';
 import {
@@ -62,7 +71,7 @@ import {
 } from '../templates/templates.service';
 import { toyUploadPath } from '../toy/toys.controller';
 import { layoutOf, withHeadingCheck } from '../layout/layout';
-import { PdfService } from '../pdf/pdf.service';
+import { PdfService, type RenderHooks } from '../pdf/pdf.service';
 import { cleanPhoto, PhotoRefused } from '../photos/photo';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReferenceService } from '../reference/reference.service';
@@ -141,15 +150,14 @@ interface Job {
   toyUpload?: string;
 }
 
-/** Page illustrations generated at once; each chains from the hero sheet, not from each other. */
-const PAGE_CONCURRENCY = 4;
-
 @Injectable()
 export class BooksService implements OnModuleInit {
   private readonly logger = new Logger(BooksService.name);
   private readonly pageCount: number;
   /** Books generated at once; more wait their turn as "queued". */
   private readonly slots: Slots;
+  /** Typical durations of the model calls, for the progress screen's time left. */
+  private readonly timings: GenerationTimings;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -165,6 +173,10 @@ export class BooksService implements OnModuleInit {
   ) {
     this.pageCount = Number(config.get('PAGE_COUNT', 10));
     this.slots = new Slots(Number(config.get('BOOK_CONCURRENCY', 3)));
+    this.timings = new GenerationTimings(
+      prisma,
+      config.get<string>('MODELS', 'mock') === 'mock',
+    );
   }
 
   /**
@@ -241,6 +253,14 @@ export class BooksService implements OnModuleInit {
         demo,
         country,
         toyName: input.toy?.name || null,
+        generation: json(
+          firstState(
+            !!job.toyUpload,
+            !!child.pet?.trim(),
+            this.pageCount,
+            new Date(),
+          ),
+        ),
       },
       include: withTemplate,
     });
@@ -517,7 +537,11 @@ export class BooksService implements OnModuleInit {
   }
 
   /** Lays the book out, prints it and runs render QA; the result's layout records what QA did. */
-  async renderPdf(row: BookRow, layout = layoutOf(row.layout)) {
+  async renderPdf(
+    row: BookRow,
+    layout = layoutOf(row.layout),
+    hooks: RenderHooks = {},
+  ) {
     const book = storedBook(row);
     const labels = BOOK_LABELS[book.language];
     const checked = withHeadingCheck(layout, [
@@ -534,7 +558,7 @@ export class BooksService implements OnModuleInit {
       tone: p.tone ?? null,
     }));
     const result = await this.journal.run({ bookId: row.id }, () =>
-      this.pdf.render(row.id, book, checked, pictures),
+      this.pdf.render(row.id, book, checked, pictures, hooks),
     );
     // The tones are measured once and kept with the pages.
     const pages = stored.map((p) => ({
@@ -598,10 +622,38 @@ export class BooksService implements OnModuleInit {
     // Pictures leave calm space for text only when the theme first prints text over them.
     const textSpace = calmSpace(theme) ?? undefined;
 
+    // What the progress screen shows (Book.generation): the step, the pages being drawn or
+    // redrawn. Pages finish in parallel, so every write goes through one queue in order, each with
+    // the latest state.
+    const gen = firstState(
+      !!toyUpload,
+      !!child.pet?.trim(),
+      brief.pageCount,
+      new Date(),
+    );
+    gen.startedAt = gen.stepAt;
+    let writes: Promise<unknown> = Promise.resolve();
+    const save = (data: Prisma.BookUpdateInput = {}) => {
+      const write = writes.then(() =>
+        this.update(id, statusOfStep(gen.step), {
+          ...data,
+          generation: json(gen),
+        }),
+      );
+      writes = write.catch(() => undefined);
+      return write;
+    };
+    const step = (next: GenerationStep, data: Prisma.BookUpdateInput = {}) => {
+      gen.step = next;
+      gen.stepAt = new Date().toISOString();
+      return save({ progress: progressFor(statusOfStep(next)), ...data });
+    };
+    await step('read');
+
     // The toy first: SAM cuts it out of the photo, Muse Spark puts it into words for the story.
     let toyReference: Buffer | null = null;
     if (toyUpload) {
-      await this.stage(id, 'toy');
+      await step('toy');
       const photo = await this.storage.read(toyUploadPath(toyUpload));
       const toyPhotoPath = await this.storage.save(
         `books/${id}/toy-photo.jpg`,
@@ -615,7 +667,7 @@ export class BooksService implements OnModuleInit {
         : null;
       const described = await this.models.describeToy(toyReference);
       spent.usd += found.costUsd + described.costUsd;
-      const row = await this.update(id, 'toy', {
+      const row = await save({
         toyPhotoPath,
         toyCutoutPath,
         toyDescription: described.description,
@@ -630,7 +682,7 @@ export class BooksService implements OnModuleInit {
       };
     }
 
-    await this.stage(id, 'story');
+    await step('story');
     const { story, costUsd: storyCost } = await this.models.writeStory(brief);
     spent.usd += storyCost;
     const pages: StoredPage[] = story.pages.map((p) => ({
@@ -639,7 +691,10 @@ export class BooksService implements OnModuleInit {
       scenePrompt: p.scene_prompt,
       imagePath: null,
     }));
-    await this.update(id, 'story', {
+    // Now it is known whether there is a pet to draw and how many pages.
+    gen.pet = story.pet_description !== null;
+    gen.pages = pages.length;
+    await save({
       title: story.title,
       heroDescription: story.hero_description,
       pages: json(pages),
@@ -648,6 +703,7 @@ export class BooksService implements OnModuleInit {
     });
 
     // A second pass before any picture is drawn: the parent's text went into the prompt.
+    await step('review', { progress: 20 });
     const review = await this.models.reviewStory(
       story,
       child.age,
@@ -660,14 +716,14 @@ export class BooksService implements OnModuleInit {
       );
     }
 
-    await this.stage(id, 'hero');
+    await step('hero');
     const hero = await this.models.drawHero(story.hero_description, style);
     spent.usd += hero.costUsd;
     const heroImagePath = await this.storage.save(
       `books/${id}/hero.${hero.ext}`,
       hero.data,
     );
-    await this.update(id, 'hero', {
+    await save({
       heroResponseId: hero.ref,
       heroImagePath,
       costUsd: spent.usd,
@@ -676,6 +732,8 @@ export class BooksService implements OnModuleInit {
     // The pet gets its own sheet too, or it changes breed and color between pages.
     let anchorRef = hero.ref;
     const withPet = story.pet_description !== null;
+    if (withPet || (toyReference && brief.toy))
+      await step('friends', { progress: 28 });
     if (story.pet_description) {
       const pet = await this.models.drawPet(
         story.pet_description,
@@ -688,7 +746,7 @@ export class BooksService implements OnModuleInit {
         pet.data,
       );
       anchorRef = pet.ref;
-      await this.update(id, 'hero', { petImagePath, costUsd: spent.usd });
+      await save({ petImagePath, costUsd: spent.usd });
     }
 
     // The toy's sheet is drawn from the cut-out photo, chained after the hero (and pet).
@@ -705,14 +763,18 @@ export class BooksService implements OnModuleInit {
         toy.data,
       );
       anchorRef = toy.ref;
-      await this.update(id, 'hero', { toyImagePath, costUsd: spent.usd });
+      await save({ toyImagePath, costUsd: spent.usd });
     }
 
-    await this.update(id, 'pages', {
-      progress: progressFor('pages', 0, pages.length),
-    });
+    await step('pages', { progress: progressFor('pages', 0, pages.length) });
     let done = 0;
+    const settle = (n: number) => {
+      gen.drawing = gen.drawing.filter((p) => p !== n);
+      gen.redrawing = gen.redrawing.filter((p) => p !== n);
+    };
     await eachLimit(pages, PAGE_CONCURRENCY, async (page) => {
+      gen.drawing.push(page.page);
+      await save();
       // A refused scene is softened, then rewritten; a page refused every time keeps no picture.
       const drawn = await illustratePage(this.models, {
         page: page.page,
@@ -726,6 +788,10 @@ export class BooksService implements OnModuleInit {
         }),
         style,
         textSpace,
+        onRetry: () => {
+          if (!gen.redrawing.includes(page.page)) gen.redrawing.push(page.page);
+          return save();
+        },
       });
       spent.usd += drawn.costUsd;
       page.art = drawn.outcome;
@@ -746,24 +812,29 @@ export class BooksService implements OnModuleInit {
       if (image)
         page.subject = await this.findSubject(id, page.page, image, spent);
       done++;
-      await this.update(id, 'pages', {
+      settle(page.page);
+      await save({
         pages: json(pages),
         costUsd: spent.usd,
         progress: progressFor('pages', done, pages.length),
       });
     });
 
-    const row = await this.update(id, 'pdf', {
+    const row = await step('check', {
       pages: json(pages),
       costUsd: spent.usd,
       progress: progressFor('pdf'),
     });
-    const rendered = await this.renderPdf(row);
+    const rendered = await this.renderPdf(row, layoutOf(row.layout), {
+      printing: () => step('pdf', { progress: 97 }),
+    });
+    await writes;
     await this.update(id, 'done', {
       pdfPath: rendered.pdfPath,
       layout: json(rendered.layout),
       pages: json(rendered.pages),
       progress: 100,
+      generation: Prisma.DbNull,
     });
     this.logger.log(
       `book ${id} done: ${pages.length} pages, $${spent.usd.toFixed(3)}`,
@@ -787,10 +858,6 @@ export class BooksService implements OnModuleInit {
       );
       return null;
     }
-  }
-
-  private stage(id: string, status: BookStatus) {
-    return this.update(id, status, { progress: progressFor(status) });
   }
 
   /**
@@ -849,14 +916,67 @@ export class BooksService implements OnModuleInit {
         page: p.page,
         text: p.text,
         imageUrl: this.storage.url(p.imagePath),
+        ...(p.art === 'refused' && { vignette: true }),
       })),
       pdfUrl: this.storage.url(row.pdfPath),
       error: row.error,
       layout: layoutOf(row.layout),
       editable,
+      generation: this.generationOf(row, pages),
       createdAt: row.createdAt.toISOString(),
     };
   }
+
+  /**
+   * The progress screen's view while the book is being made (null once done or failed): its steps,
+   * pages drawn, pages being drawn again, and about how long is left. A book without a stored state
+   * (made before it) is read off its status.
+   */
+  generationOf(
+    row: BookRow,
+    pages: StoredPage[],
+    now = Date.now(),
+  ): GenerationView | null {
+    if (row.status === 'done' || row.status === 'failed') return null;
+    const stored = GenerationStateSchema.safeParse(row.generation);
+    const state = stored.success
+      ? stored.data
+      : stateOfStatus(row.status, {
+          toy: !!row.toyPhotoPath || row.status === 'toy',
+          pet: !!row.petImagePath,
+          pages: pages.length || this.pageCount,
+          since: (row.updatedAt ?? row.createdAt).toISOString(),
+        });
+    return generationView(
+      state,
+      {
+        pagesDone: pages.filter((p) => p.imagePath || p.art === 'refused')
+          .length,
+        petImageUrl: this.storage.url(row.petImagePath),
+      },
+      this.timings.current(now),
+      now,
+    );
+  }
+}
+
+/** The state a book starts with, before it leaves the queue. */
+function firstState(
+  toy: boolean,
+  pet: boolean,
+  pages: number,
+  now: Date,
+): GenerationState {
+  return {
+    step: 'read',
+    toy,
+    pet,
+    pages,
+    drawing: [],
+    redrawing: [],
+    startedAt: null,
+    stepAt: now.toISOString(),
+  };
 }
 
 /** What the renderer needs of a stored book; images by file name, as they sit next to book.html. */

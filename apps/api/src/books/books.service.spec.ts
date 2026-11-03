@@ -1,10 +1,12 @@
 import type { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import {
   DEFAULT_FORMATS,
   DEFAULT_METHODOLOGIES,
   PHOTO_REFUSED,
   newLayout,
   type BookLayout,
+  type GenerationState,
 } from '@fabulka/shared';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,7 +22,12 @@ import type { StorageService } from '../storage/storage.service';
 import { SEED_TEMPLATES } from '../templates/catalog';
 import { SEED_TRANSLATIONS } from '../templates/catalog-i18n';
 import type { TemplatesService } from '../templates/templates.service';
-import { BooksService, petInScene, toyInScene } from './books.service';
+import {
+  BooksService,
+  petInScene,
+  toyInScene,
+  type StoredPage,
+} from './books.service';
 
 const child = {
   name: 'Арман',
@@ -259,6 +266,179 @@ describe('BooksService', () => {
       pages: { image: string | null }[];
     };
     expect(book.pages.map((p) => p.image)).toEqual(['page-1.svg', null]);
+  });
+
+  describe('the progress screen', () => {
+    it('records each step, the pages being drawn and the one drawn again, then clears it', async () => {
+      const interests = ['скейт', 'mock-refuse'];
+      const row: Record<string, unknown> = {
+        id: 'b10',
+        status: 'queued',
+        child: { ...child, interests, pet: 'кот' },
+        language: 'ru',
+        pages: [],
+        layout: null,
+        createdAt: new Date(),
+      };
+      const states: GenerationState[] = [];
+      const update = jest.fn(
+        ({ data }: { data: Record<string, unknown> & { status: string } }) => {
+          if (data.generation && data.generation !== Prisma.DbNull)
+            states.push(
+              JSON.parse(JSON.stringify(data.generation)) as GenerationState,
+            );
+          Object.assign(row, data);
+          return Promise.resolve({ ...row });
+        },
+      );
+      const render = jest.fn(
+        async (
+          _id: string,
+          _book: unknown,
+          layout: BookLayout,
+          _pictures: unknown,
+          hooks: { printing?: () => unknown },
+        ) => {
+          await hooks.printing?.();
+          return { pdfPath: 'books/b10/book.pdf', layout, tones: {} };
+        },
+      );
+      const service = makeService(
+        {
+          book: {
+            create: jest
+              .fn()
+              .mockImplementation(({ data }: { data: object }) => {
+                Object.assign(row, data);
+                return Promise.resolve({ ...row });
+              }),
+            update,
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          },
+          modelCall: { create: jest.fn().mockResolvedValue({}) },
+        },
+        new MockGateway(0),
+        methodRows(),
+        {},
+        {
+          storage: { url: () => null, save: (p: string) => Promise.resolve(p) },
+          pdf: { render },
+        },
+      );
+
+      const created = await service.create(
+        { child: { ...child, interests, pet: 'кот' } },
+        'k',
+        false,
+      );
+      // Before it leaves the queue: the first step, the pet from the profile, the planned pages.
+      expect(created.generation).toMatchObject({
+        step: 'read',
+        pagesTotal: 2,
+        pagesDone: 0,
+      });
+      expect(created.generation?.steps.map((s) => s.id)).toEqual([
+        'read',
+        'story',
+        'review',
+        'hero',
+        'friends',
+        'pages',
+        'check',
+        'pdf',
+      ]);
+      for (let i = 0; i < 50 && row.status !== 'done'; i++)
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(row.status).toBe('done');
+      const steps = states
+        .map((s) => s.step)
+        .filter((s, i, all) => s !== all[i - 1]);
+      expect(steps).toEqual([
+        'read',
+        'story',
+        'review',
+        'hero',
+        'friends',
+        'pages',
+        'check',
+        'pdf',
+      ]);
+      expect(states.every((s) => s.pet && s.pages === 2 && !s.toy)).toBe(true);
+      expect(states.some((s) => s.drawing.length === 2)).toBe(true);
+      // Page 2's scene is refused: it is shown as being drawn again, then settles as a vignette.
+      expect(states.some((s) => s.redrawing.includes(2))).toBe(true);
+      expect(states.at(-1)).toMatchObject({ drawing: [], redrawing: [] });
+      expect(row.generation).toBe(Prisma.DbNull);
+      const done = service.toDto({ ...row, template: null } as never);
+      expect(done.generation).toBeNull();
+      expect(done.pages.map((p) => p.vignette)).toEqual([undefined, true]);
+    });
+
+    it('reads a book made before the state was kept off its status', () => {
+      const service = makeService(
+        {},
+        undefined,
+        methodRows(),
+        {},
+        {
+          storage: { url: (p: string | null) => (p ? `/files/${p}` : null) },
+        },
+      );
+      const since = new Date(Date.now() - 5000);
+      const row = {
+        id: 'old',
+        status: 'pages',
+        child,
+        language: 'ru',
+        generation: null,
+        petImagePath: 'books/old/pet.png',
+        toyPhotoPath: null,
+        pages: [
+          {
+            page: 1,
+            text: 'a',
+            scenePrompt: 'a',
+            imagePath: 'books/old/page-1.png',
+          },
+          {
+            page: 2,
+            text: 'b',
+            scenePrompt: 'b',
+            imagePath: null,
+            art: 'refused',
+          },
+          { page: 3, text: 'c', scenePrompt: 'c', imagePath: null },
+          { page: 4, text: 'd', scenePrompt: 'd', imagePath: null },
+        ],
+        createdAt: since,
+        updatedAt: since,
+      };
+      const view = service.generationOf(
+        row as never,
+        row.pages as StoredPage[],
+      );
+      expect(view).toMatchObject({
+        step: 'pages',
+        pagesDone: 2,
+        pagesTotal: 4,
+        petImageUrl: '/files/books/old/pet.png',
+      });
+      expect(view?.steps.map((s) => [s.id, s.state])).toEqual([
+        ['read', 'done'],
+        ['story', 'done'],
+        ['review', 'done'],
+        ['hero', 'done'],
+        ['friends', 'done'],
+        ['pages', 'current'],
+        ['check', 'next'],
+        ['pdf', 'next'],
+      ]);
+      expect(view?.etaSeconds).toBeGreaterThan(0);
+      expect(
+        service.generationOf({ ...row, status: 'failed' } as never, []),
+      ).toBeNull();
+    });
   });
 
   describe('a book of your own', () => {

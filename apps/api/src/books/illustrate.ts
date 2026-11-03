@@ -31,6 +31,11 @@ export interface PageToIllustrate {
   companions: (scene: string) => Companions;
   style?: string;
   textSpace?: TextSpace;
+  /**
+   * Called before the picture is drawn again after a refusal (the gentler scene, then the
+   * rewritten one), so the progress screen can say the page is being redrawn. A throw stops the page.
+   */
+  onRetry?: (next: 'softened' | 'rewritten') => unknown;
 }
 
 const logger = new Logger('illustratePage');
@@ -70,6 +75,7 @@ export async function illustratePage(
     if (!isSafetyRefusal(error)) throw error;
     refusal = error;
   }
+  await page.onRetry?.('softened');
   try {
     return drawn(await draw(softenScene(page.scenePrompt)), 'softened');
   } catch (error) {
@@ -77,6 +83,7 @@ export async function illustratePage(
     refusal = error;
   }
 
+  await page.onRetry?.('rewritten');
   let scene: string;
   try {
     const rewritten = await models.rewriteScene({

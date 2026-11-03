@@ -15,6 +15,7 @@ import {
 import { PaymentProviderSchema, TemplateCountriesSchema, bookPricesFor, type City, type Country, type LocalFormat, type PricingData } from "./reference";
 import { CurrencySchema, MoneySchema, RevenueSchema, money, multiplyMoney, type Currency, type Money } from "./money";
 import { CountriesModeSchema } from "./country-rules";
+import { GenerationViewSchema } from "./generation";
 
 export * from "./language";
 export * from "./methodologies";
@@ -28,6 +29,7 @@ export * from "./admin-access";
 export * from "./staff";
 export * from "./examples";
 export * from "./country-rules";
+export * from "./generation";
 export * from "./audit";
 
 /** Ages a book is written for (the form's picker, catalog books' ranges, the voice prefill). */
@@ -178,6 +180,8 @@ export const BookPageSchema = z.object({
   page: z.number().int(),
   text: z.string(),
   imageUrl: z.string().nullable(),
+  /** Every version of the picture was refused: a vignette page with the hero's sheet (older APIs leave it out). */
+  vignette: z.boolean().optional(),
 });
 export type BookPage = z.infer<typeof BookPageSchema>;
 
@@ -211,6 +215,8 @@ export const BookSchema = z.object({
   layout: BookLayoutSchema,
   /** The visitor may still change the layout: their book, finished, not yet ordered. */
   editable: z.boolean(),
+  /** While the book is being made: its steps, pages drawn and time left; null once done or failed (older APIs leave it out). */
+  generation: GenerationViewSchema.nullable().optional(),
   createdAt: z.string(),
 });
 export type Book = z.infer<typeof BookSchema>;
