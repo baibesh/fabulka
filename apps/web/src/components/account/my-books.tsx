@@ -34,7 +34,7 @@ export function MyBooks() {
     );
   }
   return (
-    <ul data-testid="my-books" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <ul data-testid="my-books" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {books.data.map((book) => (
         <li key={book.id}>
           <LocaleLink href={`/books/${book.id}`} className="flex gap-4 rounded-2xl border border-border bg-card p-4 transition hover:border-accent">

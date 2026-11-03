@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
 import { useDismiss } from "@/hooks/use-dismiss";
 import { cx } from "./cx";
 
@@ -36,6 +36,16 @@ export function Menu({
   const panel = useRef<HTMLDivElement>(null);
   const close = () => setOpen(false);
   useDismiss(root, open, close);
+  // A panel opened near a screen edge (a "+" at the end of a wrapped row) would stick out and scroll
+  // the page sideways: shift it back inside with an 8px margin.
+  useLayoutEffect(() => {
+    const node = panel.current;
+    if (!open || !node) return;
+    const { left, right } = node.getBoundingClientRect();
+    const edge = document.documentElement.clientWidth - 8;
+    const shift = right > edge ? Math.max(edge - right, 8 - left) : left < 8 ? 8 - left : 0;
+    node.style.translate = shift ? `${shift}px 0` : "";
+  }, [open]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const list = items(panel.current);

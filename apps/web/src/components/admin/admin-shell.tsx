@@ -79,7 +79,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   return (
     <WorkingCountryProvider me={me.data}>
       <div className="flex min-h-screen flex-col md:flex-row">
-        <aside className="flex shrink-0 gap-1 border-b border-border bg-card p-3 md:sticky md:top-0 md:h-screen md:w-56 md:flex-col md:overflow-y-auto md:border-r md:border-b-0 md:p-4">
+        <aside className="flex shrink-0 flex-wrap gap-1 border-b border-border bg-card p-3 md:sticky md:top-0 md:h-screen md:w-56 md:flex-col md:overflow-y-auto md:border-r md:border-b-0 md:p-4">
           <p className="hidden px-3 pb-4 text-sm font-extrabold uppercase tracking-widest text-accent md:block">{t("admin.title")}</p>
           <AdminNav items={nav} pathname={pathname} />
           <WorkingCountrySwitcher className="w-40 self-center md:mx-1 md:mb-2 md:w-auto md:self-stretch" />
@@ -109,7 +109,7 @@ function AdminNav({ items, pathname }: { items: NavItem[]; pathname: string }) {
   const { t } = useAdminI18n();
   const { href: keep } = useWorkingCountry();
   return (
-    <nav className="flex flex-1 gap-1 overflow-x-auto md:flex-col">
+    <nav className="flex flex-1 basis-full gap-1 overflow-x-auto md:basis-auto md:flex-col">
       {items.map(({ href, label, icon: Icon }) => {
         const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
         return (

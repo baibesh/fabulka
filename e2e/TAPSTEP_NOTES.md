@@ -60,3 +60,11 @@ Things noticed while using tapstep on Fabulka. Version: 0.13.11.
     `"Invitation sent to" not found`, while the self-heal list showed the exact line on screen. The
     same text without `testId` passes. As with note 7, saying "found, but inside a descendant of
     testId=…" (or matching descendants' text for `contains`) would have saved two runs.
+15. **No way to assert "the page does not scroll sideways" at a phone width.** The check is one
+    line of page JS (`document.documentElement.scrollWidth <= clientWidth`), but a flow cannot run
+    JS in the page (`evalScript` runs in QuickJS, `openLink: "javascript:…"` is ignored), selectors
+    carry no position, and the viewport is only the run-wide `--viewport` flag, so a 360px check
+    cannot sit in the same directory run as the 1280px flows. The horizontal-overflow audit had to
+    be a Playwright script outside the suite. A per-flow `viewport:` header (or a `setViewport`
+    step) plus an `assertNoHorizontalScroll` (or a page-side `assertTrue: { js: … }`) would make it
+    a three-line flow.

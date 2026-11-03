@@ -44,7 +44,7 @@ export function MyOrders() {
           {t("my.orders.empty")}
         </EmptyState>
       ) : (
-        <ul className="grid gap-4 lg:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {orders.data.map((order) => (
             <Card as="li" key={order.id} data-testid="my-order" data-order-id={order.id} className="flex flex-col gap-4">
               <div className="flex gap-4">

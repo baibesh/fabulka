@@ -21,7 +21,7 @@ const tab = variants({
   defaults: { variant: "pills" },
 });
 
-const list = { pills: "flex gap-1 overflow-x-auto", segmented: "flex gap-1 rounded-xl bg-background p-1" };
+const list = { pills: "flex gap-1 overflow-x-auto md:flex-wrap", segmented: "flex gap-1 overflow-x-auto rounded-xl bg-background p-1" };
 
 /** The ids that tie a tab list to its panels; pass the same `base` to <Tabs> and tabPanelProps(). */
 export function useTabsId(): string {

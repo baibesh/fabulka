@@ -80,7 +80,7 @@ function Cell({ country, cell }: { country: string; cell: VisitorCell }) {
       data-kind={cell.kind}
       data-offered={cell.offered ? "true" : "false"}
       data-count={cell.items.length}
-      className={cx("min-w-44 align-top", cell.kind === "empty" && cell.offered && "bg-warning/10", !cell.offered && "opacity-50")}
+      className={cx("min-w-36 align-top", cell.kind === "empty" && cell.offered && "bg-warning/10", !cell.offered && "opacity-50")}
     >
       {cell.kind === "empty" ? (
         <span className={cx("text-xs font-semibold", cell.offered ? "text-warning" : "text-muted")}>{t("admin.matrix.empty")}</span>

@@ -288,7 +288,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
         </Notice>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card title={t("admin.method.texts")}>
           <Tabs
             base={tabs}
@@ -405,7 +405,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
           </Button>
         }
       >
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Field label={t("admin.method.structure")} error={problems["structure"]}>
             <Textarea
               data-testid="methodology-structure"
