@@ -17,3 +17,6 @@ storage-private/
 storage-e2e-private/
 e2e/*.log
 apps/api/geoip/
+
+# E2E shard links (e2e/shard.sh)
+e2e/.shard-*
