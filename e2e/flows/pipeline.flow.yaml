@@ -1,0 +1,57 @@
+# The admin's Pipeline page: a comic's graph with its live numbers, a node's settings, and a mock
+# book's trace with the replay, opened from the book's admin page.
+appId: ${WEB}
+tags: [admin]
+env:
+  childName: "Pipeline ${Date.now()}"
+commands:
+  - request:
+      method: POST
+      url: ${API}/books
+      headers: { X-Client-Key: "e2e-${childName}", X-Demo-Code: E2E-DEMO }
+      json: { child: { name: "${childName}", age: 10, gender: boy, interests: [robots], city: Алматы }, methodology: comic-quest }
+      extract: { bookId: "$.id" }
+      assert: { status: 201 }
+  - request:
+      url: ${API}/books/${bookId}
+      retryUntil:
+        status: 200
+        json: { "$.status": done }
+      timeout: 60000
+  - request:
+      url: ${API}/admin/pipeline/stats?format=comic
+      assert: { status: 401 }
+
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "admin@e2e.test"
+  - tapOn: { testId: admin-password }
+  - inputText: "e2e-admin-password"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: admin-nav-inbox }
+
+  # The comic's graph: every step a card, the period's numbers, a node's settings in the side panel.
+  - tapOn: { testId: admin-nav-pipeline }
+  - waitForVisible: { testId: pipeline-page }
+  - selectOption: { testId: pipeline-format, optionValue: comic }
+  - waitForVisible: { testId: pipeline-summary }
+  - assertVisible: { testId: "pipeline-node-sheet.cast" }
+  - assertVisible: { testId: "pipeline-node-photo.delete" }
+  - tapOn: { testId: "pipeline-node-story.write" }
+  - waitForVisible: { testId: pipeline-panel }
+  - assertVisible: { testId: pipeline-node-stats }
+  - assertVisible: { testId: pipeline-params }
+  - tapOn: { testId: pipeline-panel-close }
+
+  # The book's trace, from its admin page: the run on the graph and the replay.
+  - openLink: "${WEB}/admin/books/${bookId}?country=all"
+  - tapOn: { testId: book-trace }
+  - waitForVisible: { testId: pipeline-trace-book }
+  - assertVisible: "${childName}"
+  - waitForVisible: { css: "[data-testid='pipeline-node-frame.draw'][data-state=done]" }
+  - tapOn: { testId: pipeline-play }
+  - waitForVisible: { testId: pipeline-pause }
+  - tapOn: { testId: "pipeline-node-frame.draw" }
+  - waitForVisible: { testId: pipeline-trace-frames }
