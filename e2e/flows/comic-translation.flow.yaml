@@ -97,6 +97,11 @@ commands:
   - waitForVisible: { css: "[data-testid=book-reader] .fb-page[data-key=story-1].fb-panels" }
   - assertVisible: { css: "[data-key=story-1] .fb-say[data-el='1:1.2'] p", contains: "Wow, sieh dir das an!" }
   - assertVisible: { css: "[data-key=story-1] .fb-sfx p", contains: "BUMM!" }
+  # Taken off the home page through the admin, so the site's cached examples drop it too.
+  - request:
+      method: DELETE
+      url: /admin/examples/${exampleId}
+      assert: { status: 204 }
 after:
   - sql: { exec: "delete from \"Example\" where id in (select \"exampleId\" from \"ExampleVersion\" v join \"Book\" b on b.id = v.\"bookId\" where b.child->>'name' like $1)", params: ["Comic Translate ${stamp}%"] }
   - sql: { exec: "delete from \"Book\" where \"clientKey\" = $1 or (\"clientKey\" = 'staff:example-translation' and child->>'name' like 'Comic Translate%')", params: ["e2e-comic-translation-${stamp}"] }

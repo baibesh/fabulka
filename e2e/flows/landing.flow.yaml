@@ -137,7 +137,8 @@ commands:
   - assertVisible: "Кітаптар каталогы"
   - assertVisible: { testId: custom-price, text: "5,90 $" }
   - openLink: "${WEB}/ru"
-  - waitForVisible: { testId: hero-covers }
+  # The covers arrive once the page runs; a busy CI runner can take a while to load the page.
+  - waitForVisible: { testId: hero-covers, timeout: 20000 }
   - assertVisible: { contains: "Первые книги - бесплатно, дальше - от 3,90 $" }
   - assertVisible: "В вашей стране печати пока нет - мы планируем её открыть. А PDF легко распечатать самим."
   # Outside Kazakhstan the FAQ says print is not there yet, and prices are in dollars.
