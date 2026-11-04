@@ -55,7 +55,8 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  # The admin opens on Global's Inbox now (the pause switch lives in Settings).
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=all]", timeout: 15000 }
   - tapOn: { css: "nav a[href^='/admin/consent']" }
   - waitForVisible: { testId: admin-consent }
   - waitForVisible: { css: "[data-testid=consent-form][data-language=en][data-version='${before}']" }
@@ -88,9 +89,9 @@ commands:
   - selectOption: { testId: activity-filter-section, optionValue: consent }
   - waitForVisible: { css: "[data-testid=activity-row][data-action='consent.update'][data-target=en]" }
   # Countries offer the photo path by default, with a switch each.
-  - openLink: "${WEB}/admin/reference"
-  - waitForVisible: { testId: reference-tabs }
-  - tapOn: { testId: reference-tab-countries }
+  # Countries and their switches live in Global's Settings now.
+  - openLink: "${WEB}/admin/settings?country=all&tab=countries"
+  - waitForVisible: { testId: settings-tabs }
   - waitForVisible: { css: "[data-testid=country-row][data-code=KZ] [data-testid=country-hero-photo]:checked", timeout: 15000 }
 
   # A parent in English sees the new version and needs both checkboxes.

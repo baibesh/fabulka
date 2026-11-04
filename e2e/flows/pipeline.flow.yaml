@@ -49,9 +49,11 @@ commands:
   - openLink: "${WEB}/admin/books/${bookId}?country=all"
   - tapOn: { testId: book-trace }
   - waitForVisible: { testId: pipeline-trace-book }
-  - assertVisible: "${childName}"
+  - assertVisible: { contains: "${childName}", childOf: { testId: pipeline-trace-book } }
   - waitForVisible: { css: "[data-testid='pipeline-node-frame.draw'][data-state=done]" }
+  - scrollUntilVisible: { testId: pipeline-play }
   - tapOn: { testId: pipeline-play }
-  - waitForVisible: { testId: pipeline-pause }
+  # A mock run lasts seconds, so the replay may already be over: the bar itself is the check.
+  - waitForVisible: { testId: pipeline-replay }
   - tapOn: { testId: "pipeline-node-frame.draw" }
   - waitForVisible: { testId: pipeline-trace-frames }

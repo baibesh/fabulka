@@ -39,7 +39,9 @@ commands:
   - waitForVisible: { css: "[data-step=story]" }
   - assertVisible: { testId: book-theme }
 
-  # Back keeps what was entered.
+  # Back keeps what was entered: from the story to the hero's look, then to the child.
+  - tapOn: { testId: wizard-back }
+  - waitForVisible: { css: "[data-step=look]" }
   - tapOn: { testId: wizard-back }
   - waitForVisible: { css: "[data-step=child]" }
   - assertVisible: { testId: child-name, value: "Тимур" }
