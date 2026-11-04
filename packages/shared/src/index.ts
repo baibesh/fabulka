@@ -16,6 +16,8 @@ import { PaymentProviderSchema, TemplateCountriesSchema, bookPricesFor, type Cit
 import { CurrencySchema, MoneySchema, RevenueSchema, money, multiplyMoney, type Currency, type Money } from "./money";
 import { CountriesModeSchema } from "./country-rules";
 import { GenerationViewSchema } from "./generation";
+import { FrameRectSchema, PipelineStepIdSchema, TextKindSchema } from "./formats";
+import type { RenderablePage } from "./layout";
 
 export * from "./language";
 export * from "./methodologies";
@@ -32,6 +34,8 @@ export * from "./country-rules";
 export * from "./generation";
 export * from "./audit";
 export * from "./references";
+export * from "./formats";
+export * from "./scenario";
 
 /** Ages a book is written for (the form's picker, catalog books' ranges, the voice prefill). */
 export const CHILD_AGE_MIN = 2;
@@ -153,31 +157,6 @@ export const CreateBookSchema = z.object({
 });
 export type CreateBookInput = z.infer<typeof CreateBookSchema>;
 
-/** One page of the story as Muse Spark returns it. */
-export const StoryPageSchema = z.object({
-  page: z.number().int().min(1),
-  /** The method beat the page tells (1 = the first of the method's structure), as Muse Spark tagged it. */
-  beat: z.number().int().optional().catch(undefined),
-  text: z.string().min(1),
-  scene_prompt: z.string().min(1),
-});
-export type StoryPage = z.infer<typeof StoryPageSchema>;
-
-export const StorySchema = z.object({
-  title: z.string().min(1),
-  hero_description: z.string().min(1),
-  /** The pet's look, or null when the child has no pet. */
-  pet_description: z.string().min(1).nullable().default(null),
-  pages: z.array(StoryPageSchema).min(1),
-  /** Questions for the parent to ask while reading together, in the book's language. */
-  talk_questions: z.array(z.string().min(1)).min(3).max(5),
-  /** The front cover's picture (English): the hero in the story's most joyful moment; null: none given. */
-  cover_scene: z.string().trim().min(1).max(600).nullable().default(null).catch(null),
-  /** Two short sentences for the back cover, in the book's language; null: none given. */
-  blurb: z.string().trim().min(1).max(400).nullable().default(null).catch(null),
-});
-export type Story = z.infer<typeof StorySchema>;
-
 /** Generation stages, in order. "toy" runs only when the parent sent a photo of a toy. */
 export const BOOK_STATUSES = ["queued", "toy", "story", "hero", "pages", "pdf", "done", "failed"] as const;
 export const BookStatusSchema = z.enum(BOOK_STATUSES);
@@ -185,10 +164,22 @@ export type BookStatus = z.infer<typeof BookStatusSchema>;
 
 export const BookPageSchema = z.object({
   page: z.number().int(),
+  /** The page's prose (its narration; on a panel page its captions and lines), for lists and older clients. */
   text: z.string(),
+  /** The page's picture (a panel page's first frame). */
   imageUrl: z.string().nullable(),
   /** Every version of the picture was refused: a vignette page with the hero's sheet (older APIs leave it out). */
   vignette: z.boolean().optional(),
+  /** The grid's id ("full" for a picture book page; older APIs leave it out). */
+  grid: z.string().optional(),
+  /** Its frames: each one's box on the page (0..1) and picture (older APIs leave them out: one full frame). */
+  frames: z
+    .array(z.object({ frame: z.number().int(), rect: FrameRectSchema, imageUrl: z.string().nullable(), vignette: z.boolean().optional() }))
+    .optional(),
+  /** Its texts, each tied to a frame (older APIs leave them out: the text as one narration). */
+  texts: z
+    .array(z.object({ id: z.string(), kind: TextKindSchema, frame: z.number().int(), speaker: z.string().nullable(), text: z.string() }))
+    .optional(),
 });
 export type BookPage = z.infer<typeof BookPageSchema>;
 
@@ -202,6 +193,8 @@ export const BookSchema = z.object({
   /** The child's name, for the cover. */
   childName: z.string(),
   methodology: z.string(),
+  /** The story format it is made in (StoryFormat slug; older APIs leave it out: the picture book). */
+  format: z.string().default("picture-book"),
   /** Catalog book slug, or null for a book of your own. */
   template: z.string().nullable(),
   talkQuestions: z.array(z.string()),
@@ -231,6 +224,17 @@ export const BookSchema = z.object({
   createdAt: z.string(),
 });
 export type Book = z.infer<typeof BookSchema>;
+
+/** A book's pages from the API as the renderer takes them: panel pages keep their frames and texts. */
+export function renderablePages(pages: Book["pages"]): RenderablePage[] {
+  return pages.map((p) => ({
+    page: p.page,
+    text: p.text,
+    image: p.imageUrl,
+    ...(p.frames && { frames: p.frames.map((f) => ({ frame: f.frame, rect: f.rect, image: f.imageUrl })) }),
+    ...(p.texts && { texts: p.texts.map((t) => ({ id: t.id, kind: t.kind, frame: t.frame, text: t.text })) }),
+  }));
+}
 
 /**
  * Body of PATCH /books/:id/layout (the parent, before ordering): another theme, and the parent's
@@ -900,6 +904,8 @@ export const MODEL_CALL_KINDS = [
   "cover",
   /** SAM finds the characters on the cover illustration, so the lettering keeps off them. */
   "cover-mask",
+  /** Muse Image draws a side character's sheet (a story format with cast sheets), chained from the hero's. */
+  "cast",
 ] as const;
 export const ModelCallKindSchema = z.enum(MODEL_CALL_KINDS);
 export type ModelCallKind = z.infer<typeof ModelCallKindSchema>;
@@ -931,6 +937,10 @@ export const ModelCallSchema = z.object({
   errorMessage: z.string().nullable(),
   /** Illustrator references (their ids) sent with the call as pictures. */
   references: z.array(z.string()).default([]),
+  /** The pipeline step it was made for (PIPELINE_STEP_IDS), and the page and frame; null before steps were kept. */
+  step: PipelineStepIdSchema.nullable().default(null).catch(null),
+  page: z.number().int().nullable().default(null),
+  frame: z.number().int().nullable().default(null),
   createdAt: z.string(),
 });
 export type ModelCall = z.infer<typeof ModelCallSchema>;

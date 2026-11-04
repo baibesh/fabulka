@@ -193,6 +193,9 @@ function toDto(row: Omit<ModelCallRow, 'prompt' | 'output'>): ModelCall {
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,
     references: row.references ?? [],
+    step: (row.step as ModelCall['step']) ?? null,
+    page: row.page ?? null,
+    frame: row.frame ?? null,
     createdAt: row.createdAt.toISOString(),
   };
 }

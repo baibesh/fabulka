@@ -27,6 +27,8 @@ model Book {
   language        String
   /// Story method slug (Methodology.slug).
   methodology     String          @default("adventure-quest")
+  /// The story format it is made in (StoryFormat.slug), as its method had it when the book was made.
+  storyFormat     String          @default("picture-book")
   /// What the parent asked the book to be about, if anything.
   theme           String?
   template        BookTemplate?   @relation("TemplateBooks", fields: [templateId], references: [id], onDelete: SetNull)
@@ -53,8 +55,13 @@ model Book {
   coverTone       Json?
   /// The back cover's two sentences, in the book's language (Muse Spark writes them with the story).
   blurb           String?
-  /// BookPage[]: { page, beat, text, scenePrompt, imagePath }
+  /// StoredPage[] (@fabulka/shared): { page, beat, grid, frames: [{ frame, rect, scenePrompt, cast,
+  /// imagePath, subject, tone, art }], texts: [{ id, kind, frame, speaker, text }] }. Books made before
+  /// formats keep { page, beat, text, scenePrompt, imagePath, ... }; normalizePage reads both.
   pages           Json            @default("[]")
+  /// Side characters and recurring things of the story (CastMember[]) and their sheets:
+  /// [{ id, name, look, kind, imagePath, responseId }].
+  cast            Json            @default("[]")
   /// Questions for the parent to ask after reading (dialogic reading).
   talkQuestions   Json            @default("[]")
   /// BookLayout (@fabulka/shared): format, theme snapshot, blocks, page layouts, render QA.
@@ -376,10 +383,46 @@ model Methodology {
   avoid           Json     @default("[]")
   /// The method's own limit on words a page; caps the age norm. Null: none.
   maxWordsPerPage Int?
+  /// The story format its books are made in (StoryFormat.slug).
+  format          String   @default("picture-book")
   published       Boolean  @default(true)
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+/// A story format (admin «Formats»): what a page is made of - a grid of frames and texts tied to
+/// frames - and how long each kind of text may be. Seeded from DEFAULT_STORY_FORMATS in
+/// @fabulka/shared; a method points to one by slug (no foreign key, like methods: a format in use
+/// cannot be deleted, only unpublished).
+model StoryFormat {
+  slug           String   @id
+  /// Name and summary by interface language: { ru, kk, en, es, de } of { name, summary }.
+  texts          Json
+  ageMin         Int
+  ageMax         Int
+  /// Story pages a book has; null: the service's PAGE_COUNT.
+  pageCount      Int?
+  /// FrameGrid[]: the grids a page may use, in order of preference.
+  grids          Json
+  /// FormatTextRule[]: the kinds of text it uses, how long and how many a frame.
+  textRules      Json
+  /// Rules for Muse Spark's scenario (string[], English).
+  rules          Json     @default("[]")
+  /// Replaces the default art style in its picture prompts; null: the default.
+  artStyle       String?
+  /// Said in every frame's picture prompt (room for balloons, faces); null: nothing.
+  frameDirection String?
+  /// Side characters drawn on sheets of their own.
+  castSheets     Int      @default(0)
+  /// The theme its books get when the catalog book names none; null: by age.
+  theme          String?
+  gutterMm       Float    @default(0)
+  borderMm       Float    @default(0)
+  published      Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 /// Someone outside Kazakhstan asked for a printed copy: demand for print partners abroad.
@@ -426,6 +469,11 @@ model ModelCall {
   staffCountry String?
   /// Illustrator references (IllustratorReference ids) sent with the call as pictures.
   references   String[] @default([])
+  /// The pipeline step it was made for (PIPELINE_STEP_IDS in @fabulka/shared) and the page and frame
+  /// it drew or read; null for calls made before steps were kept and for calls outside a book.
+  step         String?
+  page         Int?
+  frame        Int?
   createdAt    DateTime @default(now())
 
   @@index([bookId])
@@ -433,6 +481,7 @@ model ModelCall {
   @@index([kind, status, createdAt])
   @@index([staffEmail, createdAt])
   @@index([staffCountry, createdAt])
+  @@index([step, createdAt])
 }
 
 /// An error a visitor saw in the browser (POST /telemetry/error). No client key, IP, names or

@@ -1,6 +1,6 @@
 "use client";
 
-import { BOOK_CSS, renderBook, type Book, type RenderedBook } from "@fabulka/shared";
+import { BOOK_CSS, renderBook, renderablePages, type Book, type RenderedBook } from "@fabulka/shared";
 import { useEffect, useMemo, useState } from "react";
 import { type Highlight, markPersonal } from "@/lib/personalization";
 import { type Hyphenate, loadHyphenator } from "@/lib/hyphenate";
@@ -39,7 +39,8 @@ export function useRenderedBook(book: PreviewableBook, highlights?: Highlight[])
         heroImage: book.heroImageUrl,
         coverImage: book.coverImageUrl ?? null,
         blurb: book.blurb ?? null,
-        pages: book.pages.map((p) => ({ page: p.page, text: p.text, image: p.imageUrl })),
+        // Panel pages keep their frames and texts; picture book pages their text and picture.
+        pages: renderablePages(book.pages),
         talkQuestions: book.talkQuestions,
       },
       book.layout,

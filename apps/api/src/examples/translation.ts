@@ -2,13 +2,19 @@ import type { Book as BookRow, Prisma } from '@prisma/client';
 import {
   DedicationSchema,
   PhotoCaptionSchema,
+  normalizePages,
+  pageImagePaths,
+  textRule,
   type BookLayout,
   type ChildProfile,
   type Language,
+  type StoredPage,
+  type StoryFormatData,
+  type TextKind,
 } from '@fabulka/shared';
 import { basename } from 'node:path';
 import { z } from 'zod';
-import type { StoredPage } from '../books/books.service';
+import type { StoredCast } from '../books/books.service';
 import type { TranslationBrief } from '../meta/prompts';
 
 /** Books translated for «Examples» are staff's, not a visitor's: they never show in anyone's "My books". */
@@ -21,11 +27,30 @@ export const BookTranslationSchema = z.object({
   city: z.string().trim().max(60).default(''),
   toy_name: z.string().trim().max(60).nullable().default(null),
   pages: z.array(
-    z.object({ page: z.number().int(), text: z.string().trim().min(1) }),
+    z.preprocess(
+      // A page translated as one text (the shape before formats) is its narration.
+      (raw) =>
+        raw && typeof raw === 'object' && 'text' in raw && !('texts' in raw)
+          ? {
+              page: (raw as { page?: unknown }).page,
+              texts: [{ id: '1.1', text: (raw as { text?: unknown }).text }],
+            }
+          : raw,
+      z.object({
+        page: z.number().int(),
+        texts: z.array(
+          z.object({
+            id: z.string().trim().min(1),
+            text: z.string().trim().min(1),
+          }),
+        ),
+      }),
+    ),
   ),
   talk_questions: z.array(z.string().trim().min(1)),
   dedication: z.string().trim().nullable().default(null),
   photo_caption: z.string().trim().nullable().default(null),
+  blurb: z.string().trim().nullable().default(null).catch(null),
 });
 export type BookTranslation = z.infer<typeof BookTranslationSchema>;
 
@@ -42,6 +67,12 @@ export function translationProblem(
   const got = translation.pages.map((p) => p.page).join(',');
   if (want !== got)
     return `"pages" must be pages ${want} in this order, got ${got || 'none'}`;
+  for (const [i, page] of brief.pages.entries()) {
+    const ids = page.texts.map((t) => t.id).join(',');
+    const back = translation.pages[i].texts.map((t) => t.id).join(',');
+    if (ids !== back)
+      return `page ${page.page} must have texts ${ids} in this order, got ${back || 'none'}`;
+  }
   if (translation.talk_questions.length !== brief.talkQuestions.length)
     return `"talk_questions" must have ${brief.talkQuestions.length} questions, got ${translation.talk_questions.length}`;
   if (brief.dedication && !translation.dedication)
@@ -76,7 +107,9 @@ export function copyPlan(
     source.toyImagePath,
     source.toyPhotoPath,
     source.toyCutoutPath,
-    ...(source.pages as unknown as StoredPage[]).map((p) => p.imagePath),
+    source.coverImagePath,
+    ...castOf(source).map((c) => c.imagePath),
+    ...normalizePages(source.pages).flatMap(pageImagePaths),
     layout?.photo?.path ?? null,
   ].filter((path): path is string => Boolean(path));
   return [...new Set(paths)].map((from) => ({
@@ -91,7 +124,9 @@ export function translationBrief(
   to: Language,
   layout: BookLayout,
   wordsPerPage: number,
+  format?: Pick<StoryFormatData, 'textRules'>,
 ): TranslationBrief {
+  const kinds: TextKind[] = ['caption', 'speech', 'sfx'];
   const child = source.child as unknown as ChildProfile;
   return {
     from: source.language as Language,
@@ -104,15 +139,27 @@ export function translationBrief(
     },
     toyName: source.toyName,
     title: source.title ?? '',
-    pages: (source.pages as unknown as StoredPage[]).map((p) => ({
+    pages: normalizePages(source.pages).map((p) => ({
       page: p.page,
-      text: p.text,
+      texts: p.texts.map((t) => ({ id: t.id, kind: t.kind, text: t.text })),
     })),
     talkQuestions: source.talkQuestions as string[],
     dedication: layout.dedication,
     photoCaption: layout.photo?.caption ?? null,
+    blurb: source.blurb,
     wordsPerPage,
+    limits: Object.fromEntries(
+      kinds.flatMap((kind) => {
+        const rule = format ? textRule(format, kind) : null;
+        return rule ? [[kind, rule.maxWords]] : [];
+      }),
+    ),
   };
+}
+
+/** A book's cast (Book.cast) as stored. */
+export function castOf(row: Pick<BookRow, 'cast'>): StoredCast[] {
+  return Array.isArray(row.cast) ? (row.cast as unknown as StoredCast[]) : [];
 }
 
 /** The new book's row before anything is translated: the source's story, staff's, in `language`. */
@@ -126,6 +173,7 @@ export function translationRow(
     child: { ...child, language },
     language,
     methodology: source.methodology,
+    storyFormat: source.storyFormat,
     theme: source.theme,
     templateId: source.templateId,
     answers: source.answers ?? undefined,
@@ -155,15 +203,21 @@ export function assembleTranslation(
   layout: BookLayout,
 ) {
   const child = source.child as unknown as ChildProfile;
-  const texts = new Map(translation.pages.map((p) => [p.page, p.text]));
-  const moved = (path: string | null) => (path ? relocate(path, bookId) : null);
-  const pages: StoredPage[] = (source.pages as unknown as StoredPage[]).map(
-    (p) => ({
-      ...p,
-      text: texts.get(p.page) ?? p.text,
-      imagePath: moved(p.imagePath),
-    }),
+  const texts = new Map(
+    translation.pages.flatMap((p) =>
+      p.texts.map((t) => [`${p.page}:${t.id}`, t.text] as const),
+    ),
   );
+  const moved = (path: string | null) => (path ? relocate(path, bookId) : null);
+  // The same pictures (copied), every text element translated: narration, balloons, captions, sounds.
+  const pages: StoredPage[] = normalizePages(source.pages).map((p) => ({
+    ...p,
+    frames: p.frames.map((f) => ({ ...f, imagePath: moved(f.imagePath) })),
+    texts: p.texts.map((t) => ({
+      ...t,
+      text: texts.get(`${p.page}:${t.id}`) ?? t.text,
+    })),
+  }));
   const dedication =
     layout.dedication === null || !translation.dedication
       ? null
@@ -204,17 +258,27 @@ export function assembleTranslation(
     toyImagePath: moved(source.toyImagePath),
     toyPhotoPath: moved(source.toyPhotoPath),
     toyCutoutPath: moved(source.toyCutoutPath),
+    coverImagePath: moved(source.coverImagePath),
+    coverSubject: source.coverSubject,
+    coverTone: source.coverTone,
+    blurb: source.blurb ? (translation.blurb ?? null) : null,
+    cast: castOf(source).map((c) => ({ ...c, imagePath: moved(c.imagePath) })),
     layout: translatedLayout,
   };
 }
 
-/** Story pages whose text still overflows after render QA (a two-page layout's either half), by number. */
+/**
+ * Picture book pages whose text still overflows after render QA (a two-page layout's either half),
+ * by number; a panel page's overflowing balloon names its element and is shortened on its own.
+ */
 export function overflowingPages(layout: BookLayout): number[] {
   return [
     ...new Set(
       layout.qa.issues
         .map((i) =>
-          i.kind === 'overflow' ? /^story-(\d+)/.exec(i.page) : null,
+          i.kind === 'overflow' && !i.element
+            ? /^story-(\d+)/.exec(i.page)
+            : null,
         )
         .filter((m): m is RegExpExecArray => m !== null)
         .map((m) => Number(m[1])),

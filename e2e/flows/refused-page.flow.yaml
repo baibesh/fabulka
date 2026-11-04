@@ -39,8 +39,8 @@ commands:
           "$.layout.qa.notes[0].page": story-2
   - sql:
       query: >-
-        select status::text as status, pages->1->>'art' as art, pages->1->>'imagePath' is null as "noImage",
-        pages->0->>'art' as first, "pdfPath" is not null as pdf
+        select status::text as status, pages->1->'frames'->0->>'art' as art, pages->1->'frames'->0->>'imagePath' is null as "noImage",
+        pages->0->'frames'->0->>'art' as first, "pdfPath" is not null as pdf
         from "Book" where id = $1
       params: ["${bookId}"]
       readOnly: true

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
+  normalizePages,
   COUNTRY_UNKNOWN,
   LANDING_IMAGE_MAX_BYTES,
   LANDING_IMAGE_WIDTHS,
@@ -88,10 +89,9 @@ export function bookPicturePath(
   if (picture === 'hero') return book.heroImagePath;
   const page = /^page-(\d{1,2})$/.exec(picture)?.[1];
   if (!page || !Array.isArray(book.pages)) return null;
-  const found = (book.pages as { page?: unknown; imagePath?: unknown }[]).find(
-    (p) => p?.page === Number(page),
-  );
-  return typeof found?.imagePath === 'string' ? found.imagePath : null;
+  // A page's picture: a picture book page's one, a comic page's first panel.
+  const found = normalizePages(book.pages).find((p) => p.page === Number(page));
+  return found?.frames[0]?.imagePath ?? null;
 }
 
 const bookSelect = {

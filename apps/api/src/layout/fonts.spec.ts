@@ -12,7 +12,12 @@ describe('book fonts', () => {
   it('embeds every font file the themes use', () => {
     const css = bookFontCss();
     for (const theme of Object.values(BOOK_THEMES)) {
-      for (const font of [theme.fonts.body, theme.fonts.heading]) {
+      const lettering = theme.lettering ? [theme.lettering.font] : [];
+      for (const font of [
+        theme.fonts.body,
+        theme.fonts.heading,
+        ...lettering,
+      ]) {
         expect(css).toContain(`font-family: '${font.family}'`);
         expect(BOOK_FONTS[font.family].weights).toContain(font.weight);
       }
@@ -29,7 +34,7 @@ describe('book fonts', () => {
   // The cmap of the actual font files, for every theme and every language it claims.
   for (const theme of Object.values(BOOK_THEMES)) {
     for (const language of theme.languages) {
-      it(`${theme.id}: both fonts cover every letter of ${language}`, () => {
+      it(`${theme.id}: its fonts cover every letter of ${language}`, () => {
         const labels = BOOK_LABELS[language];
         const text =
           ALPHABETS[language] +
@@ -40,6 +45,11 @@ describe('book fonts', () => {
           labels.drawingTitle;
         expect(missingGlyphs(theme.fonts.body, text)).toEqual([]);
         expect(missingGlyphs(theme.fonts.heading, text)).toEqual([]);
+        // A comic's balloons and caption boxes are lettered in capitals in their own font.
+        if (theme.lettering)
+          expect(
+            missingGlyphs(theme.lettering.font, text.toUpperCase()),
+          ).toEqual([]);
       });
     }
   }

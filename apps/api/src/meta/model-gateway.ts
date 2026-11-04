@@ -3,17 +3,18 @@ import type {
   ModelCallKind,
   PageSubject,
   ReferenceKind,
+  SamConcept,
   Story,
   VoicePrefill,
 } from '@fabulka/shared';
 import type { BookTranslation } from '../examples/translation';
 import type {
   Companions,
+  FrameBrief,
   PrefillBrief,
   SceneRewriteBrief,
   ShortenBrief,
   StoryBrief,
-  TextSpace,
   TranslationBrief,
 } from './prompts';
 
@@ -43,6 +44,11 @@ export type PrefillFields = Omit<VoicePrefill, 'transcript'>;
 export interface GeneratedStory {
   story: Story;
   costUsd: number;
+}
+
+/** One frame's picture to draw: the brief and the illustrators' pictures sent with it. */
+export interface FrameRequest extends FrameBrief {
+  references?: ReferenceImage[];
 }
 
 /**
@@ -87,19 +93,22 @@ export interface ModelGateway {
     style?: string,
   ): Promise<GeneratedImage>;
   /**
-   * One page illustration, chained from the last character sheet (`anchorRef`) so the
-   * child, the pet and the toy stay on-model. `style` replaces the default art style (catalog books).
-   * One try: a scene the safety filter refuses throws (isSafetyRefusal), and illustratePage takes
-   * it from there (a gentler scene, then a rewritten one, then a page without its picture).
+   * A side character's sheet (a format with cast sheets), chained from the last sheet so the hero,
+   * the friends and the cast stay in one conversation; frames then chain from the last of them.
    */
-  drawPage(
-    scenePrompt: string,
+  drawCast(
+    name: string,
+    look: string,
     anchorRef: string,
-    companions: Companions,
     style?: string,
-    textSpace?: TextSpace,
-    references?: ReferenceImage[],
   ): Promise<GeneratedImage>;
+  /**
+   * One frame's picture (a picture book page is one frame), chained from the last character sheet
+   * (`anchorRef`) so the child, the pet, the toy and the cast stay on-model; the frames of a page
+   * are drawn in parallel. One try: a scene the safety filter refuses throws (isSafetyRefusal), and
+   * illustrateFrame takes it from there (a gentler scene, a rewritten one, then no picture).
+   */
+  drawFrame(frame: FrameRequest): Promise<GeneratedImage>;
   /**
    * The front cover's own illustration, chained from the last character sheet like a page: the hero
    * once, in a scene from the story, low in the picture with the top left calm for the lettering.
@@ -121,6 +130,8 @@ export interface ModelGateway {
     image: Buffer,
     ext: GeneratedImage['ext'],
     kind?: Extract<ModelCallKind, 'page-mask' | 'cover-mask'>,
+    /** What to look for, one request each (the frame's text kinds decide); people and animals by default. */
+    concepts?: readonly SamConcept[],
   ): Promise<{ subject: PageSubject; costUsd: number }>;
   /**
    * Muse Spark proposes a book theme for the owner's brief, as JSON (ProposedTheme in
@@ -157,6 +168,6 @@ export interface ModelGateway {
   rewriteScene(
     brief: SceneRewriteBrief,
   ): Promise<{ scene: string; costUsd: number }>;
-  /** Muse Spark shortens one translated page whose text did not fit its layout. */
-  shortenPage(brief: ShortenBrief): Promise<{ text: string; costUsd: number }>;
+  /** Muse Spark shortens one text that did not fit its box: a page's narration, a balloon, a caption. */
+  shortenText(brief: ShortenBrief): Promise<{ text: string; costUsd: number }>;
 }

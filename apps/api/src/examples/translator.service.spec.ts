@@ -1,7 +1,13 @@
 import type { ConfigService } from '@nestjs/config';
 import type { Book as BookRow } from '@prisma/client';
-import type { BookLayout } from '@fabulka/shared';
+import {
+  BOOK_THEMES,
+  DEFAULT_STORY_FORMATS,
+  withTheme,
+  type BookLayout,
+} from '@fabulka/shared';
 import type { BooksService, StoredPage } from '../books/books.service';
+import type { FormatsService } from '../formats/formats.service';
 import { JournalService } from '../journal/journal.service';
 import { MockGateway } from '../meta/mock.gateway';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -111,11 +117,17 @@ function makeTranslator(
   const translator = new TranslatorService(
     prisma as unknown as PrismaService,
     { copy } as unknown as StorageService,
-    { renderPdf } as unknown as BooksService,
+    {
+      renderPdf,
+      shortenOverflow: () => Promise.resolve(null),
+    } as unknown as BooksService,
     curatedThemes(),
     journal,
     { revalidate } as unknown as SeoWebService,
     models,
+    {
+      forBook: () => Promise.resolve(DEFAULT_STORY_FORMATS[0]),
+    } as unknown as FormatsService,
     { get: () => 2 } as unknown as ConfigService,
   );
   /** The models' translateBook as the spy a test's setup put on it. */
@@ -185,10 +197,9 @@ describe('TranslatorService', () => {
       costUsd: 0.02,
       error: null,
     });
-    expect((book.pages as StoredPage[]).map((p) => p.imagePath)).toEqual([
-      'books/new/page-1.jpeg',
-      'books/new/page-2.jpeg',
-    ]);
+    expect(
+      (book.pages as StoredPage[]).map((p) => p.frames[0].imagePath),
+    ).toEqual(['books/new/page-1.jpeg', 'books/new/page-2.jpeg']);
     // The source is untouched.
     expect(prisma.rows.get('src')).toMatchObject({
       title: 'Тайна снежного барса',
@@ -202,12 +213,12 @@ describe('TranslatorService', () => {
 
   it('shortens a page that overflows and prints the book again', async () => {
     let shorten!: jest.SpyInstance<
-      ReturnType<MockGateway['shortenPage']>,
-      Parameters<MockGateway['shortenPage']>
+      ReturnType<MockGateway['shortenText']>,
+      Parameters<MockGateway['shortenText']>
     >;
     const { translator, prisma, renderPdf } = makeTranslator(sourceRow(), {
       setup: (models) => {
-        shorten = jest.spyOn(models, 'shortenPage');
+        shorten = jest.spyOn(models, 'shortenText');
       },
       overflow: [[2]],
     });
@@ -219,8 +230,8 @@ describe('TranslatorService', () => {
     expect(shorten.mock.calls[0][0].maxWords).toBe(8);
     expect(renderPdf).toHaveBeenCalledTimes(2);
     const pages = prisma.rows.get('new')!.pages as StoredPage[];
-    expect(pages[1].text.split(' ')).toHaveLength(8);
-    expect(pages[0].text).toBe(
+    expect(pages[1].texts[0].text.split(' ')).toHaveLength(8);
+    expect(pages[0].texts[0].text).toBe(
       'Seite 1. Timur bricht in Almaty zu einem neuen Abenteuer auf.',
     );
   });
@@ -280,6 +291,16 @@ describe('TranslatorService', () => {
     expect(
       (await translator.layoutFor(legacy, 'de', 'no-such-theme')).theme.id,
     ).toBe('fairy');
+    // A comic keeps the comic theme its format picked, though parents cannot pick it.
+    const comic = sourceRow({
+      layout: withTheme(
+        sourceRow().layout as unknown as BookLayout,
+        BOOK_THEMES.comic,
+      ) as never,
+    });
+    expect((await translator.layoutFor(comic, 'kk', null)).theme.id).toBe(
+      'comic',
+    );
   });
 });
 

@@ -92,6 +92,7 @@ const calm: CreateMethodology = {
   rules: [],
   avoid: [],
   maxWordsPerPage: null,
+  format: 'picture-book',
   published: true,
   sortOrder: 100,
 };
@@ -225,6 +226,7 @@ describe('MethodologiesService', () => {
       });
       await service.update('growth-mindset', {
         ...DEFAULT_METHODOLOGIES.find((m) => m.slug === 'growth-mindset')!,
+        format: 'picture-book',
         maxWordsPerPage: null,
         texts: {
           ...DEFAULT_METHODOLOGIES[3].texts,
@@ -375,6 +377,7 @@ describe('MethodologiesService', () => {
       );
       await service.update('adventure-quest', {
         ...DEFAULT_METHODOLOGIES[5],
+        format: 'picture-book',
         maxWordsPerPage: null,
         published: false,
         sortOrder: 50,

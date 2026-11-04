@@ -39,7 +39,7 @@ commands:
       query: >-
         select b.id, b."clientKey" as key,
         (select count(*)::int from "ModelCall" m where m."bookId" = b.id and m.kind = 'page-mask' and m.status = 'ok') as masks,
-        (select count(*)::int from jsonb_array_elements(b.pages) p where p->'subject'->'box' is not null and p->'tone' is not null) as analysed,
+        (select count(*)::int from jsonb_array_elements(b.pages) p where p->'frames'->0->'subject'->'box' is not null and p->'frames'->0->'tone' is not null) as analysed,
         b.layout->'pages'->'1'->'options'->>0 as best, b.layout->'pages'->'1'->'ink'->>'overlay-bottom' as ink
         from "Book" b where b.child->>'name' = $1
       params: ["${childName}"]

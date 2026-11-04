@@ -70,6 +70,7 @@ const FAIRY: BookTheme = {
   cover: "scene",
   ornament: "leaf",
   ornamentImage: null,
+  lettering: null,
 };
 
 /**
@@ -93,6 +94,7 @@ const ADVENTURE: BookTheme = {
   cover: "scene",
   ornament: "star",
   ornamentImage: null,
+  lettering: null,
 };
 
 /**
@@ -116,6 +118,7 @@ const LITTLE: BookTheme = {
   cover: "framed",
   ornament: "flower",
   ornamentImage: null,
+  lettering: null,
 };
 
 /** How books looked before themes: Nunito, the picture on top, the text below. */
@@ -135,9 +138,35 @@ const CLASSIC: BookTheme = {
   cover: "framed",
   ornament: "sparkle",
   ornamentImage: null,
+  lettering: null,
 };
 
-export const BOOK_THEMES: Record<string, BookTheme> = { fairy: FAIRY, adventure: ADVENTURE, little: LITTLE, classic: CLASSIC };
+/**
+ * «Комикс»: the comic format's look. Nunito ExtraBold in capitals letters the balloons and caption
+ * boxes (the probe's lettering: round, sturdy, every Kazakh and German letter), Rubik Bold the titles
+ * and the sound effects; white paper, black ink, a red accent for the sound words and a pale yellow
+ * for caption boxes. Not offered for picture books: a story format picks it.
+ */
+const COMIC: BookTheme = {
+  id: "comic",
+  version: 1,
+  source: "curated",
+  legacy: false,
+  languages: [...LANGUAGES],
+  fonts: { heading: { family: "Rubik", weight: 700 }, body: { family: "Nunito", weight: 400 } },
+  sizes: { young: scale(17, 25, 32), middle: scale(14.5, 55, 30), older: scale(13, 85, 28) },
+  minFit: 0.8,
+  minContrast: 4.5,
+  palette: { paper: "#ffffff", ink: "#16161d", accent: "#d93025", muted: "#6b6b76", cover: "#ffe14d", plate: "#fff3a8" },
+  variants: ["plate"],
+  textSpace: null,
+  cover: "scene",
+  ornament: "star",
+  ornamentImage: null,
+  lettering: { font: { family: "Nunito", weight: 800 }, scale: 0.74 },
+};
+
+export const BOOK_THEMES: Record<string, BookTheme> = { fairy: FAIRY, adventure: ADVENTURE, little: LITTLE, classic: CLASSIC, comic: COMIC };
 
 /** Themes staff and parents can pick (the legacy one is not offered). */
 export const SELECTABLE_THEMES = ["fairy", "adventure", "little"] as const;
@@ -237,6 +266,7 @@ export function newLayout(theme: BookTheme | string, age = 6, format?: BookForma
     pages: {},
     fits: {},
     cover: null,
+    panels: null,
     qa: { status: "pending", checkedAt: null, issues: [], notes: [] },
   };
 }
@@ -254,6 +284,9 @@ export function blankPage(): PageLayout {
     plateBand: "bottom",
     spreadSide: "right",
     noArt: false,
+    panels: false,
+    frames: {},
+    balloons: [],
   };
 }
 

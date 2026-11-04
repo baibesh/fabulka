@@ -8,6 +8,7 @@ import {
   steadyEta,
   TYPICAL_SECONDS,
   type Book,
+  type BookPage,
   type GenerationStep,
   type GenerationView,
   type StepState,
@@ -25,6 +26,7 @@ import { cx } from "../ui/cx";
  */
 function viewOf(book: Book): GenerationView {
   if (book.generation) return book.generation;
+  const frames = book.pages.flatMap(framesOf);
   const state = stateOfStatus(book.status, {
     toy: !!book.toy,
     pet: false,
@@ -32,12 +34,19 @@ function viewOf(book: Book): GenerationView {
     since: book.createdAt,
   });
   return generationView(
-    state,
-    { pagesDone: book.pages.filter((p) => p.imageUrl || p.vignette).length, petImageUrl: null },
+    { ...state, frames: frames.length },
+    { pagesDone: book.pages.filter(pageDrawn).length, framesDone: frames.filter((f) => f.imageUrl || f.vignette).length, petImageUrl: null },
     TYPICAL_SECONDS,
     Date.now(),
   );
 }
+
+/** A page's frames; an older API's page is one frame, its picture. */
+const framesOf = (page: Pick<BookPage, "imageUrl" | "vignette" | "frames">): { imageUrl: string | null; vignette?: boolean }[] =>
+  page.frames ?? [{ imageUrl: page.imageUrl, vignette: page.vignette }];
+
+/** Every frame of the page is drawn (or was refused in every version): a comic page counts once all its panels are. */
+const pageDrawn = (page: Pick<BookPage, "imageUrl" | "vignette" | "frames">) => framesOf(page).every((f) => f.imageUrl || f.vignette);
 
 /** A step's name for the parent; the friends' step says whose sheets are drawn. */
 function stepKey(step: GenerationStep, view: GenerationView): MessageKey {
@@ -139,6 +148,12 @@ function Stepper({ view }: { view: GenerationView }) {
                 {t("book.step.pagesCount", { done: view.pagesDone, total: view.pagesTotal })}
               </span>
             )}
+            {/* Panels: more pictures than pages, so the pictures are counted too. */}
+            {id === "pages" && state !== "next" && view.framesTotal > view.pagesTotal && (
+              <span data-testid="frames-count" className="text-sm text-muted">
+                {t("book.step.framesCount", { done: view.framesDone, total: view.framesTotal })}
+              </span>
+            )}
             {STEP_MODELS[id] && <span className="text-xs tracking-wide text-muted/80">{STEP_MODELS[id]}</span>}
           </div>
         </li>
@@ -181,26 +196,31 @@ function LiveArt({ book, view }: { book: Book; view: GenerationView }) {
         {view.pet && <Sheet testId="pet-image" url={view.petImageUrl} label={t("book.live.pet")} busy={view.step === "friends"} alt={t("book.live.pet")} />}
       </div>
       <ol className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-5">
-        {pages.map((page) => (
-          <Thumb
-            key={page.page}
-            page={page.page}
-            imageUrl={page.imageUrl}
-            vignette={!!page.vignette}
-            heroUrl={book.heroImageUrl}
-            state={
-              page.imageUrl
-                ? "done"
-                : page.vignette
-                  ? "vignette"
-                  : view.redrawing.includes(page.page)
-                    ? "redrawing"
-                    : view.drawing.includes(page.page)
-                      ? "drawing"
-                      : "waiting"
-            }
-          />
-        ))}
+        {pages.map((page) => {
+          // A page shows its first drawn picture once every one of its frames is in.
+          const drawn = pageDrawn(page);
+          const imageUrl = drawn ? (framesOf(page).find((f) => f.imageUrl)?.imageUrl ?? null) : null;
+          return (
+            <Thumb
+              key={page.page}
+              page={page.page}
+              imageUrl={imageUrl}
+              vignette={drawn && !imageUrl}
+              heroUrl={book.heroImageUrl}
+              state={
+                imageUrl
+                  ? "done"
+                  : drawn
+                    ? "vignette"
+                    : view.redrawing.includes(page.page)
+                      ? "redrawing"
+                      : view.drawing.includes(page.page)
+                        ? "drawing"
+                        : "waiting"
+              }
+            />
+          );
+        })}
       </ol>
     </section>
   );

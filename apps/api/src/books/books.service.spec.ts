@@ -1,6 +1,8 @@
 import type { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
+  DEFAULT_STORY_FORMATS,
+  normalizePages,
   DEFAULT_FORMATS,
   DEFAULT_METHODOLOGIES,
   PHOTO_REFUSED,
@@ -12,12 +14,13 @@ import {
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MockGateway } from '../meta/mock.gateway';
-import type { ModelGateway } from '../meta/model-gateway';
+import type { FrameRequest, ModelGateway } from '../meta/model-gateway';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import { JournalService } from '../journal/journal.service';
 import type { PdfService } from '../pdf/pdf.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { ReferenceService } from '../reference/reference.service';
+import type { FormatsService } from '../formats/formats.service';
 import { curatedThemes } from '../themes/curated.testing';
 import type { StorageService } from '../storage/storage.service';
 import { SEED_TEMPLATES } from '../templates/catalog';
@@ -100,8 +103,21 @@ function makeService(
     (files.references ?? {
       forBook: () => Promise.resolve(NO_REFERENCES),
     }) as ReferencesService,
+    fakeFormats(),
     { get: () => 2 } as unknown as ConfigService,
   );
+}
+
+/** The seed story formats, as FormatsService reads them. */
+function fakeFormats(): FormatsService {
+  return {
+    pageCount: 10,
+    forBook: (slug?: string) =>
+      Promise.resolve(
+        DEFAULT_STORY_FORMATS.find((f) => f.slug === slug) ??
+          DEFAULT_STORY_FORMATS[0],
+      ),
+  } as unknown as FormatsService;
 }
 
 describe('BooksService', () => {
@@ -160,6 +176,7 @@ describe('BooksService', () => {
       methodology: DEFAULT_METHODOLOGIES.find(
         (m) => m.slug === 'adventure-quest',
       )!,
+      format: DEFAULT_STORY_FORMATS[0],
     });
     jest
       .spyOn(models, 'writeStory')
@@ -265,13 +282,10 @@ describe('BooksService', () => {
     expect(updateMany).not.toHaveBeenCalled();
     expect(statuses.at(-1)).toBe('done');
     expect(rewriteScene).toHaveBeenCalledTimes(1);
-    const pages = row.pages as {
-      page: number;
-      imagePath: string | null;
-      art: string;
-    }[];
-    expect(pages.map((p) => p.art)).toEqual(['drawn', 'refused']);
-    expect(pages[1].imagePath).toBeNull();
+    // Pages are kept as frames: one full frame a picture book page, with how it was drawn.
+    const pages = row.pages as StoredPage[];
+    expect(pages.map((p) => p.frames[0].art)).toEqual(['drawn', 'refused']);
+    expect(pages[1].frames[0].imagePath).toBeNull();
     expect(saved).toContain('books/b9/page-1.svg');
     expect(saved).not.toContain('books/b9/page-2.svg');
     // Render QA gets the page with no picture, and lays it out as a vignette page.
@@ -279,6 +293,130 @@ describe('BooksService', () => {
       pages: { image: string | null }[];
     };
     expect(book.pages.map((p) => p.image)).toEqual(['page-1.svg', null]);
+  });
+
+  it('makes a comic in its format: panels by frame, a cast sheet chained like the hero, faces looked for, an overflowing balloon shortened', async () => {
+    const models = new MockGateway(0);
+    const drawCast = jest.spyOn(models, 'drawCast');
+    const drawFrame = jest.spyOn(models, 'drawFrame');
+    const findSubject = jest.spyOn(models, 'findSubject');
+    const shortenText = jest.spyOn(models, 'shortenText');
+    const kid = { ...child, age: 10, language: 'en' as const };
+    const row: Record<string, unknown> = {
+      id: 'c1',
+      status: 'queued',
+      child: kid,
+      language: 'en',
+      pages: [],
+      layout: null,
+      createdAt: new Date(),
+    };
+    const update = jest.fn(({ data }: { data: Record<string, unknown> }) => {
+      Object.assign(row, data);
+      return Promise.resolve({ ...row });
+    });
+    // The first render finds balloon 1.2 of page 1 too long; the second fits.
+    let renders = 0;
+    const render = jest.fn((_id: string, _book: unknown, layout: BookLayout) =>
+      Promise.resolve({
+        pdfPath: 'books/c1/book.pdf',
+        tones: {},
+        layout: {
+          ...layout,
+          qa:
+            renders++ === 0
+              ? {
+                  status: 'blocked' as const,
+                  checkedAt: null,
+                  notes: [],
+                  issues: [
+                    {
+                      page: 'story-1',
+                      kind: 'overflow' as const,
+                      detail: '',
+                      element: '1:1.2',
+                    },
+                  ],
+                }
+              : {
+                  status: 'ok' as const,
+                  checkedAt: null,
+                  notes: [],
+                  issues: [],
+                },
+        },
+      }),
+    );
+    const service = makeService(
+      {
+        book: {
+          create: jest.fn().mockImplementation(({ data }: { data: object }) => {
+            Object.assign(row, data);
+            return Promise.resolve({ ...row });
+          }),
+          update,
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        modelCall: { create: jest.fn().mockResolvedValue({}) },
+      },
+      models,
+      methodRows(),
+      {},
+      {
+        storage: {
+          url: () => null,
+          save: (path: string) => Promise.resolve(path),
+        },
+        pdf: { render },
+      },
+    );
+
+    await service.create(
+      { child: kid, methodology: 'comic-quest' },
+      'k',
+      false,
+    );
+    for (let i = 0; i < 100 && row.status !== 'done'; i++)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(row.status).toBe('done');
+    expect(row.storyFormat).toBe('comic');
+    // The comic's theme, and panels drawn with its gutter and border.
+    const layout = row.layout as BookLayout;
+    expect(layout.theme.id).toBe('comic');
+    expect(layout.panels).toEqual({ gutterMm: 3, borderMm: 0.8 });
+    const pages = row.pages as StoredPage[];
+    expect(pages).toHaveLength(8);
+    const frames = pages.reduce((n, p) => n + p.frames.length, 0);
+    expect(drawFrame).toHaveBeenCalledTimes(frames);
+    expect(pages[0].frames.length).toBeGreaterThan(1);
+    // Ayla, the side character, gets her sheet; the kite (a thing) does not. Frames chain from her sheet.
+    expect(drawCast).toHaveBeenCalledTimes(1);
+    expect(drawCast.mock.calls[0].slice(0, 3)).toEqual([
+      'Ayla',
+      expect.stringContaining('braids'),
+      'mock-hero',
+    ]);
+    const request = drawFrame.mock.calls[1][0] as FrameRequest;
+    expect(request.anchorRef).toBe('mock-cast-ayla');
+    expect(request.cast).toEqual([
+      expect.objectContaining({ name: 'Ayla', sheet: true }),
+    ]);
+    expect(request.positions).toBe('the hero on the left, Ayla on the right');
+    expect(request.direction).toContain('speech balloons');
+    // Frames with balloons ask SAM for faces too.
+    expect(findSubject.mock.calls.some((c) => c[3]?.includes('face'))).toBe(
+      true,
+    );
+    // The one balloon that overflowed is shortened, and the book laid out again.
+    expect(shortenText).toHaveBeenCalledTimes(1);
+    expect(shortenText.mock.calls[0][0]).toMatchObject({ kind: 'speech' });
+    expect(render).toHaveBeenCalledTimes(2);
+    const cast = row.cast as { id: string; imagePath: string | null }[];
+    expect(cast.map((c) => [c.id, c.imagePath])).toEqual([
+      ['ayla', 'books/c1/cast-ayla.svg'],
+      ['kite', null],
+    ]);
   });
 
   it("sends the illustrators' references with the hero, each page and the cover, records them, and draws the cover", async () => {
@@ -552,9 +690,10 @@ describe('BooksService', () => {
         createdAt: since,
         updatedAt: since,
       };
+      // Pages as books made before formats kept them, read through the adapter.
       const view = service.generationOf(
         row as never,
-        row.pages as StoredPage[],
+        normalizePages(row.pages),
       );
       expect(view).toMatchObject({
         step: 'pages',

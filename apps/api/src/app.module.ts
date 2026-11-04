@@ -39,6 +39,7 @@ import { TestMailsController } from './mail/test-mails.controller';
 import { MetaModule } from './meta/meta.module';
 import { MethodologiesController } from './methodologies/methodologies.controller';
 import { MethodologiesService } from './methodologies/methodologies.service';
+import { FormatsService } from './formats/formats.service';
 import { OrdersController } from './orders/orders.controller';
 import { SitemapController } from './sitemap/sitemap.controller';
 import {
@@ -138,6 +139,7 @@ class HealthController {
     TemplatesService,
     ThemesService,
     MethodologiesService,
+    FormatsService,
     SettingsService,
     ToyUploadsCleaner,
     AdminAuthService,

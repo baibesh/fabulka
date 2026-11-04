@@ -1,4 +1,4 @@
-import { DEFAULT_METHODOLOGIES } from '@fabulka/shared';
+import { DEFAULT_METHODOLOGIES, DEFAULT_STORY_FORMATS } from '@fabulka/shared';
 import type { Prisma } from '@prisma/client';
 import { MetaGateway } from '../meta/meta.gateway';
 import { MockGateway } from '../meta/mock.gateway';
@@ -33,7 +33,12 @@ const translationBrief: TranslationBrief = {
   child: { name: 'Алия', age: 5, gender: 'girl', city: 'Алматы' },
   toyName: null,
   title: 'Алия',
-  pages: [{ page: 1, text: 'Жила-была Алия.' }],
+  pages: [
+    {
+      page: 1,
+      texts: [{ id: '1.1', kind: 'narration', text: 'Жила-была Алия.' }],
+    },
+  ],
   talkQuestions: ['Что случилось?'],
   dedication: null,
   photoCaption: null,
@@ -51,6 +56,7 @@ const brief = {
   },
   pageCount: 1,
   methodology: DEFAULT_METHODOLOGIES.find((m) => m.slug === 'adventure-quest')!,
+  format: DEFAULT_STORY_FORMATS[0],
 };
 
 describe('JournalService', () => {
@@ -169,6 +175,26 @@ describe('JournalService', () => {
       ['story', 'book-1', 0],
       ['hero', 'book-1', 1],
       ['voice-transcribe', null, 0],
+    ]);
+  });
+
+  it('records the pipeline step, page and frame of calls made inside step()', async () => {
+    const { journal, rows } = makeJournal();
+    const models = new MockGateway(0, journal);
+
+    await journal.run({ bookId: 'book-3' }, async () => {
+      await journal.step('story.write', {}, () => models.writeStory(brief));
+      await journal.step('frame.draw', { page: 2, frame: 3 }, () =>
+        models.drawFrame({ scene: 'the hero, scene 2 frame 3' }),
+      );
+    });
+    await journal.idle();
+
+    expect(
+      rows().map((r) => [r.kind, r.bookId, r.step, r.page, r.frame]),
+    ).toEqual([
+      ['story', 'book-3', 'story.write', null, null],
+      ['page', 'book-3', 'frame.draw', 2, 3],
     ]);
   });
 

@@ -29,6 +29,8 @@ export function sourceRow(patch: Partial<BookRow> = {}): BookRow {
     },
     language: 'ru',
     methodology: 'adventure-quest',
+    storyFormat: 'picture-book',
+    cast: [],
     theme: null,
     templateId: 't1',
     answers: { pet: 'нет' },
@@ -46,6 +48,7 @@ export function sourceRow(patch: Partial<BookRow> = {}): BookRow {
     coverSubject: null,
     coverTone: null,
     blurb: null,
+    // Pages as books made before formats kept them: read through normalizePage.
     pages: [
       {
         page: 1,
@@ -84,6 +87,9 @@ export function sourceRow(patch: Partial<BookRow> = {}): BookRow {
           ink: {},
           plateBand: 'bottom',
           spreadSide: 'right',
+          panels: false,
+          frames: {},
+          balloons: [],
         },
       },
     }),

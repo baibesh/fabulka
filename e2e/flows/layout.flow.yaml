@@ -113,7 +113,7 @@ commands:
   # A page far too long: render QA shrinks it, tries other layouts, then blocks printing.
   - sql:
       exec: >-
-        update "Book" set pages = jsonb_set(pages, '{0,text}', to_jsonb($2::text)) where id = $1
+        update "Book" set pages = jsonb_set(pages, '{0,texts,0,text}', to_jsonb($2::text)) where id = $1
       params: ["${bookId}", "${longText}"]
   - request:
       method: POST

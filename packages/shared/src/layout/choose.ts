@@ -14,10 +14,15 @@ import { blankPage, formatTypeScale } from "./themes";
 export const GRID = 24;
 
 /** Where SAM found the hero in a picture: its box (0..1) and a GRID×GRID mask as hex bits. */
+const BoxSchema = z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() });
 export const PageSubjectSchema = z.object({
-  box: z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }).nullable(),
+  box: BoxSchema.nullable(),
   /** Row-major bits, 4 per hex digit; "" with no box (SAM found nobody). */
   grid: z.string(),
+  /** Each figure SAM found (a frame with speech: whom a balloon may point at), left to right; older masks have none. */
+  people: z.array(z.object({ concept: z.enum(["person", "animal"]), box: BoxSchema })).optional(),
+  /** Faces SAM found (asked for frames with speech): a balloon never covers one and points at its top. */
+  faces: z.array(BoxSchema).optional(),
 });
 export type PageSubject = z.infer<typeof PageSubjectSchema>;
 

@@ -3,6 +3,10 @@ import {
   AdminLoginOptionsSchema,
   AdminBookSchema,
   AdminMethodologySchema,
+  AdminStoryFormatSchema,
+  type AdminStoryFormat,
+  type CreateStoryFormat,
+  type UpdateStoryFormat,
   AdminOrderSchema,
   AdminReferenceSchema,
   BlockedCountriesSchema,
@@ -297,6 +301,26 @@ export async function updateMethodology(slug: string, method: UpdateMethodology)
 /** Refused with 409 methodology_in_use while catalog books or books follow the method. */
 export const deleteMethodology = (slug: string) =>
   request(`/api/admin/methodologies/${encodeURIComponent(slug)}`, { method: "DELETE" });
+
+export async function adminStoryFormats(): Promise<AdminStoryFormat[]> {
+  return AdminStoryFormatSchema.array().parse(await request("/api/admin/story-formats"));
+}
+
+export async function adminStoryFormat(slug: string): Promise<AdminStoryFormat> {
+  return AdminStoryFormatSchema.parse(await request(`/api/admin/story-formats/${encodeURIComponent(slug)}`));
+}
+
+export async function createStoryFormat(format: CreateStoryFormat): Promise<AdminStoryFormat> {
+  return AdminStoryFormatSchema.parse(await request("/api/admin/story-formats", json("POST", format)));
+}
+
+export async function updateStoryFormat(slug: string, format: UpdateStoryFormat): Promise<AdminStoryFormat> {
+  return AdminStoryFormatSchema.parse(await request(`/api/admin/story-formats/${encodeURIComponent(slug)}`, json("PUT", format)));
+}
+
+/** Refused with 409 story_format_in_use while methods or books use it (always for the picture book). */
+export const deleteStoryFormat = (slug: string) =>
+  request(`/api/admin/story-formats/${encodeURIComponent(slug)}`, { method: "DELETE" });
 
 /** The method part of the story prompt for a sample child, from the editor's unsaved fields. */
 export async function previewMethodology(draft: MethodologyPreview): Promise<MethodologyPreviewResult> {

@@ -1,5 +1,6 @@
 import {
   DEFAULT_METHODOLOGIES,
+  DEFAULT_STORY_FORMATS,
   GRID,
   StorySchema,
   gridCell,
@@ -8,6 +9,8 @@ import {
 import { subjectGrid } from './meta.gateway';
 import { MockGateway } from './mock.gateway';
 import {
+  castPrompt,
+  framePrompt,
   heroPrompt,
   methodPrompt,
   pagePrompt,
@@ -25,6 +28,7 @@ const brief = (overrides: Partial<ChildProfile> = {}, pageCount = 4) => ({
   child: { ...child, ...overrides },
   pageCount,
   methodology: method('growth-mindset'),
+  format: DEFAULT_STORY_FORMATS[0],
 });
 
 const child: ChildProfile = {
@@ -58,14 +62,102 @@ describe('MockGateway', () => {
   });
 
   it('draws a distinct placeholder per page', async () => {
-    const one = await gateway.drawPage('the hero, scene 1');
-    const two = await gateway.drawPage('the hero, scene 2');
+    const one = await gateway.drawFrame({ scene: 'the hero, scene 1' });
+    const two = await gateway.drawFrame({ scene: 'the hero, scene 2' });
     expect(one.ext).toBe('svg');
     expect(one.data.equals(two.data)).toBe(false);
+  });
+
+  it('writes a comic in panels when the format has no narration', async () => {
+    const comic = DEFAULT_STORY_FORMATS.find((f) => f.slug === 'comic')!;
+    const { story } = await gateway.writeStory({
+      ...brief({ language: 'en' }, 2),
+      format: comic,
+    });
+    const parsed = StorySchema.parse(story);
+    expect(parsed.cast.map((c) => c.id)).toEqual(['ayla', 'kite']);
+    const [first, second] = parsed.pages;
+    expect(first.grid).toBe(comic.grids[0].id);
+    expect(first.frames).toHaveLength(comic.grids[0].frames.length);
+    expect(first.texts.map((t) => t.kind)).toContain('speech');
+    expect(first.texts.find((t) => t.kind === 'speech')?.speaker).toBe('hero');
+    expect(second.texts.some((t) => t.kind === 'sfx')).toBe(true);
   });
 });
 
 describe('prompts', () => {
+  it('injects the format as data: its grids, kinds of text with their limits and its rules', () => {
+    const comic = DEFAULT_STORY_FORMATS.find((f) => f.slug === 'comic')!;
+    const prompt = storyPrompt({ ...brief({ age: 10 }, 8), format: comic });
+    expect(prompt).toContain('8-page comic');
+    expect(prompt).toContain('"big-top-2": 3 frames');
+    expect(prompt).toContain('"speech": at most 14 words, at most 2 a frame');
+    expect(prompt).toContain('"sfx": at most 2 words');
+    expect(prompt).toContain('Vary the camera');
+    // A comic has no page of prose: no sentence count, no page-length line.
+    expect(prompt).not.toContain('Age norms: each page is');
+    expect(prompt).not.toContain('"narration"');
+    // A picture book: one frame and one narration a page, within the page's words.
+    const book = storyPrompt({ ...brief({ age: 6 }, 10), wordsPerPage: 45 });
+    expect(book).toContain('Every page has 1 frame.');
+    expect(book).toContain('"narration": at most 45 words, at most 1 a frame');
+    expect(book).toContain(
+      'Every page has exactly one "narration" in frame 1.',
+    );
+    expect(STORY_INSTRUCTIONS).toContain('"frames"');
+    expect(STORY_INSTRUCTIONS).toContain('"cast"');
+  });
+
+  it("draws a picture book page's frame with the page prompt as before", () => {
+    const companions = { pet: true, toy: false };
+    expect(
+      framePrompt({
+        scene: 'the hero in the park',
+        companions,
+        cast: [],
+        textSpace: 'bottom',
+      }),
+    ).toBe(pagePrompt('the hero in the park', companions, undefined, 'bottom'));
+  });
+
+  it("adds a panel's cast with their sheets, who stands where and the format's direction", () => {
+    const prompt = framePrompt({
+      scene: 'the hero and Ayla run after the kite',
+      companions: { pet: false, toy: false },
+      cast: [
+        {
+          name: 'Ayla',
+          look: 'a girl with two black braids.',
+          sheet: true,
+          kind: 'character',
+        },
+        {
+          name: 'the kite',
+          look: 'a red kite shaped like a snow leopard',
+          sheet: false,
+          kind: 'thing',
+        },
+      ],
+      positions: 'the hero on the left, Ayla on the right',
+      direction: 'Leave open sky at the top for speech balloons.',
+      style: 'bold comic art',
+    });
+    expect(prompt).toContain(
+      "Ayla is the same character as in Ayla's character sheet shown earlier: a girl with two black braids.",
+    );
+    expect(prompt).toContain(
+      'the kite: a red kite shaped like a snow leopard.',
+    );
+    expect(prompt).toContain(
+      'Positions: the hero on the left, Ayla on the right.',
+    );
+    expect(prompt).toContain('Leave open sky at the top for speech balloons.');
+    expect(prompt.endsWith('bold comic art')).toBe(true);
+    expect(castPrompt('Ayla', 'a girl with braids')).toContain(
+      'one single figure',
+    );
+  });
+
   it('puts every profile detail into the story prompt', () => {
     const prompt = storyPrompt(brief({}, 10));
     expect(storyPrompt(brief({ language: 'en' }))).toContain('in English');

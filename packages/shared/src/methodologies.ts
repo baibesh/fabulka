@@ -49,6 +49,8 @@ export const MethodologySchema = z.object({
   slug: z.string(),
   name: z.string(),
   summary: z.string(),
+  /** The story format its books are made in (older APIs leave it out: the picture book). */
+  format: z.string().default("picture-book"),
   /** Where the method comes from, so an author can read further. */
   source: z.string(),
   ageMin: z.number().int(),
@@ -72,6 +74,8 @@ export interface MethodologyData {
    * layout's room, and replaces the age's sentence count in the prompt. Null or left out: none.
    */
   maxWordsPerPage?: number | null;
+  /** The story format its books are made in (StoryFormat slug); left out: the picture book. */
+  format?: string;
 }
 
 /** One item per line in the editor; each goes into the prompt as a list item. */
@@ -87,6 +91,8 @@ const MethodologyFieldsSchema = z.object({
   rules: promptLines(400),
   avoid: promptLines(200),
   maxWordsPerPage: z.number().int().min(METHODOLOGY_WORDS_MIN).max(METHODOLOGY_WORDS_MAX).nullable().default(null),
+  /** A story format's slug (the API checks it exists); left out: the picture book. */
+  format: MethodologySlugSchema.default("picture-book"),
   published: z.boolean(),
   sortOrder: z.number().int().min(0).max(1000),
 });
@@ -133,6 +139,7 @@ export const MethodologyPreviewSchema = MethodologyFieldsSchema.pick({
   rules: true,
   avoid: true,
   maxWordsPerPage: true,
+  format: true,
 }).extend({
   slug: z.string().trim().max(40),
   source: z.string().trim().max(300),
@@ -154,6 +161,7 @@ export const AdminMethodologySchema = z.object({
   rules: z.array(z.string()),
   avoid: z.array(z.string()),
   maxWordsPerPage: z.number().int().nullable(),
+  format: z.string().default("picture-book"),
   published: z.boolean(),
   sortOrder: z.number().int(),
   /** Catalog books and books that follow the method; while there are any it cannot be deleted. */
@@ -447,6 +455,50 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       "Tension stays mild and is resolved within a page or two.",
     ],
     avoid: ["violence or weapons", "villains who are evil for no reason", "frightening images"],
+  },
+  {
+    slug: "comic-quest",
+    format: "comic",
+    texts: {
+      ru: {
+        name: "Комикс-квест",
+        summary: "Приключение в кадрах: ребёнок с другом разгадывает загадку в родном городе, реплики - в облачках.",
+      },
+      kk: {
+        name: "Комикс-квест",
+        summary: "Кадрлардағы шытырман оқиға: бала досымен бірге туған қаласындағы жұмбақты шешеді, сөздері - бұлттарда.",
+      },
+      en: {
+        name: "Comic quest",
+        summary: "An adventure in panels: the child and a friend crack a mystery in their own city, every line in a speech balloon.",
+      },
+      es: {
+        name: "Misión en cómic",
+        summary: "Una aventura en viñetas: el niño y un amigo resuelven un misterio en su ciudad, con cada frase en un bocadillo.",
+      },
+      de: {
+        name: "Comic-Abenteuer",
+        summary: "Ein Abenteuer in Panels: Dein Kind löst mit einem Freund ein Rätsel in der eigenen Stadt - jeder Satz in einer Sprechblase.",
+      },
+    },
+    source: "The hero's journey (Campbell, Vogler) told in comic panels; Scott McCloud, Understanding Comics",
+    ageMin: 8,
+    ageMax: 12,
+    structure: [
+      "A lively opening in the hero's city: the hero doing what they love, with a friend.",
+      "Something odd happens: a clue, a lost thing or a call for help linked to the child's interests.",
+      "The hero and the friend set off and follow the clues through real places of the city.",
+      "A setback: a wrong guess or an obstacle; the friends argue a little, then think again together.",
+      "A clever turn: the hero uses their interest or skill to solve the main puzzle.",
+      "The big moment, solved with wit and teamwork, never by fighting.",
+      "Back home, a little braver; a last funny panel.",
+    ],
+    rules: [
+      "The story moves through dialogue: the characters say what they think and plan.",
+      "The hero makes the key decisions; grown-ups do not rescue them.",
+      "Humour on every page: a joke, a funny face or a running gag.",
+    ],
+    avoid: ["violence or weapons", "villains who are evil for no reason", "frightening images", "long narration"],
   },
 ];
 

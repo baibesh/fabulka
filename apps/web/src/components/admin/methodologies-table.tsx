@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { PageTitle, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
+import { useStoryFormatName } from "./use-story-formats";
 import { Badge } from "@/components/ui/badge";
 import { ErrorText } from "@/components/ui/notice";
 import { buttonClass } from "@/components/ui/button";
@@ -16,6 +17,7 @@ export function MethodologiesTable() {
   const { t, locale } = useAdminI18n();
   const methods = useAdminMethodologies();
   const canEdit = useCan("methodologies");
+  const formatName = useStoryFormatName();
 
   return (
     <>
@@ -39,6 +41,7 @@ export function MethodologiesTable() {
             <tr>
               <th>{t("admin.methods.name")}</th>
               <th>{t("admin.methods.ages")}</th>
+              <th>{t("admin.methods.format")}</th>
               <th>{t("admin.methods.site")}</th>
               <th>{t("admin.methods.usedBy")}</th>
             </tr>
@@ -55,6 +58,9 @@ export function MethodologiesTable() {
                 <td className="whitespace-nowrap">
                   {m.ageMin}–{m.ageMax}
                 </td>
+                <td data-testid="methodology-format-name" className="whitespace-nowrap text-sm">
+                  {formatName(m.format)}
+                </td>
                 <td>
                   <Badge tone={m.published ? "success" : "neutral"}>
                     {m.published ? t("admin.published") : t("admin.draft")}
@@ -65,7 +71,7 @@ export function MethodologiesTable() {
                 </td>
               </tr>
             ))}
-            {methods.data?.length === 0 && <TableEmpty colSpan={4}>{t("admin.methods.empty")}</TableEmpty>}
+            {methods.data?.length === 0 && <TableEmpty colSpan={5}>{t("admin.methods.empty")}</TableEmpty>}
           </tbody>
         </Table>
       </TableFrame>

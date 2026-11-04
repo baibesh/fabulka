@@ -14,6 +14,7 @@ import {
   LANGUAGE_NAMES,
   UpdateMethodologySchema,
   methodologyText,
+  storyFormatText,
   type AdminMethodology,
   type Language,
   type MethodologyTexts,
@@ -25,13 +26,14 @@ import { adminMethodology, createMethodology, deleteMethodology, previewMethodol
 import { ApiError } from "@/lib/api";
 import { Card, useAdminI18n } from "./ui";
 import { useAdminMethodologies } from "./use-methodologies";
+import { useAdminStoryFormats } from "./use-story-formats";
 import { ErrorText, Notice } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Checkbox, ChoiceLabel } from "@/components/ui/choice";
 import { Field } from "@/components/ui/field";
-import { Input, Textarea } from "@/components/ui/input";
+import { Input, Select, Textarea } from "@/components/ui/input";
 import { BackLink, PageHeader } from "@/components/ui/page";
 import { tabPanelProps, Tabs, useTabsId } from "@/components/ui/tabs";
 import { useAdminHref, useCan } from "./working-country";
@@ -52,6 +54,8 @@ interface Draft {
   avoid: string;
   /** The method's own words-per-page limit, as typed; "" for none (the age norm). */
   maxWords: string;
+  /** The story format its books are made in (a slug). */
+  format: string;
   published: boolean;
   /** Null for a new method until the owner types one: it then goes after the existing ones. */
   sortOrder: number | null;
@@ -67,6 +71,7 @@ const toDraft = (m: AdminMethodology): Draft => ({
   rules: m.rules.join("\n"),
   avoid: m.avoid.join("\n"),
   maxWords: m.maxWordsPerPage === null ? "" : String(m.maxWordsPerPage),
+  format: m.format,
   published: m.published,
   sortOrder: m.sortOrder,
 });
@@ -83,6 +88,7 @@ const fields = (d: Draft, sortOrder: number) => ({
   rules: lines(d.rules),
   avoid: lines(d.avoid),
   maxWordsPerPage: maxWords(d),
+  format: d.format,
   published: d.published,
   sortOrder,
 });
@@ -92,8 +98,8 @@ export function MethodologyPage() {
   const { slug } = useParams<{ slug: string }>();
   const method = useQuery({ queryKey: ["admin", "methodology", slug], queryFn: () => adminMethodology(slug) });
   if (!method.data) return <QueryState error={method.error} scope="admin" />;
-  // Keyed so the form starts over from the saved method after each save.
-  return <MethodologyEditor key={method.data.updatedAt} initial={method.data} />;
+  // Keyed by the method; after a save the editor takes the saved values itself (and says it saved).
+  return <MethodologyEditor key={method.data.slug} initial={method.data} />;
 }
 
 /** How many catalog books and created books follow a method the API refused to delete. */
@@ -111,6 +117,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
   const { t, locale } = useAdminI18n();
   const queryClient = useQueryClient();
   const all = useAdminMethodologies();
+  const formats = useAdminStoryFormats();
   const [draft, setDraft] = useState<Draft>(() =>
     initial
       ? toDraft(initial)
@@ -124,6 +131,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
           rules: "",
           avoid: "",
           maxWords: "",
+          format: "picture-book",
           published: false,
           sortOrder: null,
         },
@@ -137,6 +145,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
   const setText = (key: "name" | "summary", value: string) =>
     setDraft((d) => ({ ...d, texts: { ...d.texts, [lang]: { ...(d.texts[lang] ?? empty), [key]: value } } }));
   const refresh = (saved: AdminMethodology) => {
+    if (initial) setDraft(toDraft(saved));
     queryClient.setQueryData(["admin", "methodology", saved.slug], saved);
     void queryClient.invalidateQueries({ queryKey: ["admin", "methodologies"] });
     // The site's lists pick the change up on their next load.
@@ -191,6 +200,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
         avoid: lines(draft.avoid),
         // A limit the schema would refuse is left out of the preview; saving shows the problem.
         maxWordsPerPage: Number.isInteger(maxWords(draft)) ? maxWords(draft) : null,
+        format: draft.format,
       }),
   });
 
@@ -379,6 +389,17 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
               value={draft.maxWords}
               onChange={(e) => set("maxWords", e.target.value)}
             />
+          </Field>
+          <Field label={t("admin.method.format")} hint={t("admin.method.format.hint")} error={problems["format"]}>
+            <Select data-testid="methodology-format" value={draft.format} onChange={(e) => set("format", e.target.value)}>
+              {/* Until the list arrives (or for a format deleted since), the saved slug stays selectable. */}
+              {!formats.data?.some((f) => f.slug === draft.format) && <option value={draft.format}>{draft.format}</option>}
+              {formats.data?.map((f) => (
+                <option key={f.slug} value={f.slug}>
+                  {storyFormatText(f.texts, locale).name || f.slug}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field label={t("admin.method.sortOrder")} error={problems["sortOrder"]}>
             <Input

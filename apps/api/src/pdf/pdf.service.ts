@@ -16,6 +16,9 @@ import {
   countBreaks,
   countWords,
   cropNote,
+  frameKey,
+  layoutPanels,
+  type PanelPageInput,
   printDocument,
   printPageSize,
   type PageSubject,
@@ -59,8 +62,11 @@ export interface PageCheck {
 export interface RenderResult {
   pdfPath: string;
   layout: BookLayout;
-  /** Each story page's tone, measured now or passed in: the caller keeps them for next time. */
-  tones: Record<number, PageTone | null>;
+  /**
+   * Each picture's tone by frame key ("3.1": page 3's first frame, a picture book page's picture),
+   * measured now or passed in: the caller keeps them for next time.
+   */
+  tones: Record<string, PageTone | null>;
   /** The cover illustration's tone, measured now or passed in; null without one. */
   coverTone: PageTone | null;
 }
@@ -76,6 +82,11 @@ export interface PagePicture {
   page: number;
   subject: PageSubject | null;
   tone: PageTone | null;
+}
+
+/** The same of one frame of a panel page. */
+export interface FramePicture extends PagePicture {
+  frame: number;
 }
 
 const MIME: Record<string, string> = {
@@ -120,6 +131,7 @@ export class PdfService {
     pictures: PagePicture[] = [],
     hooks: RenderHooks = {},
     cover: CoverPicture | null = null,
+    frames: FramePicture[] = [],
   ): Promise<RenderResult> {
     const call = this.journal.start({ kind: 'render', model: 'chromium' });
     const browser = await chromium.launch();
@@ -139,6 +151,7 @@ export class PdfService {
         layout,
         pictures,
         cover,
+        frames,
       );
       await hooks.printing?.();
       // The PDF is printed from the page as checked: the shrink is already applied there.
@@ -193,13 +206,14 @@ export class PdfService {
     layout: BookLayout,
     pictures: PagePicture[],
     cover: CoverPicture | null = null,
+    frames: FramePicture[] = [],
   ) {
     const hyphenate = hyphenatorFor(book.language);
     const tones = await measureTones(
       page,
       join(this.storage.root, folder),
       book,
-      pictures,
+      [...pictures.map((p) => ({ ...p, frame: 1 })), ...frames],
     );
     // The cover's lettering goes where SAM says the hero is not (chooseCover); none without its art.
     const coverTone =
@@ -228,7 +242,7 @@ export class PdfService {
         return {
           page: p.page,
           subject: p.subject,
-          tone: tones[p.page],
+          tone: tones[frameKey(p.page, 1)],
           words: countWords(page?.text ?? ''),
           breaks: countBreaks(page?.text ?? ''),
           // A page whose picture was refused has none: it becomes a vignette page.
@@ -250,6 +264,50 @@ export class PdfService {
         const detail = cropNote(current, analysis);
         if (detail)
           notes.push({ page: `story-${analysis.page}`, kind: 'crop', detail });
+      }
+    }
+    if (frames.length) {
+      // Panel pages: each frame's crop and its texts' places, from SAM's figures and faces.
+      const panels: PanelPageInput[] = [];
+      for (const story of book.pages) {
+        const own = frames.filter((f) => f.page === story.page);
+        if (!own.length || !story.frames) continue;
+        panels.push({
+          page: story.page,
+          frames: story.frames.map((f) => {
+            const picture = own.find((o) => o.frame === f.frame);
+            return {
+              frame: f.frame,
+              rect: f.rect,
+              subject: f.image ? (picture?.subject ?? null) : null,
+              aspect: tones[frameKey(story.page, f.frame)]?.aspect ?? null,
+              cast: f.cast ?? [],
+            };
+          }),
+          texts: (story.texts ?? []).map((t) => ({
+            ...t,
+            speaker: t.speaker ?? null,
+          })),
+        });
+        for (const f of story.frames.filter((f) => !f.image)) {
+          notes.push({
+            page: `story-${story.page}`,
+            kind: 'no-art',
+            detail: `Muse Image refused every version of frame ${f.frame}: the hero's sheet stands in`,
+          });
+        }
+      }
+      current = layoutPanels(current, panels);
+      for (const panel of panels) {
+        const covered = current.pages[String(panel.page)]?.balloons.filter(
+          (b) => b.face,
+        );
+        if (covered?.length)
+          notes.push({
+            page: `story-${panel.page}`,
+            kind: 'face',
+            detail: `no room clear of every face for ${covered.map((b) => b.id).join(', ')}`,
+          });
       }
     }
     let check: PageCheck = { fits: {}, overflow: [], fallback: [] };
@@ -497,14 +555,18 @@ async function measureTones(
   page: Page,
   folder: string,
   book: RenderableBook,
-  pictures: PagePicture[],
-): Promise<Record<number, PageTone | null>> {
-  const tones: Record<number, PageTone | null> = {};
+  pictures: FramePicture[],
+): Promise<Record<string, PageTone | null>> {
+  const tones: Record<string, PageTone | null> = {};
   for (const picture of pictures) {
-    tones[picture.page] = picture.tone;
-    const file = book.pages.find((p) => p.page === picture.page)?.image;
+    const key = frameKey(picture.page, picture.frame);
+    tones[key] = picture.tone;
+    const story = book.pages.find((p) => p.page === picture.page);
+    const file =
+      story?.frames?.find((f) => f.frame === picture.frame)?.image ??
+      (picture.frame === 1 ? story?.image : null);
     if (picture.tone || !file) continue;
-    tones[picture.page] = await measureTone(page, join(folder, file));
+    tones[key] = await measureTone(page, join(folder, file));
   }
   return tones;
 }
@@ -629,12 +691,24 @@ async function checkPages(page: Page, minFit: number): Promise<PageCheck> {
           section.style.setProperty('--fit', String(fit));
         }
         if (fit < 1) fits[key] = fit;
-        const box = over();
-        if (box) {
+        // On a panel page every balloon that still overflows is reported, by its element.
+        const still = boxes.filter((box) => {
+          const flow = box.firstElementChild as HTMLElement | null;
+          if (!flow) return false;
+          const wide = Array.from(
+            flow.querySelectorAll<HTMLElement>('p, li, h1, h2'),
+          ).some((el) => el.scrollWidth > el.clientWidth + 1);
+          return wide || flow.offsetHeight > box.clientHeight + 1;
+        });
+        const reported = still.some((b) => b.dataset.el)
+          ? still.filter((b) => b.dataset.el)
+          : still.slice(0, 1);
+        for (const box of reported) {
           const flow = box.firstElementChild as HTMLElement;
           overflow.push({
             page: key,
             detail: `${Math.round(flow.offsetHeight)}px of text in a ${Math.round(box.clientHeight)}px box at ${Math.round(fit * 100)}%`,
+            ...(box.dataset.el && { element: box.dataset.el }),
           });
         }
       }

@@ -3,14 +3,18 @@ import {
   beatOf,
   countWords,
   encodeGrid,
+  textRule,
   transliterate,
   type Language,
   type ModelCallKind,
   type PageSubject,
+  type SamConcept,
   type Story,
+  type StoryPage,
 } from '@fabulka/shared';
 import { type CallJournal, NO_JOURNAL } from '../journal/journal.service';
 import type {
+  FrameRequest,
   GeneratedImage,
   GeneratedStory,
   ModelGateway,
@@ -119,6 +123,76 @@ const MOCK_TEXT: Record<
       'Wen siehst du auf dem Bild?',
       'Was würdest du tun?',
     ],
+  },
+};
+
+/**
+ * What the mock's comic says, by language: a caption, the lines the hero and the friend take turns
+ * with, and a sound word. E2E flows look for these in the balloons (and for the translated ones).
+ */
+export const MOCK_COMIC: Record<
+  Language,
+  {
+    caption: (n: number, city: string) => string;
+    lines: string[];
+    sfx: string;
+    friend: string;
+  }
+> = {
+  ru: {
+    caption: (n, city) => `Часть ${n}. ${city}`,
+    lines: [
+      'Смотри, что я нашёл!',
+      'Вот это да!',
+      'Бежим скорее!',
+      'Я знаю, что делать!',
+    ],
+    sfx: 'БУМ!',
+    friend: 'Айла',
+  },
+  kk: {
+    caption: (n, city) => `${n}-бөлім. ${city}`,
+    lines: [
+      'Қара, не таптым!',
+      'Мінеки, ғажап!',
+      'Тезірек жүгірейік!',
+      'Не істеу керегін білемін!',
+    ],
+    sfx: 'ДҮҢК!',
+    friend: 'Айла',
+  },
+  en: {
+    caption: (n, city) => `Part ${n}. ${city}`,
+    lines: [
+      'Look what I found!',
+      'Wow, look at that!',
+      "Let's run!",
+      'I know what to do!',
+    ],
+    sfx: 'BOOM!',
+    friend: 'Ayla',
+  },
+  es: {
+    caption: (n, city) => `Parte ${n}. ${city}`,
+    lines: [
+      '¡Mira lo que encontré!',
+      '¡Qué pasada!',
+      '¡Corramos!',
+      '¡Sé qué hacer!',
+    ],
+    sfx: '¡BUM!',
+    friend: 'Ayla',
+  },
+  de: {
+    caption: (n, city) => `Teil ${n}. ${city}`,
+    lines: [
+      'Schau, was ich gefunden habe!',
+      'Wow, sieh dir das an!',
+      'Lass uns rennen!',
+      'Ich weiß, was zu tun ist!',
+    ],
+    sfx: 'BUMM!',
+    friend: 'Ayla',
   },
 };
 
@@ -266,6 +340,7 @@ export class MockGateway implements ModelGateway {
     template,
     toy,
     methodology,
+    format,
   }: StoryBrief): Promise<GeneratedStory> {
     const asked = (interest: string) =>
       child.interests.some((i) => i.trim().toLowerCase() === interest);
@@ -280,21 +355,89 @@ export class MockGateway implements ModelGateway {
         : text.title(child.name),
       hero_description: `a ${child.age}-year-old ${child.gender} with dark hair, yellow raincoat, red boots${slow}`,
       pet_description: child.pet ? 'a small ginger cat with white paws' : null,
+      cast: [],
       pages: Array.from({ length: pageCount }, (_, i) => ({
         page: i + 1,
         beat:
           beatOf(undefined, i + 1, pageCount, methodology.structure.length) ??
           undefined,
-        text: text.page(i + 1, child.name, child.city),
-        scene_prompt:
-          i + 1 === refused
-            ? `the hero tumbling off a skateboard in ${child.city}, scene ${i + 1} ${REFUSE_MARK}${slow}`
-            : `the hero${toy ? ' and the toy' : ''} exploring ${child.city}, scene ${i + 1}${slow}`,
+        grid: 'full',
+        frames: [
+          {
+            frame: 1,
+            cast: [],
+            scene_prompt:
+              i + 1 === refused
+                ? `the hero tumbling off a skateboard in ${child.city}, scene ${i + 1} ${REFUSE_MARK}${slow}`
+                : `the hero${toy ? ' and the toy' : ''} exploring ${child.city}, scene ${i + 1}${slow}`,
+          },
+        ],
+        texts: [
+          {
+            kind: 'narration' as const,
+            frame: 1,
+            speaker: null,
+            text: text.page(i + 1, child.name, child.city),
+          },
+        ],
       })),
       talk_questions: text.questions,
       cover_scene: `the hero laughing on a hill above ${child.city}${slow}`,
       blurb: text.blurb(child.name),
     };
+    // A format without narration (a comic): the same story in panels, with balloons, captions and a sound.
+    if (!textRule(format, 'narration')) {
+      const comic = MOCK_COMIC[child.language];
+      story.cast = [
+        {
+          id: 'ayla',
+          name: comic.friend,
+          look: 'a 9-year-old girl with two black braids, a green hoodie and orange sneakers',
+          kind: 'character',
+        },
+        {
+          id: 'kite',
+          name: 'the kite',
+          look: 'a red paper kite shaped like a snow leopard',
+          kind: 'thing',
+        },
+      ];
+      story.pages = story.pages.map((page, i): StoryPage => {
+        const grid = format.grids[i % format.grids.length];
+        const scene = page.frames[0].scene_prompt;
+        const frames = grid.frames.map((_, f) => ({
+          frame: f + 1,
+          cast: [
+            { id: 'hero', at: 'left' as const },
+            { id: 'ayla', at: 'right' as const },
+          ],
+          scene_prompt:
+            f === 0
+              ? scene
+              : `the hero and ${comic.friend} in ${child.city}, scene ${i + 1} frame ${f + 1}${slow}`,
+        }));
+        const texts: StoryPage['texts'] = [];
+        if (textRule(format, 'caption'))
+          texts.push({
+            kind: 'caption',
+            frame: 1,
+            speaker: null,
+            text: comic.caption(i + 1, child.city),
+          });
+        if (textRule(format, 'speech'))
+          frames.forEach((_, f) =>
+            texts.push({
+              kind: 'speech',
+              frame: f + 1,
+              speaker: f % 2 ? 'ayla' : 'hero',
+              text: comic.lines[(i + f) % comic.lines.length],
+            }),
+          );
+        if (textRule(format, 'sfx') && frames.length > 1)
+          texts.push({ kind: 'sfx', frame: 2, speaker: null, text: comic.sfx });
+        return { ...page, grid: grid.id, frames, texts };
+      });
+    }
     return { story, costUsd: 0 };
   }
 
@@ -404,7 +547,19 @@ export class MockGateway implements ModelGateway {
         toy_name: brief.toyName ? transliterate(brief.toyName, brief.to) : null,
         pages: brief.pages.map((p) => ({
           page: p.page,
-          text: text.page(p.page, name, city),
+          texts: p.texts.map((t, i) => ({
+            id: t.id,
+            text:
+              t.kind === 'narration'
+                ? text.page(p.page, name, city)
+                : t.kind === 'caption'
+                  ? MOCK_COMIC[brief.to].caption(p.page, city)
+                  : t.kind === 'sfx'
+                    ? MOCK_COMIC[brief.to].sfx
+                    : MOCK_COMIC[brief.to].lines[
+                        (p.page - 1 + i) % MOCK_COMIC[brief.to].lines.length
+                      ],
+          })),
         })),
         talk_questions: brief.talkQuestions.map(
           (_, i) => text.questions[i % text.questions.length],
@@ -415,13 +570,14 @@ export class MockGateway implements ModelGateway {
         photo_caption: brief.photoCaption
           ? `[${brief.to}] ${brief.photoCaption}`
           : null,
+        blurb: brief.blurb ? text.blurb(name) : null,
       },
       costUsd: this.staffCostUsd,
     };
   }
 
-  /** The page's first words, as many as allowed. */
-  async shortenPage({ text, maxWords }: ShortenBrief) {
+  /** The text's first words, as many as allowed. */
+  async shortenText({ text, maxWords }: ShortenBrief) {
     await this.pretend('shorten');
     const words = text.split(/\s+/u).filter(Boolean);
     return {
@@ -456,9 +612,38 @@ export class MockGateway implements ModelGateway {
     _image?: Buffer,
     _ext?: GeneratedImage['ext'],
     kind: 'page-mask' | 'cover-mask' = 'page-mask',
+    concepts: readonly SamConcept[] = ['person', 'animal'],
   ): Promise<{ subject: PageSubject; costUsd: number }> {
-    await Promise.all([this.pretend(kind, 1), this.pretend(kind, 1)]);
-    return { subject: MOCK_SUBJECT, costUsd: 0 };
+    await Promise.all(concepts.map(() => this.pretend(kind, 1)));
+    if (!concepts.includes('face'))
+      return { subject: MOCK_SUBJECT, costUsd: 0 };
+    // Asked for faces too (a frame with balloons): the disc is one figure, its top a face.
+    const box = MOCK_SUBJECT.box!;
+    return {
+      subject: {
+        ...MOCK_SUBJECT,
+        people: [{ concept: 'person', box }],
+        faces: [
+          {
+            x: box.x + box.w * 0.3,
+            y: box.y + box.h * 0.05,
+            w: box.w * 0.4,
+            h: box.h * 0.35,
+          },
+        ],
+      },
+      costUsd: 0,
+    };
+  }
+
+  async drawCast(name = 'cast'): Promise<GeneratedImage> {
+    await this.pretend('cast', 1);
+    return {
+      data: placeholder(name, '#FFFFFF'),
+      ext: 'svg',
+      ref: `mock-cast-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      costUsd: 0,
+    };
   }
 
   /** The mock's safe version keeps the refused mark: a refused page stays refused. */
@@ -485,15 +670,12 @@ export class MockGateway implements ModelGateway {
     };
   }
 
-  async drawPage(
-    scenePrompt: string,
-    _anchorRef?: string,
-    _companions?: unknown,
-    _style?: string,
-    _textSpace?: unknown,
-    references: ReferenceImage[] = [],
-  ): Promise<GeneratedImage> {
+  async drawFrame({
+    scene: scenePrompt,
+    references = [],
+  }: Pick<FrameRequest, 'scene' | 'references'>): Promise<GeneratedImage> {
     const n = Number(/scene (\d+)/.exec(scenePrompt)?.[1] ?? 1);
+    const f = Number(/frame (\d+)/.exec(scenePrompt)?.[1] ?? 1);
     await slowedBy(scenePrompt, n * SLOW_PAGE_MS);
     if (scenePrompt.includes(REFUSE_MARK)) {
       const call = this.journal.start({
@@ -508,9 +690,12 @@ export class MockGateway implements ModelGateway {
     }
     await this.pretend('page', 1, 0, references);
     return {
-      data: placeholder(`page ${n}`, COLORS[(n - 1) % COLORS.length]),
+      data: placeholder(
+        f > 1 ? `page ${n}.${f}` : `page ${n}`,
+        COLORS[(n + f - 2) % COLORS.length],
+      ),
       ext: 'svg',
-      ref: `mock-page-${n}`,
+      ref: f > 1 ? `mock-page-${n}-${f}` : `mock-page-${n}`,
       costUsd: 0,
     };
   }

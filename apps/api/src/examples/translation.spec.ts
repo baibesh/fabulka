@@ -69,9 +69,24 @@ describe('the translation of an example book', () => {
       child: { name: 'Тимур', age: 6, gender: 'boy', city: 'Алматы' },
       toyName: 'Бусинка',
       title: 'Тайна снежного барса',
+      // A book made before formats: each page's text is its one narration.
       pages: [
-        { page: 1, text: 'Тимур проснулся рано.' },
-        { page: 2, text: '«Пойдём в горы!» - сказал Тимур.' },
+        {
+          page: 1,
+          texts: [
+            { id: '1.1', kind: 'narration', text: 'Тимур проснулся рано.' },
+          ],
+        },
+        {
+          page: 2,
+          texts: [
+            {
+              id: '1.1',
+              kind: 'narration',
+              text: '«Пойдём в горы!» - сказал Тимур.',
+            },
+          ],
+        },
       ],
       talkQuestions: ['Что ты увидел?', 'Кого ты встретил?'],
       dedication: 'Тимуру от мамы',
@@ -104,7 +119,12 @@ describe('the translation of an example book', () => {
     expect(book.language).toBe('en');
     expect(book.title).toBe('Timur and the Starry Journey');
     expect(
-      book.pages.map((p) => [p.page, p.text, p.imagePath, p.scenePrompt]),
+      book.pages.map((p) => [
+        p.page,
+        p.texts[0].text,
+        p.frames[0].imagePath,
+        p.frames[0].scenePrompt,
+      ]),
     ).toEqual([
       [
         1,
@@ -155,6 +175,85 @@ describe('the translation of an example book', () => {
     expect(book.layout.dedication).toBeNull();
     expect(book.layout.photo).toBeNull();
     expect(book.child.name).toBe('Тимур');
+  });
+
+  it('translates every text of a comic page by its id: captions, balloons, sound words', async () => {
+    const source = sourceRow({
+      storyFormat: 'comic',
+      pages: [
+        {
+          page: 1,
+          grid: 'two-rows',
+          frames: [
+            {
+              frame: 1,
+              rect: { x: 0, y: 0, w: 1, h: 0.5 },
+              scenePrompt: 'the hero and Ayla at the park',
+              cast: [{ id: 'hero', at: 'left' }],
+              imagePath: 'books/src/page-1.jpeg',
+            },
+            {
+              frame: 2,
+              rect: { x: 0, y: 0.5, w: 1, h: 0.5 },
+              scenePrompt: 'a kite flies off',
+              cast: [],
+              imagePath: 'books/src/page-1-2.jpeg',
+            },
+          ],
+          texts: [
+            {
+              id: '1.1',
+              kind: 'caption',
+              frame: 1,
+              speaker: null,
+              text: 'Утро в парке',
+            },
+            {
+              id: '1.2',
+              kind: 'speech',
+              frame: 1,
+              speaker: 'hero',
+              text: 'Смотри!',
+            },
+            { id: '2.1', kind: 'sfx', frame: 2, speaker: null, text: 'ВЖУХ!' },
+          ],
+        },
+      ],
+    });
+    const base = source.layout as unknown as BookLayout;
+    const brief = translationBrief(source, 'en', base, 40, {
+      textRules: [
+        { kind: 'caption', maxWords: 12, perFrame: 1 },
+        { kind: 'speech', maxWords: 14, perFrame: 2 },
+        { kind: 'sfx', maxWords: 2, perFrame: 1 },
+      ],
+    });
+    expect(brief.pages[0].texts.map((t) => [t.id, t.kind])).toEqual([
+      ['1.1', 'caption'],
+      ['1.2', 'speech'],
+      ['2.1', 'sfx'],
+    ]);
+    expect(brief.limits).toEqual({ caption: 12, speech: 14, sfx: 2 });
+    const { translation } = await new MockGateway(0).translateBook(brief);
+    expect(translationProblem(brief, translation)).toBeNull();
+    const book = assembleTranslation(source, translation, 'en', 'new', base);
+    const page = book.pages[0];
+    expect(page.frames.map((f) => f.imagePath)).toEqual([
+      'books/new/page-1.jpeg',
+      'books/new/page-1-2.jpeg',
+    ]);
+    expect(page.texts.map((t) => [t.id, t.kind, t.speaker, t.text])).toEqual([
+      ['1.1', 'caption', null, 'Part 1. Almaty'],
+      ['1.2', 'speech', 'hero', 'Wow, look at that!'],
+      ['2.1', 'sfx', null, 'BOOM!'],
+    ]);
+    // Texts missing from the translation are named, so the model is asked again.
+    expect(
+      translationProblem(brief, {
+        ...translation,
+        pages: [{ page: 1, texts: translation.pages[0].texts.slice(0, 2) }],
+      }),
+    ).toContain('texts 1.1,1.2,2.1');
   });
 
   it('refuses a translation that does not match the book', () => {

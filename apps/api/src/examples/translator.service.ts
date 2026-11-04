@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Book as BookRow, BookStatus, Prisma } from '@prisma/client';
+import { Prisma, type Book as BookRow, type BookStatus } from '@prisma/client';
 import {
   BOOK_THEMES,
   countWords,
@@ -10,8 +10,10 @@ import {
   type BookLayout,
   type ChildProfile,
   type Language,
+  type StoredPage,
 } from '@fabulka/shared';
-import { BooksService, Slots, type StoredPage } from '../books/books.service';
+import { BooksService, Slots } from '../books/books.service';
+import { FormatsService } from '../formats/formats.service';
 import { JournalService } from '../journal/journal.service';
 import { layoutOf } from '../layout/layout';
 import { MODEL_GATEWAY, type ModelGateway } from '../meta/model-gateway';
@@ -81,6 +83,7 @@ export class TranslatorService {
     private readonly journal: JournalService,
     private readonly web: SeoWebService,
     @Inject(MODEL_GATEWAY) private readonly models: ModelGateway,
+    private readonly formats: FormatsService,
     config: ConfigService,
   ) {
     this.slots = new Slots(Number(config.get('TRANSLATION_CONCURRENCY', 2)));
@@ -147,8 +150,14 @@ export class TranslatorService {
     );
     const child = source.child as unknown as ChildProfile;
     const words = wordsPerPage(layout.theme, child.age, layout.format);
-    const { translation, costUsd } = await this.models.translateBook(
-      translationBrief(source, language, layout, words),
+    const format = await this.formats.forBook(source.storyFormat);
+    const { translation, costUsd } = await this.journal.step(
+      'story.translate',
+      {},
+      () =>
+        this.models.translateBook(
+          translationBrief(source, language, layout, words, format),
+        ),
     );
     spent.usd += costUsd;
     const book = assembleTranslation(source, translation, language, id, layout);
@@ -156,6 +165,9 @@ export class TranslatorService {
       ...book,
       child: json(book.child),
       pages: json(book.pages),
+      cast: json(book.cast),
+      coverSubject: book.coverSubject ?? Prisma.DbNull,
+      coverTone: book.coverTone ?? Prisma.DbNull,
       talkQuestions: book.talkQuestions,
       layout: json(book.layout),
       costUsd: spent.usd,
@@ -166,22 +178,44 @@ export class TranslatorService {
     // model and the book printed again.
     let rendered = await this.books.renderPdf(row, book.layout);
     for (let round = 0; round < SHORTEN_ROUNDS; round++) {
+      // A balloon or caption of a panel page that overflows is shortened on its own.
+      const panels = await this.books.shortenOverflow(
+        rendered.pages,
+        rendered.layout,
+        format,
+        language,
+        spent,
+      );
       const overflow = overflowingPages(rendered.layout);
-      if (!overflow.length) break;
-      const pages: StoredPage[] = rendered.pages.map((p) => ({ ...p }));
+      if (!overflow.length && !panels) break;
+      const pages: StoredPage[] = (panels ?? rendered.pages).map((p) => ({
+        ...p,
+        texts: p.texts.map((t) => ({ ...t })),
+      }));
       for (const number of overflow) {
-        const page = pages.find((p) => p.page === number);
-        if (!page) continue;
-        const short = await this.models.shortenPage({
-          language,
-          text: page.text,
-          maxWords: Math.max(
-            5,
-            Math.min(words, Math.floor(countWords(page.text) * SHORTEN_SHARE)),
-          ),
-        });
+        const narration = pages
+          .find((p) => p.page === number)
+          ?.texts.find((t) => t.kind === 'narration');
+        if (!narration) continue;
+        const short = await this.journal.step(
+          'text.shorten',
+          { page: number },
+          () =>
+            this.models.shortenText({
+              language,
+              kind: 'narration',
+              text: narration.text,
+              maxWords: Math.max(
+                5,
+                Math.min(
+                  words,
+                  Math.floor(countWords(narration.text) * SHORTEN_SHARE),
+                ),
+              ),
+            }),
+        );
         spent.usd += short.costUsd;
-        page.text = short.text;
+        narration.text = short.text;
       }
       row = await this.update(id, 'pdf', {
         pages: json(pages),
@@ -215,6 +249,10 @@ export class TranslatorService {
     templateTheme: string | null,
   ): Promise<BookLayout> {
     const layout = layoutOf(source.layout);
+    // A curated theme a story format picked (the comic's) is not offered for picking, but stays.
+    const curated = BOOK_THEMES[layout.theme.id];
+    if (curated && !curated.legacy && curated.languages.includes(language))
+      return layout;
     if (await this.themes.pick(layout.theme.id, language)) return layout;
     const named = templateTheme
       ? await this.themes.pick(templateTheme, language)

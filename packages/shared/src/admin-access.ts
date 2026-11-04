@@ -13,7 +13,7 @@ import { z } from "zod";
  * The admin's sections, in nav order. `team` (staff and roles) is the superadmin's alone. `audit`
  * is the Activity section: who changed what (a country-scoped role sees its countries' events).
  */
-export const ADMIN_PERMISSIONS = ["dashboard", "books", "orders", "catalog", "examples", "methodologies", "themes", "references", "reference", "journal", "audit", "seo", "team"] as const;
+export const ADMIN_PERMISSIONS = ["dashboard", "books", "orders", "catalog", "examples", "methodologies", "story_formats", "themes", "references", "reference", "journal", "audit", "seo", "team"] as const;
 export const AdminPermissionSchema = z.enum(ADMIN_PERMISSIONS);
 export type AdminPermission = z.infer<typeof AdminPermissionSchema>;
 
@@ -28,6 +28,7 @@ export type AdminPermission = z.infer<typeof AdminPermissionSchema>;
 export const ADMIN_SECTION_PARTS = [
   "books.review",
   "methodologies.read",
+  "story_formats.read",
   "themes.read",
   "reference.prices",
   "reference.landing",

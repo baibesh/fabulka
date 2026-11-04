@@ -48,6 +48,15 @@ function gatewayWith(create: jest.Mock) {
   return gateway;
 }
 
+/** A picture book page's frame: the scene, chained from the hero's sheet, landscape. */
+const frame = (scene: string) => ({
+  scene,
+  anchorRef: 'hero-1',
+  companions: { pet: false, toy: false },
+  cast: [],
+  size: '1536x1024' as const,
+});
+
 describe('MetaGateway pictures drawn after an earlier one', () => {
   it('asks again when Meta has not stored the earlier picture yet', async () => {
     const create = jest
@@ -68,10 +77,7 @@ describe('MetaGateway pictures drawn after an earlier one', () => {
     const create = jest.fn().mockRejectedValue(missing());
 
     await expect(
-      gatewayWith(create).drawPage('a scene', 'hero-1', {
-        pet: false,
-        toy: false,
-      }),
+      gatewayWith(create).drawFrame(frame('a scene')),
     ).rejects.toThrow('referenced response');
     expect(create).toHaveBeenCalledTimes(3);
   });
@@ -100,14 +106,11 @@ describe('MetaGateway pictures drawn after an earlier one', () => {
 });
 
 describe('MetaGateway pages the safety filter refused', () => {
-  it('draws a page once and leaves a refusal to the caller (illustratePage)', async () => {
+  it('draws a frame once and leaves a refusal to the caller (illustrateFrame)', async () => {
     const create = jest.fn().mockRejectedValue(refused());
 
     await expect(
-      gatewayWith(create).drawPage('a scene', 'hero-1', {
-        pet: false,
-        toy: false,
-      }),
+      gatewayWith(create).drawFrame(frame('a scene')),
     ).rejects.toThrow('content management policy');
     expect(create).toHaveBeenCalledTimes(1);
   });
@@ -278,14 +281,11 @@ describe('MetaGateway illustrator references', () => {
   it('sends the pictures after the prompt, says what each is for and records their ids', async () => {
     const create = jest.fn().mockResolvedValue(picture('p1'));
     const { gateway, started } = journaled(create);
-    await gateway.drawPage(
-      'the hero sits on the grass',
-      'hero-1',
-      { pet: false, toy: false },
-      undefined,
-      'top',
-      [sketch, style],
-    );
+    await gateway.drawFrame({
+      ...frame('the hero sits on the grass'),
+      textSpace: 'top',
+      references: [sketch, style],
+    });
     const request = (create.mock.calls as unknown[][])[0][0] as {
       input: {
         content: { type: string; text?: string; image_url?: string }[];

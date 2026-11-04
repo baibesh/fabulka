@@ -63,7 +63,11 @@ export class BooksController {
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
-    await this.quota.assertCanCreate(client.key, client.demoCode);
+    await this.quota.assertCanCreate(
+      client.key,
+      client.demoCode,
+      await this.books.estimate(body),
+    );
     return this.books.create(
       body,
       client.key,

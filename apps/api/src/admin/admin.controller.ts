@@ -18,6 +18,10 @@ import {
   CitiesSchema,
   CountriesSchema,
   CreateMethodologySchema,
+  CreateStoryFormatSchema,
+  UpdateStoryFormatSchema,
+  type CreateStoryFormat,
+  type UpdateStoryFormat,
   FaqSchema,
   FormatsSchema,
   JournalCallsQuerySchema,
@@ -75,6 +79,7 @@ import { FxService } from '../fx/fx.service';
 import { ZodPipe } from '../common/zod.pipe';
 import { JournalAdminService } from '../journal/journal-admin.service';
 import { MethodologiesService } from '../methodologies/methodologies.service';
+import { FormatsService } from '../formats/formats.service';
 import { OrdersService } from '../orders/orders.service';
 import { ReferenceService } from '../reference/reference.service';
 import { StaffCapsService } from '../staff/caps.service';
@@ -141,6 +146,7 @@ export class AdminController {
     private readonly orders: OrdersService,
     private readonly journal: JournalAdminService,
     private readonly methodologies: MethodologiesService,
+    private readonly formats: FormatsService,
     private readonly reference: ReferenceService,
     private readonly storage: StorageService,
     private readonly themes: ThemesService,
@@ -489,10 +495,17 @@ export class AdminController {
   @Post('methodologies')
   @RequirePermission('methodologies')
   @Audit('methodology.create', { target: 'methodology' })
-  createMethodology(
+  async createMethodology(
     @Body(new ZodPipe(CreateMethodologySchema)) body: CreateMethodology,
   ) {
+    await this.assertFormat(body.format);
     return this.methodologies.create(body);
+  }
+
+  /** A method may point only to a story format that exists. */
+  private async assertFormat(slug: string) {
+    if (!(await this.formats.exists(slug)))
+      throw new BadRequestException(`No story format «${slug}»`);
   }
 
   @Put('methodologies/:slug')
@@ -503,10 +516,61 @@ export class AdminController {
     @Body(new ZodPipe(UpdateMethodologySchema)) body: UpdateMethodology,
     @Trail() trail: AuditTrail,
   ) {
+    await this.assertFormat(body.format);
     const before = await this.methodologies.adminGet(slug);
     const after = await this.methodologies.update(slug, body);
     trail.diff(before, after);
     return after;
+  }
+
+  /** Story formats: what a page is made of; methods point to them (the method editor lists them too). */
+  @Get('story-formats')
+  @RequirePermission(
+    'story_formats',
+    'story_formats.read',
+    'methodologies',
+    'methodologies.read',
+  )
+  listStoryFormats() {
+    return this.formats.adminList();
+  }
+
+  @Get('story-formats/:slug')
+  @RequirePermission('story_formats', 'story_formats.read')
+  storyFormat(@Param('slug') slug: string) {
+    return this.formats.adminGet(slug);
+  }
+
+  @Post('story-formats')
+  @RequirePermission('story_formats')
+  @Audit('story_format.create', { target: 'story_format' })
+  createStoryFormat(
+    @Body(new ZodPipe(CreateStoryFormatSchema)) body: CreateStoryFormat,
+  ) {
+    return this.formats.create(body);
+  }
+
+  @Put('story-formats/:slug')
+  @RequirePermission('story_formats')
+  @Audit('story_format.update', { target: 'story_format' })
+  async updateStoryFormat(
+    @Param('slug') slug: string,
+    @Body(new ZodPipe(UpdateStoryFormatSchema)) body: UpdateStoryFormat,
+    @Trail() trail: AuditTrail,
+  ) {
+    const before = await this.formats.adminGet(slug);
+    const after = await this.formats.update(slug, body);
+    trail.diff(before, after);
+    return after;
+  }
+
+  /** 409 story_format_in_use while methods or books use it (and always for the picture book). */
+  @Delete('story-formats/:slug')
+  @RequirePermission('story_formats')
+  @Audit('story_format.delete', { target: 'story_format' })
+  @HttpCode(204)
+  deleteStoryFormat(@Param('slug') slug: string) {
+    return this.formats.remove(slug);
   }
 
   /** 409 methodology_in_use while catalog books or books follow it: unpublish it instead. */

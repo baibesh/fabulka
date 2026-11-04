@@ -7,7 +7,11 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { ClientErrorReport, ModelCallKind } from '@fabulka/shared';
+import type {
+  ClientErrorReport,
+  ModelCallKind,
+  PipelineStepId,
+} from '@fabulka/shared';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { PrismaService } from '../prisma/prisma.service';
 import { CONTENT_POLICY, isSafetyRefusal } from '../meta/refusal';
@@ -29,6 +33,10 @@ export interface JournalContext {
   staffEmail?: string | null;
   /** The country that staff action was for. */
   staffCountry?: string | null;
+  /** The pipeline step the calls inside are for (PIPELINE_STEP_IDS), and the page and frame. */
+  step?: PipelineStepId;
+  page?: number;
+  frame?: number;
 }
 
 /** What a model call is, known before it is sent. */
@@ -75,6 +83,22 @@ export class JournalService implements OnModuleDestroy {
   /** Runs `task` so that every model call inside it is recorded against the book. */
   run<T>(context: JournalContext, task: () => Promise<T>): Promise<T> {
     return this.context.run(context, task);
+  }
+
+  /**
+   * Runs `task` as a pipeline step: its model calls keep the book (and staff) of the run around it
+   * and are recorded with the step, page and frame, so each row can be found on the pipeline graph.
+   */
+  step<T>(
+    step: PipelineStepId,
+    where: { page?: number; frame?: number },
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const outer = this.context.getStore() ?? {};
+    return this.context.run(
+      { ...outer, step, page: where.page, frame: where.frame },
+      task,
+    );
   }
 
   /** Starts timing a model call. */
@@ -219,6 +243,9 @@ export class ModelCallTimer {
       costUsd: outcome.costUsd,
       responseId: outcome.responseId ?? null,
       references: this.call.references ?? [],
+      step: this.context?.step ?? null,
+      page: this.context?.page ?? null,
+      frame: this.context?.frame ?? null,
     };
   }
 

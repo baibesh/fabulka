@@ -1,4 +1,6 @@
 import {
+  normalizePages,
+  pageImagePaths,
   CountriesModeSchema,
   CountryLandingSchema,
   LANDING_IMAGE_SLOTS,
@@ -209,8 +211,11 @@ export function bookPaths(row: Record<string, unknown>): string[] {
     row.petImagePath,
     row.coverImagePath,
     row.pdfPath,
-    ...(Array.isArray(row.pages)
-      ? (row.pages as { imagePath?: unknown }[]).map((p) => p?.imagePath)
+    // Every frame's picture (a picture book page's one, a comic page's panels).
+    ...normalizePages(row.pages).flatMap(pageImagePaths),
+    // Side characters' sheets.
+    ...(Array.isArray(row.cast)
+      ? (row.cast as { imagePath?: unknown }[]).map((c) => c?.imagePath)
       : []),
     (row.layout as { photo?: { path?: unknown } | null } | null)?.photo?.path,
   ];

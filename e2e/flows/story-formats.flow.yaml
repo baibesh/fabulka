@@ -1,0 +1,146 @@
+# Story formats in the admin: the owner sees the seeded picture book and comic, adds a format without
+# touching code (a three-strip grid with speech balloons and captions), sees what a book of it costs,
+# changes a balloon's word limit, points a method at it, finds both changes in Activity, is refused
+# deleting it while the method uses it, and deletes it once the method goes back to the picture book.
+appId: ${WEB}
+tags: [admin, formats]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  slug: "e2e-format-${Date.now()}"
+  method: "e2e-format-method-${Date.now()}"
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+commands:
+  # A draft method of its own to point at the new format, so no other flow's books follow it.
+  - sql:
+      exec: >-
+        insert into "Methodology" (slug, texts, source, "ageMin", "ageMax", structure, published, "updatedAt")
+        values ($1, '{"ru":{"name":"Методика форматов","summary":"Для проверки форматов."},"en":{"name":"Format method","summary":"For the format check."}}',
+        'E2E', 8, 12, '["The hero finds a clue."]', false, now())
+      params: ["${method}"]
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/ru"
+  - waitForVisible: { testId: hero-covers }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+
+  # The seeded formats are listed with what a book of each costs.
+  - tapOn: { testId: admin-nav-story-formats }
+  - waitForVisible: { testId: story-formats-table }
+  - assertVisible: { css: "[data-testid=story-format-row][data-slug=picture-book]" }
+  - assertVisible: { css: "[data-testid=story-format-row][data-slug=comic]" }
+
+  # A new format: Russian and English names, three strips, balloons and captions instead of narration.
+  - tapOn: { testId: story-format-new }
+  - waitForVisible: { testId: story-format-editor }
+  - tapOn: { testId: story-format-slug }
+  - inputText: "${slug}"
+  - tapOn: { testId: story-format-tab-ru }
+  - tapOn: { testId: story-format-name-ru }
+  - inputText: "Три полосы"
+  - tapOn: { testId: story-format-tab-en }
+  - tapOn: { testId: story-format-name-en }
+  - inputText: "Three strips"
+  - tapOn: { testId: story-format-grid-add-strips-3 }
+  - waitForVisible: { testId: story-format-grid-strips-3 }
+  - tapOn: { testId: story-format-grid-remove-full }
+  - assertNotVisible: { testId: story-format-grid-full }
+  - assertVisible: { testId: story-format-frames, contains: "3" }
+  - tapOn: { testId: story-format-kind-narration-on }
+  - tapOn: { testId: story-format-kind-speech-on }
+  - tapOn: { testId: story-format-kind-caption-on }
+  - tapOn: { testId: story-format-save }
+  - waitForVisible: { testId: story-format-estimate }
+  - assertUrl: { contains: "/admin/story-formats/${slug}" }
+  - sql:
+      query: >-
+        select jsonb_array_length(grids) as grids, grids->0->>'id' as grid,
+        (select string_agg(r->>'kind', ',' order by r->>'kind') from jsonb_array_elements("textRules") r) as kinds
+        from "StoryFormat" where slug = $1
+      params: ["${slug}"]
+      readOnly: true
+      assert:
+        rows: 1
+        first: { grids: 1, grid: strips-3, kinds: "caption,speech" }
+
+  # In the list, with its estimate.
+  - tapOn: { testId: admin-nav-story-formats }
+  - waitForVisible: { css: "[data-testid=story-format-row][data-slug='${slug}']" }
+  - assertVisible: { css: "[data-testid=story-format-row][data-slug='${slug}'] [data-testid=story-format-estimate]", contains: "$" }
+
+  # A balloon may now hold 9 words; the change is kept.
+  - openLink: "${WEB}/admin/story-formats/${slug}"
+  - waitForVisible: { testId: story-format-editor }
+  - tapOn: { testId: story-format-kind-speech-words }
+  - eraseText
+  - inputText: "9"
+  - tapOn: { testId: story-format-save }
+  - waitForVisible: { testId: story-format-saved }
+  - sql:
+      query: >-
+        select (select (r->>'maxWords')::int from jsonb_array_elements("textRules") r where r->>'kind' = 'speech') as words
+        from "StoryFormat" where slug = $1
+      params: ["${slug}"]
+      readOnly: true
+      assert:
+        rows: 1
+        first: { words: 9 }
+  - openLink: "${WEB}/admin/story-formats/${slug}"
+  - waitForVisible: { css: "[data-testid=story-format-kind-speech-words][value='9']" }
+
+  # A method points at it.
+  - openLink: "${WEB}/admin/methodologies/${method}"
+  - waitForVisible: { testId: methodology-editor }
+  - selectOption: { testId: methodology-format, optionValue: "${slug}" }
+  - tapOn: { testId: methodology-save }
+  - waitForVisible: { testId: methodology-saved }
+  - sql:
+      # Assert values are taken as written, so the format is compared in the query.
+      query: select format = $2 as linked from "Methodology" where slug = $1
+      params: ["${method}", "${slug}"]
+      readOnly: true
+      assert:
+        rows: 1
+        first: { linked: true }
+
+  # Both changes of the format are in Activity.
+  - tapOn: { testId: admin-nav-activity }
+  - waitForVisible: { testId: activity-table }
+  - assertVisible: { css: "[data-testid=activity-row][data-action='story_format.create']" }
+  - assertVisible: { css: "[data-testid=activity-row][data-action='story_format.update'][data-target='${slug}']" }
+
+  # While the method uses it, it is not deleted.
+  - openLink: "${WEB}/admin/story-formats/${slug}"
+  - waitForVisible: { testId: story-format-usage, contains: "${method}" }
+  - tapOn: { testId: story-format-delete }
+  - tapOn: { testId: story-format-delete-confirm }
+  - waitForVisible: { testId: story-format-delete-error }
+  - assertVisible: { contains: "Unpublish it instead" }
+
+  # The method goes back to the picture book; then the format is deleted.
+  - openLink: "${WEB}/admin/methodologies/${method}"
+  - waitForVisible: { testId: methodology-editor }
+  - selectOption: { testId: methodology-format, optionValue: picture-book }
+  - tapOn: { testId: methodology-save }
+  - waitForVisible: { testId: methodology-saved }
+  - openLink: "${WEB}/admin/story-formats/${slug}"
+  - waitForVisible: { testId: story-format-editor }
+  - tapOn: { testId: story-format-delete }
+  - tapOn: { testId: story-format-delete-confirm }
+  - waitForVisible: { testId: story-formats-table }
+  - assertVisible: { css: "[data-testid=story-format-row][data-slug=comic]" }
+  - assertNotVisible: { css: "[data-slug='${slug}']" }
+after:
+  - sql: { exec: "delete from \"Methodology\" where slug = $1", params: ["${method}"] }
+  - sql: { exec: "delete from \"StoryFormat\" where slug = $1", params: ["${slug}"] }

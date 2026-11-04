@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, ExternalLink, Flag, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { addExampleVersion, adminBook, adminExamples, bookCalls, bookFlags, createExample, deleteBook, flagPage, pinLayout } from "@/lib/admin-api";
 import { Menu, MenuItem } from "@/components/ui/menu";
 import { EXAMPLES_QUERY, useExampleError } from "./examples-page";
@@ -12,6 +12,7 @@ import { CallDetail } from "./journal/call-detail";
 import { CallStatus } from "./journal/call-status";
 import { BOOK_STATUS_TONE, Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
 import { useMethodologyName } from "./use-methodologies";
+import { useStoryFormatName } from "./use-story-formats";
 import { Badge } from "@/components/ui/badge";
 import { ErrorText, Notice } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
@@ -19,7 +20,7 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { BackLink } from "@/components/ui/page";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { BookReader } from "@/components/book/book-reader";
-import { LANGUAGE_NAMES, PAGE_VARIANTS, displayVersion, type AdminBook, type LayoutQa, type PageVariant } from "@fabulka/shared";
+import { LANGUAGE_NAMES, PAGE_VARIANTS, displayVersion, isPanelPage, type AdminBook, type BookPage, type LayoutQa, type PageVariant } from "@fabulka/shared";
 import { themeName } from "@/lib/themes";
 import { Select, Textarea } from "@/components/ui/input";
 import { pageLabel } from "./references-page";
@@ -106,6 +107,14 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
         <p className="font-semibold">{t("admin.book.layout.pins")}</p>
         {book.pages.map(({ page }) => {
           const state = layout.pages[String(page)];
+          // A page of panels has one layout, its grid: nothing to pin.
+          if (state?.panels)
+            return (
+              <p key={page} data-testid={`pin-${page}-panels`} className="flex items-center gap-2 text-muted">
+                <span className="w-16">{t("design.page", { page })}</span>
+                {t("admin.book.panels")}
+              </p>
+            );
           return (
             <label key={page} className="flex items-center gap-2">
               <span className="w-16 text-muted">{t("design.page", { page })}</span>
@@ -315,6 +324,7 @@ export function BookDetail() {
   const { t, date, bookStatus } = useAdminI18n();
   const book = useQuery({ queryKey: ["admin", "book", id], queryFn: () => adminBook(id) });
   const methodName = useMethodologyName();
+  const formatName = useStoryFormatName();
   const canManage = useCan("books");
   const canExamples = useCan("examples");
   const canFlag = useCan("books.review");
@@ -322,7 +332,7 @@ export function BookDetail() {
   const remove = useMutation({ mutationFn: () => deleteBook(id), onSuccess: () => router.replace(adminHref("/admin/books")), onSettled: () => setConfirming(false) });
   if (!book.data) return <QueryState error={book.error} scope="admin" />;
   const b = book.data;
-  const facts: [string, string][] = [
+  const facts: [string, ReactNode][] = [
     [
       t("admin.book.child"),
       t("admin.book.child.value", {
@@ -335,6 +345,7 @@ export function BookDetail() {
     [t("admin.book.interests"), b.child.interests.join(", ")],
     [t("admin.book.pet"), b.child.pet ?? "-"],
     [t("admin.book.method"), methodName(b.methodology)],
+    [t("admin.book.format"), <span key="format" data-testid="admin-book-format" data-format={b.format}>{formatName(b.format)}</span>],
     [t("admin.book.template"), b.template ?? t("admin.books.custom")],
     [t("admin.book.theme"), b.theme ?? "-"],
     [t("admin.book.language"), b.language.toUpperCase()],
@@ -414,20 +425,24 @@ export function BookDetail() {
                 </div>
               </li>
             )}
-            {b.pages.map((page) => (
-              <li key={page.page} data-testid="admin-page" className="overflow-hidden rounded-xl border border-border">
-                {page.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
-                  <img src={page.imageUrl} alt="" className="aspect-[3/2] w-full object-cover" />
-                ) : (
-                  <div className="aspect-[3/2] w-full bg-border" />
-                )}
-                <div className="flex flex-col gap-2 p-3 text-sm">
-                  <p className="whitespace-pre-line">{page.text}</p>
-                  {canFlag && <FlagButton bookId={b.id} page={`story-${page.page}`} />}
-                </div>
-              </li>
-            ))}
+            {b.pages.map((page) =>
+              page.frames && page.texts && isPanelPage({ frames: page.frames, texts: page.texts }) ? (
+                <PanelPage key={page.page} page={page} bookId={b.id} canFlag={canFlag} />
+              ) : (
+                <li key={page.page} data-testid="admin-page" className="overflow-hidden rounded-xl border border-border">
+                  {page.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API
+                    <img src={page.imageUrl} alt="" className="aspect-[3/2] w-full object-cover" />
+                  ) : (
+                    <div className="aspect-[3/2] w-full bg-border" />
+                  )}
+                  <div className="flex flex-col gap-2 p-3 text-sm">
+                    <p className="whitespace-pre-line">{page.text}</p>
+                    {canFlag && <FlagButton bookId={b.id} page={`story-${page.page}`} />}
+                  </div>
+                </li>
+              ),
+            )}
           </ol>
         </Card>
       </div>
@@ -454,5 +469,42 @@ export function BookDetail() {
         confirmTestId="delete-book-confirm"
       />
     </>
+  );
+}
+
+/** A page of panels: its frames where the grid puts them, then every text with its kind and speaker. */
+function PanelPage({ page, bookId, canFlag }: { page: BookPage; bookId: string; canFlag: boolean }) {
+  const { t } = useAdminI18n();
+  return (
+    <li data-testid="admin-page" data-panels="true" className="overflow-hidden rounded-xl border border-border">
+      <div className="relative aspect-square w-full bg-white">
+        {page.frames?.map((f) => (
+          <div
+            key={f.frame}
+            data-testid="admin-frame"
+            data-frame={f.frame}
+            className="absolute overflow-hidden border border-border bg-border"
+            style={{ left: `${f.rect.x * 100}%`, top: `${f.rect.y * 100}%`, width: `${f.rect.w * 100}%`, height: `${f.rect.h * 100}%` }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- generated files, served by the API */}
+            {f.imageUrl && <img src={f.imageUrl} alt={t("admin.book.frame", { frame: f.frame })} className="size-full object-cover" />}
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col gap-2 p-3 text-sm">
+        <ol className="flex flex-col gap-1">
+          {page.texts?.map((text) => (
+            <li key={text.id} data-testid="admin-text" data-kind={text.kind}>
+              <span className="text-xs text-muted">
+                {t("admin.book.frame", { frame: text.frame })} · {t(`admin.format.kind.${text.kind}`)}
+                {text.speaker && ` · ${t("admin.book.speaker", { speaker: text.speaker })}`}
+              </span>
+              <p className="whitespace-pre-line">{text.text}</p>
+            </li>
+          ))}
+        </ol>
+        {canFlag && <FlagButton bookId={bookId} page={`story-${page.page}`} />}
+      </div>
+    </li>
   );
 }

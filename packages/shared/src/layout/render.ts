@@ -1,6 +1,9 @@
 import type { Language } from "../language";
 import { BOOK_LABELS } from "../labels";
-import type { BookLayout, BookTheme, CoverLayout, PageLayout, PageVariant } from "./model";
+import type { FrameRect, TextKind } from "../formats";
+import type { FrameCast } from "../scenario";
+import type { BookLayout, BookTheme, CoverLayout, PageLayout, PageVariant, PlacedText } from "./model";
+import { frameBox, letteringFont } from "./panels";
 import { BOOK_FONTS, formatTypeScale } from "./themes";
 import { type PlannedPage, type Rect, artRect, interiorPages, planBook, textRect } from "./plan";
 import { contrast, luminance, objectPosition, pageText } from "./choose";
@@ -25,8 +28,21 @@ export interface RenderableBook {
   coverImage?: string | null;
   /** The back cover's two sentences, in the book's language. */
   blurb?: string | null;
-  pages: { page: number; text: string; image: string | null }[];
+  pages: RenderablePage[];
   talkQuestions: string[];
+}
+
+/**
+ * A story page for the renderer. A picture book page needs its text and picture; a panel page
+ * (PageLayout.panels) also its frames and texts, which the renderer then draws where the layout
+ * placed them. `image` is then the first frame's picture (for the covers).
+ */
+export interface RenderablePage {
+  page: number;
+  text: string;
+  image: string | null;
+  frames?: { frame: number; rect: FrameRect; image: string | null; cast?: FrameCast[] }[];
+  texts?: { id: string; kind: TextKind; frame: number; text: string; speaker?: string | null }[];
 }
 
 /** A run of text: plain, or words to mark with a hint (the sample book on a catalog page). */
@@ -107,6 +123,8 @@ function themeStyle(layout: BookLayout, fit: number, bleed: number): string {
     `--title-size:${size.titlePt}pt`,
     `--heading-size:${size.headingPt}pt`,
     `--fit:${fit}`,
+    `--letter:${fontStack(letteringFont(theme).family)}`,
+    `--letter-weight:${letteringFont(theme).weight}`,
   ].join(";");
 }
 
@@ -150,7 +168,11 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
       case "story": {
         const page = byPage.get(planned.story!)!;
         const state = layout.pages[String(planned.story)];
-        if (state?.noArt) {
+        if (state?.panels && page.frames?.length) {
+          // Comic lettering is never hyphenated: a word that does not fit makes render QA shrink or shorten.
+          inner = panelPage(planned.story!, page, state, layout, book.heroImage, (t) => escapeHtml(pageText(t)));
+          classes.push("fb-panels");
+        } else if (state?.noArt) {
           inner = vignette(page, layout, book.heroImage, body, ornament);
           classes.push("fb-no-art");
         } else {
@@ -321,10 +343,13 @@ function backCover(
   const rect = paperRect(layout);
   const box = { ...rect, h: rect.h - 14 };
   // The story's last picture in a round frame (the happy ending), else the hero's sheet, else the ornament.
-  const last = [...book.pages].reverse().find((p) => p.image);
+  const last = [...book.pages]
+    .reverse()
+    .map((p) => [...(p.frames ?? [])].reverse().find((f) => f.image)?.image ?? p.image)
+    .find(Boolean);
   const side = Math.min(rect.w, rect.h) * 0.36;
   const hero = last
-    ? `<div class="fb-back-frame" style="width:${mm(side)};height:${mm(side)}"><img class="fb-back-art" src="${escapeHtml(last.image!)}" alt=""></div>`
+    ? `<div class="fb-back-frame" style="width:${mm(side)};height:${mm(side)}"><img class="fb-back-art" src="${escapeHtml(last)}" alt=""></div>`
     : book.heroImage
       ? `<img class="fb-back-hero" src="${escapeHtml(book.heroImage)}" alt="">`
       : `<div class="fb-ornament">${ornament()}</div>`;
@@ -349,7 +374,7 @@ const FABULKA_MARK =
  * the theme's ornament stands in.
  */
 function vignette(
-  page: RenderableBook["pages"][number],
+  page: RenderablePage,
   layout: BookLayout,
   heroImage: string | null,
   body: (t: string) => string,
@@ -364,9 +389,87 @@ function vignette(
   return `${picture}<div class="fb-box fb-text fb-on-paper fb-center fb-top" data-fit-box style="${place(rect)}"><div class="fb-flow"><p data-qa-text>${body(page.text)}</p></div></div>`;
 }
 
+/**
+ * A panel page: each frame in its box with an ink border, its picture cropped to keep SAM's figures
+ * in view (or the hero's sheet small on paper when every version of it was refused), and its texts
+ * where the layout placed them - balloons (an SVG ellipse and tail, ink stroke under a paper fill, so
+ * a balloon and its tail read as one shape), caption boxes and sound effects. Every text is a fit box
+ * render QA measures; `data-el` names it, so the one that overflows can be shortened.
+ */
+function panelPage(
+  number: number,
+  page: RenderablePage,
+  state: PageLayout,
+  layout: BookLayout,
+  heroImage: string | null,
+  body: (t: string) => string,
+): string {
+  const gutter = layout.panels?.gutterMm ?? 3;
+  const border = layout.panels?.borderMm ?? 0.8;
+  return (page.frames ?? [])
+    .map((frame) => {
+      const box = frameBox(layout.format, frame.rect, gutter);
+      const crop = state.frames[String(frame.frame)];
+      const position = crop ? objectPosition(crop.focus, crop.aspect, box.w / box.h) : undefined;
+      const picture = frame.image
+        ? image(frame.image, "fb-art", position)
+        : heroImage
+          ? image(heroImage, "fb-vignette fb-panel-vignette", undefined, "left:15%;top:10%;width:70%;height:80%;")
+          : "";
+      const placed = state.balloons.filter((b) => b.frame === frame.frame);
+      const texts = new Map((page.texts ?? []).map((t) => [t.id, t]));
+      const shapes = placed.filter((b) => b.kind === "speech").map((b) => balloonShape(b, box));
+      const svg = shapes.length
+        ? `<svg class="fb-balloons" viewBox="0 0 ${round(box.w)} ${round(box.h)}" preserveAspectRatio="none" aria-hidden="true"><g class="fb-balloon-ink">${shapes.join("")}</g><g class="fb-balloon-fill">${shapes.join("")}</g></svg>`
+        : "";
+      const letters = placed
+        .map((b) => {
+          const text = texts.get(b.id);
+          if (!text) return "";
+          const r: Rect = { x: b.box.x * box.w, y: b.box.y * box.h, w: b.box.w * box.w, h: b.box.h * box.h };
+          const el = ` data-el="${number}:${escapeHtml(b.id)}"`;
+          const size = `font-size:calc(${b.pt}pt * var(--fit))`;
+          if (b.kind === "speech") {
+            const inner = { x: r.x + r.w * 0.1, y: r.y + r.h * 0.12, w: r.w * 0.8, h: r.h * 0.76 };
+            return `<div class="fb-box fb-say" data-fit-box${el} style="${place(inner)};${size}"><div class="fb-flow"><p data-qa-text>${body(text.text)}</p></div></div>`;
+          }
+          if (b.kind === "sfx") {
+            return `<div class="fb-box fb-sfx" data-fit-box${el} style="${place(r)};${size};transform:rotate(${b.rotate}deg)"><div class="fb-flow"><p data-qa-text>${body(text.text)}</p></div></div>`;
+          }
+          return `<div class="fb-box fb-caption${b.kind === "narration" ? " fb-caption-wide" : ""}" data-fit-box${el} style="${place(r)};${size}"><div class="fb-flow"><p data-qa-text>${body(text.text)}</p></div></div>`;
+        })
+        .join("");
+      return `<div class="fb-panel" data-frame="${frame.frame}" style="${place(box)};border-width:${mm(border)}">${picture}${svg}${letters}</div>`;
+    })
+    .join("");
+}
+
+/** A balloon's ellipse and its tail toward the speaker, in the frame's millimetres. */
+function balloonShape(b: PlacedText, box: Rect): string {
+  const rx = (b.box.w * box.w) / 2;
+  const ry = (b.box.h * box.h) / 2;
+  const cx = b.box.x * box.w + rx;
+  const cy = b.box.y * box.h + ry;
+  let tail = "";
+  if (b.tail) {
+    const tx = b.tail.x * box.w;
+    const ty = b.tail.y * box.h;
+    const angle = Math.atan2(ty - cy, tx - cx);
+    const bx = cx + Math.cos(angle) * rx * 0.6;
+    const by = cy + Math.sin(angle) * ry * 0.6;
+    const half = Math.min(rx, ry) * 0.32;
+    const px = -Math.sin(angle) * half;
+    const py = Math.cos(angle) * half;
+    tail = `<path d="M${round(bx + px)},${round(by + py)} L${round(tx)},${round(ty)} L${round(bx - px)},${round(by - py)} Z"/>`;
+  }
+  return `<ellipse cx="${round(cx)}" cy="${round(cy)}" rx="${round(rx)}" ry="${round(ry)}"/>${tail}`;
+}
+
+const round = (n: number) => Math.round(n * 100) / 100;
+
 function story(
   planned: PlannedPage,
-  page: RenderableBook["pages"][number],
+  page: RenderablePage,
   state: PageLayout | undefined,
   layout: BookLayout,
   body: (t: string) => string,
@@ -582,6 +685,23 @@ export const BOOK_CSS = `
 .fb-crayons { position: absolute; right: 5mm; bottom: 5mm; width: 42mm; height: auto; color: var(--accent); }
 .fb-drawing-label { position: absolute; left: var(--safe); right: var(--safe); bottom: calc(var(--safe) + 2mm); text-align: center;
   font-size: 11pt; color: var(--muted); }
+/* Panel pages: frames with an ink border, balloons (an ink stroke under a paper fill), caption boxes, sound effects. */
+.fb-panels { background: var(--paper); }
+.fb-panel { position: absolute; overflow: hidden; border-style: solid; border-color: var(--ink); background: color-mix(in srgb, var(--muted) 18%, var(--paper)); }
+.fb-panel .fb-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.fb-panel-vignette { position: absolute; object-fit: contain; mix-blend-mode: multiply; }
+.fb-balloons { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.fb-balloon-ink { fill: var(--ink); stroke: var(--ink); stroke-width: 1.2; stroke-linejoin: round; }
+.fb-balloon-fill { fill: #fff; }
+.fb-say, .fb-caption, .fb-sfx { font-family: var(--letter); font-weight: var(--letter-weight); text-transform: uppercase; color: var(--ink);
+  text-align: center; line-height: 1.16; letter-spacing: .01em; }
+.fb-say p, .fb-caption p, .fb-sfx p { font-size: inherit; line-height: inherit; }
+.fb-say { align-items: stretch; }
+.fb-caption { background: var(--plate); border: .5mm solid var(--ink); text-align: left; justify-content: center; }
+.fb-caption .fb-flow { padding: .3em .55em; }
+.fb-caption-wide { text-align: center; }
+.fb-sfx { font-family: var(--heading); font-weight: var(--heading-weight); color: var(--accent); -webkit-text-stroke: .35mm var(--ink);
+  paint-order: stroke fill; letter-spacing: .03em; font-style: italic; overflow: visible; }
 .fb-mark { background: color-mix(in srgb, var(--accent) 20%, transparent); color: inherit; border-radius: .2em; padding: 0 .1em;
   text-decoration: underline dotted color-mix(in srgb, var(--accent) 70%, transparent); text-underline-offset: .2em; cursor: help; outline: none; }
 .fb-mark:focus-visible { box-shadow: 0 0 0 .5mm var(--accent); }

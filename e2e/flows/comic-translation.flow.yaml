@@ -1,0 +1,102 @@
+# A comic translated as an example (mock models): staff make a finished English comic an example and
+# translate it into German. The German comic keeps the same pictures (copied) and the same panels,
+# and every text element is translated by its id - the caption box, each speech balloon (still the
+# speaker's) and the sound word - then laid out again around the balloons and printed.
+appId: ${WEB}
+tags: [comic, examples, admin, i18n]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  stamp: "${Date.now()}"
+  childName: "Comic Translate ${stamp}"
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+  headers:
+    X-Client-Key: "e2e-comic-translation-${stamp}"
+    X-Demo-Code: E2E-DEMO
+commands:
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${childName}", age: 10, gender: girl, interests: [kites], city: Almaty, language: en }
+        methodology: comic-quest
+      extract: { bookId: "$.id" }
+      assert: { status: 201, json: { "$.format": comic } }
+  - request:
+      url: /books/${bookId}
+      retryUntil:
+        status: 200
+        json: { "$.status": done }
+      timeout: 60000
+      extract: { enFrame: "$.pages[0].frames[1].imageUrl" }
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: POST
+      url: /admin/examples
+      json: { bookId: "${bookId}" }
+      extract: { exampleId: "$.id" }
+      assert: { status: 201 }
+
+  # Staff translate it into German from «Examples».
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - tapOn: { testId: admin-nav-examples }
+  - waitForVisible: { testId: "example-${exampleId}" }
+  - tapOn: { testId: "example-${exampleId}-translate-de" }
+  - waitForVisible: { css: "[data-testid='example-${exampleId}-lang-de'][data-state=done]", timeout: 60000 }
+
+  # The German comic: the same panels, every text in German, the speakers kept.
+  - sql:
+      query: >-
+        select b.id, b."storyFormat" as format, b.language, jsonb_array_length(b.pages) as pages,
+        jsonb_array_length(b.pages->0->'frames') as frames, b.pages->0->'texts'->0->>'text' as caption,
+        b.pages->0->'texts'->1->>'text' as balloon, b.pages->0->'texts'->1->>'speaker' as speaker,
+        (b.layout->'pages'->'1'->>'panels')::boolean as panels, b.status::text as status
+        from "Book" b join "ExampleVersion" v on v."bookId" = b.id
+        where v."exampleId" = $1 and v.language = 'de'
+      params: ["${exampleId}"]
+      readOnly: true
+      extract: { deId: "$[0].id" }
+      assert:
+        rows: 1
+        first:
+          { format: comic, language: de, pages: 8, frames: 3, caption: "Teil 1. Almaty", balloon: "Wow, sieh dir das an!",
+            speaker: hero, panels: true, status: done }
+  - request:
+      url: /books/${deId}
+      extract: { deFrame: "$.pages[0].frames[1].imageUrl", deSfx: "$.pages[0].texts[4].text" }
+      assert: { status: 200, json: { "$.pages[0].texts[4].kind": sfx } }
+  - assertTrue: { equals: ["${deSfx}", "BUMM!"] }
+  # The same picture, copied into the German book's own folder.
+  - assertTrue: { contains: ["${deFrame}", "${deId}"] }
+  - request:
+      url: ${WEB}${deFrame}
+      assert: { status: 200 }
+
+  # The German comic in its reader: the balloons in German.
+  - openLink: "${WEB}/de/books/${deId}"
+  - waitForVisible: { testId: book-reader }
+  - tapOn: { testId: reader-next }
+  - waitForVisible: { css: "[data-testid=book-reader] .fb-page[data-key=story-1].fb-panels" }
+  - assertVisible: { css: "[data-key=story-1] .fb-say[data-el='1:1.2'] p", contains: "Wow, sieh dir das an!" }
+  - assertVisible: { css: "[data-key=story-1] .fb-sfx p", contains: "BUMM!" }
+after:
+  - sql: { exec: "delete from \"Example\" where id in (select \"exampleId\" from \"ExampleVersion\" v join \"Book\" b on b.id = v.\"bookId\" where b.child->>'name' like $1)", params: ["Comic Translate ${stamp}%"] }
+  - sql: { exec: "delete from \"Book\" where \"clientKey\" = $1 or (\"clientKey\" = 'staff:example-translation' and child->>'name' like 'Comic Translate%')", params: ["e2e-comic-translation-${stamp}"] }

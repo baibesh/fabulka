@@ -11,9 +11,11 @@ import {
   type PageSubject,
   type Language,
   type ModelCallKind,
+  type SamConcept,
   type Story,
 } from '@fabulka/shared';
 import type {
+  FrameRequest,
   GeneratedImage,
   GeneratedStory,
   ModelGateway,
@@ -56,15 +58,15 @@ import {
   TOY_DESCRIPTION_PROMPT,
   type Companions,
   type StoryBrief,
-  type TextSpace,
+  castPrompt,
   coverPrompt,
+  framePrompt,
   heroPrompt,
   referenceNotes,
   ornamentPrompt,
   themeInstructions,
   themePrompt,
   toyPrompt,
-  pagePrompt,
   petPrompt,
   SCENE_REWRITE_INSTRUCTIONS,
   type SceneRewriteBrief,
@@ -97,7 +99,7 @@ const TOY_CONCEPT = 'toy';
  * the grandfather, the eagle and the dog the text must not cover either; "character" missed animals
  * and "person or animal" finds nothing, so people and animals are asked for separately.
  */
-const SUBJECT_CONCEPTS = ['person', 'animal'];
+const SUBJECT_CONCEPTS: readonly SamConcept[] = ['person', 'animal'];
 const STORY_ATTEMPTS = 3;
 /**
  * A picture drawn "after" an earlier one (previous_response_id) is sometimes refused with 400
@@ -269,12 +271,13 @@ export class MetaGateway implements ModelGateway {
     image: Buffer,
     _ext?: GeneratedImage['ext'],
     kind: 'page-mask' | 'cover-mask' = 'page-mask',
+    concepts: readonly SamConcept[] = SUBJECT_CONCEPTS,
   ): Promise<{ subject: PageSubject; costUsd: number }> {
     const sam = await import('@meta-sam/parser');
     const size = jpegSize(image);
     if (!size) throw new Error('SAM gets JPEG page illustrations only');
     const found = await Promise.all(
-      SUBJECT_CONCEPTS.map(async (concept) => {
+      concepts.map(async (concept) => {
         const call = this.journal.start({
           kind,
           model: this.options.samModel,
@@ -284,19 +287,45 @@ export class MetaGateway implements ModelGateway {
           this.segment(sam, image, concept),
         );
         call.ok({ costUsd: SAM_PRICE, images: 1 });
-        return [...sam.recordsOfKind(records, 'mask')];
+        return [...sam.recordsOfKind(records, 'mask')].map((record) => ({
+          concept,
+          record,
+        }));
       }),
     );
-    const masks = found.flat().map((record) => ({
+    // People and animals make the mask text keeps off; faces only say where heads are.
+    const bodies = found.flat().filter((f) => f.concept !== 'face');
+    const masks = bodies.map(({ record }) => ({
       box: record.bounds,
       mask: sam.decodeMaskToRaster(record.mask),
       maskWidth: record.mask.width,
       maskHeight: record.mask.height,
     }));
-    return {
-      subject: subjectGrid(masks, size),
-      costUsd: SAM_PRICE * SUBJECT_CONCEPTS.length,
-    };
+    const subject = subjectGrid(masks, size);
+    const share = (b: {
+      left: number;
+      top: number;
+      right: number;
+      bottom: number;
+    }) => ({
+      x: b.left / size.width,
+      y: b.top / size.height,
+      w: (b.right - b.left) / size.width,
+      h: (b.bottom - b.top) / size.height,
+    });
+    if (concepts.includes('face')) {
+      subject.people = bodies
+        .map(({ concept, record }) => ({
+          concept: concept as 'person' | 'animal',
+          box: share(record.bounds),
+        }))
+        .sort((a, b) => a.box.x + a.box.w / 2 - (b.box.x + b.box.w / 2));
+      subject.faces = found
+        .flat()
+        .filter((f) => f.concept === 'face')
+        .map(({ record }) => share(record.bounds));
+    }
+    return { subject, costUsd: SAM_PRICE * concepts.length };
   }
 
   /** Streams SAM's answer for the photo and returns the parsed masks. */
@@ -493,24 +522,32 @@ export class MetaGateway implements ModelGateway {
     );
   }
 
-  /** One try; a safety refusal is the caller's to handle (illustratePage softens and rewrites). */
-  drawPage(
-    scenePrompt: string,
+  drawCast(
+    name: string,
+    look: string,
     anchorRef: string,
-    companions: Companions,
     style?: string,
-    textSpace?: TextSpace,
-    references: ReferenceImage[] = [],
   ): Promise<GeneratedImage> {
     return this.draw(
+      'cast',
+      castPrompt(name, look, style),
+      '1024x1024',
+      anchorRef,
+    );
+  }
+
+  /** One try; a safety refusal is the caller's to handle (illustrateFrame softens and rewrites). */
+  drawFrame(frame: FrameRequest): Promise<GeneratedImage> {
+    const references = frame.references ?? [];
+    return this.draw(
       'page',
-      pagePrompt(scenePrompt, companions, style, textSpace) +
+      framePrompt(frame) +
         referenceNotes(
           references.map((r) => r.kind),
           'page',
         ),
-      '1536x1024',
-      anchorRef,
+      frame.size,
+      frame.anchorRef,
       undefined,
       {},
       references,
@@ -716,7 +753,7 @@ export class MetaGateway implements ModelGateway {
     );
   }
 
-  async shortenPage(
+  async shortenText(
     brief: ShortenBrief,
   ): Promise<{ text: string; costUsd: number }> {
     const input = shortenPrompt(brief);
@@ -758,7 +795,7 @@ export class MetaGateway implements ModelGateway {
   private async draw(
     kind: ModelCallKind,
     prompt: string,
-    size: '1024x1024' | '1536x1024',
+    size: '1024x1024' | '1536x1024' | '1024x1536',
     previousResponseId?: string,
     reference?: Buffer,
     extra: { output_format?: 'png' } = {},
@@ -790,7 +827,7 @@ export class MetaGateway implements ModelGateway {
   private async drawOnce(
     kind: ModelCallKind,
     prompt: string,
-    size: '1024x1024' | '1536x1024',
+    size: '1024x1024' | '1536x1024' | '1024x1536',
     previousResponseId?: string,
     reference?: Buffer,
     extra: { output_format?: 'png' } = {},

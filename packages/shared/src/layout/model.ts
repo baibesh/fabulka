@@ -112,6 +112,11 @@ export const BookThemeSchema = z.object({
   ornament: z.enum(ORNAMENTS),
   /** An AI theme's drawn ornament (a storage path), used instead of the SVG one; null: the SVG. */
   ornamentImage: z.string().nullable().default(null),
+  /**
+   * The lettering of panel pages (speech balloons and caption boxes, in capitals); its size is this
+   * share of the body size. Null: the heading font. Sound effects always take the heading font.
+   */
+  lettering: z.object({ font: FontRefSchema, scale: z.number().min(0.4).max(1.2) }).nullable().default(null),
 });
 export type BookTheme = z.infer<typeof BookThemeSchema>;
 
@@ -131,6 +136,23 @@ export type BookPhoto = z.infer<typeof BookPhotoSchema>;
 /** A point in a picture, 0..1 from the top left: what the crop keeps in view. */
 export const FocusSchema = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) });
 export type Focus = z.infer<typeof FocusSchema>;
+
+/**
+ * A text of a panel page placed in its frame (placeFrameTexts): its box as shares of the frame, the
+ * point its tail ends at (a balloon pointing at its speaker; null: no tail), its type size and a tilt.
+ * `face` is true when no place kept clear of every face (render QA notes it).
+ */
+export const PlacedTextSchema = z.object({
+  id: z.string(),
+  frame: z.number().int(),
+  kind: z.enum(["narration", "caption", "speech", "sfx"]),
+  box: z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }),
+  tail: z.object({ x: z.number(), y: z.number() }).nullable(),
+  pt: z.number().positive(),
+  rotate: z.number().default(0),
+  face: z.boolean().default(false),
+});
+export type PlacedText = z.infer<typeof PlacedTextSchema>;
 
 /** One story page's layout: what suits its picture, and what staff or the parent picked. */
 export const PageLayoutSchema = z.object({
@@ -158,6 +180,12 @@ export const PageLayoutSchema = z.object({
    * the theme's colors, the text below it (render QA notes it as "no-art").
    */
   noArt: z.boolean().default(false),
+  /** The page is laid out as panels (isPanelPage): its frames on a grid, its texts in balloons and boxes. */
+  panels: z.boolean().default(false),
+  /** Each frame's crop on a panel page, by frame number: the characters' centre (SAM) and the picture's shape. */
+  frames: z.record(z.string(), z.object({ focus: FocusSchema, aspect: z.number().positive() })).default({}),
+  /** Where each text of a panel page goes (placeFrameTexts), in reading order. */
+  balloons: z.array(PlacedTextSchema).default([]),
 });
 export type PageLayout = z.infer<typeof PageLayoutSchema>;
 
@@ -165,14 +193,17 @@ export type PageLayout = z.infer<typeof PageLayoutSchema>;
 export const RENDER_ISSUE_KINDS = ["overflow", "fallback-font", "cover-overlap"] as const;
 /**
  * Things render QA tells staff without blocking print: "crop" - a picture too narrow for the
- * format's layouts; "no-art" - a page whose picture was refused, laid out as a vignette page.
+ * format's layouts; "no-art" - a page whose picture was refused, laid out as a vignette page;
+ * "face" - a panel where no place for a balloon kept clear of every face.
  */
-export const RENDER_NOTE_KINDS = ["crop", "no-art"] as const;
+export const RENDER_NOTE_KINDS = ["crop", "no-art", "face"] as const;
 export const RenderIssueSchema = z.object({
   /** The rendered page's key: "cover", "story-3", "talk"… */
   page: z.string(),
   kind: z.enum(RENDER_ISSUE_KINDS),
   detail: z.string(),
+  /** The text element that overflows on a panel page ("1.2": frame 1, its second text), for the shortening. */
+  element: z.string().optional(),
 });
 export type RenderIssue = z.infer<typeof RenderIssueSchema>;
 
@@ -231,6 +262,8 @@ export const BookLayoutSchema = z.object({
   fits: z.record(z.string(), z.number()).default({}),
   /** The front cover's lettering over its own illustration; null: a book without one (the older cover). */
   cover: CoverLayoutSchema.nullable().default(null),
+  /** How panel pages are drawn (the story format's): the white between panels and their border, mm; null: none. */
+  panels: z.object({ gutterMm: z.number().min(0), borderMm: z.number().min(0) }).nullable().default(null),
   qa: LayoutQaSchema,
 });
 export type BookLayout = z.infer<typeof BookLayoutSchema>;

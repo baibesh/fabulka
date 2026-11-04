@@ -68,7 +68,7 @@ commands:
       assert: { status: 200 }
   - sql:
       query: >-
-        select status::text as status, "toyDescription" as description, pages->0->>'scenePrompt' like '%the toy%' as toy_in_scene
+        select status::text as status, "toyDescription" as description, pages->0->'frames'->0->>'scenePrompt' like '%the toy%' as toy_in_scene
         from "Book" where id = $1
       params: ["${bookId}"]
       readOnly: true

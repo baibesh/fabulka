@@ -17,8 +17,28 @@ import {
   PAGE_CONCURRENCY,
   PHOTO_REFUSED,
   TemplateBlocksSchema,
+  FRAME_CONCURRENCY,
   answersProblem,
   arrangeBlocks,
+  countWords,
+  formatEstimate,
+  frameBox,
+  frameImageSize,
+  frameKey,
+  framesRange,
+  isPanelPage,
+  normalizePages,
+  pageProse,
+  samConceptsFor,
+  storedPageFrom,
+  textRule,
+  type CastMember,
+  type PipelineStepId,
+  type RenderablePage,
+  type SamConcept,
+  type StoredFrame,
+  type StoredPage,
+  type StoryFormatData,
   availableVariants,
   beatOf,
   blankPage,
@@ -34,6 +54,7 @@ import {
   withFormat,
   withTheme,
   wordsPerPage,
+  type BookFormat,
   type BookTheme,
   type GenerationState,
   type GenerationStep,
@@ -43,7 +64,6 @@ import {
   type BookLayout,
   type PageLayout,
   type PageSubject,
-  type PageTone,
   PageSubjectSchema,
   PageToneSchema,
   type PinLayout,
@@ -63,7 +83,7 @@ import {
   type GeneratedImage,
   type ModelGateway,
 } from '../meta/model-gateway';
-import { type ArtOutcome, illustratePage } from './illustrate';
+import { illustrateFrame } from './illustrate';
 import { GenerationTimings } from './timings';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import type { StoryBrief } from '../meta/prompts';
@@ -81,11 +101,19 @@ import { ReferenceService } from '../reference/reference.service';
 import { StorageService } from '../storage/storage.service';
 import { ThemesService } from '../themes/themes.service';
 import { isSafetyRefusal } from '../meta/refusal';
-import { softenScene, type Companions } from '../meta/prompts';
+import {
+  softenScene,
+  type CastInFrame,
+  type Companions,
+} from '../meta/prompts';
+import { FormatsService } from '../formats/formats.service';
 import {
   type BookReferences,
   ReferencesService,
 } from '../references/references.service';
+
+/** Rounds of shortening texts that overflow on panel pages, each followed by a new render. */
+const SHORTEN_ROUNDS = 2;
 
 /** Body of a 400 from PATCH /books/:id/layout: the new block order breaks the template's rules. */
 export const BLOCKS_REFUSED = 'blocks_refused';
@@ -97,24 +125,14 @@ const PHOTO_MESSAGES: Record<PhotoRefusal, string> = {
   decode: 'The photo could not be read',
 };
 
-/** A page as stored in Book.pages. */
-export interface StoredPage {
-  page: number;
-  /** The method beat the page tells (1 = the first); missing for books made before beats. */
-  beat?: number | null;
-  text: string;
-  scenePrompt: string;
+/** A page as stored in Book.pages (StoredPage in @fabulka/shared; normalizePages reads older books). */
+export type { StoredPage } from '@fabulka/shared';
+
+/** A side character or recurring thing as Book.cast keeps it: its look and, once drawn, its sheet. */
+export interface StoredCast extends CastMember {
   imagePath: string | null;
-  /** Where SAM found the hero; null when SAM failed, missing for books made before. */
-  subject?: PageSubject | null;
-  /** How light the picture is where, measured when the book was first rendered. */
-  tone?: PageTone | null;
-  /**
-   * How the picture came about (illustratePage); "refused": every version of the scene was refused
-   * and the page has no picture (imagePath null), laid out as a vignette page. Missing for books
-   * made before.
-   */
-  art?: ArtOutcome;
+  /** The sheet's Muse Image response id (frames chain from the last sheet). */
+  responseId: string | null;
 }
 
 /** The row with the catalog book slug the DTO needs. */
@@ -155,10 +173,12 @@ interface Job {
   theme: BookTheme;
   /** The template's blocks; null: the default ones. */
   blocks?: TemplateBlocks | null;
-  /** Art style of a catalog book; the default one otherwise. */
+  /** Art style of a catalog book; the format's (else the default) otherwise. */
   style?: string;
   /** The uploaded toy photo, when the parent sent one. */
   toyUpload?: string;
+  /** The printed size the book is laid out at (its frames' shapes decide the pictures' sizes). */
+  printFormat?: BookFormat;
 }
 
 @Injectable()
@@ -181,9 +201,11 @@ export class BooksService implements OnModuleInit {
     private readonly reference: ReferenceService,
     private readonly themes: ThemesService,
     private readonly references: ReferencesService,
+    private readonly formats: FormatsService,
     config: ConfigService,
   ) {
     this.pageCount = Number(config.get('PAGE_COUNT', 10));
+    this.formats.pageCount = this.pageCount;
     this.slots = new Slots(Number(config.get('BOOK_CONCURRENCY', 3)));
     this.timings = new GenerationTimings(
       prisma,
@@ -220,22 +242,20 @@ export class BooksService implements OnModuleInit {
     const { child } = input;
     const job: Job = input.template
       ? await this.catalogJob(input.template, input)
-      : {
-          theme: BOOK_THEMES[defaultThemeId(child.age)],
-          brief: {
-            child,
-            pageCount: this.pageCount,
-            methodology: await this.methodologies.forBook(
-              input.methodology,
-              child.age,
-            ),
-            theme: input.theme,
-          },
-        };
+      : await this.ownJob(input);
     // The theme's type size at the book's format decides how many words fit on a page; the story is
     // written to fit.
     const format = bookFormatOf(await this.reference.defaultFormat());
-    const layout = newLayout(job.theme, child.age, format, job.blocks);
+    const story = job.brief.format;
+    const layout = {
+      ...newLayout(job.theme, child.age, format, job.blocks),
+      // A format with more than one frame a page draws panels: its gutter and border.
+      panels:
+        framesRange(story).max > 1 || !textRule(story, 'narration')
+          ? { gutterMm: story.gutterMm, borderMm: story.borderMm }
+          : null,
+    };
+    job.printFormat = layout.format;
     job.brief.wordsPerPage = wordsPerPage(
       layout.theme,
       child.age,
@@ -254,6 +274,7 @@ export class BooksService implements OnModuleInit {
         child,
         language: child.language,
         methodology: job.brief.methodology.slug,
+        storyFormat: story.slug,
         theme: job.brief.theme,
         template: input.template
           ? { connect: { slug: input.template } }
@@ -269,8 +290,9 @@ export class BooksService implements OnModuleInit {
           firstState(
             !!job.toyUpload,
             !!child.pet?.trim(),
-            this.pageCount,
+            job.brief.pageCount,
             new Date(),
+            expectedFrames(story, job.brief.pageCount),
           ),
         ),
       },
@@ -287,6 +309,61 @@ export class BooksService implements OnModuleInit {
       )
       .catch((error: unknown) => this.fail(row.id, error, spent.usd));
     return this.toDto(row);
+  }
+
+  /** A book of your own: the parent's method (or the age's), its format, the format's theme or the age's. */
+  private async ownJob(input: CreateBookInput): Promise<Job> {
+    const { child } = input;
+    const methodology = await this.methodologies.forBook(
+      input.methodology,
+      child.age,
+    );
+    const format = await this.formats.forBook(methodology.format);
+    return {
+      theme:
+        (await this.formatTheme(format, child.language)) ??
+        BOOK_THEMES[defaultThemeId(child.age)],
+      brief: {
+        child,
+        pageCount: format.pageCount ?? this.pageCount,
+        methodology,
+        format,
+        theme: input.theme,
+      },
+    };
+  }
+
+  /** The theme a format names, when it still covers the language (a curated one or a published AI one). */
+  private async formatTheme(
+    format: StoryFormatData,
+    language: Language,
+  ): Promise<BookTheme | null> {
+    if (!format.theme) return null;
+    const curated = BOOK_THEMES[format.theme];
+    if (curated) return curated.languages.includes(language) ? curated : null;
+    return this.themes.pick(format.theme, language);
+  }
+
+  /**
+   * About what the book will cost in model spend, from its format (every frame and sheet), so the
+   * budget check refuses a book that would run past it rather than one picture a page.
+   */
+  async estimate(input: CreateBookInput): Promise<number> {
+    try {
+      const slug = input.template
+        ? (await this.templates.find(input.template)).methodology
+        : input.methodology;
+      const method = slug ? await this.methodologies.find(slug) : undefined;
+      const format = await this.formats.forBook(method?.format);
+      return formatEstimate(format, {
+        pages: this.pageCount,
+        pet: !!input.child.pet?.trim(),
+        toy: !!input.toy,
+      }).usd;
+    } catch {
+      // An unknown template or method is refused by create() with its own message.
+      return 0;
+    }
   }
 
   /** Someone in a country without print wants this book printed; once per book. */
@@ -502,7 +579,7 @@ export class BooksService implements OnModuleInit {
     let layout = layoutOf(row.layout);
     if (patch.theme && patch.theme !== layout.theme.id)
       layout = withTheme(layout, await this.theme(patch.theme, row.language));
-    const pages = row.pages as unknown as StoredPage[];
+    const pages = normalizePages(row.pages);
     for (const [page, pin] of Object.entries(patch.pins ?? {})) {
       if (!pages.some((p) => String(p.page) === page))
         throw new BadRequestException(`No page ${page}`);
@@ -565,12 +642,23 @@ export class BooksService implements OnModuleInit {
       labels.talk,
       labels.end,
     ]);
-    const stored = row.pages as unknown as StoredPage[];
-    const pictures = stored.map((p) => ({
-      page: p.page,
-      subject: p.subject ?? null,
-      tone: p.tone ?? null,
-    }));
+    const stored = normalizePages(row.pages);
+    // Picture book pages are judged as before (chooseLayout); panel pages get their texts placed.
+    const pictures = stored
+      .filter((p) => !isPanelPage(p))
+      .map((p) => ({
+        page: p.page,
+        subject: p.frames[0]?.subject ?? null,
+        tone: p.frames[0]?.tone ?? null,
+      }));
+    const frames = stored.filter(isPanelPage).flatMap((p) =>
+      p.frames.map((f) => ({
+        page: p.page,
+        frame: f.frame,
+        subject: f.subject ?? null,
+        tone: f.tone ?? null,
+      })),
+    );
     const cover = row.coverImagePath
       ? {
           subject: PageSubjectSchema.safeParse(row.coverSubject).data ?? null,
@@ -578,12 +666,17 @@ export class BooksService implements OnModuleInit {
         }
       : null;
     const result = await this.journal.run({ bookId: row.id }, () =>
-      this.pdf.render(row.id, book, checked, pictures, hooks, cover),
+      this.journal.step('layout.check', {}, () =>
+        this.pdf.render(row.id, book, checked, pictures, hooks, cover, frames),
+      ),
     );
-    // The tones are measured once and kept with the pages.
-    const pages = stored.map((p) => ({
+    // The tones are measured once and kept with the frames (the pages are saved in today's shape).
+    const pages: StoredPage[] = stored.map((p) => ({
       ...p,
-      tone: result.tones[p.page] ?? p.tone ?? null,
+      frames: p.frames.map((f) => ({
+        ...f,
+        tone: result.tones[frameKey(p.page, f.frame)] ?? f.tone ?? null,
+      })),
     }));
     return { ...result, pages };
   }
@@ -613,13 +706,21 @@ export class BooksService implements OnModuleInit {
       ? await this.themes.pick(template.layoutTheme, child.language)
       : null;
     const blocks = TemplateBlocksSchema.safeParse(template.blocks);
+    const methodology = await this.methodologies.forTemplate(
+      template.methodology,
+    );
+    const format = await this.formats.forBook(methodology.format);
     return {
-      theme: named ?? BOOK_THEMES[defaultThemeId(child.age)],
+      theme:
+        named ??
+        (await this.formatTheme(format, child.language)) ??
+        BOOK_THEMES[defaultThemeId(child.age)],
       blocks: blocks.success ? blocks.data : null,
       brief: {
         child,
-        pageCount: this.pageCount,
-        methodology: await this.methodologies.forTemplate(template.methodology),
+        pageCount: format.pageCount ?? this.pageCount,
+        methodology,
+        format,
         theme: template.theme,
         template: {
           title: template.title,
@@ -635,12 +736,19 @@ export class BooksService implements OnModuleInit {
 
   private async generate(
     id: string,
-    { brief, style, toyUpload, theme }: Job,
+    { brief, style: templateStyle, toyUpload, theme, printFormat }: Job,
     spent: Spend,
   ): Promise<void> {
-    const { child } = brief;
-    // Pictures leave calm space for text only when the theme first prints text over them.
+    const { child, format } = brief;
+    // A catalog book's own style wins; else the format's (a comic's ink and flat colors); else the default.
+    const style = templateStyle ?? format.artStyle ?? undefined;
+    // Picture book pages leave calm space for text only when the theme first prints text over them.
     const textSpace = calmSpace(theme) ?? undefined;
+    const inStep = <T>(
+      step: PipelineStepId,
+      task: () => Promise<T>,
+      where: { page?: number; frame?: number } = {},
+    ) => this.journal.step(step, where, task);
 
     // What the progress screen shows (Book.generation): the step, the pages being drawn or
     // redrawn. Pages finish in parallel, so every write goes through one queue in order, each with
@@ -650,6 +758,7 @@ export class BooksService implements OnModuleInit {
       !!child.pet?.trim(),
       brief.pageCount,
       new Date(),
+      expectedFrames(format, brief.pageCount),
     );
     gen.startedAt = gen.stepAt;
     let writes: Promise<unknown> = Promise.resolve();
@@ -680,12 +789,16 @@ export class BooksService implements OnModuleInit {
         photo,
       );
       await this.storage.remove(toyUploadPath(toyUpload));
-      const found = await this.models.findToy(photo);
+      const found = await inStep('toy.cutout', () =>
+        this.models.findToy(photo),
+      );
       toyReference = found.cutout ?? photo;
       const toyCutoutPath = found.cutout
         ? await this.storage.save(`books/${id}/toy-cutout.jpg`, found.cutout)
         : null;
-      const described = await this.models.describeToy(toyReference);
+      const described = await inStep('toy.describe', () =>
+        this.models.describeToy(toyReference!),
+      );
       spent.usd += found.costUsd + described.costUsd;
       const row = await save({
         toyPhotoPath,
@@ -703,35 +816,48 @@ export class BooksService implements OnModuleInit {
     }
 
     await step('story');
-    const { story, costUsd: storyCost } = await this.models.writeStory(brief);
+    const { story, costUsd: storyCost } = await inStep('story.write', () =>
+      this.models.writeStory(brief),
+    );
     spent.usd += storyCost;
-    // Each page's beat of the method: Spark's tag, else spread over the beats in order.
+    // Each page as the format allows (its grids and kinds of text), with the method beat it tells:
+    // Spark's tag, else spread over the beats in order.
     const beats = brief.methodology.structure.length;
-    const pages: StoredPage[] = story.pages.map((p) => ({
-      page: p.page,
-      beat: beatOf(p.beat, p.page, story.pages.length, beats),
-      text: p.text,
-      scenePrompt: p.scene_prompt,
+    const pages: StoredPage[] = story.pages.map((p) =>
+      storedPageFrom(
+        p,
+        format,
+        beatOf(p.beat, p.page, story.pages.length, beats),
+      ),
+    );
+    const cast: StoredCast[] = story.cast.map((member) => ({
+      ...member,
       imagePath: null,
+      responseId: null,
     }));
-    // Now it is known whether there is a pet to draw and how many pages.
+    // The side characters the format draws on sheets of their own: the first ones the story lists.
+    const sheeted = cast
+      .filter((c) => c.kind === 'character')
+      .slice(0, format.castSheets);
+    // Now it is known whether there is a pet to draw, how many pages, frames and cast sheets.
     gen.pet = story.pet_description !== null;
     gen.pages = pages.length;
+    gen.frames = pages.reduce((n, p) => n + p.frames.length, 0);
+    gen.cast = sheeted.length;
     await save({
       title: story.title,
       blurb: story.blurb,
       heroDescription: story.hero_description,
       pages: json(pages),
+      cast: json(cast),
       talkQuestions: story.talk_questions,
       costUsd: spent.usd,
     });
 
     // A second pass before any picture is drawn: the parent's text went into the prompt.
     await step('review', { progress: 20 });
-    const review = await this.models.reviewStory(
-      story,
-      child.age,
-      child.language,
+    const review = await inStep('story.review', () =>
+      this.models.reviewStory(story, child.age, child.language),
     );
     spent.usd += review.costUsd;
     if (!review.safe) {
@@ -747,10 +873,9 @@ export class BooksService implements OnModuleInit {
     });
 
     await step('hero');
-    const hero = await this.models.drawHero(
-      story.hero_description,
-      style,
-      await references.for({ kind: 'hero' }),
+    const heroRefs = await references.for({ kind: 'hero' });
+    const hero = await inStep('sheet.hero', () =>
+      this.models.drawHero(story.hero_description, style, heroRefs),
     );
     spent.usd += hero.costUsd;
     const heroImagePath = await this.storage.save(
@@ -766,13 +891,12 @@ export class BooksService implements OnModuleInit {
     // The pet gets its own sheet too, or it changes breed and color between pages.
     let anchorRef = hero.ref;
     const withPet = story.pet_description !== null;
-    if (withPet || (toyReference && brief.toy))
+    if (withPet || (toyReference && brief.toy) || sheeted.length)
       await step('friends', { progress: 28 });
     if (story.pet_description) {
-      const pet = await this.models.drawPet(
-        story.pet_description,
-        hero.ref,
-        style,
+      const description = story.pet_description;
+      const pet = await inStep('sheet.pet', () =>
+        this.models.drawPet(description, hero.ref, style),
       );
       spent.usd += pet.costUsd;
       const petImagePath = await this.storage.save(
@@ -785,11 +909,10 @@ export class BooksService implements OnModuleInit {
 
     // The toy's sheet is drawn from the cut-out photo, chained after the hero (and pet).
     if (toyReference && brief.toy) {
-      const toy = await this.models.drawToy(
-        brief.toy.description,
-        toyReference,
-        anchorRef,
-        style,
+      const toyBrief = brief.toy;
+      const after = anchorRef;
+      const toy = await inStep('sheet.toy', () =>
+        this.models.drawToy(toyBrief.description, toyReference, after, style),
       );
       spent.usd += toy.costUsd;
       const toyImagePath = await this.storage.save(
@@ -800,77 +923,141 @@ export class BooksService implements OnModuleInit {
       await save({ toyImagePath, costUsd: spent.usd });
     }
 
-    await step('pages', { progress: progressFor('pages', 0, pages.length) });
+    // Side characters get sheets of their own, chained like the hero's, or their skin, hair and
+    // clothes drift between panels; the frames then chain from the last sheet.
+    for (const member of sheeted) {
+      const after = anchorRef;
+      const sheet = await inStep('sheet.cast', () =>
+        this.models.drawCast(member.name, member.look, after, style),
+      );
+      spent.usd += sheet.costUsd;
+      member.imagePath = await this.storage.save(
+        `books/${id}/cast-${member.id}.${sheet.ext}`,
+        sheet.data,
+      );
+      member.responseId = sheet.ref;
+      anchorRef = sheet.ref;
+      await save({ cast: json(cast), costUsd: spent.usd });
+    }
+
+    await step('pages', {
+      progress: progressFor('pages', 0, gen.frames ?? pages.length),
+    });
     // The cover is drawn alongside the pages, chained from the same sheets: it adds no wait of its own.
     const companions = (scene: string): Companions => ({
       pet: withPet && petInScene(scene),
       toy: toyReference !== null && toyInScene(scene),
     });
+    // The cover names the cast like a frame does, so a kite or a friend looks as on the pages.
+    const coverScene =
+      story.cover_scene ?? pages[0]?.frames[0]?.scenePrompt ?? story.title;
+    const coverCast = castIn(
+      { cast: [], scenePrompt: coverScene },
+      cast,
+      sheeted,
+    )
+      .map((c) => ` ${c.name}: ${c.look.replace(/[.\s]+$/, '')}.`)
+      .join('');
     const coverJob = this.drawCover(
       id,
-      story.cover_scene ?? pages[0]?.scenePrompt ?? story.title,
+      `${coverScene.replace(/[.\s]+$/, '')}.${coverCast}`,
       anchorRef,
       companions,
       style,
       references,
       spent,
     );
-    let done = 0;
+    const layoutFormat =
+      printFormat ?? bookFormatOf(await this.reference.defaultFormat());
+    // Frames of every page drawn at once share these slots; a page's frames all start together.
+    const frameSlots = new Slots(FRAME_CONCURRENCY);
+    let framesDone = 0;
     const settle = (n: number) => {
       gen.drawing = gen.drawing.filter((p) => p !== n);
       gen.redrawing = gen.redrawing.filter((p) => p !== n);
     };
+    const drawFrame = async (page: StoredPage, frame: StoredFrame) => {
+      const panel = isPanelPage(page);
+      const box = frameBox(layoutFormat, frame.rect, format.gutterMm);
+      const texts = page.texts.filter((t) => t.frame === frame.frame);
+      const drawn = await frameSlots.run(async () =>
+        illustrateFrame(this.models, {
+          page: page.page,
+          frame: frame.frame,
+          text: panel ? texts.map((t) => t.text).join('\n') : pageProse(page),
+          language: child.language,
+          scene: frame.scenePrompt,
+          anchorRef,
+          companions,
+          cast: castIn(frame, cast, sheeted),
+          positions: positionsOf(frame, cast),
+          style,
+          textSpace: panel ? undefined : textSpace,
+          direction: panel ? format.frameDirection : null,
+          size: frameImageSize(box, panel),
+          references: await references.for({
+            kind: 'page',
+            beat: page.beat ?? null,
+          }),
+          onRetry: () => {
+            if (!gen.redrawing.includes(page.page))
+              gen.redrawing.push(page.page);
+            return save();
+          },
+          step: (stepId, task) =>
+            inStep(stepId, task, { page: page.page, frame: frame.frame }),
+        }),
+      );
+      spent.usd += drawn.costUsd;
+      frame.art = drawn.outcome;
+      const image = drawn.image;
+      if (!image) {
+        frame.imagePath = null;
+        frame.subject = null;
+        this.logger.warn(
+          `book ${id} page ${page.page} frame ${frame.frame}: the picture was refused; the hero's sheet instead`,
+        );
+      } else {
+        const name =
+          frame.frame > 1
+            ? `page-${page.page}-${frame.frame}`
+            : `page-${page.page}`;
+        frame.imagePath = await this.storage.save(
+          `books/${id}/${name}.${image.ext}`,
+          image.data,
+        );
+        // SAM finds the characters once, for the layout; the frame's texts decide what it looks
+        // for (faces where a balloon must point at a head). A failure only costs the overlays.
+        frame.subject = await inStep(
+          'frame.mask',
+          () =>
+            this.findSubject(
+              id,
+              page.page,
+              image,
+              spent,
+              samConceptsFor(texts.map((t) => t.kind)),
+            ),
+          { page: page.page, frame: frame.frame },
+        );
+      }
+      framesDone++;
+    };
     await eachLimit(pages, PAGE_CONCURRENCY, async (page) => {
       gen.drawing.push(page.page);
       await save();
-      // A refused scene is softened, then rewritten; a page refused every time keeps no picture.
-      const drawn = await illustratePage(this.models, {
-        page: page.page,
-        text: page.text,
-        scenePrompt: page.scenePrompt,
-        language: child.language,
-        anchorRef,
-        companions,
-        style,
-        textSpace,
-        references: await references.for({
-          kind: 'page',
-          beat: page.beat ?? null,
-        }),
-        onRetry: () => {
-          if (!gen.redrawing.includes(page.page)) gen.redrawing.push(page.page);
-          return save();
-        },
-      });
-      spent.usd += drawn.costUsd;
-      page.art = drawn.outcome;
-      const image = drawn.image;
-      if (!image) {
-        page.imagePath = null;
-        page.subject = null;
-        this.logger.warn(
-          `book ${id} page ${page.page}: the picture was refused; a vignette page instead`,
-        );
-      } else {
-        page.imagePath = await this.storage.save(
-          `books/${id}/page-${page.page}.${image.ext}`,
-          image.data,
-        );
-      }
-      // SAM finds the hero once, for the page layout; a failure only costs the page its overlays.
-      if (image)
-        page.subject = await this.findSubject(id, page.page, image, spent);
-      done++;
+      // A refused scene is softened, then rewritten; a frame refused every time keeps no picture.
+      await Promise.all(page.frames.map((frame) => drawFrame(page, frame)));
       settle(page.page);
       await save({
         pages: json(pages),
         costUsd: spent.usd,
-        progress: progressFor('pages', done, pages.length),
+        progress: progressFor('pages', framesDone, gen.frames ?? pages.length),
       });
     });
 
     const cover = await coverJob;
-    const row = await step('check', {
+    let row = await step('check', {
       pages: json(pages),
       costUsd: spent.usd,
       progress: progressFor('pdf'),
@@ -879,21 +1066,85 @@ export class BooksService implements OnModuleInit {
         coverSubject: cover.subject ? json(cover.subject) : Prisma.DbNull,
       }),
     });
-    const rendered = await this.renderPdf(row, layoutOf(row.layout), {
+    let rendered = await this.renderPdf(row, layoutOf(row.layout), {
       printing: () => step('pdf', { progress: 97 }),
     });
+    // A balloon or caption that does not fit even at the smallest size is shortened by Muse Spark
+    // (the one text, not the page) and the book laid out again.
+    for (let round = 0; round < SHORTEN_ROUNDS; round++) {
+      const shortened = await this.shortenOverflow(
+        rendered.pages,
+        rendered.layout,
+        format,
+        child.language,
+        spent,
+      );
+      if (!shortened) break;
+      row = await save({ pages: json(shortened), costUsd: spent.usd });
+      rendered = await this.renderPdf(row, rendered.layout);
+    }
     await writes;
     await this.update(id, 'done', {
       pdfPath: rendered.pdfPath,
       layout: json(rendered.layout),
       pages: json(rendered.pages),
+      costUsd: spent.usd,
       ...(rendered.coverTone && { coverTone: json(rendered.coverTone) }),
       progress: 100,
       generation: Prisma.DbNull,
     });
     this.logger.log(
-      `book ${id} done: ${pages.length} pages, $${spent.usd.toFixed(3)}`,
+      `book ${id} done: ${pages.length} pages, ${gen.frames} frames, $${spent.usd.toFixed(3)}`,
     );
+  }
+
+  /**
+   * Shortens every text render QA found overflowing on a panel page (each issue names its element),
+   * to the format's limit for its kind or three quarters of its words. Returns the pages with the
+   * new texts, or null when nothing was shortened. Picture book pages are left to the layout.
+   */
+  async shortenOverflow(
+    pages: StoredPage[],
+    layout: BookLayout,
+    format: Pick<StoryFormatData, 'textRules'>,
+    language: Language,
+    spent: Spend,
+  ): Promise<StoredPage[] | null> {
+    const issues = layout.qa.issues.filter(
+      (i) => i.kind === 'overflow' && i.element,
+    );
+    if (!issues.length) return null;
+    const next = pages.map((p) => ({
+      ...p,
+      texts: p.texts.map((t) => ({ ...t })),
+    }));
+    let changed = false;
+    for (const issue of issues) {
+      const [page, element] = issue.element!.split(':');
+      const text = next
+        .find((p) => String(p.page) === page)
+        ?.texts.find((t) => t.id === element);
+      if (!text) continue;
+      const limit = textRule(format, text.kind)?.maxWords ?? 12;
+      const words = countWords(text.text);
+      const short = await this.journal.step(
+        'text.shorten',
+        { page: Number(page) },
+        () =>
+          this.models.shortenText({
+            language,
+            kind: text.kind,
+            text: text.text,
+            maxWords: Math.max(1, Math.min(limit, Math.floor(words * 0.75))),
+          }),
+      );
+      spent.usd += short.costUsd;
+      if (short.text && short.text !== text.text) {
+        text.text = short.text;
+        changed = true;
+      }
+    }
+    return changed ? next : null;
   }
 
   /**
@@ -912,7 +1163,15 @@ export class BooksService implements OnModuleInit {
   ): Promise<{ path: string; subject: PageSubject | null } | null> {
     const pictures = await references.for({ kind: 'cover' });
     const draw = (text: string) =>
-      this.models.drawCover(text, anchorRef, companions(text), style, pictures);
+      this.journal.step('cover.draw', {}, () =>
+        this.models.drawCover(
+          text,
+          anchorRef,
+          companions(text),
+          style,
+          pictures,
+        ),
+      );
     try {
       let image: GeneratedImage;
       try {
@@ -928,10 +1187,8 @@ export class BooksService implements OnModuleInit {
       );
       let subject: PageSubject | null = null;
       try {
-        const found = await this.models.findSubject(
-          image.data,
-          image.ext,
-          'cover-mask',
+        const found = await this.journal.step('cover.mask', {}, () =>
+          this.models.findSubject(image.data, image.ext, 'cover-mask'),
         );
         spent.usd += found.costUsd;
         subject = found.subject;
@@ -949,15 +1206,21 @@ export class BooksService implements OnModuleInit {
     }
   }
 
-  /** SAM's mask of a page's characters; null when SAM failed (logged). */
+  /** SAM's mask of a frame's characters; null when SAM failed (logged). */
   private async findSubject(
     id: string,
     page: number,
     image: GeneratedImage,
     spent: Spend,
+    concepts?: readonly SamConcept[],
   ): Promise<PageSubject | null> {
     try {
-      const found = await this.models.findSubject(image.data, image.ext);
+      const found = await this.models.findSubject(
+        image.data,
+        image.ext,
+        'page-mask',
+        concepts,
+      );
       spent.usd += found.costUsd;
       return found.subject;
     } catch (error) {
@@ -1000,7 +1263,7 @@ export class BooksService implements OnModuleInit {
   }
 
   toDto(row: BookWithTemplate, editable = false): Book {
-    const pages = row.pages as unknown as StoredPage[];
+    const pages = normalizePages(row.pages);
     return {
       id: row.id,
       status: row.status,
@@ -1009,6 +1272,7 @@ export class BooksService implements OnModuleInit {
       language: row.language as Language,
       childName: (row.child as unknown as ChildProfile).name,
       methodology: row.methodology,
+      format: row.storyFormat,
       template: row.template?.slug ?? null,
       talkQuestions: row.talkQuestions as string[],
       heroImageUrl: this.storage.url(row.heroImagePath),
@@ -1024,9 +1288,23 @@ export class BooksService implements OnModuleInit {
         : null,
       pages: pages.map((p) => ({
         page: p.page,
-        text: p.text,
-        imageUrl: this.storage.url(p.imagePath),
-        ...(p.art === 'refused' && { vignette: true }),
+        text: pageProse(p),
+        imageUrl: this.storage.url(p.frames[0]?.imagePath ?? null),
+        ...(p.frames[0]?.art === 'refused' && { vignette: true }),
+        grid: p.grid,
+        frames: p.frames.map((f) => ({
+          frame: f.frame,
+          rect: f.rect,
+          imageUrl: this.storage.url(f.imagePath),
+          ...(f.art === 'refused' && { vignette: true }),
+        })),
+        texts: p.texts.map((t) => ({
+          id: t.id,
+          kind: t.kind,
+          frame: t.frame,
+          speaker: t.speaker,
+          text: t.text,
+        })),
       })),
       pdfUrl: this.storage.url(row.pdfPath),
       error: row.error,
@@ -1057,11 +1335,15 @@ export class BooksService implements OnModuleInit {
           pages: pages.length || this.pageCount,
           since: (row.updatedAt ?? row.createdAt).toISOString(),
         });
+    const drawn = (f: StoredFrame) => !!f.imagePath || f.art === 'refused';
     return generationView(
       state,
       {
-        pagesDone: pages.filter((p) => p.imagePath || p.art === 'refused')
-          .length,
+        pagesDone: pages.filter((p) => p.frames.every(drawn)).length,
+        framesDone: pages.reduce(
+          (n, p) => n + p.frames.filter(drawn).length,
+          0,
+        ),
         petImageUrl: this.storage.url(row.petImagePath),
       },
       this.timings.current(now),
@@ -1076,12 +1358,15 @@ function firstState(
   pet: boolean,
   pages: number,
   now: Date,
+  frames = pages,
 ): GenerationState {
   return {
     step: 'read',
     toy,
     pet,
     pages,
+    frames,
+    cast: 0,
     drawing: [],
     redrawing: [],
     startedAt: null,
@@ -1092,6 +1377,11 @@ function firstState(
 /** What the renderer needs of a stored book; images by file name, as they sit next to book.html. */
 export function storedBook(row: BookRow) {
   const child = row.child as unknown as ChildProfile;
+  const things = new Set(
+    (Array.isArray(row.cast) ? (row.cast as unknown as CastMember[]) : [])
+      .filter((c) => c.kind === 'thing')
+      .map((c) => c.id),
+  );
   const local = (path: string | null) => (path ? basename(path) : null);
   return {
     title: row.title,
@@ -1100,13 +1390,81 @@ export function storedBook(row: BookRow) {
     heroImage: local(row.heroImagePath),
     coverImage: local(row.coverImagePath),
     blurb: row.blurb,
-    pages: (row.pages as unknown as StoredPage[]).map((p) => ({
+    pages: normalizePages(row.pages).map((p): RenderablePage => ({
       page: p.page,
-      text: p.text,
-      image: local(p.imagePath),
+      text: pageProse(p),
+      image: local(p.frames[0]?.imagePath ?? null),
+      frames: p.frames.map((f) => ({
+        frame: f.frame,
+        rect: f.rect,
+        image: local(f.imagePath),
+        // Who may speak: people and the pet, not the things the story keeps the same (a kite).
+        cast: f.cast.filter((c) => !things.has(c.id)),
+      })),
+      texts: p.texts.map((t) => ({
+        id: t.id,
+        kind: t.kind,
+        frame: t.frame,
+        speaker: t.speaker,
+        text: t.text,
+      })),
     })),
     talkQuestions: row.talkQuestions as string[],
   };
+}
+
+/**
+ * Pictures a book of this format draws for its pages, before the story says: the middle of its
+ * grids' frame counts a page (one a page for a picture book).
+ */
+export function expectedFrames(
+  format: Pick<StoryFormatData, 'grids'>,
+  pages: number,
+): number {
+  const { min, max } = framesRange(format);
+  return Math.round(pages * ((min + max) / 2));
+}
+
+/** The side characters and things a frame shows, with their looks (and whether they have a sheet). */
+export function castIn(
+  frame: Pick<StoredFrame, 'cast' | 'scenePrompt'>,
+  cast: readonly CastMember[],
+  sheeted: readonly CastMember[],
+): CastInFrame[] {
+  const scene = frame.scenePrompt.toLowerCase();
+  return cast
+    .filter(
+      (member) =>
+        frame.cast.some((c) => c.id === member.id) ||
+        scene.includes(member.name.toLowerCase()),
+    )
+    .map((member) => ({
+      name: member.name,
+      look: member.look,
+      kind: member.kind,
+      sheet: sheeted.some((s) => s.id === member.id),
+    }));
+}
+
+/** Where everyone stands in a frame, for the picture prompt: "the hero on the left, Ayla on the right". */
+export function positionsOf(
+  frame: Pick<StoredFrame, 'cast'>,
+  cast: readonly CastMember[],
+): string | undefined {
+  const named = (id: string) =>
+    id === 'hero' || id === 'pet' || id === 'toy'
+      ? `the ${id}`
+      : (cast.find((c) => c.id === id)?.name ?? null);
+  const parts = frame.cast
+    .filter((c) => c.at)
+    .map((c) => {
+      const name = named(c.id);
+      return name
+        ? `${name} ${c.at === 'center' ? 'in the middle' : `on the ${c.at}`}`
+        : null;
+    })
+    .filter((p): p is string => p !== null);
+  return parts.length > 1 ? parts.join(', ') : undefined;
 }
 
 /** The layout with one story page's state changed. */

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { BookStatus } from "./index";
+import { FRAME_CONCURRENCY } from "./formats";
 
 // ---- Generation progress ---------------------------------------------------------------------
 //
@@ -23,9 +24,9 @@ export const GENERATION_STEPS = [
   "review",
   /** Muse Image draws the hero's character sheet. */
   "hero",
-  /** Muse Image draws the pet's and the toy's sheets. */
+  /** Muse Image draws the pet's, the toy's and the side characters' sheets. */
   "friends",
-  /** Muse Image draws every page (a few at once); SAM 3.1 finds the hero on each. */
+  /** Muse Image draws every page's frames (a few at once); SAM 3.1 finds the characters in each. */
   "pages",
   /** The pages are laid out around SAM's masks and checked in a browser (render QA). */
   "check",
@@ -48,7 +49,10 @@ export const STEP_MODELS: Record<GenerationStep, string | null> = {
   pdf: null,
 };
 
-/** Page pictures drawn at once; each chains from the hero sheet, not from each other. */
+/**
+ * Pages drawn at once (all the frames of a page together, FRAME_CONCURRENCY frames at most); each
+ * frame chains from the character sheets, not from the others.
+ */
 export const PAGE_CONCURRENCY = 4;
 
 /** What the API keeps on Book.generation while the book is being made. */
@@ -60,6 +64,10 @@ export const GenerationStateSchema = z.object({
   pet: z.boolean(),
   /** Pages planned, then as many as the story wrote. */
   pages: z.number().int().min(0),
+  /** Pictures the pages need: one a page in a picture book, every panel in a comic (left out: one a page). */
+  frames: z.number().int().min(0).optional(),
+  /** Side characters drawn on sheets of their own in the "friends" step (the format's cast sheets). */
+  cast: z.number().int().min(0).default(0),
   /** Pages whose picture is being drawn right now. */
   drawing: z.array(z.number().int()).default([]),
   /** Of those, pages drawn again after the picture was refused (gentler, then rewritten). */
@@ -84,6 +92,9 @@ export const GenerationViewSchema = z.object({
   pet: z.boolean(),
   pagesDone: z.number().int().min(0),
   pagesTotal: z.number().int().min(0),
+  /** Pictures drawn of all the pages need (frames; a picture book has one a page). */
+  framesDone: z.number().int().min(0).default(0),
+  framesTotal: z.number().int().min(0).default(0),
   drawing: z.array(z.number().int()),
   redrawing: z.array(z.number().int()),
   /** The pet's character sheet once drawn (the toy's is in Book.toy). */
@@ -94,13 +105,16 @@ export const GenerationViewSchema = z.object({
 export type GenerationView = z.infer<typeof GenerationViewSchema>;
 
 /** The steps this book goes through, in order. */
-export function stepsFor(state: Pick<GenerationState, "toy" | "pet">): GenerationStep[] {
+export function stepsFor(state: Pick<GenerationState, "toy" | "pet"> & { cast?: number }): GenerationStep[] {
   return GENERATION_STEPS.filter((step) => {
     if (step === "toy") return state.toy;
-    if (step === "friends") return state.toy || state.pet;
+    if (step === "friends") return state.toy || state.pet || (state.cast ?? 0) > 0;
     return true;
   });
 }
+
+/** Pictures the pages step draws: the frames, or one a page for a state kept before frames. */
+export const framesOf = (state: Pick<GenerationState, "pages" | "frames">) => state.frames ?? state.pages;
 
 /** The step a status stands for, for books that have no generation state. */
 export function stepOfStatus(status: BookStatus): GenerationStep {
@@ -182,27 +196,38 @@ export const TYPICAL_SECONDS: StepTimings = {
 };
 
 /** Seconds a whole step usually takes for this book. */
-export function stepSeconds(step: GenerationStep, state: Pick<GenerationState, "toy" | "pet" | "pages">, t: StepTimings): number {
+export function stepSeconds(step: GenerationStep, state: Pick<GenerationState, "toy" | "pet" | "pages" | "frames"> & { cast?: number }, t: StepTimings): number {
   switch (step) {
     case "read":
       return 0;
     case "toy":
       return t.toyCutout + t.toyDescribe;
     case "story":
-      return t.story;
+      // A scenario of panels is longer to write than one text a page: it grows with the frames a page.
+      return t.story * Math.max(1, framesOf(state) / Math.max(1, state.pages));
     case "review":
       return t.review;
     case "hero":
       return t.hero;
     case "friends":
-      return (state.pet ? t.pet : 0) + (state.toy ? t.toySheet : 0);
+      return (state.pet ? t.pet : 0) + (state.toy ? t.toySheet : 0) + (state.cast ?? 0) * t.toySheet;
     case "pages":
-      return Math.ceil(state.pages / PAGE_CONCURRENCY) * (t.page + t.pageMask);
+      return waves(state) * (t.page + t.pageMask);
     case "check":
       return Math.max(t.render - 1, 0.5);
     case "pdf":
       return Math.min(t.render, 1);
   }
+}
+
+/**
+ * How many rounds the pages step draws in: a picture book PAGE_CONCURRENCY pages at once, panels
+ * FRAME_CONCURRENCY frames at once.
+ */
+function waves(state: Pick<GenerationState, "pages" | "frames">, left = framesOf(state)): number {
+  const frames = framesOf(state);
+  const atOnce = frames > state.pages ? FRAME_CONCURRENCY : PAGE_CONCURRENCY;
+  return Math.ceil(left / atOnce);
 }
 
 /**
@@ -212,14 +237,14 @@ export function stepSeconds(step: GenerationStep, state: Pick<GenerationState, "
  * their waves of PAGE_CONCURRENCY (the running wave counted half done), and a page being drawn
  * again after a refusal keeps most of a page's time.
  */
-function currentStepLeft(state: GenerationState, pagesDone: number, elapsed: number, t: StepTimings): number {
+function currentStepLeft(state: GenerationState, framesDone: number, elapsed: number, t: StepTimings): number {
   const full = stepSeconds(state.step, state, t);
   if (state.step !== "pages") return Math.max(full - elapsed, Math.min(5, full * 0.25));
   const perPage = t.page + t.pageMask;
-  const left = Math.max(state.pages - pagesDone, 0);
+  const left = Math.max(framesOf(state) - framesDone, 0);
   if (!left) return 0;
   const byTime = full - elapsed;
-  const byCount = (Math.ceil(left / PAGE_CONCURRENCY) - 0.5) * perPage;
+  const byCount = (waves(state, left) - 0.5) * perPage;
   const redraw = state.redrawing.length ? perPage * 0.75 : 0;
   return Math.max(byTime, byCount, redraw, Math.min(5, perPage * 0.25));
 }
@@ -229,12 +254,12 @@ function currentStepLeft(state: GenerationState, pagesDone: number, elapsed: num
  * its typical length (pages in waves of PAGE_CONCURRENCY). Not a countdown: it is an estimate from
  * typical durations, and it only goes down while things run as usual.
  */
-export function remainingSeconds(state: GenerationState, pagesDone: number, t: StepTimings, now: number): number {
+export function remainingSeconds(state: GenerationState, framesDone: number, t: StepTimings, now: number): number {
   const steps = stepsFor(state);
   const at = steps.indexOf(state.step);
   const began = Date.parse(state.stepAt);
   const elapsed = Number.isNaN(began) ? 0 : Math.max((now - began) / 1000, 0);
-  let left = currentStepLeft(state, pagesDone, elapsed, t);
+  let left = currentStepLeft(state, framesDone, elapsed, t);
   for (const step of steps.slice(at + 1)) left += stepSeconds(step, state, t);
   return left;
 }
@@ -274,6 +299,7 @@ export function stateOfStatus(
     toy: book.toy,
     pet: book.pet,
     pages: book.pages,
+    cast: 0,
     drawing: [],
     redrawing: [],
     startedAt: status === "queued" ? null : book.since,
@@ -284,13 +310,15 @@ export function stateOfStatus(
 /** The view of a book being made, from its state, what is drawn so far and typical timings. */
 export function generationView(
   state: GenerationState,
-  progress: { pagesDone: number; petImageUrl: string | null },
+  progress: { pagesDone: number; framesDone?: number; petImageUrl: string | null },
   timings: StepTimings,
   now: number,
 ): GenerationView {
   const steps = stepsFor(state);
   const step = steps.includes(state.step) ? state.step : steps[0];
   const fixed = { ...state, step };
+  const framesTotal = framesOf(state);
+  const framesDone = Math.min(progress.framesDone ?? progress.pagesDone, framesTotal);
   return {
     steps: stepStates(steps, step),
     step,
@@ -298,9 +326,11 @@ export function generationView(
     pet: state.pet,
     pagesDone: Math.min(progress.pagesDone, state.pages),
     pagesTotal: state.pages,
+    framesDone,
+    framesTotal,
     drawing: state.drawing,
     redrawing: state.redrawing,
     petImageUrl: progress.petImageUrl,
-    etaSeconds: roundEta(remainingSeconds(fixed, progress.pagesDone, timings, now)),
+    etaSeconds: roundEta(remainingSeconds(fixed, framesDone, timings, now)),
   };
 }

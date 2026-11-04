@@ -78,12 +78,17 @@ export class QuotaService {
   }
 
   /**
-   * Throws 402 when the visitor is out of books, 503 when today's cap or the whole model budget
-   * is spent.
+   * Throws 402 when the visitor is out of books, 503 when today's cap is reached or the whole model
+   * budget is spent - or would be by this book: `estimateUsd` is what a book of its format costs
+   * (formatEstimate: every frame, not one picture a page).
    */
-  async assertCanCreate(clientKey: string, demoCode?: string): Promise<void> {
+  async assertCanCreate(
+    clientKey: string,
+    demoCode?: string,
+    estimateUsd = 0,
+  ): Promise<void> {
     const spent = await this.prisma.book.aggregate({ _sum: { costUsd: true } });
-    if ((spent._sum.costUsd ?? 0) >= this.budgetUsd) {
+    if ((spent._sum.costUsd ?? 0) + estimateUsd > this.budgetUsd) {
       throw new HttpException(
         {
           code: BUDGET_REACHED,

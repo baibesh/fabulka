@@ -76,6 +76,7 @@ export function themeFromProposal(id: string, proposal: ProposedTheme): BookThem
     cover: proposal.cover,
     ornament: proposal.ornament,
     ornamentImage: null,
+    lettering: null,
   };
 }
 

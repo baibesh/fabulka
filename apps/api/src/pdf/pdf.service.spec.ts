@@ -257,8 +257,8 @@ describe('PdfService (Chromium), choosing layouts from the pictures', () => {
       { page: 3, subject: MOCK_SUBJECT, tone: null },
     ]);
     // The pastel picture is light: dark text on its calm bottom third.
-    expect(result.tones[1]?.aspect).toBe(1);
-    expect(result.tones[1]!.lum[0]).toBeGreaterThan(180);
+    expect(result.tones['1.1']?.aspect).toBe(1);
+    expect(result.tones['1.1']!.lum[0]).toBeGreaterThan(180);
     expect(result.layout.pages['1'].options[0]).toBe('overlay-bottom');
     expect(result.layout.pages['1'].ink['overlay-bottom']).toBe('dark');
     // Where SAM failed nobody knows where the hero is: the text goes on its own page (story 2

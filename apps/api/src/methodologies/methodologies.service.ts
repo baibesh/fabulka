@@ -9,6 +9,7 @@ import {
 import type { Methodology as MethodologyRow } from '@prisma/client';
 import {
   DEFAULT_METHODOLOGIES,
+  PICTURE_BOOK,
   METHODOLOGY_AGE,
   METHODOLOGY_EXISTS,
   METHODOLOGY_IN_USE,
@@ -64,6 +65,7 @@ export class MethodologiesService implements OnModuleInit {
         rules: m.rules,
         avoid: m.avoid,
         maxWordsPerPage: m.maxWordsPerPage ?? null,
+        format: m.format ?? PICTURE_BOOK,
         sortOrder: i * 10,
       })),
       skipDuplicates: true,
@@ -302,6 +304,7 @@ export function toData(row: MethodologyRow): MethodologyData {
     rules: row.rules as string[],
     avoid: row.avoid as string[],
     maxWordsPerPage: row.maxWordsPerPage,
+    format: row.format,
   };
 }
 
@@ -315,12 +318,14 @@ function toPublic(row: MethodologyRow, lang: Language): Methodology {
     source: row.source,
     ageMin: row.ageMin,
     ageMax: row.ageMax,
+    format: row.format,
   };
 }
 
 function toAdmin(row: MethodologyRow, usage: Usage): AdminMethodology {
   return {
     ...toData(row),
+    format: row.format,
     maxWordsPerPage: row.maxWordsPerPage,
     published: row.published,
     sortOrder: row.sortOrder,
