@@ -406,7 +406,7 @@ export class BooksService implements OnModuleInit {
     if (!format.theme) return null;
     const curated = BOOK_THEMES[format.theme];
     if (curated) return curated.languages.includes(language) ? curated : null;
-    return this.themes.pick(format.theme, language);
+    return this.themes.pick(format.theme, language, { comic: true });
   }
 
   /**

@@ -253,7 +253,8 @@ export class TranslatorService {
     const curated = BOOK_THEMES[layout.theme.id];
     if (curated && !curated.legacy && curated.languages.includes(language))
       return layout;
-    if (await this.themes.pick(layout.theme.id, language)) return layout;
+    if (await this.themes.pick(layout.theme.id, language, { comic: true }))
+      return layout;
     const named = templateTheme
       ? await this.themes.pick(templateTheme, language)
       : null;

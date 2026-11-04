@@ -1,9 +1,14 @@
-import { UnprocessableEntityException } from '@nestjs/common';
+import {
+  BadRequestException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import {
   LANGUAGES,
   ProposedThemeSchema,
   THEME_REFUSED,
+  editOf,
   themeFromProposal,
+  type BookTheme,
   type ThemeCheck,
 } from '@fabulka/shared';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -49,6 +54,7 @@ describe('ThemesService.propose (Chromium)', () => {
           });
         },
       },
+      themeHistory: { create: () => Promise.resolve({}) },
     } as unknown as PrismaService;
     themes = new ThemesService(
       prisma,
@@ -130,52 +136,214 @@ describe('ThemesService.propose (Chromium)', () => {
   });
 });
 
-describe('ThemesService.publish', () => {
-  function setup() {
-    const row = {
-      id: 'ai-1',
-      brief: 'лес',
-      theme: mockThemeRow(),
-      checks: [],
-      previews: {},
-      published: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    const prisma = {
-      theme: {
-        update: jest.fn(({ data }: { data: { published: boolean } }) =>
-          Promise.resolve({ ...row, published: data.published }),
-        ),
-      },
-      bookTemplate: {
-        updateMany: jest.fn(() => Promise.resolve({ count: 2 })),
-      },
-    };
-    const service = new ThemesService(
-      prisma as unknown as PrismaService,
-      new MockGateway(0),
-      {} as PdfService,
-      { url: (p: string) => `/files/${p}` } as unknown as StorageService,
-      {} as JournalService,
-    );
-    return { service, prisma };
-  }
+/** Every check of a theme that passed them all, the sample book included. */
+const PASSED: ThemeCheck[] = [
+  { check: 'schema', ok: true, detail: 'valid theme JSON' },
+  { check: 'contrast', ok: true, detail: 'all text pairs readable' },
+  { check: 'render', ok: true, detail: 'everything fits', language: 'ru' },
+];
 
+/** A stored theme row and a service over an in-memory Theme table (no renderer). */
+function stored(overrides: Record<string, unknown> = {}) {
+  let row: Record<string, unknown> = {
+    id: 'ai-1',
+    brief: 'лес',
+    theme: mockThemeRow(),
+    checks: PASSED,
+    previews: {},
+    draft: null,
+    basedOn: null,
+    published: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+  const history: Record<string, unknown>[] = [];
+  const prisma = {
+    theme: {
+      findUnique: jest.fn(() => Promise.resolve(row)),
+      update: jest.fn(({ data }: { data: Record<string, unknown> }) => {
+        const next = { ...row, ...data };
+        // Prisma.DbNull clears a JSON column.
+        const draft = data.draft;
+        if (typeof draft === 'object' && draft !== null && !('theme' in draft))
+          next.draft = null;
+        row = next;
+        return Promise.resolve(row);
+      }),
+    },
+    themeHistory: {
+      create: jest.fn(({ data }: { data: Record<string, unknown> }) => {
+        history.push(data);
+        return Promise.resolve(data);
+      }),
+    },
+    bookTemplate: {
+      updateMany: jest.fn(() => Promise.resolve({ count: 2 })),
+    },
+  };
+  const service = new ThemesService(
+    prisma as unknown as PrismaService,
+    new MockGateway(0),
+    {} as PdfService,
+    {
+      root: join(tmpdir(), 'fabulka-themes-none'),
+      url: (p: string) => `/files/${p}`,
+      exists: () => Promise.resolve(false),
+    } as unknown as StorageService,
+    {
+      run: <T>(_: unknown, task: () => Promise<T>) => task(),
+    } as unknown as JournalService,
+  );
+  return { service, prisma, history, row: () => row };
+}
+
+describe('ThemesService.publish', () => {
   it('takes a theme back: catalog books that named it pick by age again', async () => {
-    const { service, prisma } = setup();
-    const theme = await service.publish('ai-1', false);
-    expect(theme.status).toBe('draft');
+    const { service, prisma } = stored();
+    const { entry } = await service.publish('ai-1', false);
+    expect(entry.status).toBe('draft');
     expect(prisma.bookTemplate.updateMany).toHaveBeenCalledWith({
       where: { layoutTheme: 'ai-1' },
       data: { layoutTheme: null },
     });
   });
 
-  it('leaves catalog books alone when publishing', async () => {
-    const { service, prisma } = setup();
-    expect((await service.publish('ai-1', true)).status).toBe('published');
+  it('leaves catalog books alone when publishing, and remembers it', async () => {
+    const { service, prisma, history } = stored({ published: false });
+    const { entry } = await service.publish('ai-1', true, 'owner@e2e.test');
+    expect(entry.status).toBe('published');
     expect(prisma.bookTemplate.updateMany).not.toHaveBeenCalled();
+    expect(history).toMatchObject([
+      { themeId: 'ai-1', action: 'publish', who: 'owner@e2e.test' },
+    ]);
+  });
+
+  it('never publishes a theme that failed a check', async () => {
+    const failed: ThemeCheck[] = [
+      { check: 'contrast', ok: false, detail: 'ink on paper: 1.6, needs 7' },
+    ];
+    const { service, prisma } = stored({ published: false, checks: failed });
+    const error = (await service
+      .publish('ai-1', true)
+      .catch((e: unknown) => e)) as UnprocessableEntityException;
+    expect(error).toBeInstanceOf(UnprocessableEntityException);
+    expect(error.getResponse()).toMatchObject({ code: THEME_REFUSED });
+    expect(prisma.theme.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('ThemesService editing', () => {
+  const edit = () => editOf(mockThemeRow());
+
+  it('keeps a published theme as it is and holds a failing edit as pending changes', async () => {
+    const { service, row, history } = stored();
+    const pale = {
+      ...edit(),
+      palette: { ...edit().palette, ink: '#c9cfc0' },
+    };
+    const { entry, before, after } = await service.save('ai-1', pale, null);
+    // What books and pickers use has not changed.
+    expect(entry.theme.palette.ink).toBe('#22331f');
+    expect(entry.status).toBe('published');
+    expect(entry.draft?.theme.palette.ink).toBe('#c9cfc0');
+    expect(entry.draft?.theme.version).toBe(2);
+    const contrast = entry.draft?.checks.find((c) => c.check === 'contrast');
+    expect(contrast).toMatchObject({ ok: false });
+    expect(contrast?.detail).toMatch(/ink #c9cfc0 on paper/);
+    const render = entry.draft?.checks.find((c) => c.check === 'render');
+    expect(render?.ok).toBe(false);
+    expect(render?.detail).toMatch(/not run/);
+    expect(before?.palette.ink).toBe('#22331f');
+    expect(after.palette.ink).toBe('#c9cfc0');
+    expect(history.map((h) => h.action)).toEqual(['save']);
+    // Pending changes that failed a check are not published.
+    await expect(service.publish('ai-1', true)).rejects.toBeInstanceOf(
+      UnprocessableEntityException,
+    );
+    expect((row().theme as BookTheme).palette.ink).toBe('#22331f');
+    // Dropped: the published version stays.
+    const dropped = await service.discard('ai-1', null);
+    expect(dropped.entry.draft).toBeNull();
+    expect(dropped.entry.theme.palette.ink).toBe('#22331f');
+  });
+
+  it('refuses an ornament that is not this theme’s own file', async () => {
+    const { service } = stored();
+    await expect(
+      service.save(
+        'ai-1',
+        { ...edit(), ornamentImage: 'themes/ai-2/ornament.png' },
+        null,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.save(
+        'ai-1',
+        { ...edit(), ornamentImage: 'themes/ai-1/../ai-2/ornament.png' },
+        null,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('refines with words through the propose call and says what changed, saving nothing', async () => {
+    const { service, prisma } = stored();
+    const refined = await service.refine(
+      'ai-1',
+      'warmer paper, bolder titles',
+      edit(),
+    );
+    const paths = refined.changes.map((c) => c.path);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        'palette.paper',
+        'palette.plate',
+        'fonts.heading.family',
+      ]),
+    );
+    expect(paths).not.toContain('palette.ink');
+    expect(refined.theme.fonts.heading).toEqual({
+      family: 'Rubik',
+      weight: 700,
+    });
+    expect(refined.checks.find((c) => c.check === 'contrast')?.ok).toBe(true);
+    expect(refined.checks.filter((c) => c.check === 'glyphs')).toHaveLength(5);
+    expect(prisma.theme.update).not.toHaveBeenCalled();
+  });
+
+  it('checks the editor’s fields without saving: a display body font and missing letters', () => {
+    const { service } = stored();
+    const checks = service.check({
+      ...edit(),
+      fonts: {
+        heading: { family: 'Lobster', weight: 400 },
+        body: { family: 'Lobster', weight: 400 },
+      },
+    });
+    const fonts = checks.find((c) => c.check === 'fonts');
+    expect(fonts?.ok).toBe(false);
+    expect(fonts?.detail).toMatch(/Lobster is a display font/);
+    const fine = service.check(edit());
+    expect(fine.every((c) => c.ok)).toBe(true);
+  });
+
+  it('checks the comic lettering font too: vetted, and then its letters in every language', () => {
+    const { service } = stored();
+    const odd = service.check({
+      ...edit(),
+      lettering: { font: { family: 'Bangers', weight: 400 }, scale: 0.8 },
+    });
+    const fonts = odd.find((c) => c.check === 'fonts');
+    expect(fonts?.ok).toBe(false);
+    expect(fonts?.detail).toMatch(/lettering font Bangers/);
+    expect(odd.filter((c) => c.check === 'glyphs').every((c) => !c.ok)).toBe(
+      true,
+    );
+    const comic = service.check({
+      ...edit(),
+      lettering: { font: { family: 'Nunito', weight: 800 }, scale: 0.74 },
+    });
+    expect(comic.every((c) => c.ok)).toBe(true);
   });
 });
 

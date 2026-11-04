@@ -1,0 +1,116 @@
+# Themes edited by hand (mock models): the owner duplicates a curated theme (it stays read-only) and
+# edits the copy with a live preview drawn by the book renderer. Pale text fails the contrast check
+# inline; saved like that, the copy is a draft that cannot be published. Fixed, it passes every check
+# (the sample book in five languages too) and is published. Muse Spark refines it with words, shown as
+# a diff before anything changes. Edits of a published theme wait as pending changes: parents keep
+# seeing the published version until they are published. Every change is in Activity.
+appId: ${WEB}
+tags: [admin, layout, themes]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+commands:
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: admin-nav-inbox }
+  - tapOn: { testId: admin-nav-themes }
+  - waitForVisible: { testId: themes-list }
+
+  # A curated theme has no edit button: it is duplicated, and the copy opens in the editor.
+  - assertNotVisible: { css: "[data-testid=theme-card][data-id=fairy] [data-testid=theme-edit]" }
+  - tapOn: { css: "[data-testid=theme-card][data-id=fairy] [data-testid=theme-duplicate]" }
+  - waitForVisible: { testId: theme-editor, timeout: 60000 }
+  - sql:
+      query: >-
+        select id, published, "basedOn", theme->>'source' as source,
+        (select count(*)::int from jsonb_array_elements(checks) c where not (c->>'ok')::boolean) as failed
+        from "Theme" where "basedOn" = 'fairy' order by "createdAt" desc limit 1
+      readOnly: true
+      extract: { copyId: "$[0].id" }
+      assert: { rows: 1, first: { published: false, source: ai, failed: 0 } }
+  - assertVisible: { css: "[data-testid=theme-editor][data-id='${copyId}'][data-status=draft]" }
+
+  # The preview is drawn by the renderer, in the language picked.
+  - assertVisible: { css: "[data-testid=theme-preview-page][data-key=cover]" }
+  - selectOption: { testId: theme-preview-language, optionValue: kk }
+  - waitForVisible: { css: "[data-testid=theme-preview][data-language=kk]" }
+
+  # Pale text: the contrast pairs and the live check say so next to the colors.
+  - tapOn: { testId: theme-color-ink }
+  - eraseText: 10
+  - inputText: "#c9cfc0"
+  - waitForVisible: { css: "[data-testid=theme-contrast-pair][data-pair=ink-paper][data-ok=false]" }
+  - waitForVisible: { css: "[data-testid=theme-live-checks] [data-testid=theme-check][data-check=contrast][data-ok=false]" }
+  # Saved as a draft; it cannot be published.
+  - tapOn: { testId: theme-save }
+  - waitForVisible: { testId: theme-saved-failed, timeout: 60000 }
+  - assertVisible: { css: "[data-testid=theme-publish][disabled]" }
+
+  # Fixed: every check passes, the copy is published and offered to parents.
+  - tapOn: { testId: theme-color-ink }
+  - eraseText: 10
+  - inputText: "#2e2018"
+  - tapOn: { testId: theme-save }
+  - waitForVisible: { testId: theme-saved, timeout: 60000 }
+  - tapOn: { testId: theme-publish }
+  - waitForVisible: { css: "[data-testid=theme-editor][data-status=published]" }
+  - request:
+      url: /themes
+      extract: { last: "$[-1:].id" }
+      assert: { status: 200 }
+  - assertTrue: { equals: ["${last}", "${copyId}"] }
+
+  # Refine with words: a diff first, nothing saved until the owner applies and saves.
+  - tapOn: { testId: theme-refine-comment }
+  - inputText: "warmer paper, bolder titles"
+  - tapOn: { testId: theme-refine-submit }
+  - waitForVisible: { testId: theme-refine-diff, timeout: 30000 }
+  - assertVisible: { css: "[data-testid=theme-refine-change][data-path='palette.paper']" }
+  - assertVisible: { css: "[data-testid=theme-refine-change][data-path='fonts.heading.family']" }
+  - tapOn: { testId: theme-refine-apply }
+  - waitForVisible: { testId: theme-refine-applied }
+  - assertVisible: { css: "[data-testid=theme-editor][data-dirty=true]" }
+
+  # A published theme's save waits as pending changes: parents still get the published version.
+  - tapOn: { testId: theme-save }
+  - waitForVisible: { testId: theme-pending-note, timeout: 60000 }
+  - sql:
+      query: >-
+        select theme->'palette'->>'paper' as live, draft->'theme'->'palette'->>'paper' as pending
+        from "Theme" where id = $1
+      params: ["${copyId}"]
+      readOnly: true
+      assert: { rows: 1, first: { live: "#fbf5ea" } }
+  - tapOn: { testId: theme-publish }
+  - extendedWaitUntil: { notVisible: { testId: theme-pending-note }, timeout: 30000 }
+  - sql:
+      query: >-
+        select theme->'palette'->>'paper' <> '#fbf5ea' as changed, draft is null as clean, (theme->>'version')::int as version
+        from "Theme" where id = $1
+      params: ["${copyId}"]
+      readOnly: true
+      assert: { rows: 1, first: { changed: true, clean: true, version: 4 } }
+
+  # Every change is in Activity, with the history in the editor.
+  - assertVisible: { css: "[data-testid=theme-history-entry][data-action=duplicate]" }
+  - sql:
+      query: >-
+        select count(*)::int as n from "AuditEvent"
+        where "targetId" = $1 and action in ('theme.update', 'theme.refine', 'theme.publish')
+      params: ["${copyId}"]
+      readOnly: true
+      assert: { rows: 1, first: { n: 6 } }

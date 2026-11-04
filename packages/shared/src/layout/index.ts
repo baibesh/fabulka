@@ -8,3 +8,4 @@ export * from "./panels";
 export * from "./blocks";
 export * from "./sample";
 export * from "./theme-checks";
+export * from "./theme-edit";

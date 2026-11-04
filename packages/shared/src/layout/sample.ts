@@ -69,3 +69,21 @@ export const SAMPLE_BOOKS: Record<Language, SampleBook> = {
     talkQuestions: ["Warum war der Igel traurig?", "Wo suchten die Freunde den Stern?", "Hast du schon einmal etwas wiedergefunden?"],
   },
 };
+
+/**
+ * A sample comic page in every language for the theme editor's preview: a caption box, two speech
+ * balloons and a sound word, with each language's own letters.
+ */
+export interface SampleComicPage {
+  caption: string;
+  speech: [string, string];
+  sfx: string;
+}
+
+export const SAMPLE_COMIC: Record<Language, SampleComicPage> = {
+  ru: { caption: "Утро у реки", speech: ["Смотри, ёжик нашёл звезду!", "Пойдём скорее!"], sfx: "ПЛЮХ!" },
+  kk: { caption: "Өзен жағасындағы таң", speech: ["Қара, кірпі жұлдыз тапты!", "Тезірек жүр!"], sfx: "ШАЛП!" },
+  en: { caption: "Morning by the river", speech: ["Look, the hedgehog found a star!", "Come on, quick!"], sfx: "SPLASH!" },
+  es: { caption: "Mañana junto al río", speech: ["¡Mira, el erizo encontró una estrella!", "¡Vamos, rápido!"], sfx: "¡PLAF!" },
+  de: { caption: "Morgen am Fluss", speech: ["Schau, der Igel hat einen Stern gefunden!", "Komm schnell!"], sfx: "PLATSCH!" },
+};

@@ -80,10 +80,11 @@ export function themeFromProposal(id: string, proposal: ProposedTheme): BookThem
   };
 }
 
-/** Fonts: both from the vetted list, at a weight that ships; the body font a wide-coverage body family. */
+/** Fonts: all from the vetted list (comic lettering too), at a weight that ships; the body font a wide-coverage body family. */
 export function checkFonts(theme: BookTheme): ThemeCheck {
   const problems: string[] = [];
-  for (const [role, font] of Object.entries(theme.fonts)) {
+  const fonts = theme.lettering ? { ...theme.fonts, lettering: theme.lettering.font } : theme.fonts;
+  for (const [role, font] of Object.entries(fonts)) {
     const known = BOOK_FONTS[font.family];
     if (!known) problems.push(`${role} font ${font.family} is not on the vetted list (${Object.keys(BOOK_FONTS).join(", ")})`);
     else if (!known.weights.includes(font.weight)) problems.push(`${role} font ${font.family} has no weight ${font.weight} (${known.weights.join(", ")})`);

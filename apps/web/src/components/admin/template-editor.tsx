@@ -23,6 +23,7 @@ import {
   newLayout,
   pickLanguage,
   themesFor,
+  isComicTheme,
   withTheme,
   type AdminBook,
   type AdminTemplate,
@@ -85,7 +86,7 @@ function Editor({ initial }: { initial: AdminTemplate }) {
   // Published themes whose fonts cover every language of the book (the curated ones while loading).
   const allThemes = useQuery({ queryKey: ["admin", "themes"], queryFn: adminThemes });
   const themes: BookTheme[] = allThemes.data
-    ? allThemes.data.filter((x) => x.status === "published" && draft.languages.every((l) => x.theme.languages.includes(l))).map((x) => x.theme)
+    ? allThemes.data.filter((x) => x.status === "published" && !isComicTheme(x.theme) && draft.languages.every((l) => x.theme.languages.includes(l))).map((x) => x.theme)
     : themesFor(draft.languages);
   const save = useMutation({
     mutationFn: () =>

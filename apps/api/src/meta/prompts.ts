@@ -11,6 +11,7 @@ import {
   lookSentence,
   type Language,
   type MethodologyData,
+  type ProposedTheme,
   type TemplateQuestion,
 } from '@fabulka/shared';
 
@@ -805,6 +806,22 @@ Rules:
 
 export function themePrompt(brief: string): string {
   return `The owner's brief for a new theme: «${brief}»`;
+}
+
+/**
+ * "Refine with words": the theme as it is, in the answer's own JSON, and the owner's comment on it.
+ * Only what the comment asks for changes; the same rules hold.
+ */
+export function themeRefinePrompt(
+  comment: string,
+  current: ProposedTheme,
+): string {
+  return [
+    'The current theme, as JSON with the keys of your answer:',
+    JSON.stringify(current),
+    `The owner's comment on it: «${comment}»`,
+    'Answer with the whole theme adjusted to the comment. Change only what the comment asks for and keep every other value exactly as it is; keep "ornamentPrompt" unless the comment is about the ornament.',
+  ].join('\n');
 }
 
 /** The ornament as an isolated motif the book prints small next to the dedication and the end. */

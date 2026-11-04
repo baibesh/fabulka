@@ -1,6 +1,7 @@
 import { LANGUAGES, LANGUAGE_NAMES } from "@fabulka/shared";
 import { PHOTO_MESSAGES } from "./messages-photo";
 import { PIPELINE_MESSAGES } from "./messages-pipeline";
+import { THEMES_MESSAGES } from "./messages-themes";
 
 /** The interface languages: the book languages, in the same order (English first, Russian last). */
 export const UI_LOCALES = LANGUAGES;
@@ -876,7 +877,7 @@ const ru = {
   "admin.activity.action.reference.delete": "Удаление референса",
   "admin.activity.action.reference.order": "Порядок референсов",
   "admin.themes.title": "Темы оформления",
-  "admin.themes.lead": "Встроенные темы не меняются. Новую тему предлагает Muse Spark по вашему описанию; код проверяет шрифты, контраст, размеры по возрасту и все буквы пяти языков, а пример книги проходит проверку вёрстки на каждом языке. Опубликованная тема появляется в редакторе каталога и в выборе темы у родителей.",
+  "admin.themes.lead": "Встроенные темы не меняются: продублируйте тему, чтобы править копию. Темы Muse Spark и копии правятся вручную, каждое сохранение проходит те же проверки. Новую тему предлагает Muse Spark по вашему описанию; код проверяет шрифты, контраст, размеры по возрасту и все буквы пяти языков, а пример книги проходит проверку вёрстки на каждом языке. Опубликованная тема появляется в редакторе каталога и в выборе темы у родителей.",
   "admin.themes.propose": "Предложить тему",
   "admin.themes.brief": "Описание",
   "admin.themes.brief.hint": "Настроение, возраст, слова о палитре: «уютная зимняя сказка, 3–5 лет, синий и тёплый белый»",
@@ -1631,6 +1632,7 @@ const ru = {
   "admin.palette.keys": "↑ ↓ - выбор · Enter - открыть · Esc - закрыть",
   ...PHOTO_MESSAGES.ru,
   ...PIPELINE_MESSAGES.ru,
+  ...THEMES_MESSAGES.ru,
 } as const;
 
 export type MessageKey = keyof typeof ru;
@@ -2504,7 +2506,7 @@ const kk: Messages = {
   "admin.activity.action.reference.delete": "Референсті жою",
   "admin.activity.action.reference.order": "Референстер реті",
   "admin.themes.title": "Безендіру тақырыптары",
-  "admin.themes.lead": "Кіріктірілген тақырыптар өзгермейді. Жаңа тақырыпты сіздің сипаттамаңыз бойынша Muse Spark ұсынады; код қаріптерді, контрастты, жасқа сай өлшемдерді және бес тілдің барлық әрпін тексереді, ал үлгі кітап әр тілде беттеу тексерісінен өтеді. Жарияланған тақырып каталог редакторында және ата-аналардың тақырып таңдауында пайда болады.",
+  "admin.themes.lead": "Кіріктірілген тақырыптар өзгермейді: көшірмесін өңдеу үшін тақырыпты көшіріңіз. Muse Spark тақырыптары мен көшірмелер қолмен өңделеді, әр сақтау сол тексерістерден өтеді. Жаңа тақырыпты сіздің сипаттамаңыз бойынша Muse Spark ұсынады; код қаріптерді, контрастты, жасқа сай өлшемдерді және бес тілдің барлық әрпін тексереді, ал үлгі кітап әр тілде беттеу тексерісінен өтеді. Жарияланған тақырып каталог редакторында және ата-аналардың тақырып таңдауында пайда болады.",
   "admin.themes.propose": "Тақырып ұсыну",
   "admin.themes.brief": "Сипаттама",
   "admin.themes.brief.hint": "Көңіл күй, жас, түстер туралы сөздер: «жайлы қысқы ертегі, 3–5 жас, көк пен жылы ақ»",
@@ -3259,6 +3261,7 @@ const kk: Messages = {
   "admin.palette.keys": "↑ ↓ - таңдау · Enter - ашу · Esc - жабу",
   ...PHOTO_MESSAGES.kk,
   ...PIPELINE_MESSAGES.kk,
+  ...THEMES_MESSAGES.kk,
 };
 
 const en: Messages = {
@@ -4130,7 +4133,7 @@ const en: Messages = {
   "admin.activity.action.reference.delete": "Reference deleted",
   "admin.activity.action.reference.order": "References reordered",
   "admin.themes.title": "Book themes",
-  "admin.themes.lead": "Built-in themes never change. Muse Spark proposes a new theme from your brief; the code checks the fonts, the contrast, sizes by age and every letter of the five languages, and a sample book goes through render QA in each language. A published theme appears in the catalog editor and in the parents' theme picker.",
+  "admin.themes.lead": "Built-in themes never change: duplicate one to edit a copy. Muse Spark themes and copies are edited by hand, and every save goes through the same checks. Muse Spark proposes a new theme from your brief; the code checks the fonts, the contrast, sizes by age and every letter of the five languages, and a sample book goes through render QA in each language. A published theme appears in the catalog editor and in the parents' theme picker.",
   "admin.themes.propose": "Propose a theme",
   "admin.themes.brief": "Brief",
   "admin.themes.brief.hint": "Mood, age, palette words: “cosy winter tale, ages 3–5, blue and warm white”",
@@ -4885,6 +4888,7 @@ const en: Messages = {
   "admin.palette.keys": "↑ ↓ to move · Enter to open · Esc to close",
   ...PHOTO_MESSAGES.en,
   ...PIPELINE_MESSAGES.en,
+  ...THEMES_MESSAGES.en,
 };
 
 const es: Messages = {
@@ -5756,7 +5760,7 @@ const es: Messages = {
   "admin.activity.action.reference.delete": "Referencia eliminada",
   "admin.activity.action.reference.order": "Orden de referencias",
   "admin.themes.title": "Temas de diseño",
-  "admin.themes.lead": "Los temas integrados no cambian. Muse Spark propone un tema nuevo a partir de tu descripción; el código revisa las fuentes, el contraste, los tamaños por edad y todas las letras de los cinco idiomas, y un libro de muestra pasa el control de maquetación en cada idioma. Un tema publicado aparece en el editor del catálogo y en el selector de temas de los padres.",
+  "admin.themes.lead": "Los temas integrados no cambian: duplica uno para editar una copia. Los temas de Muse Spark y las copias se editan a mano, y cada guardado pasa las mismas comprobaciones. Muse Spark propone un tema nuevo a partir de tu descripción; el código revisa las fuentes, el contraste, los tamaños por edad y todas las letras de los cinco idiomas, y un libro de muestra pasa el control de maquetación en cada idioma. Un tema publicado aparece en el editor del catálogo y en el selector de temas de los padres.",
   "admin.themes.propose": "Proponer un tema",
   "admin.themes.brief": "Descripción",
   "admin.themes.brief.hint": "Ambiente, edad, palabras sobre la paleta: «cuento de invierno acogedor, 3–5 años, azul y blanco cálido»",
@@ -6511,6 +6515,7 @@ const es: Messages = {
   "admin.palette.keys": "↑ ↓ para moverte · Enter para abrir · Esc para cerrar",
   ...PHOTO_MESSAGES.es,
   ...PIPELINE_MESSAGES.es,
+  ...THEMES_MESSAGES.es,
 };
 
 const de: Messages = {
@@ -7382,7 +7387,7 @@ const de: Messages = {
   "admin.activity.action.reference.delete": "Referenz gelöscht",
   "admin.activity.action.reference.order": "Referenzen neu geordnet",
   "admin.themes.title": "Buchdesigns",
-  "admin.themes.lead": "Eingebaute Designs bleiben unverändert. Muse Spark schlägt nach deiner Beschreibung ein neues Design vor; der Code prüft Schriften, Kontrast, Schriftgrößen nach Alter und jeden Buchstaben der fünf Sprachen, und ein Beispielbuch durchläuft in jeder Sprache die Satzprüfung. Ein veröffentlichtes Design erscheint im Katalog-Editor und in der Designauswahl der Eltern.",
+  "admin.themes.lead": "Eingebaute Designs bleiben unverändert: kopiere eines, um die Kopie zu bearbeiten. Designs von Muse Spark und Kopien werden von Hand bearbeitet, und jedes Speichern durchläuft dieselben Prüfungen. Muse Spark schlägt nach deiner Beschreibung ein neues Design vor; der Code prüft Schriften, Kontrast, Schriftgrößen nach Alter und jeden Buchstaben der fünf Sprachen, und ein Beispielbuch durchläuft in jeder Sprache die Satzprüfung. Ein veröffentlichtes Design erscheint im Katalog-Editor und in der Designauswahl der Eltern.",
   "admin.themes.propose": "Design vorschlagen",
   "admin.themes.brief": "Beschreibung",
   "admin.themes.brief.hint": "Stimmung, Alter, Farben: „gemütliches Wintermärchen, 3–5 Jahre, Blau und warmes Weiß“",
@@ -8137,6 +8142,7 @@ const de: Messages = {
   "admin.palette.keys": "↑ ↓ zum Wechseln · Enter zum Öffnen · Esc zum Schließen",
   ...PHOTO_MESSAGES.de,
   ...PIPELINE_MESSAGES.de,
+  ...THEMES_MESSAGES.de,
 };
 
 export const MESSAGES: Record<UiLocale, Messages> = { ru, kk, en, es, de };

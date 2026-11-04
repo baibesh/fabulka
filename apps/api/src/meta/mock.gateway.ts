@@ -1,4 +1,5 @@
 import {
+  BOOK_FONTS,
   GRID,
   beatOf,
   countWords,
@@ -10,6 +11,7 @@ import {
   type Language,
   type ModelCallKind,
   type PageSubject,
+  type ProposedTheme,
   type SamConcept,
   type Story,
   type StoryPage,
@@ -313,6 +315,67 @@ export function mockTheme(brief: string) {
     ornamentPrompt:
       'a small round wreath of green leaves and tiny white flowers, flat children-book illustration',
   };
+}
+
+/** `a` moved towards `b` by `share` (0..1), as #rrggbb. */
+function mix(a: string, b: string, share: number): string {
+  const channel = (hex: string, i: number) =>
+    parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  return `#${[0, 1, 2]
+    .map((i) =>
+      Math.round(channel(a, i) + (channel(b, i) - channel(a, i)) * share)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
+}
+
+/**
+ * "Refine with words" without a model: the comment's usual words do the usual thing - warmer paper,
+ * bolder titles, bigger type, darker ink, pale ink (to see a check fail); anything else warms the
+ * accent a little. Everything not asked for stays.
+ */
+export function mockRefine(
+  current: ProposedTheme,
+  comment: string,
+): ProposedTheme {
+  const next: ProposedTheme = structuredClone(current);
+  const has = (re: RegExp) => re.test(comment);
+  let changed = false;
+  if (has(/warm|тёпл|тепл|жылы|cálid/i)) {
+    const plateIsPaper = next.palette.plate === next.palette.paper;
+    next.palette.paper = mix(next.palette.paper, '#ffe9c9', 0.45);
+    next.palette.cover = mix(next.palette.cover, '#f6cf9a', 0.35);
+    if (plateIsPaper) next.palette.plate = next.palette.paper;
+    changed = true;
+  }
+  if (has(/bold|жирн|ярч|negrit|fett/i)) {
+    const heading = BOOK_FONTS[next.fonts.heading.family];
+    const heaviest = heading ? Math.max(...heading.weights) : 0;
+    next.fonts.heading =
+      heaviest > next.fonts.heading.weight
+        ? { family: next.fonts.heading.family, weight: heaviest }
+        : { family: 'Rubik', weight: 700 };
+    changed = true;
+  }
+  if (has(/big|larg|крупн|больш|grand|größ/i)) {
+    for (const size of Object.values(next.sizes)) {
+      size.bodyPt += 1;
+      size.titlePt = Math.min(48, size.titlePt + 2);
+      size.headingPt = Math.min(size.titlePt, size.headingPt + 1);
+    }
+    changed = true;
+  }
+  if (has(/dark|тёмн|темн|oscur|dunkl/i)) {
+    next.palette.ink = mix(next.palette.ink, '#000000', 0.5);
+    changed = true;
+  }
+  if (has(/pale|бледн|блёкл|нечитаем/i)) {
+    next.palette.ink = '#c9cfc0';
+    changed = true;
+  }
+  if (!changed) next.palette.accent = mix(next.palette.accent, '#d0632b', 0.4);
+  return next;
 }
 
 /** The mock's ornament: a leaf wreath on a transparent background. */
@@ -634,9 +697,12 @@ export class MockGateway implements ModelGateway {
     };
   }
 
-  async proposeTheme(brief: string) {
+  async proposeTheme(brief: string, current?: ProposedTheme) {
     await this.pretend('theme', 0, this.staffCostUsd);
-    return { proposal: mockTheme(brief), costUsd: this.staffCostUsd };
+    return {
+      proposal: current ? mockRefine(current, brief) : mockTheme(brief),
+      costUsd: this.staffCostUsd,
+    };
   }
 
   async drawOrnament(): Promise<GeneratedImage> {
