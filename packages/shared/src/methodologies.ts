@@ -3,8 +3,9 @@ import { BASE_LANGUAGES, LanguageSchema, localized, type Language } from "./lang
 
 // ---- Story methods -----------------------------------------------------------------
 // Methods live in the database and are edited in the admin; DEFAULT_METHODOLOGIES below only
-// seeds it. Names and summaries are per interface language (shown to parents and in the admin);
-// structure, rules and avoid are English because they go straight into the Muse Spark prompt.
+// seeds it. Names, summaries and the source as parents read it are per interface language (shown
+// to parents and in the admin); the canonical source, structure, rules and avoid are English
+// because they go straight into the Muse Spark prompt.
 
 /** What catalog books and books refer to a method by, so it never changes once created. */
 export const MethodologySlugSchema = z
@@ -27,21 +28,30 @@ export const METHODOLOGY_WORDS_MAX = 150;
 const MethodologyTextSchema = z.object({
   name: z.string().trim().max(80),
   summary: z.string().trim().max(300),
+  /**
+   * Where the method comes from, as parents read it in this language; left out or empty: another
+   * language's (methodologyText), else the canonical English MethodologyData.source.
+   */
+  source: z.string().trim().max(300).optional(),
 });
 export type MethodologyText = z.infer<typeof MethodologyTextSchema>;
 
 /**
- * A method's name and summary by language (LANGUAGES): the base languages (BASE_LANGUAGES) are
- * required to publish, the rest are optional and fall back to them (see methodologyText).
+ * A method's name, summary and source by language (LANGUAGES): the name and summary in the base
+ * languages (BASE_LANGUAGES) are required to publish, the rest are optional and fall back to them
+ * (see methodologyText).
  */
 export const MethodologyTextsSchema = z.partialRecord(LanguageSchema, MethodologyTextSchema);
 export type MethodologyTexts = z.infer<typeof MethodologyTextsSchema>;
 
-/** The method's name and summary in `language`, each falling back like any localized text. */
-export function methodologyText(texts: MethodologyTexts, language: Language): MethodologyText {
+/**
+ * The method's name, summary and source in `language`, each falling back like any localized text;
+ * the source is empty when no language has one (the canonical MethodologyData.source is shown then).
+ */
+export function methodologyText(texts: MethodologyTexts, language: Language): Required<MethodologyText> {
   const field = (key: keyof MethodologyText) =>
     localized(Object.fromEntries(Object.entries(texts).map(([lang, text]) => [lang, text?.[key] ?? ""])), language);
-  return { name: field("name"), summary: field("summary") };
+  return { name: field("name"), summary: field("summary"), source: field("source") };
 }
 
 /** A story method as the site shows it, in the requested language (GET /methodologies). */
@@ -51,7 +61,7 @@ export const MethodologySchema = z.object({
   summary: z.string(),
   /** The story format its books are made in (older APIs leave it out: the picture book). */
   format: z.string().default("picture-book"),
-  /** Where the method comes from, so an author can read further. */
+  /** Where the method comes from, so an author can read further, in the requested language. */
   source: z.string(),
   ageMin: z.number().int(),
   ageMax: z.number().int(),
@@ -62,6 +72,7 @@ export type Methodology = z.infer<typeof MethodologySchema>;
 export interface MethodologyData {
   slug: string;
   texts: MethodologyTexts;
+  /** Where the method comes from, in English: the story prompt names it; parents read texts[lang].source. */
   source: string;
   ageMin: number;
   ageMax: number;
@@ -211,22 +222,27 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       ru: {
         name: "Повтор и ритм для малышей",
         summary: "Знакомый день малыша с повторяющейся фразой, звуками и маленьким добрым сюрпризом.",
+        source: "Предсказуемые тексты с повторами для раннего чтения; реалистичные истории для малышей",
       },
       kk: {
         name: "Кішкентайларға арналған қайталау мен ырғақ",
         summary: "Сәбидің таныс күні: қайталанып отыратын сөз, дыбыстар және кішкентай жағымды тосынсый.",
+        source: "Ерте сауат ашуға арналған қайталамалы, оңай болжанатын мәтіндер; кішкентайларға арналған өмірдегідей әңгімелер",
       },
       en: {
         name: "Rhythm and repetition for toddlers",
         summary: "A familiar day with a repeating line, sounds to say along and a small, kind surprise.",
+        source: "Predictable and repetitive texts in early literacy; reality-based stories for toddlers",
       },
       es: {
         name: "Ritmo y repetición para los más pequeños",
         summary: "Un día cotidiano con una frase que se repite, sonidos para decir en voz alta y una pequeña sorpresa llena de cariño.",
+        source: "textos predecibles y repetitivos para la lectura temprana y en historias realistas para los más pequeños",
       },
       de: {
         name: "Rhythmus und Wiederholung für die Kleinsten",
         summary: "Ein vertrauter Tag mit einem Satz, der immer wiederkehrt, Geräuschen zum Mitsprechen und einer kleinen, liebevollen Überraschung.",
+        source: "Vorhersehbare Texte mit Wiederholungen aus der frühen Leseförderung; realitätsnahe Geschichten für Kleinkinder",
       },
     },
     source: "Predictable and repetitive texts in early literacy; reality-based stories for toddlers",
@@ -252,22 +268,27 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       ru: {
         name: "Социальная история",
         summary: "Спокойно готовит к новому: детский сад, врач, перелёт, переезд, братик или сестрёнка.",
+        source: "Социальные истории Кэрол Грей",
       },
       kk: {
         name: "Әлеуметтік әңгіме",
         summary: "Жаңа жағдайға сабырмен дайындайды: балабақша, дәрігер, ұшақпен ұшу, көшу, кішкентай бауырдың дүниеге келуі.",
+        source: "Кэрол Грейдің «Әлеуметтік әңгімелері»",
       },
       en: {
         name: "Social story",
         summary: "Calmly prepares for something new: kindergarten, the doctor, a flight, a move, a new sibling.",
+        source: "Social Stories by Carol Gray",
       },
       es: {
         name: "Historia social",
         summary: "Prepara con calma para algo nuevo: la guardería, el médico, un vuelo, una mudanza, un hermanito.",
+        source: "las Historias Sociales de Carol Gray",
       },
       de: {
         name: "Soziale Geschichte",
         summary: "Bereitet in Ruhe auf Neues vor: Kita, Arztbesuch, Flug, Umzug oder ein Geschwisterchen.",
+        source: "Social Stories nach Carol Gray",
       },
     },
     source: "Social Stories by Carol Gray",
@@ -294,22 +315,27 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       ru: {
         name: "Эмоциональный интеллект",
         summary: "Герой учится замечать и называть чувства, успокаиваться и понимать других.",
+        source: "Модель социально-эмоционального обучения CASEL; эмоциональный коучинг Джона Готтмана",
       },
       kk: {
         name: "Эмоциялық интеллект",
         summary: "Кейіпкер сезімдерді байқауды, оларды атауды, сабырға келуді және өзгелерді түсінуді үйренеді.",
+        source: "CASEL әлеуметтік-эмоциялық оқыту моделі; Джон Готтманның эмоциялық коучингі",
       },
       en: {
         name: "Emotional intelligence",
         summary: "The hero learns to notice and name feelings, calm down and understand others.",
+        source: "CASEL social and emotional learning framework; emotion coaching by John Gottman",
       },
       es: {
         name: "Inteligencia emocional",
         summary: "El protagonista aprende a notar y nombrar lo que siente, a calmarse y a entender a los demás.",
+        source: "el marco de aprendizaje socioemocional de CASEL y el coaching emocional de John Gottman",
       },
       de: {
         name: "Emotionale Intelligenz",
         summary: "Der Held lernt, Gefühle zu bemerken und zu benennen, sich zu beruhigen und andere zu verstehen.",
+        source: "CASEL-Modell des sozial-emotionalen Lernens; Emotionscoaching nach John Gottman",
       },
     },
     source: "CASEL social and emotional learning framework; emotion coaching by John Gottman",
@@ -337,22 +363,27 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       ru: {
         name: "Мышление роста",
         summary: "Не получилось - пока. Герой пробует, ошибается, ищет способ и добивается своего трудом.",
+        source: "Исследования Кэрол Дуэк о мышлении роста",
       },
       kk: {
         name: "Даму ойлауы",
         summary: "Әзірге шықпай тұр - тек әзірге. Кейіпкер талпынады, қателеседі, жол іздейді және еңбегімен мақсатына жетеді.",
+        source: "Кэрол Двектің даму ойлауы туралы зерттеулері",
       },
       en: {
         name: "Growth mindset",
         summary: "Can't do it - yet. The hero tries, makes mistakes, finds a way and gets there through effort.",
+        source: "Growth mindset research by Carol Dweck",
       },
       es: {
         name: "Mentalidad de crecimiento",
         summary: "No me sale… todavía. El protagonista lo intenta, se equivoca, busca la manera y lo consigue con esfuerzo.",
+        source: "las investigaciones de Carol Dweck sobre la mentalidad de crecimiento",
       },
       de: {
         name: "Wachstumsdenken",
         summary: "„Ich kann das nicht“ – noch nicht! Der Held probiert, macht Fehler, findet einen Weg und schafft es mit Ausdauer.",
+        source: "Carol Dwecks Forschung zum Wachstumsdenken (Growth Mindset)",
       },
     },
     source: "Growth mindset research by Carol Dweck",
@@ -379,22 +410,27 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       ru: {
         name: "Зеркала и окна",
         summary: "Ребёнок узнаёт в книге свой город и культуру и открывает для себя мир других людей.",
+        source: "«Зеркала, окна и раздвижные стеклянные двери» Рудин Симс Бишоп",
       },
       kk: {
         name: "Айналар мен терезелер",
         summary: "Бала кітаптан өз қаласы мен мәдениетін таниды және басқа адамдардың әлемін ашады.",
+        source: "Рудин Симс Бишоптың «Айналар, терезелер және сырғымалы шыны есіктер» идеясы",
       },
       en: {
         name: "Mirrors and windows",
         summary: "Children see their own city and culture in the book and discover the worlds of other people.",
+        source: "\"Mirrors, windows and sliding glass doors\" by Rudine Sims Bishop",
       },
       es: {
         name: "Espejos y ventanas",
         summary: "Los niños reconocen en el libro su ciudad y su cultura, y descubren el mundo de otras personas.",
+        source: "«Espejos, ventanas y puertas corredizas de cristal», de Rudine Sims Bishop",
       },
       de: {
         name: "Spiegel und Fenster",
         summary: "Dein Kind entdeckt im Buch seine eigene Stadt und Kultur – und die Welt anderer Menschen.",
+        source: "„Spiegel, Fenster und gläserne Schiebetüren“ von Rudine Sims Bishop",
       },
     },
     source: "\"Mirrors, windows and sliding glass doors\" by Rudine Sims Bishop",
@@ -420,22 +456,27 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       ru: {
         name: "Приключение",
         summary: "Путешествие в волшебный мир по интересам ребёнка, где побеждают доброта и смекалка.",
+        source: "Путь героя (Кэмпбелл, Воглер), адаптированный для книжек с картинками",
       },
       kk: {
         name: "Шытырман оқиға",
         summary: "Мейірімділік пен тапқырлық жеңетін, баланың қызығушылықтарына сай сиқырлы әлемге саяхат.",
+        source: "Қаһарман жолы (Кэмпбелл, Воглер), суретті кітапшаларға бейімделген",
       },
       en: {
         name: "Adventure",
         summary: "A journey to a magical place built on the child's interests, where kindness and wit win.",
+        source: "The hero's journey (Campbell, Vogler), adapted for picture books",
       },
       es: {
         name: "Aventura",
         summary: "Un viaje a un mundo mágico inspirado en lo que más le gusta al niño, donde ganan la bondad y el ingenio.",
+        source: "el viaje del héroe (Campbell, Vogler), adaptado a los álbumes ilustrados",
       },
       de: {
         name: "Abenteuer",
         summary: "Eine Reise in eine magische Welt rund um die Lieblingsthemen deines Kindes, in der Freundlichkeit und Köpfchen gewinnen.",
+        source: "Die Heldenreise (Campbell, Vogler), für Bilderbücher angepasst",
       },
     },
     source: "The hero's journey (Campbell, Vogler), adapted for picture books",
@@ -463,22 +504,27 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
       ru: {
         name: "Комикс-квест",
         summary: "Приключение в кадрах: ребёнок с другом разгадывает загадку в родном городе, реплики - в облачках.",
+        source: "Путь героя (Кэмпбелл, Воглер) в кадрах комикса; Скотт Макклауд, «Понимание комикса»",
       },
       kk: {
         name: "Комикс-квест",
         summary: "Кадрлардағы шытырман оқиға: бала досымен бірге туған қаласындағы жұмбақты шешеді, сөздері - бұлттарда.",
+        source: "Қаһарман жолы (Кэмпбелл, Воглер) комикс кадрларында; Скотт Макклауд, «Комиксті түсіну»",
       },
       en: {
         name: "Comic quest",
         summary: "An adventure in panels: the child and a friend crack a mystery in their own city, every line in a speech balloon.",
+        source: "The hero's journey (Campbell, Vogler) told in comic panels; Scott McCloud, Understanding Comics",
       },
       es: {
         name: "Misión en cómic",
         summary: "Una aventura en viñetas: el niño y un amigo resuelven un misterio en su ciudad, con cada frase en un bocadillo.",
+        source: "el viaje del héroe (Campbell, Vogler) contado en viñetas y en «Entender el cómic» de Scott McCloud",
       },
       de: {
         name: "Comic-Abenteuer",
         summary: "Ein Abenteuer in Panels: Dein Kind löst mit einem Freund ein Rätsel in der eigenen Stadt - jeder Satz in einer Sprechblase.",
+        source: "Die Heldenreise (Campbell, Vogler) in Comic-Panels erzählt; Scott McCloud, „Comics richtig lesen“",
       },
     },
     source: "The hero's journey (Campbell, Vogler) told in comic panels; Scott McCloud, Understanding Comics",

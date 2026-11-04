@@ -142,7 +142,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
   const [confirming, setConfirming] = useState(false);
   const sortOrder = draft.sortOrder ?? (all.data?.at(-1)?.sortOrder ?? -10) + 10;
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
-  const setText = (key: "name" | "summary", value: string) =>
+  const setText = (key: "name" | "summary" | "source", value: string) =>
     setDraft((d) => ({ ...d, texts: { ...d.texts, [lang]: { ...(d.texts[lang] ?? empty), [key]: value } } }));
   const refresh = (saved: AdminMethodology) => {
     if (initial) setDraft(toDraft(saved));
@@ -339,6 +339,16 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
                 className="min-h-24"
                 value={draft.texts[lang]?.summary ?? ""}
                 onChange={(e) => setText("summary", e.target.value)}
+              />
+            </Field>
+            {/* While it is empty the placeholder shows what parents see: another language's source, else the prompt's. */}
+            <Field label={t("admin.method.sourceText")} hint={t("admin.method.sourceText.hint")} error={problems[`texts.${lang}.source`]}>
+              <Input
+                key={`source-${lang}`}
+                data-testid={`methodology-source-${lang}`}
+                value={draft.texts[lang]?.source ?? ""}
+                placeholder={methodologyText(draft.texts, lang).source || draft.source}
+                onChange={(e) => setText("source", e.target.value)}
               />
             </Field>
           </div>

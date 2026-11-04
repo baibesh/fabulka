@@ -45,6 +45,9 @@ commands:
   - inputText: "Тестовая методика"
   - tapOn: { testId: methodology-summary-ru }
   - inputText: "Герой пробует новое и справляется."
+  # The source as parents read it, in Russian; the prompt keeps the English one below.
+  - tapOn: { testId: methodology-source-ru }
+  - inputText: "Тестовый источник"
   - tapOn: { testId: methodology-tab-en }
   - tapOn: { testId: methodology-name-en }
   - inputText: "Test method"
@@ -88,12 +91,27 @@ commands:
       assert:
         rows: 1
         first: { published: true, min: 5, max: 7, kk: "", beats: 1 }
-  # The site in Kazakh gets the Russian name and summary.
+  # The site in Kazakh gets the Russian name, summary and source.
   - request:
       url: ${API}/methodologies
       query: { lang: kk }
       assert: { status: 200 }
   - assertTrue: { contains: ["${response.body}", "Тестовая методика"] }
+  - assertTrue: { contains: ["${response.body}", "Тестовый источник"] }
+  - sql:
+      query: >-
+        select source, texts->'ru'->>'source' as ru from "Methodology" where slug = $1
+      params: ["${slug}"]
+      readOnly: true
+      assert:
+        rows: 1
+        first: { source: "E2E test source", ru: "Тестовый источник" }
+  # A seed method's source is in the language asked too, not the prompt's English.
+  - request:
+      url: ${API}/methodologies
+      query: { lang: ru }
+      assert: { status: 200 }
+  - assertTrue: { contains: ["${response.body}", "Путь героя (Кэмпбелл, Воглер), адаптированный для книжек с картинками"] }
 
   # On the Kazakh /create it is offered for a 6-year-old, by its Russian name, and follows the
   # parent's choice to the review.

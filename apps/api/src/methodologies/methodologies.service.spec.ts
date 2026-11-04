@@ -213,9 +213,77 @@ describe('MethodologiesService', () => {
         kk: edited,
       });
     });
+
+    it('still updates them once migration z29 has given them their seed source', async () => {
+      const { service, rows } = makeService();
+      const seed = DEFAULT_METHODOLOGIES.find(
+        (m) => m.slug === 'toddler-routine',
+      )!;
+      const old = SEEDED_METHOD_TEXTS_V1['toddler-routine'];
+      // What the migration leaves: the frozen copy plus the seed's source in that language.
+      const migrated = Object.fromEntries(
+        Object.entries(old).map(([lang, text]) => [
+          lang,
+          {
+            ...(text as object),
+            source: seed.texts[lang as keyof typeof seed.texts]?.source,
+          },
+        ]),
+      );
+      const owned = {
+        name: 'Своё название',
+        summary: 'Своё описание',
+        source: 'Свой источник',
+      };
+      rows.set(
+        'toddler-routine',
+        withDates({
+          slug: 'toddler-routine',
+          texts: { ...seed.texts, ...migrated, ru: owned },
+          source: seed.source,
+          published: true,
+          sortOrder: 0,
+        }),
+      );
+      await service.onModuleInit();
+
+      expect(rows.get('toddler-routine')?.texts).toEqual({
+        ...seed.texts,
+        ru: owned,
+      });
+    });
   });
 
   describe('the public list', () => {
+    it('gives the source in the language asked, falling back like the name, else the prompt one', async () => {
+      const { service } = makeService();
+      await service.onModuleInit();
+      const source = async (lang: 'ru' | 'kk' | 'en' | 'es' | 'de') =>
+        (await service.list(lang)).find((m) => m.slug === 'adventure-quest')
+          ?.source;
+      expect(await source('ru')).toBe(
+        'Путь героя (Кэмпбелл, Воглер), адаптированный для книжек с картинками',
+      );
+      expect(await source('en')).toBe(
+        "The hero's journey (Campbell, Vogler), adapted for picture books",
+      );
+
+      await service.create({
+        ...calm,
+        texts: {
+          ...calm.texts,
+          ru: { ...calm.texts.ru!, source: 'Осознанность для детей' },
+        },
+      });
+      const calmSource = async (lang: 'ru' | 'kk' | 'en') =>
+        (await service.list(lang)).find((m) => m.slug === 'calm-down')?.source;
+      expect(await calmSource('kk')).toBe('Осознанность для детей');
+      expect(await calmSource('en')).toBe('Осознанность для детей');
+
+      await service.update('calm-down', calm);
+      expect(await calmSource('ru')).toBe('Mindfulness for children');
+    });
+
     it('shows published methods in their order, in the language asked, Russian where a text is missing', async () => {
       const { service } = makeService();
       await service.onModuleInit();

@@ -375,9 +375,10 @@ model ExampleVersion {
 /// when a book is made, and a method that is in use cannot be deleted, only unpublished).
 model Methodology {
   slug            String   @id
-  /// Name and summary by interface language: { ru, kk, en } of { name, summary }.
+  /// Name, summary and source as parents read it, by interface language: { ru, kk, en, es, de } of
+  /// { name, summary, source? }.
   texts           Json
-  /// Where the method comes from.
+  /// Where the method comes from, in English: the story prompt names it.
   source          String
   ageMin          Int
   ageMax          Int

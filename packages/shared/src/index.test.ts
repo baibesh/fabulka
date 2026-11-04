@@ -36,6 +36,7 @@ import {
   CreateBookSchema,
   CreateMethodologySchema,
   DEFAULT_METHODOLOGIES,
+  LANGUAGES,
   JournalCallsQuerySchema,
   MethodologySlugSchema,
   UpdateMethodologySchema,
@@ -298,6 +299,16 @@ describe("methodologies", () => {
       expect(m.structure.length).toBeGreaterThanOrEqual(3);
       expect(MethodologySlugSchema.safeParse(m.slug).success).toBe(true);
       expect(CreateMethodologySchema.safeParse({ ...m, published: true, sortOrder: 0 }).success).toBe(true);
+      // The source as parents read it, in every language; the English one is the prompt's.
+      for (const lang of LANGUAGES) expect(m.texts[lang]?.source, `${m.slug} ${lang}`).toBeTruthy();
+      expect(m.texts.en?.source).toBe(m.source);
+    }
+  });
+
+  it("seeds sources without em dashes", () => {
+    const emDash = String.fromCharCode(0x2014);
+    for (const m of DEFAULT_METHODOLOGIES) {
+      for (const text of Object.values(m.texts)) expect(text?.source).not.toContain(emDash);
     }
   });
 
@@ -366,9 +377,23 @@ describe("methodologies", () => {
 
     it("reads a text in the asked language, else Russian, else English", () => {
       const all = { ru: texts("Спокойствие"), kk: { name: "", summary: "" }, en: texts("Calm") };
-      expect(methodologyText(all, "kk")).toEqual(texts("Спокойствие"));
-      expect(methodologyText(all, "en")).toEqual(texts("Calm"));
+      expect(methodologyText(all, "kk")).toEqual({ ...texts("Спокойствие"), source: "" });
+      expect(methodologyText(all, "en")).toEqual({ ...texts("Calm"), source: "" });
       expect(methodologyText({ en: texts("Calm") }, "kk").name).toBe("Calm");
+    });
+
+    it("reads the source in the asked language with the same fallbacks, empty when none has one", () => {
+      const all = {
+        ru: { ...texts("Спокойствие"), source: "Осознанность для детей" },
+        kk: { ...texts("Тыныштық"), source: "" },
+        en: { ...texts("Calm"), source: "Mindfulness for children" },
+        de: texts("Ruhe"),
+      };
+      expect(methodologyText(all, "ru").source).toBe("Осознанность для детей");
+      expect(methodologyText(all, "kk").source).toBe("Осознанность для детей");
+      expect(methodologyText(all, "de").source).toBe("Mindfulness for children");
+      expect(methodologyText({ ru: texts("Спокойствие") }, "ru").source).toBe("");
+      expect(problems({ ...input, texts: all })).toEqual([]);
     });
   });
 

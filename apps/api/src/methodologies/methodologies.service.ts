@@ -27,7 +27,7 @@ import {
   type MethodologyTexts,
   type UpdateMethodology,
 } from '@fabulka/shared';
-import { seedTextUpdates } from '../common/seed-texts';
+import { seedTextUpdates, type SeedTexts } from '../common/seed-texts';
 import { methodPrompt } from '../meta/prompts';
 import { PrismaService } from '../prisma/prisma.service';
 import { SEEDED_METHOD_TEXTS_V1 } from './seeded';
@@ -90,10 +90,11 @@ export class MethodologiesService implements OnModuleInit {
       const seed = seeds.get(row.slug);
       if (!seed) continue;
       const texts = { ...(row.texts as MethodologyTexts | null) };
+      const v1 = SEEDED_METHOD_TEXTS_V1[row.slug];
       const langs = seedTextUpdates(
         texts,
         seed.texts,
-        [SEEDED_METHOD_TEXTS_V1[row.slug]],
+        [v1, v1 && withSeedSources(v1, seed.texts)],
         (text) => {
           const t = text as MethodologyTexts[Language] | undefined;
           return !t?.name && !t?.summary;
@@ -293,6 +294,19 @@ export class MethodologiesService implements OnModuleInit {
 
 const texts = (row: MethodologyRow) => row.texts as unknown as MethodologyTexts;
 
+/**
+ * An older seed copy as migration z29_method_source_texts left it: each text with today's seed
+ * source added, so a text still otherwise equal to the copy counts as never edited.
+ */
+function withSeedSources(copy: SeedTexts, seed: MethodologyTexts): SeedTexts {
+  return Object.fromEntries(
+    Object.entries(copy).map(([lang, text]) => {
+      const source = seed[lang as Language]?.source;
+      return [lang, source ? { ...(text as object), source } : text];
+    }),
+  );
+}
+
 export function toData(row: MethodologyRow): MethodologyData {
   return {
     slug: row.slug,
@@ -308,14 +322,17 @@ export function toData(row: MethodologyRow): MethodologyData {
   };
 }
 
-/** In `lang`, each text falling back to Russian, then English (methodologyText). */
+/**
+ * In `lang`, each text falling back to Russian, then English (methodologyText); the source to the
+ * canonical one the prompt uses when no language has its own.
+ */
 function toPublic(row: MethodologyRow, lang: Language): Methodology {
-  const { name, summary } = methodologyText(texts(row), lang);
+  const { name, summary, source } = methodologyText(texts(row), lang);
   return {
     slug: row.slug,
     name,
     summary,
-    source: row.source,
+    source: source || row.source,
     ageMin: row.ageMin,
     ageMax: row.ageMax,
     format: row.format,
