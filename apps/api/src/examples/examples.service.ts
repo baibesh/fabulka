@@ -166,9 +166,12 @@ export class ExamplesService {
    * its languages, currency and prices, the examples and catalog samples per language (the
    * country's own sample or the global fallback), the landing's hero per language, and what is
    * missing (OVERVIEW_GAPS). For the session's countries, like the matrix; a code the site no longer
-   * offers is listed as not offered.
+   * offers is listed as not offered. `only` narrows to one country (a country workspace's Inbox).
    */
-  async overview(session: AdminAccess): Promise<CountryOverview[]> {
+  async overview(
+    session: AdminAccess,
+    only?: string | null,
+  ): Promise<CountryOverview[]> {
     const scope = listScope(
       session,
       'examples',
@@ -193,7 +196,8 @@ export class ExamplesService {
         },
       }),
     ]);
-    const codes = scope ?? [...offered.map((c) => c.code), OTHER_COUNTRY];
+    const all = scope ?? [...offered.map((c) => c.code), OTHER_COUNTRY];
+    const codes = only ? all.filter((code) => code === only) : all;
     const pricing = { ...reference, countries: offered };
     return codes.map((code): CountryOverview => {
       const other = code === OTHER_COUNTRY;

@@ -11,6 +11,8 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { resolve } from 'node:path';
 import { AdminAuthService } from './admin/admin-auth.service';
 import { AdminAuthController, AdminController } from './admin/admin.controller';
+import { InboxController } from './admin/inbox.controller';
+import { InboxService } from './admin/inbox.service';
 import { AdminService } from './admin/admin.service';
 import { AuditController } from './audit/audit.controller';
 import { AuditInterceptor } from './audit/audit.interceptor';
@@ -113,6 +115,7 @@ class HealthController {
     ToysController,
     AdminAuthController,
     AdminController,
+    InboxController,
     ExamplesAdminController,
     ReferencesController,
     TeamController,
@@ -144,6 +147,7 @@ class HealthController {
     ToyUploadsCleaner,
     AdminAuthService,
     AdminService,
+    InboxService,
     JournalAdminService,
     AuthService,
     StaffAccessService,

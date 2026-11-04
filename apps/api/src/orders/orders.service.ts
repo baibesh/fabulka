@@ -488,6 +488,33 @@ export class OrdersService implements OnModuleInit {
     return { path, name };
   }
 
+  /**
+   * How many orders are at each stage short of delivered, by the stage the parent sees (set by hand,
+   * else the demo timer's), in `countries` (null: every country), for the admin's Inbox.
+   */
+  async openStages(
+    countries: string[] | null,
+  ): Promise<Partial<Record<OrderStatus, number>>> {
+    if (countries && !countries.length) return {};
+    const rows = await this.prisma.order.findMany({
+      where: {
+        OR: [{ status: null }, { status: { not: 'delivered' } }],
+        ...(countries ? { country: { in: countries } } : {}),
+      },
+      select: { status: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 2000,
+    });
+    const counts: Partial<Record<OrderStatus, number>> = {};
+    for (const row of rows) {
+      const status =
+        (row.status as OrderStatus | null) ??
+        orderStatusAt(Date.now() - row.createdAt.getTime(), this.stageMs);
+      if (status !== 'delivered') counts[status] = (counts[status] ?? 0) + 1;
+    }
+    return counts;
+  }
+
   /** The stage the parent sees: set by hand, else where the demo timer is. */
   private statusOf(row: OrderRow): OrderStatus {
     return (

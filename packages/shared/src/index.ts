@@ -36,6 +36,7 @@ export * from "./audit";
 export * from "./references";
 export * from "./formats";
 export * from "./scenario";
+export * from "./inbox";
 
 /** Ages a book is written for (the form's picker, catalog books' ranges, the voice prefill). */
 export const CHILD_AGE_MIN = 2;
