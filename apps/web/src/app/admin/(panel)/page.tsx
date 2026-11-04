@@ -1,5 +1,5 @@
-import { Dashboard } from "@/components/admin/dashboard";
+import { InboxPage } from "@/components/admin/inbox-page";
 
-export default function AdminDashboardPage() {
-  return <Dashboard />;
+export default function AdminInboxPage() {
+  return <InboxPage />;
 }

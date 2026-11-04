@@ -32,13 +32,16 @@ export function VisitorMatrixPage() {
   const matrix = useQuery({ queryKey: ["admin", "visitor-matrix"], queryFn: visitorMatrix });
   const overview = useQuery({ queryKey: ["admin", "countries-overview"], queryFn: countriesOverview });
   const byCountry = new Map(overview.data?.map((row) => [row.country, row]));
+  // In a country's workspace this is "Preview as visitor": that country only.
+  const rows = country ? matrix.data?.filter((row) => row.country === country) : matrix.data;
+  const cards = country ? overview.data?.filter((row) => row.country === country) : overview.data;
 
   return (
     <>
-      <BackLink href={adminHref("/admin/examples")}>{t("admin.matrix.back")}</BackLink>
-      <PageTitle>{t("admin.matrix.title")}</PageTitle>
-      <p className="max-w-3xl text-sm text-muted">{t("admin.matrix.lead")}</p>
-      {!matrix.data ? (
+      {!country && <BackLink href={adminHref("/admin/examples")}>{t("admin.matrix.back")}</BackLink>}
+      <PageTitle>{country ? t("admin.ws.nav.preview") : t("admin.matrix.title")}</PageTitle>
+      <p className="max-w-3xl text-sm text-muted">{country ? t("admin.ws.preview.lead") : t("admin.matrix.lead")}</p>
+      {!rows ? (
         <QueryState error={matrix.error} scope="admin" />
       ) : (
         <TableFrame>
@@ -52,7 +55,7 @@ export function VisitorMatrixPage() {
               </tr>
             </thead>
             <tbody>
-              {matrix.data.map((row) => {
+              {rows.map((row) => {
                 const info = byCountry.get(row.country);
                 return (
                   <tr
@@ -102,11 +105,11 @@ export function VisitorMatrixPage() {
       )}
       <h2 className="mt-4 text-xl font-extrabold">{t("admin.overview.title")}</h2>
       <p className="max-w-3xl text-sm text-muted">{t("admin.overview.lead")}</p>
-      {!overview.data ? (
+      {!cards ? (
         <QueryState error={overview.error} scope="admin" />
       ) : (
         <div data-testid="countries-overview" className="flex flex-col gap-3">
-          {overview.data.map((row) => (
+          {cards.map((row) => (
             <OverviewCard key={row.country} row={row} open={row.country === country} />
           ))}
         </div>

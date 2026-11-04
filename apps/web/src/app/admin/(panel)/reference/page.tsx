@@ -1,5 +1,5 @@
-import { ReferencePage } from "@/components/admin/reference/reference-page";
+import { ReferenceRedirect } from "@/components/admin/reference/pages";
 
 export default function AdminReferencePage() {
-  return <ReferencePage />;
+  return <ReferenceRedirect />;
 }

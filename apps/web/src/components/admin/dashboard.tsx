@@ -1,14 +1,14 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { covers, isSuperAdmin, type AdminStats, type CountrySpend, type Revenue } from "@fabulka/shared";
-import { Grid3x3, Pause, Play } from "lucide-react";
+import { Grid3x3 } from "lucide-react";
 import Link from "next/link";
-import { adminCountryStats, adminMe, adminStats, setPaused } from "@/lib/admin-api";
+import { adminCountryStats, adminMe, adminStats } from "@/lib/admin-api";
 import { intlLocale } from "@/i18n/format";
 import { Card, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
 import { QueryState } from "@/components/ui/query-state";
-import { Button, buttonClass } from "@/components/ui/button";
+import { buttonClass } from "@/components/ui/button";
 import { Stat } from "@/components/ui/stat";
 import { useCountryName } from "@/hooks/use-country-name";
 import { useAdminHref, useWorkingCountry } from "./working-country";
@@ -119,7 +119,7 @@ function CountryDashboard() {
   const names = (country ? [country] : options).map((code) => countryName(code)).join(", ");
   return (
     <>
-      <PageTitle>{t("admin.dashboard.title")}</PageTitle>
+      <PageTitle>{t("admin.ws.nav.overview")}</PageTitle>
       <p data-testid="country-dashboard" data-countries={s.countries.join(" ")} className="text-sm text-muted">
         {t("admin.dashboard.scoped", { countries: names })}
       </p>
@@ -162,13 +162,8 @@ function CountryDashboard() {
 function GlobalDashboard() {
   const adminHref = useAdminHref();
   const { t, locale, number, money, percent } = useAdminI18n();
-  const queryClient = useQueryClient();
   const stats = useQuery({ queryKey: ["admin", "stats"], queryFn: adminStats, refetchInterval: 10_000 });
   const me = useQuery({ queryKey: ["admin", "me"], queryFn: adminMe, retry: false });
-  const pause = useMutation({
-    mutationFn: setPaused,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin", "stats"] }),
-  });
 
   if (!stats.data) return <QueryState error={stats.error} scope="admin" />;
   const s: AdminStats = stats.data;
@@ -189,32 +184,9 @@ function GlobalDashboard() {
           )
         }
       >
-        {t("admin.dashboard.title")}
+        {t("admin.ws.nav.overview")}
       </PageTitle>
 
-      <section
-        data-testid="pause-card"
-        data-paused={s.paused}
-        className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-5 ${
-          s.paused ? "border-danger/40 bg-danger/10" : "border-border bg-card"
-        }`}
-      >
-        <div>
-          <p className="font-bold">{s.paused ? t("admin.dashboard.paused") : t("admin.dashboard.running")}</p>
-          <p className="text-sm text-muted">
-            {s.paused ? t("admin.dashboard.paused.text") : t("admin.dashboard.running.text")}
-          </p>
-        </div>
-        <Button
-          variant={s.paused ? "success" : "danger"}
-          data-testid="pause-toggle"
-          loading={pause.isPending}
-          icon={s.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
-          onClick={() => pause.mutate(!s.paused)}
-        >
-          {s.paused ? t("admin.dashboard.resume") : t("admin.dashboard.pause")}
-        </Button>
-      </section>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat

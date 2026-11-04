@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ORDER_STATUSES, type OrderStatus } from "@fabulka/shared";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Fragment, useState } from "react";
 import { adminOrders, setOrderStatus } from "@/lib/admin-api";
 import { PageTitle, useAdminI18n } from "./ui";
@@ -14,12 +15,22 @@ import { Input, Select } from "@/components/ui/input";
 import { Flag } from "@/components/ui/flag";
 import { useAdminHref, useWorkingCountry } from "./working-country";
 
+/** The list's filter: every order, a stage, or "open" (not delivered yet, what the Inbox links to). */
+type Filter = OrderStatus | "open" | "";
+
+/** `?status=` and `?order=` come from the Inbox and the command palette: a filter, and one order's history opened. */
+function initialFilter(value: string | null): Filter {
+  return value === "open" || (ORDER_STATUSES as readonly string[]).includes(value ?? "") ? (value as Filter) : "";
+}
+
 export function OrdersTable() {
   const adminHref = useAdminHref();
   const { t, date, money, orderStatus } = useAdminI18n();
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<OrderStatus | "">("");
-  const [open, setOpen] = useState<string | null>(null);
+  const params = useSearchParams();
+  const [filter, setFilter] = useState<Filter>(() => initialFilter(params.get("status")));
+  const [open, setOpen] = useState<string | null>(() => params.get("order"));
+  const focus = params.get("order");
   // A status picked but not saved yet, with the note for the parent typed under it.
   const [change, setChange] = useState<{ id: string; status: OrderStatus; note: string } | null>(null);
   // The working country's orders (a manager's countries' only: the API limits them anyway).
@@ -38,8 +49,9 @@ export function OrdersTable() {
     <>
       <PageTitle
         aside={
-          <Select data-testid="orders-filter" aria-label={t("admin.orders.status")} className="w-48" value={filter} onChange={(e) => setFilter(e.target.value as OrderStatus | "")}>
+          <Select data-testid="orders-filter" aria-label={t("admin.orders.status")} className="w-48" value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
             <option value="">{t("admin.allStatuses")}</option>
+            <option value="open">{t("admin.orders.open")}</option>
             {ORDER_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {orderStatus(s)}
@@ -65,9 +77,9 @@ export function OrdersTable() {
             </tr>
           </thead>
           <tbody>
-            {orders.data?.filter((o) => !filter || o.status === filter).map((order) => (
+            {orders.data?.filter((o) => (focus ? o.id === focus : !filter || (filter === "open" ? o.status !== "delivered" : o.status === filter))).map((order) => (
               <Fragment key={order.id}>
-                <tr data-testid="order-row" data-country={order.country ?? ""}>
+                <tr data-testid="order-row" data-country={order.country ?? ""} data-id={order.id} data-status={order.status}>
                   <td>
                     {books ? (
                       <Link href={adminHref(`/admin/books/${order.bookId}`)} className="font-semibold hover:text-accent">

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { BOOK_STATUSES, type BookStatus } from "@fabulka/shared";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { adminBooks } from "@/lib/admin-api";
 import { BOOK_STATUS_TONE, formatSpendUsd, PageTitle, useAdminI18n } from "./ui";
@@ -16,7 +17,12 @@ import { useAdminHref } from "./working-country";
 export function BooksTable() {
   const adminHref = useAdminHref();
   const { t, date, bookStatus } = useAdminI18n();
-  const [status, setStatus] = useState<BookStatus | "">("");
+  // `?status=failed` comes from the Inbox.
+  const params = useSearchParams();
+  const [status, setStatus] = useState<BookStatus | "">(() => {
+    const asked = params.get("status");
+    return (BOOK_STATUSES as readonly string[]).includes(asked ?? "") ? (asked as BookStatus) : "";
+  });
   const [query, setQuery] = useState("");
   const books = useQuery({ queryKey: ["admin", "books", status], queryFn: () => adminBooks(status || undefined), refetchInterval: 5000 });
   const methodName = useMethodologyName();

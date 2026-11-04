@@ -124,8 +124,20 @@ import {
   type LandingImageSlot,
   type LandingImageUpload,
 } from "@fabulka/shared";
+import { AdminSearchSchema, InboxSchema, type AdminSearch, type Inbox } from "@fabulka/shared";
 import { z } from "zod";
 import { request } from "./api";
+
+/** The workspace's Inbox: the global one (country null) or a country's. */
+export async function adminInbox(country: string | null): Promise<Inbox> {
+  const query = country ? `?country=${encodeURIComponent(country)}` : "";
+  return InboxSchema.parse(await request(`/api/admin/inbox${query}`));
+}
+
+/** The command palette's search: books by title, child's name or id; orders by number. */
+export async function adminSearch(q: string): Promise<AdminSearch> {
+  return AdminSearchSchema.parse(await request(`/api/admin/search?${new URLSearchParams({ q })}`));
+}
 
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
 

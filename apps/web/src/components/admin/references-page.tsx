@@ -17,6 +17,7 @@ import {
 } from "@fabulka/shared";
 import { ArrowDown, ArrowUp, Check, ImagePlus, RotateCcw, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button, IconButton } from "@/components/ui/button";
@@ -59,7 +60,9 @@ function useReferenceError() {
 export function ReferencesPage() {
   const { t } = useAdminI18n();
   const tabs = useTabsId();
-  const [tab, setTab] = useState<Tab>("pictures");
+  // `?tab=flags` comes from the Inbox.
+  const asked = useSearchParams().get("tab");
+  const [tab, setTab] = useState<Tab>(asked === "flags" ? "flags" : "pictures");
   const canEdit = useCan("references");
   const shown = canEdit ? TABS : (["flags"] as const);
   const current = shown.includes(tab as never) ? tab : shown[0];

@@ -2,23 +2,34 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { accessFromMe, allowed, type AdminAccess, type AdminMe, type AdminRight } from "@fabulka/shared";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { adminReference } from "@/lib/admin-api";
 import { ALL, COUNTRY_PARAM, resolveWorkingCountry, withCountry } from "@/lib/admin-country";
+import { switchTarget, workspaceOf } from "@/lib/admin-workspace";
 import { useCountryName } from "@/hooks/use-country-name";
-import { Select } from "@/components/ui/input";
 import { QUERY as REFERENCE_QUERY } from "./reference/shared";
-import { useNotOffered } from "./not-offered";
 import { useAdminI18n } from "./ui";
 
 /** Where this browser remembers the last pick: only the default for a visit whose address has no country. */
 const STORAGE_KEY = "fabulka.admin.country";
 
 /** The rights whose lists follow the working country. */
-const COUNTRY_RIGHTS: readonly AdminRight[] = ["orders", "examples", "catalog", "reference", "reference.prices", "reference.landing", "audit", "dashboard"];
+const COUNTRY_RIGHTS: readonly AdminRight[] = [
+  "orders",
+  "examples",
+  "catalog",
+  "reference",
+  "reference.prices",
+  "reference.landing",
+  "reference.cities",
+  "reference.delivery",
+  "reference.formats_country",
+  "audit",
+  "dashboard",
+];
 
 /** A country in the address the session may not open, and what is shown instead. */
 interface Refusal {
@@ -38,6 +49,7 @@ export interface WorkingCountry {
   me: AdminMe;
   /** The admin's sections follow a working country (the switcher is shown). */
   follows: boolean;
+  /** Switches the workspace: Global (null) or a country; the page stays when that workspace has it, else its Inbox. */
   setCountry: (country: string | null) => void;
   /** An admin link that keeps the working country: `/admin/orders` → `/admin/orders?country=DE`. */
   href: (path: string) => string;
@@ -82,6 +94,7 @@ function store(value: string) {
  */
 export function WorkingCountryProvider({ me, children }: { me: AdminMe; children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const params = useSearchParams();
   const allowAll = me.superadmin || me.countries.length === 0;
   const follows = me.rights.some((right) => COUNTRY_RIGHTS.includes(right));
@@ -97,7 +110,9 @@ export function WorkingCountryProvider({ me, children }: { me: AdminMe; children
 
   // The server render knows nothing of this browser: the remembered pick is read once hydrated.
   const hydrated = useHydrated();
-  const raw = params.get(COUNTRY_PARAM);
+  // A page of Global's alone (books, Studio, SEO, Team, Settings) is in the global workspace.
+  const address = params.get(COUNTRY_PARAM);
+  const raw = allowAll && workspaceOf(pathname) === "global" ? ALL : address;
   const resolved = resolveWorkingCountry(raw, { options, allowAll, loaded }, lastInTab ?? (hydrated ? readStored() : null));
   const current = `${pathname}${params.size ? `?${params}` : ""}`;
 
@@ -108,7 +123,7 @@ export function WorkingCountryProvider({ me, children }: { me: AdminMe; children
   }
 
   // Fill in or correct the address; remember what this tab works in.
-  const target = follows && resolved.settled && raw !== resolved.param ? withCountry(current, resolved.param) : null;
+  const target = follows && resolved.settled && address !== resolved.param ? withCountry(current, resolved.param) : null;
   useEffect(() => {
     if (target) window.history.replaceState(null, "", target);
   }, [target]);
@@ -129,7 +144,10 @@ export function WorkingCountryProvider({ me, children }: { me: AdminMe; children
       store(v);
       lastInTab = v;
       setRefusal(null);
-      window.history.pushState(null, "", withCountry(current, v));
+      const path = switchTarget(access, pathname, next);
+      // The same page keeps its state (filters, an open tab); another one is a navigation.
+      if (path === pathname) window.history.pushState(null, "", withCountry(current, v));
+      else router.push(withCountry(path, v));
     },
     href: (path) => withCountry(path, param),
     refusal: refusal && refusal.shown === param ? refusal : null,
@@ -143,34 +161,6 @@ export function useWorkingCountry(): WorkingCountry {
   const value = useContext(Context);
   if (!value) throw new Error("useWorkingCountry outside WorkingCountryProvider");
   return value;
-}
-
-/** The header's switcher; hidden for staff whose sections do not depend on a country. */
-export function WorkingCountrySwitcher({ className }: { className?: string }) {
-  const { t } = useAdminI18n();
-  const countryName = useCountryName("admin");
-  const { country, options, allowAll, follows, setCountry } = useWorkingCountry();
-  const notOffered = useNotOffered();
-  if (!follows) return null;
-  if (!options.length && !allowAll) return null;
-  return (
-    <Select
-      data-testid="admin-country"
-      data-value={country ?? ALL}
-      data-loaded={options.length > 0 ? "true" : "false"}
-      aria-label={t("admin.country.label")}
-      className={className}
-      value={country ?? ALL}
-      onChange={(e) => setCountry(e.target.value === ALL ? null : e.target.value)}
-    >
-      {allowAll && <option value={ALL}>{t("admin.country.all")}</option>}
-      {options.map((code) => (
-        <option key={code} value={code}>
-          {notOffered(code) ? `${countryName(code)} · ${t("admin.country.notOffered")}` : countryName(code)}
-        </option>
-      ))}
-    </Select>
-  );
 }
 
 /** The address asked for a country the session may not open: what was asked, and what is shown. */
