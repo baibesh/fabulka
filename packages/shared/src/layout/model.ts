@@ -83,6 +83,19 @@ export const ThemePaletteSchema = z.object({
 });
 
 /**
+ * How text printed over a picture (overlay-top, overlay-bottom and spread) is set off from it.
+ * - plate: a soft panel of the theme's plate color behind the text, hugging it, with a light shadow;
+ * - fade: the paper color rising from the page edge behind the text and fading into the picture;
+ * - none: the text straight on the picture in a thin halo (how books were printed before this);
+ * - avoid: layouts with the text beside the picture come first (split is added when the theme has
+ *   none); text that still lands on a picture gets the plate.
+ * Each draws outside the text box, never inside it, so render QA measures the text as before.
+ */
+export const OVERLAY_STYLES = ["plate", "fade", "none", "avoid"] as const;
+export const OverlayStyleSchema = z.enum(OVERLAY_STYLES);
+export type OverlayStyle = z.infer<typeof OverlayStyleSchema>;
+
+/**
  * A curated look: fonts, sizes by age, colors, the page layouts it uses and its cover. Not a free
  * editor: themes live in code (and later come from Muse Spark, checked and approved by staff).
  */
@@ -105,6 +118,11 @@ export const BookThemeSchema = z.object({
   minContrast: z.number().min(1),
   palette: ThemePaletteSchema,
   variants: z.array(PageVariantSchema).min(1),
+  /**
+   * How text over a picture is set off from it (OVERLAY_STYLES). Left out: "none" - a book keeps the
+   * copy of its theme, and the ones made before this setting keep their look; themes have "plate".
+   */
+  overlayStyle: OverlayStyleSchema.default("none"),
   /** Where pictures are asked to leave calm space for text. */
   textSpace: z.enum(["top", "bottom"]).nullable(),
   cover: z.enum(["framed", "scene"]),

@@ -11,6 +11,7 @@ import {
   MIN_LARGE_CONTRAST,
   MIN_TEXT_CONTRAST,
   ORNAMENTS,
+  OVERLAY_STYLES,
   PAGE_VARIANTS,
   PALETTE_ROLES,
   PRESET_GRIDS,
@@ -28,6 +29,7 @@ import {
   layoutPanels,
   luminance,
   newLayout,
+  preferredVariants,
   quickChecks,
   type AdminTheme,
   type AgeGroup,
@@ -560,6 +562,16 @@ function LayoutCard({ edit, set }: Section) {
           ))}
         </fieldset>
       </div>
+      <fieldset data-testid="theme-overlay" data-style={edit.overlayStyle} className="flex flex-col gap-1.5">
+        <legend className="mb-1 text-sm font-semibold">{t("admin.themeEditor.overlay")}</legend>
+        {OVERLAY_STYLES.map((style) => (
+          <ChoiceLabel key={style}>
+            <Radio name="overlayStyle" data-testid={`theme-overlay-${style}`} checked={edit.overlayStyle === style} onChange={() => set({ overlayStyle: style })} />
+            {t(`admin.themeEditor.overlay.${style}`)}
+          </ChoiceLabel>
+        ))}
+        <p className="text-xs text-muted">{t("admin.themeEditor.overlay.hint")}</p>
+      </fieldset>
     </Card>
   );
 }
@@ -719,7 +731,9 @@ function ThemePreview({ theme }: { theme: BookTheme }) {
   const [language, setLanguage] = useState<Language>(locale);
   const [group, setGroup] = useState<AgeGroup>("middle");
   const [picked, setPicked] = useState<PageVariant | null>(null);
-  const variant = picked && (theme.variants.includes(picked) || picked === "plate") ? picked : theme.variants[0];
+  // The layouts in the order the chooser tries them ("avoid" puts the ones beside the picture first).
+  const variants = useMemo(() => preferredVariants(theme), [theme]);
+  const variant = picked && (variants.includes(picked) || picked === "plate") ? picked : variants[0];
   const book = useMemo(() => previewBook(theme, language, group, variant), [theme, language, group, variant]);
   const rendered = useRenderedBook(book);
   const { widthMm, heightMm } = book.layout.format;
@@ -762,7 +776,7 @@ function ThemePreview({ theme }: { theme: BookTheme }) {
         </Field>
         <Field label={t("admin.themeEditor.preview.variant")} className="min-w-48 flex-1">
           <Select data-testid="theme-preview-variant" value={variant} onChange={(e) => setPicked(e.target.value as PageVariant)}>
-            {[...theme.variants, ...(theme.variants.includes("plate") ? [] : (["plate"] as const))].map((v) => (
+            {[...variants, ...(variants.includes("plate") ? [] : (["plate"] as const))].map((v) => (
               <option key={v} value={v}>
                 {t(`admin.themeEditor.variant.${v}`)}
               </option>

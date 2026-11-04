@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LANGUAGES, type Language } from "../language";
-import { BookThemeSchema, FontRefSchema, ORNAMENTS, PageVariantSchema, TypeScaleSchema, type BookTheme } from "./model";
+import { BookThemeSchema, FontRefSchema, ORNAMENTS, OverlayStyleSchema, PageVariantSchema, TypeScaleSchema, type BookTheme } from "./model";
 import { ThemeCheckSchema, checkContrast, checkFonts, checkSizes, type ProposedTheme, type ThemeCheck } from "./theme-checks";
 import { BOOK_THEMES } from "./themes";
 
@@ -26,6 +26,8 @@ export const ThemeEditSchema = z.object({
     .min(1)
     .max(6)
     .refine((v) => new Set(v).size === v.length, "Each layout once"),
+  /** How text over a picture is set off from it; an editor that does not send it gets the plate. */
+  overlayStyle: OverlayStyleSchema.default("plate"),
   textSpace: z.enum(["top", "bottom"]).nullable(),
   cover: z.enum(["framed", "scene"]),
   ornament: z.enum(ORNAMENTS),
@@ -85,6 +87,7 @@ export function editOf(theme: BookTheme): ThemeEdit {
     palette: { ...theme.palette },
     sizes: structuredClone(theme.sizes),
     variants: [...theme.variants],
+    overlayStyle: theme.overlayStyle ?? "none",
     textSpace: theme.textSpace,
     cover: theme.cover,
     ornament: theme.ornament,
@@ -107,6 +110,7 @@ export function applyEdit(base: BookTheme, edit: ThemeEdit): BookTheme {
     palette: { ...edit.palette },
     sizes: structuredClone(edit.sizes),
     variants: [...edit.variants],
+    overlayStyle: edit.overlayStyle,
     textSpace: edit.textSpace,
     cover: edit.cover,
     ornament: edit.ornament,

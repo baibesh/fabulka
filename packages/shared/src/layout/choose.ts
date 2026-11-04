@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { BookLayout, BookTheme, Focus, PageLayout, PageVariant } from "./model";
-import { type Rect, artRect, textRect } from "./plan";
+import { type Rect, artRect, preferredVariants, textRect } from "./plan";
 import { blankPage, formatTypeScale } from "./themes";
 
 /**
@@ -214,7 +214,8 @@ export function judgePage(layout: BookLayout, page: PageAnalysis): Partial<PageL
     };
   }
 
-  for (const variant of [...theme.variants, "plate" as const]) {
+  const tried = [...preferredVariants(theme), "plate" as const];
+  for (const variant of tried) {
     const art = artRect(variant, format);
     let verdict: Verdict;
     const share = visibleShare(aspect, art.w / art.h);
@@ -250,7 +251,7 @@ export function judgePage(layout: BookLayout, page: PageAnalysis): Partial<PageL
     verdicts[variant] = verdict;
     ink[variant] = verdict.ink;
   }
-  const options = [...theme.variants, "plate" as const].filter((v, i, all) => all.indexOf(v) === i && (v === "plate" || verdicts[v]?.ok));
+  const options = tried.filter((v, i, all) => all.indexOf(v) === i && (v === "plate" || verdicts[v]?.ok));
   return { options, focus, aspect, ink, spreadSide, plateBand, noArt: false, verdicts };
 }
 
