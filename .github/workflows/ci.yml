@@ -3,7 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+    # Text and video changes need no build or tests.
+    paths-ignore: ['**.md', 'docs/**', 'video/**']
   pull_request:
+    paths-ignore: ['**.md', 'docs/**', 'video/**']
   # Run by hand when GitHub drops a push event.
   workflow_dispatch:
 
