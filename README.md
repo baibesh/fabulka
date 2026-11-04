@@ -133,7 +133,27 @@ for canned output, so tests and CI never call the API.
 - `packages/shared`: zod schemas, layout engine and types shared by web and API
 - `e2e`: tapstep flows: UI, HTTP and SQL checks in one YAML
 
-## Run locally
+## Run with Docker (one command)
+
+Needs only Docker. Builds the API and the web app from this repository, with Postgres:
+
+```bash
+docker compose -f deploy/docker-compose.local.yml up --build
+```
+
+Then open http://localhost:3000. The first build takes a few minutes; the catalog, methods and
+formats fill in on the first start.
+
+- **Models:** every model call is a canned mock by default: free, no key, a book in about 30 s. For
+  the real Meta models: `MODELS=meta MODEL_API_KEY=... docker compose -f deploy/docker-compose.local.yml up --build`
+  (the Meta Model API answers only in the regions Meta has enabled).
+- **Admin:** http://localhost:3000/admin, with the local e-mail and password written in
+  `deploy/docker-compose.local.yml`. The Pipeline page, the trace of every book and the studio are there.
+- **Not in the local stack:** parent sign-in (Keycloak), so the child's-photo path is off here; books are
+  made by description, as on the live site without signing in.
+- **Clean up:** `docker compose -f deploy/docker-compose.local.yml down -v`
+
+## Run locally (without Docker)
 
 Needs Node 22+, pnpm and Postgres.
 
