@@ -51,7 +51,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "e2e-admin-password"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
 
   # The journal: the summary, the story calls, one call's details.
   - tapOn: { testId: admin-nav-journal }

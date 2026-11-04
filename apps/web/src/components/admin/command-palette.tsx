@@ -82,11 +82,22 @@ function matches(item: Item, words: string[]): boolean {
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const { t } = useAdminI18n();
+  // Each opening starts afresh (a new body), but closing leaves the body in the closed dialog: the
+  // focused combobox and its active option are not torn out from under the browser as it closes.
+  const [session, setSession] = useState(0);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) setSession((n) => n + 1);
+  }
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      dialog.querySelector<HTMLInputElement>("[role=combobox]")?.focus();
+    }
     else if (!open && dialog.open) dialog.close();
   }, [open]);
 
@@ -101,12 +112,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       }}
       className="mx-auto mt-[12vh] w-[calc(100%-2rem)] max-w-xl overflow-hidden rounded-2xl border border-border bg-card p-0 text-foreground shadow-2xl backdrop:bg-black/40 backdrop:backdrop-blur-sm"
     >
-      {open && <PaletteBody onClose={onClose} />}
+      {session > 0 && <PaletteBody key={session} open={open} onClose={onClose} />}
     </dialog>
   );
 }
 
-function PaletteBody({ onClose }: { onClose: () => void }) {
+function PaletteBody({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const { t, locale } = useAdminI18n();
   const workspaceName = useWorkspaceName();
@@ -117,11 +128,11 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const deferred = useDeferredValue(query.trim());
 
   const can = (...rights: AdminRight[]) => rights.some((right) => allowedFor(access, right, null));
-  const methods = useQuery({ queryKey: ["admin", "methodologies"], queryFn: adminMethodologies, enabled: can("methodologies", "methodologies.read") });
-  const formats = useQuery({ queryKey: ["admin", "story-formats"], queryFn: adminStoryFormats, enabled: can("story_formats", "story_formats.read") });
-  const themes = useQuery({ queryKey: ["admin", "themes"], queryFn: adminThemes, enabled: can("themes", "themes.read") });
+  const methods = useQuery({ queryKey: ["admin", "methodologies"], queryFn: adminMethodologies, enabled: open && can("methodologies", "methodologies.read") });
+  const formats = useQuery({ queryKey: ["admin", "story-formats"], queryFn: adminStoryFormats, enabled: open && can("story_formats", "story_formats.read") });
+  const themes = useQuery({ queryKey: ["admin", "themes"], queryFn: adminThemes, enabled: open && can("themes", "themes.read") });
   const searchable = deferred.length >= 2 && allowed(access, ["books", "books.review", "orders"]);
-  const found = useQuery({ queryKey: ["admin", "search", deferred], queryFn: () => adminSearch(deferred), enabled: searchable, staleTime: 10_000 });
+  const found = useQuery({ queryKey: ["admin", "search", deferred], queryFn: () => adminSearch(deferred), enabled: open && searchable, staleTime: 10_000 });
 
   const items = useMemo(() => {
     const go = (href: string, param: string | null) => () => {
@@ -249,9 +260,9 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
 
   // The active option stays in view while the arrows move.
   useEffect(() => {
-    document.getElementById(optionId(index))?.scrollIntoView({ block: "nearest" });
+    if (open) document.getElementById(optionId(index))?.scrollIntoView({ block: "nearest" });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- optionId is derived from listId
-  }, [index, listId]);
+  }, [index, listId, open]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -278,14 +289,12 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
         <input
           data-testid="palette-input"
           role="combobox"
-          aria-expanded="true"
+          aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
-          aria-activedescendant={flat.length ? optionId(index) : undefined}
+          aria-activedescendant={open && flat.length ? optionId(index) : undefined}
           aria-label={t("admin.palette.title")}
           placeholder={t("admin.palette.placeholder")}
-          // The palette opens to type into at once.
-          autoFocus
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -303,8 +312,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           </p>
         )}
         {shown.map((group, g) => (
-          <div key={group.kind} role="group" aria-labelledby={`${listId}-${group.kind}`} className="pb-1">
-            <p id={`${listId}-${group.kind}`} role="presentation" className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-widest text-muted">
+          <div key={group.kind} role="group" aria-label={t(group.label)} className="pb-1">
+            <p aria-hidden className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-widest text-muted">
               {t(group.label)}
             </p>
             {group.items.map((item, n) => {

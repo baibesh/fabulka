@@ -1,0 +1,157 @@
+# The admin's command palette (Ctrl+K, Cmd+K on a Mac): keyboard first, it jumps to a section, a
+# settings tab, another workspace, a book by its child's name and an order by its number. A German
+# country manager's palette offers Germany's only: no Global sections, no other country, no
+# Kazakh order.
+appId: ${WEB}
+tags: [admin, workspaces]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  stamp: "${Date.now()}"
+  childName: "Palette${stamp}"
+  cmEmail: "cm-pal+${stamp}@e2e.test"
+  cmId: "e2e-cm-pal-${stamp}"
+  # The test-only admin account from e2e/start-stack.sh (the emergency sign-in: a superadmin).
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+  headers:
+    X-Client-Key: "e2e-palette-${stamp}"
+    X-Demo-Code: E2E-DEMO
+before:
+  - sql:
+      exec: "insert into \"StaffMember\" (id, email, name, status, roles, countries, \"updatedAt\") values ($1, $2, 'Lena Palette', 'active', '{country_manager}', '{DE}', now())"
+      params: ["${cmId}", "${cmEmail}"]
+commands:
+  # A finished book (mock models) and two orders of it: one from Germany, one from Kazakhstan.
+  - request:
+      method: POST
+      url: /books
+      json:
+        child: { name: "${childName}", age: 5, gender: girl, interests: [Züge], city: Berlin, language: de }
+      extract: { bookId: "$.id" }
+      assert: { status: 201 }
+  - request: { url: "/books/${bookId}", retryUntil: { status: 200, json: { "$.status": done } }, timeout: 30000 }
+  - sql:
+      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, currency, \"itemsAmount\", \"deliveryAmount\", \"totalAmount\", \"clientKey\", country, status) values ($1, $2, 'Lena', '+49301234567', 'l@e2e.test', 'Berlin', 'Str. 1', 'soft', 1, 'EUR', 2000, 0, 2000, 'e2e-palette', 'DE', 'paid')"
+      params: ["palde${stamp}", "${bookId}"]
+  - sql:
+      exec: "insert into \"Order\" (id, \"bookId\", \"recipientName\", phone, email, city, address, cover, quantity, currency, \"itemsAmount\", \"deliveryAmount\", \"totalAmount\", \"clientKey\", country, status) values ($1, $2, 'Aigerim', '+77010000000', 'a@e2e.test', 'Алматы', 'ул. Абая, 1', 'soft', 1, 'KZT', 990000, 0, 990000, 'e2e-palette', 'KZ', 'paid')"
+      params: ["palkz${stamp}", "${bookId}"]
+
+  # ---- The superadmin -----------------------------------------------------------------------------
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-email }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=all]", timeout: 15000 }
+
+  # A settings tab by name, with the keyboard only.
+  - pressKey: ctrl+k
+  - waitForVisible: { testId: palette-input }
+  - assertVisible: { css: "[data-testid=palette-input][aria-expanded=true]" }
+  - inputText: "exchange"
+  - waitForVisible: { css: "[data-testid=palette-option][data-kind=setting][data-id=fx][aria-selected=true]" }
+  - pressKey: enter
+  - waitForVisible: { testId: reference-fx, timeout: 15000 }
+  - assertUrl: { contains: "/admin/settings?tab=fx" }
+  - assertNotVisible: { testId: palette-input }
+
+  # Another workspace: Germany, by typing part of its name. (Each use starts on a freshly loaded
+  # page: see e2e/TAPSTEP_NOTES.md, note 16.)
+  - openLink: "${WEB}/admin?country=all"
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=all]", timeout: 15000 }
+  - pressKey: ctrl+k
+  - waitForVisible: { testId: palette-input }
+  - inputText: "germ"
+  - waitForVisible: { css: "[data-testid=palette-option][data-kind=workspace][data-id=DE]" }
+  - pressKey: enter
+  - waitForVisible: { css: "[data-testid=workspace-switcher][data-value=DE]", timeout: 15000 }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=DE]" }
+
+  # A section of Germany's: its cities.
+  - openLink: "${WEB}/admin?country=DE"
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=DE]", timeout: 15000 }
+  - pressKey: ctrl+k
+  - waitForVisible: { testId: palette-input }
+  - inputText: "cities"
+  - waitForVisible: { css: "[data-testid=palette-option][data-kind=section][data-id=cities][aria-selected=true]" }
+  - pressKey: enter
+  - waitForVisible: { css: "[data-testid=reference-cities][data-country=DE]", timeout: 15000 }
+  - assertUrl: { contains: "/admin/cities?country=DE" }
+
+  # A book by its child's name (the search runs in the API): the book's page, in Global.
+  - openLink: "${WEB}/admin?country=DE"
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=DE]", timeout: 15000 }
+  - pressKey: ctrl+k
+  - waitForVisible: { testId: palette-input }
+  - inputText: "${childName}"
+  - waitForVisible: { css: "[data-testid=palette-option][data-kind=book][data-id='${bookId}']", timeout: 15000 }
+  - pressKey: enter
+  - assertUrl: { contains: "/admin/books/${bookId}" }
+  - waitForVisible: { css: "[data-testid=workspace-switcher][data-value=all]", timeout: 15000 }
+
+  # An order by its number: Germany's order, opened in the orders list.
+  - openLink: "${WEB}/admin?country=all"
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=all]", timeout: 15000 }
+  - pressKey: ctrl+k
+  - waitForVisible: { testId: palette-input }
+  - inputText: "palde${stamp}"
+  - waitForVisible: { css: "[data-testid=palette-option][data-kind=order][data-id='palde${stamp}']", timeout: 15000 }
+  - assertNotVisible: { css: "[data-testid=palette-option][data-kind=order][data-id='palkz${stamp}']" }
+  - pressKey: enter
+  - waitForVisible: { css: "[data-testid=order-row][data-id='palde${stamp}']", timeout: 15000 }
+  - assertVisible: { testId: order-history }
+  - assertUrl: { contains: "order=palde${stamp}" }
+
+  # The button opens it too; a press outside closes it without going anywhere.
+  - tapOn: { testId: palette-open }
+  - waitForVisible: { testId: palette-input }
+  - tapOn: { point: "5%, 95%" }
+  - assertNotVisible: { testId: palette-input }
+  - assertVisible: { css: "[data-testid=order-row][data-id='palde${stamp}']" }
+
+  # ---- A German country manager -------------------------------------------------------------------
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login-keycloak }
+  - tapOn: { testId: admin-login-keycloak }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${cmEmail}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=DE]", timeout: 15000 }
+  - pressKey: ctrl+k
+  - waitForVisible: { testId: palette-input }
+  # With nothing typed: Germany's sections and Germany as the only workspace.
+  - assertVisible: { css: "[data-testid=palette-option][data-kind=section][data-id=landing]" }
+  - assertVisible: { css: "[data-testid=palette-option][data-kind=workspace][data-id=DE]" }
+  - assertNotVisible: { css: "[data-testid=palette-option][data-kind=workspace][data-id=all]" }
+  - assertNotVisible: { css: "[data-testid=palette-option][data-kind=workspace][data-id=KZ]" }
+  - assertNotVisible: { css: "[data-testid=palette-option][data-kind=section][data-id=books]" }
+  - inputText: "settings"
+  - waitForVisible: { testId: palette-empty }
+  - assertNotVisible: { css: "[data-testid=palette-option][data-kind=setting]" }
+  # Orders of their country only.
+  - eraseText: 20
+  - inputText: "palkz${stamp}"
+  - waitForVisible: { testId: palette-empty, timeout: 15000 }
+  - eraseText: 30
+  - inputText: "palde${stamp}"
+  - waitForVisible: { css: "[data-testid=palette-option][data-kind=order][data-id='palde${stamp}']", timeout: 15000 }
+  - pressKey: enter
+  - waitForVisible: { css: "[data-testid=order-row][data-id='palde${stamp}']", timeout: 15000 }
+  - assertUrl: { contains: "country=DE" }
+after:
+  - sql: { exec: "delete from \"Order\" where id in ($1, $2)", params: ["palde${stamp}", "palkz${stamp}"] }
+  - sql: { exec: "delete from \"Book\" where \"clientKey\" = $1", params: ["e2e-palette-${stamp}"] }
+  - sql: { exec: "delete from \"StaffMember\" where email = $1", params: ["${cmEmail}"] }
+  - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${cmEmail}"] }

@@ -77,7 +77,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "e2e-admin-password"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
   - openLink: "${WEB}/admin/books/${bookId}"
   - waitForVisible: { css: "[data-testid=render-notes] [data-kind=no-art]" }
   - assertVisible: { contains: "Muse Image refused every version of the scene" }

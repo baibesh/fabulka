@@ -68,3 +68,11 @@ Things noticed while using tapstep on Fabulka. Version: 0.13.11.
     be a Playwright script outside the suite. A per-flow `viewport:` header (or a `setViewport`
     step) plus an `assertNoHorizontalScroll` (or a page-side `assertTrue: { js: … }`) would make it
     a three-line flow.
+16. **A second keyboard step that opens or closes a popup ends the browser session.** In the admin,
+    `pressKey: ctrl+k` opens the command palette (a native `<dialog>`) and works; but after it the
+    next `pressKey` that changes what is open (Esc on the palette or on a dropdown menu, Ctrl+K
+    again after the palette closed) fails with "browser connection lost" or "pressKeyCombo waited
+    30s", with `--browser managed` and with the system Chrome alike. The same sequence by hand in
+    Chrome, and the same opens and closes done with taps, all work. Workaround in
+    command-palette.flow.yaml: one keyboard use of the palette per loaded page (`openLink` before
+    each), closing with a tap outside.

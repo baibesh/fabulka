@@ -23,7 +23,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card, timeout: 15000 }
+  - waitForVisible: { testId: admin-nav-inbox, timeout: 15000 }
   - tapOn: { testId: admin-nav-team }
   - waitForVisible: { testId: team-invite-form }
   - assertVisible: { testId: team-table }
@@ -92,7 +92,7 @@ commands:
       params: ["${cmEmail}"]
       assert: { rows: 1, first: { status: active, linked: true } }
 
-  # The manager in the browser: their sections only, starting on their countries' dashboard.
+  # The manager in the browser: Germany's workspace only, starting on its Inbox.
   - launchApp: { appId: "${WEB}", clearState: true }
   - openLink: "${WEB}/admin"
   - waitForVisible: { testId: admin-login-keycloak }
@@ -101,33 +101,46 @@ commands:
   - tapOn: { testId: mock-login-email }
   - inputText: "${cmEmail}"
   - tapOn: { testId: mock-login-submit }
-  - waitForVisible: { css: "[data-testid=country-dashboard][data-countries=DE]", timeout: 15000 }
-  - assertNotVisible: { testId: pause-card }
-  - assertVisible: { testId: admin-nav-dashboard }
-  - assertVisible: { testId: admin-nav-activity }
-  - assertVisible: { testId: admin-nav-orders }
-  - assertVisible: { testId: admin-nav-catalog }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=DE]", timeout: 15000 }
+  - assertUrl: { contains: "/admin?country=DE" }
+  - assertVisible: { css: "[data-testid=workspace-switcher][data-value=DE]" }
+  # Germany's numbers today, above its Inbox.
+  - waitForVisible: { testId: inbox-numbers }
+  # Germany's menu: its storefront, prices and delivery, orders and activity; nothing of Global's.
+  - assertVisible: { testId: admin-nav-inbox }
+  - assertVisible: { testId: admin-nav-landing }
   - assertVisible: { testId: admin-nav-examples }
-  - assertVisible: { testId: admin-nav-reference }
+  - assertVisible: { testId: admin-nav-catalog }
+  - assertVisible: { testId: admin-nav-prices }
+  - assertVisible: { testId: admin-nav-print-formats }
+  - assertVisible: { testId: admin-nav-cities }
+  - assertVisible: { testId: admin-nav-orders }
+  - assertVisible: { testId: admin-nav-activity }
+  - assertVisible: { testId: admin-nav-preview }
   - assertNotVisible: { testId: admin-nav-books }
   - assertNotVisible: { testId: admin-nav-seo }
   - assertNotVisible: { testId: admin-nav-journal }
   - assertNotVisible: { testId: admin-nav-team }
-  # Their working country, Germany, with no "All countries".
-  - assertVisible: { css: "[data-testid=admin-country][data-value=DE]" }
-  - assertNotVisible: { css: "[data-testid=admin-country] option[value=all]" }
-  - assertUrl: { contains: "?country=DE" }
-  # Reference: only their countries' data (prices, delivery, formats' offer and prices, cities,
-  # landing), never the global lists.
-  - tapOn: { testId: admin-nav-reference }
-  - waitForVisible: { testId: reference-tabs }
+  - assertNotVisible: { testId: admin-nav-settings }
+  - assertNotVisible: { testId: admin-nav-faq }
+  - assertNotVisible: { testId: admin-nav-overview }
+  # The switcher offers Germany only: no Global, no other country.
+  - tapOn: { testId: workspace-switcher }
+  - waitForVisible: { testId: workspace-option-DE }
+  - assertNotVisible: { testId: workspace-option-all }
+  - assertNotVisible: { testId: workspace-option-KZ }
+  - tapOn: { testId: workspace-switcher }
+  - assertNotVisible: { testId: workspace-menu }
+  # The old Reference data address lands on Germany's prices and delivery.
+  - openLink: "${WEB}/admin/reference"
+  - waitForVisible: { css: "[data-testid=reference-scope][data-country=DE]", timeout: 15000 }
+  - assertUrl: { contains: "/admin/prices?country=DE" }
   - assertVisible: { testId: reference-tab-prices }
-  - assertVisible: { testId: reference-tab-landing }
-  - assertVisible: { testId: reference-tab-cities }
-  - assertNotVisible: { testId: reference-tab-blocked }
-  - assertNotVisible: { testId: reference-tab-countries }
-  - assertNotVisible: { testId: reference-tab-faq }
+  - assertVisible: { testId: reference-tab-delivery }
+  # Global's pages are not theirs.
   - openLink: "${WEB}/admin/team"
+  - waitForVisible: { testId: admin-forbidden, timeout: 15000 }
+  - openLink: "${WEB}/admin/settings"
   - waitForVisible: { testId: admin-forbidden, timeout: 15000 }
 
   # The superadmin disables them; the manager's next request is refused.
@@ -139,7 +152,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card, timeout: 15000 }
+  - waitForVisible: { testId: admin-nav-inbox, timeout: 15000 }
   - openLink: "${WEB}/admin/team"
   - waitForVisible: { css: "[data-testid='team-row-${cmEmail}'][data-status=active]", timeout: 15000 }
   - assertVisible: { css: "[data-testid='team-row-${cmEmail}'] [data-testid=team-countries][data-value=DE]" }

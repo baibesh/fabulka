@@ -98,8 +98,9 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card, timeout: 15000 }
-  - assertVisible: { testId: staff-spend }
+  - waitForVisible: { testId: admin-nav-inbox, timeout: 15000 }
+  - tapOn: { testId: admin-nav-overview }
+  - waitForVisible: { testId: staff-spend }
   - tapOn: { testId: admin-nav-activity }
   - waitForVisible: { testId: activity-table }
   - selectOption: { testId: activity-filter-section, optionValue: reference }
@@ -134,7 +135,7 @@ commands:
   - tapOn: { testId: mock-login-email }
   - inputText: "${cmEmail}"
   - tapOn: { testId: mock-login-submit }
-  - waitForVisible: { css: "[data-testid=country-dashboard][data-countries=DE]", timeout: 15000 }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=DE]", timeout: 15000 }
   - tapOn: { testId: admin-nav-activity }
   # Their working country, Germany, is in the address and filters the events.
   - assertUrl: { contains: "/admin/activity?country=DE" }
@@ -188,7 +189,7 @@ commands:
   - tapOn: { testId: mock-login-email }
   - inputText: "${capEmail}"
   - tapOn: { testId: mock-login-submit }
-  - waitForVisible: { testId: country-dashboard, timeout: 15000 }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=DE]", timeout: 15000 }
   - tapOn: { testId: admin-nav-examples }
   - waitForVisible: { css: "[data-testid=staff-budget][data-allowed=false]" }
   - waitForVisible: { css: "[data-testid='example-${example}-lang-en'][data-state=done]", timeout: 30000 }

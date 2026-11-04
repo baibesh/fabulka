@@ -47,6 +47,8 @@ export function InboxPage() {
         {t("admin.inbox.title", { workspace: name(country) })}
       </PageTitle>
       {stats && <CountryNumbers country={country} />}
+      {/* Loaded: the rows are fresh (not a cached list being refetched). */}
+      <div data-testid="inbox-page" data-country={country ?? "all"} data-loaded={inbox.data && !inbox.isFetching ? "true" : "false"} className="flex flex-col gap-6">
       {!inbox.data ? (
         <QueryState error={inbox.error} scope="admin" />
       ) : inbox.data.items.length === 0 ? (
@@ -60,6 +62,7 @@ export function InboxPage() {
           ))}
         </ul>
       )}
+      </div>
     </>
   );
 }

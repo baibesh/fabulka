@@ -48,10 +48,12 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
+  # The old Reference data address lands on Settings, where the format specs are.
   - openLink: "${WEB}/admin/reference"
-  - waitForVisible: { testId: reference-tabs }
-  - tapOn: { testId: reference-tab-formats }
+  - waitForVisible: { testId: settings-tabs, timeout: 15000 }
+  - assertUrl: { contains: "/admin/settings" }
+  - tapOn: { testId: settings-tab-formats }
   - waitForVisible: { testId: reference-formats }
   - assertVisible: { css: "[data-testid=format-row][data-id=a5-portrait]" }
   - tapOn: { css: "[data-testid=format-row][data-id=a4-landscape] [data-testid=format-soft-KZT]" }

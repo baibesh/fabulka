@@ -83,7 +83,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
   - openLink: "${WEB}/admin/catalog/${slug}"
   - waitForVisible: { testId: template-editor }
   - selectOption: { testId: template-layout-theme, option: "Adventure" }

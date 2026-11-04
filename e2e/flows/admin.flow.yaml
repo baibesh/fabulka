@@ -30,11 +30,18 @@ commands:
   - eraseText: 40
   - inputText: "e2e-admin-password"
   - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: admin-nav-inbox }
+  # The Inbox is the home page; the numbers are in Overview.
+  - assertUrl: { contains: "/admin?country=all" }
+  - assertVisible: { css: "[data-testid=workspace-switcher][data-value=all]" }
+  - tapOn: { testId: admin-nav-overview }
+  - waitForVisible: "Demand by country"
+
+  # Pause (Settings, Generation): new books are refused until it is lifted.
+  - tapOn: { testId: admin-nav-settings }
+  - tapOn: { testId: settings-tab-generation }
   - waitForVisible: { testId: pause-card }
   - assertVisible: "Generation is running"
-  - assertVisible: "Demand by country"
-
-  # Pause: new books are refused until it is lifted.
   - tapOn: { testId: pause-toggle }
   - waitForVisible: "Generation is paused"
   - request:
@@ -43,8 +50,18 @@ commands:
       headers: { X-Client-Key: e2e-admin-paused }
       json: { child: { name: Пауза, age: 5, gender: girl, interests: [мячи], city: Алматы } }
       assert: { status: 503, json: { "$.code": generation_paused } }
+  # The Inbox says so first, with a link straight to the switch.
+  - tapOn: { testId: admin-nav-inbox }
+  - waitForVisible: { css: "[data-testid=inbox-item][data-kind=generation_paused][data-severity=danger]" }
+  - assertVisible: "Book generation is paused"
+  - tapOn: { css: "[data-testid=inbox-item][data-kind=generation_paused] [data-testid=inbox-fix]" }
+  - waitForVisible: { css: "[data-testid=pause-card][data-paused=true]" }
+  - assertUrl: { contains: "/admin/settings?tab=generation" }
   - tapOn: { testId: pause-toggle }
   - waitForVisible: "Generation is running"
+  - tapOn: { testId: admin-nav-inbox }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-loaded=true]" }
+  - assertNotVisible: { css: "[data-testid=inbox-item][data-kind=generation_paused]" }
 
   # The other sections open.
   - tapOn: { testId: admin-nav-books }

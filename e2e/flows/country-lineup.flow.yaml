@@ -98,11 +98,14 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
-  - openLink: "${WEB}/admin/reference?country=DE"
-  - waitForVisible: { testId: reference-tabs }
-  - tapOn: { testId: reference-tab-landing }
+  - waitForVisible: { testId: admin-nav-inbox }
+  # Germany's Inbox lists the missing picture; its Fix opens Germany's landing.
+  - openLink: "${WEB}/admin?country=DE"
+  - waitForVisible: { css: "[data-testid=inbox-item][data-kind=gap][data-gap=no_landing_image]", timeout: 15000 }
+  - tapOn: { css: "[data-testid=inbox-item][data-gap=no_landing_image] [data-testid=inbox-fix]" }
   - waitForVisible: { css: "[data-testid=landing-images][data-country=DE]" }
+  - assertUrl: { contains: "/admin/landing?country=DE" }
+  - assertVisible: { css: "[data-testid=admin-nav-landing][aria-current=page]" }
   - assertVisible: { css: "[data-testid=landing-image-hero-all][data-own=false]" }
   # One picture for all of Germany's languages, uploaded; German then shows it as inherited.
   - uploadFile: { css: "[data-testid=landing-image-hero-all-file]", files: "${PWD}/e2e/fixtures/child.jpg" }
@@ -184,9 +187,12 @@ commands:
   - assertVisible: { css: "[data-testid=overview-DE-de] [data-testid=overview-sample]" }
 
   # ---- Reset to the default ------------------------------------------------------------------------
-  - openLink: "${WEB}/admin/reference?country=DE"
-  - waitForVisible: { testId: reference-tabs }
-  - tapOn: { testId: reference-tab-landing }
+  # Germany's Inbox no longer asks for a picture.
+  - openLink: "${WEB}/admin?country=DE"
+  - waitForVisible: { css: "[data-testid=inbox-page][data-loaded=true]", timeout: 15000 }
+  - assertVisible: { css: "[data-testid=inbox-item][data-gap=no_landing_title][data-language=de]" }
+  - assertNotVisible: { css: "[data-testid=inbox-item][data-gap=no_landing_image]" }
+  - tapOn: { testId: admin-nav-landing }
   - waitForVisible: { css: "[data-testid=landing-image-hero-all][data-own=true]" }
   - tapOn: { testId: landing-image-hero-all-reset }
   - waitForVisible: { css: "[data-testid=landing-image-hero-all][data-own=false]" }

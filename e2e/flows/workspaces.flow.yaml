@@ -1,0 +1,141 @@
+# The admin's workspaces: the superadmin starts in "Fabulka · Global", switches to Germany (the menu
+# becomes Germany's, the page stays when Germany has it, else Germany's Inbox), a page of Global's
+# alone brings Global back, a country's page opened in Global asks for a country, and old addresses
+# (Reference data, the matrix) still land somewhere useful. A German country manager gets Germany's
+# workspace only: a link to Kazakhstan's Inbox shows Germany's, with a notice.
+appId: ${WEB}
+tags: [admin, workspaces]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  stamp: "${Date.now()}"
+  cmEmail: "cm-ws+${stamp}@e2e.test"
+  cmId: "e2e-cm-ws-${stamp}"
+  # The test-only admin account from e2e/start-stack.sh (the emergency sign-in: a superadmin).
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+before:
+  - sql:
+      exec: "insert into \"StaffMember\" (id, email, name, status, roles, countries, \"updatedAt\") values ($1, $2, 'Lena Workspace', 'active', '{country_manager}', '{DE}', now())"
+      params: ["${cmId}", "${cmEmail}"]
+commands:
+  # ---- The superadmin -----------------------------------------------------------------------------
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-email }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  # Global's Inbox, with Global's menu in groups.
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=all]", timeout: 15000 }
+  - assertVisible: { css: "[data-testid=workspace-switcher][data-value=all]" }
+  - assertVisible: "Inbox · Global"
+  - assertVisible: { testId: admin-nav-group-operations }
+  - assertVisible: { testId: admin-nav-group-studio }
+  - assertVisible: { testId: admin-nav-books }
+  - assertVisible: { testId: admin-nav-settings }
+  - assertNotVisible: { testId: admin-nav-landing }
+
+  # The switcher: Global and the launch countries.
+  - waitForVisible: { css: "[data-testid=workspace-switcher][data-loaded=true]" }
+  - tapOn: { testId: workspace-switcher }
+  - waitForVisible: { testId: workspace-menu }
+  - assertVisible: { css: "[data-testid=workspace-option-all][aria-current=true]" }
+  - assertVisible: { testId: workspace-option-KZ }
+  - assertVisible: { testId: workspace-option-US }
+  - assertVisible: { testId: workspace-option-ES }
+  - tapOn: { testId: workspace-option-DE }
+  # Germany's Inbox and Germany's menu: its storefront and prices, nothing of Studio's.
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=DE]" }
+  - assertUrl: { contains: "/admin?country=DE" }
+  - assertVisible: { css: "[data-testid=workspace-switcher][data-value=DE]" }
+  - assertVisible: "Inbox · Germany"
+  - assertVisible: { testId: admin-nav-landing }
+  - assertVisible: { testId: admin-nav-prices }
+  - assertVisible: { testId: admin-nav-preview }
+  - assertNotVisible: { testId: admin-nav-books }
+  - assertNotVisible: { testId: admin-nav-group-studio }
+  # A page both workspaces have stays put on a switch: Germany's orders, then Austria's.
+  - tapOn: { testId: admin-nav-orders }
+  - waitForVisible: { testId: orders-table }
+  - tapOn: { testId: workspace-switcher }
+  - tapOn: { testId: workspace-option-AT }
+  - waitForVisible: { css: "[data-testid=workspace-switcher][data-value=AT]" }
+  - assertUrl: { contains: "/admin/orders?country=AT" }
+  - assertVisible: { css: "[data-testid=admin-nav-orders][aria-current=page]" }
+  # Preview as visitor: Austria's row of the matrix and its overview, nothing else.
+  - tapOn: { testId: admin-nav-preview }
+  - waitForVisible: { testId: visitor-matrix }
+  - assertVisible: { testId: matrix-row-AT }
+  - assertNotVisible: { testId: matrix-row-KZ }
+  - assertVisible: { testId: overview-AT }
+
+  # A page of Global's alone (a link with a country in it) is shown in Global.
+  - openLink: "${WEB}/admin/books?country=DE"
+  - waitForVisible: { testId: books-table, timeout: 15000 }
+  - waitForVisible: { css: "[data-testid=workspace-switcher][data-value=all]" }
+  - assertUrl: { contains: "/admin/books?country=all" }
+  - assertVisible: { css: "[data-testid=admin-nav-books][aria-current=page]" }
+  # A country's page in Global asks for a country, and opens in the one picked.
+  - openLink: "${WEB}/admin/landing?country=all"
+  - waitForVisible: { testId: country-required, timeout: 15000 }
+  - tapOn: { testId: country-required-ES }
+  - waitForVisible: { css: "[data-testid=reference-scope][data-country=ES]" }
+  - assertUrl: { contains: "/admin/landing?country=ES" }
+  - assertVisible: { css: "[data-testid=workspace-switcher][data-value=ES]" }
+  # Switching to Global from a country's own page lands on Global's Inbox.
+  - tapOn: { testId: workspace-switcher }
+  - tapOn: { testId: workspace-option-all }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=all]" }
+  - assertUrl: { contains: "/admin?country=all" }
+  # Old addresses: Reference data lands on a country's prices or on Settings.
+  - openLink: "${WEB}/admin/reference?country=KZ"
+  - waitForVisible: { css: "[data-testid=reference-scope][data-country=KZ]", timeout: 15000 }
+  - assertUrl: { contains: "/admin/prices?country=KZ" }
+  - openLink: "${WEB}/admin/reference?country=all"
+  - waitForVisible: { testId: settings-tabs, timeout: 15000 }
+  - assertUrl: { contains: "/admin/settings" }
+  - openLink: "${WEB}/admin/examples/matrix?country=all"
+  - waitForVisible: { testId: visitor-matrix, timeout: 15000 }
+  - assertVisible: { testId: matrix-row-KZ }
+  - assertVisible: { css: "[data-testid=admin-nav-matrix][aria-current=page]" }
+
+  # ---- A German country manager: Germany only ---------------------------------------------------------
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin"
+  - waitForVisible: { testId: admin-login-keycloak }
+  - tapOn: { testId: admin-login-keycloak }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${cmEmail}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=DE][data-loaded=true]", timeout: 15000 }
+  - assertVisible: { css: "[data-testid=workspace-switcher][data-value=DE]" }
+  # Germany's gaps, each with its fix.
+  - assertVisible: { css: "[data-testid=inbox-item][data-kind=gap] [data-testid=inbox-fix]" }
+  # Kazakhstan's Inbox by its address: Germany's instead, with a notice.
+  - openLink: "${WEB}/admin?country=KZ"
+  - waitForVisible: { css: "[data-testid=admin-country-notice][data-requested=KZ][data-shown=DE]", timeout: 15000 }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=DE]" }
+  - assertUrl: { contains: "/admin?country=DE" }
+  # The API refuses another country's Inbox too.
+  - request:
+      url: ${API}/auth/login
+      query: { return: /api/admin/me }
+      headers: { Accept: application/json }
+      extract: { state: "$.state" }
+      assert: { status: 200 }
+  - request:
+      url: ${API}/auth/mock/authorize
+      query: { state: "${state}", email: "${cmEmail}" }
+      assert: { status: 200, json: { "$.countries[0]": DE } }
+  - request: { url: "${API}/admin/inbox", query: { country: KZ }, assert: { status: 403, json: { "$.code": scope_forbidden } } }
+  - request: { url: "${API}/admin/inbox", query: { country: DE }, assert: { status: 200, json: { "$.country": DE } } }
+after:
+  - sql: { exec: "delete from \"StaffMember\" where email = $1", params: ["${cmEmail}"] }
+  - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${cmEmail}"] }

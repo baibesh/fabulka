@@ -32,13 +32,15 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
-  - tapOn: { testId: admin-nav-reference }
-  - waitForVisible: { testId: reference-tabs }
+  - waitForVisible: { testId: admin-nav-inbox }
+  - tapOn: { testId: admin-nav-settings }
+  - waitForVisible: { testId: settings-tabs }
+  - assertVisible: "Settings"
+  - tapOn: { testId: settings-tab-prices }
   - waitForVisible: { testId: reference-prices }
-  - assertVisible: "Reference data"
+  - assertUrl: { contains: "/admin/settings?tab=prices" }
 
-  # "All countries": one default list per currency. A dollar price in fractions of a cent is
+  # Global's default prices: one list per currency. A dollar price in fractions of a cent is
   # pointed out next to its field, and nothing is saved.
   - assertVisible: { css: "[data-testid=reference-prices][data-currency=EUR]" }
   - tapOn: { css: "[data-testid=reference-prices][data-currency=USD] [data-testid=price-template]" }
@@ -69,12 +71,15 @@ commands:
         status: 200
         json: { "$.prices.KZT.books.template": 245000, "$.prices.USD.books.template": 490, "$.prices.KZT.books.custom": 290000, "$.prices.EUR.books.template": 390 }
 
-  # A new delivery city with free delivery, in three languages: cities are a country's, so
-  # Kazakhstan is picked in the admin's working-country switcher first.
-  - selectOption: { testId: admin-country, optionValue: KZ }
-  - waitForVisible: { css: "[data-testid=admin-country][data-value=KZ]" }
-  - assertUrl: { contains: "/admin/reference?country=KZ" }
-  - tapOn: { testId: reference-tab-cities }
+  # A new delivery city with free delivery, in three languages: cities are a country's, so the
+  # admin switches to Kazakhstan's workspace first (Settings is Global's: it lands on the Inbox).
+  - tapOn: { testId: workspace-switcher }
+  - tapOn: { testId: workspace-option-KZ }
+  - waitForVisible: { css: "[data-testid=workspace-switcher][data-value=KZ]" }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=KZ]" }
+  - assertUrl: { contains: "/admin?country=KZ" }
+  - tapOn: { testId: admin-nav-cities }
+  - assertUrl: { contains: "/admin/cities?country=KZ" }
   - waitForVisible: { css: "[data-testid=reference-cities][data-country=KZ]" }
   - assertVisible: { css: "[data-testid=city-row][data-id=almaty]" }
   - tapOn: { testId: city-add }
@@ -128,9 +133,8 @@ commands:
 
   # Countries: Portugal added (it starts in euros, English, priced from the euro defaults), offered on
   # the site, then taken off again.
-  - openLink: "${WEB}/admin/reference"
-  - waitForVisible: { testId: reference-tabs }
-  - tapOn: { testId: reference-tab-countries }
+  - openLink: "${WEB}/admin/settings?tab=countries"
+  - waitForVisible: { testId: settings-tabs }
   - waitForVisible: { testId: reference-countries }
   - assertVisible: { css: "[data-testid=country-row][data-code=KZ]" }
   - assertVisible: { testId: country-other }
@@ -195,9 +199,8 @@ commands:
         - { code: RU, languages: [ru], currency: USD, print: false }
       assert: { status: 400, json: { "$.code": country_policy_blocked, "$.countries[0]": RU } }
   # Taken off in the admin: the site no longer offers it, and a visitor who chose it is "other".
-  - openLink: "${WEB}/admin/reference"
-  - waitForVisible: { testId: reference-tabs }
-  - tapOn: { testId: reference-tab-countries }
+  - openLink: "${WEB}/admin/settings?tab=countries"
+  - waitForVisible: { testId: settings-tabs }
   - waitForVisible: { css: "[data-testid=country-row][data-code=PT]" }
   # Portugal is the last of the rows.
   - scrollUntilVisible: { css: "[data-testid=country-row][data-code=PT] [data-testid=country-remove]", centerElement: true }
@@ -217,9 +220,7 @@ commands:
   - pressKey: escape
 
   # FAQ: an answer edited and a question for Kazakhstan only, both on the home page.
-  - openLink: "${WEB}/admin/reference"
-  - waitForVisible: { testId: reference-tabs }
-  - tapOn: { testId: reference-tab-faq }
+  - openLink: "${WEB}/admin/faq"
   - waitForVisible: { testId: reference-faq }
   # Print answers follow the country's print flag, not a list of countries.
   - scrollUntilVisible: { css: "[data-testid=faq-row][data-id=print-abroad]", centerElement: true }
@@ -267,9 +268,8 @@ commands:
   - waitForVisible: "Is there gift wrapping?"
 
   # Blocked countries: Meta's list is read-only, with nothing to remove.
-  - openLink: "${WEB}/admin/reference"
-  - waitForVisible: { testId: reference-tabs }
-  - tapOn: { testId: reference-tab-blocked }
+  - openLink: "${WEB}/admin/settings?tab=blocked"
+  - waitForVisible: { testId: settings-tabs }
   - waitForVisible: { testId: blocked-meta }
   - assertVisible: { css: "[data-testid=blocked-meta-row][data-code=RU]" }
   - assertVisible: { css: "[data-testid=blocked-meta-row][data-code=IN]" }
@@ -323,9 +323,8 @@ commands:
       url: ${API}/templates
       headers: { X-Real-IP: "${dutchIp}" }
       assert: { status: 200 }
-  - openLink: "${WEB}/admin/reference"
-  - waitForVisible: { testId: reference-tabs }
-  - tapOn: { testId: reference-tab-blocked }
+  - openLink: "${WEB}/admin/settings?tab=blocked"
+  - waitForVisible: { testId: settings-tabs }
   - waitForVisible: { contains: "No extra countries", childOf: { testId: blocked-extra } }
   - assertVisible: { css: "[data-testid=blocked-meta-row][data-code=RU]" }
 after:

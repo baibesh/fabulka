@@ -33,7 +33,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
 
   # The seeded formats are listed with what a book of each costs.
   - tapOn: { testId: admin-nav-story-formats }

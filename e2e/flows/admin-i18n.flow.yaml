@@ -25,10 +25,10 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "e2e-admin-password"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
   - assertVisible: { testId: admin-nav-books, text: "Books" }
-  - assertVisible: { testId: admin-nav-journal, text: "Journal" }
-  - assertVisible: "Generation is running"
+  - assertVisible: { testId: admin-nav-journal, text: "Model journal" }
+  - assertVisible: "Inbox · Global"
   - assertVisible: { css: "html[lang=en] [data-testid=admin-nav-books]" }
 
   # The picker lists English first and Russian last.
@@ -41,8 +41,9 @@ commands:
   # Russian: the nav and the page switch at once, and so does <html lang>.
   - tapOn: { testId: admin-lang-ru }
   - waitForVisible: { testId: admin-nav-books, text: "Книги" }
-  - assertVisible: { testId: admin-nav-dashboard, text: "Дашборд" }
-  - assertVisible: "Генерация работает"
+  - assertVisible: { testId: admin-nav-inbox, text: "Входящие" }
+  - assertVisible: "Входящие · Глобально"
+  - assertVisible: { css: "[data-testid=admin-nav-group-studio]", text: "Студия" }
   - assertVisible: { css: "html[lang=ru] [data-testid=admin-nav-books]" }
   - tapOn: { testId: admin-nav-orders }
   - waitForVisible: { testId: orders-table }
@@ -57,7 +58,7 @@ commands:
   - tapOn: { testId: admin-language }
   - tapOn: { testId: admin-lang-de }
   - waitForVisible: { testId: admin-nav-books, text: "Bücher" }
-  - assertVisible: { testId: admin-nav-journal, text: "Protokoll" }
+  - assertVisible: { testId: admin-nav-journal, text: "Modellprotokoll" }
   - tapOn: { testId: admin-nav-orders }
   - waitForVisible: "Druckbestellungen"
   - tapOn: { testId: admin-language }
@@ -69,5 +70,5 @@ commands:
   - tapOn: { testId: admin-language }
   - tapOn: { testId: admin-lang-en }
   - waitForVisible: { testId: admin-nav-books, text: "Books" }
-  - assertVisible: { testId: admin-nav-dashboard, text: "Dashboard" }
+  - assertVisible: { testId: admin-nav-inbox, text: "Inbox" }
   - assertNotVisible: { text: "Книги" }

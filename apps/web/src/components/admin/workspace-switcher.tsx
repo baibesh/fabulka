@@ -89,7 +89,7 @@ export function WorkspaceSwitcher() {
               {value === ALL && <Check aria-hidden className="size-4 text-accent" />}
             </MenuItem>
           )}
-          {options.length > 0 && <p className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-widest text-muted">{t("admin.ws.countries")}</p>}
+          {options.length > 0 && <p aria-hidden className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-widest text-muted">{t("admin.ws.countries")}</p>}
           {options.map((code) => (
             <MenuItem key={code} data-testid={`workspace-option-${code}`} aria-current={value === code ? "true" : undefined} onClick={() => pick(code, close)}>
               <Flag code={code} />

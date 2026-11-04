@@ -30,7 +30,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
   - tapOn: { testId: admin-nav-themes }
   - waitForVisible: { testId: themes-list }
   # The curated themes are listed, read-only.

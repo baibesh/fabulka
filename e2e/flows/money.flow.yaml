@@ -37,18 +37,18 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card, timeout: 15000 }
-  - tapOn: { testId: admin-nav-reference }
-  - waitForVisible: { testId: reference-tabs }
-  # Only the open section is marked: "reference" must not also light up "references".
-  - assertVisible: { css: "[data-testid=admin-nav-reference][aria-current=page]" }
+  - waitForVisible: { testId: admin-nav-inbox, timeout: 15000 }
+  - tapOn: { testId: admin-nav-settings }
+  - waitForVisible: { testId: settings-tabs }
+  # Only the open section is marked.
+  - assertVisible: { css: "[data-testid=admin-nav-settings][aria-current=page]" }
   - assertNotVisible: { css: "[data-testid=admin-nav-references][aria-current=page]" }
   - tapOn: { testId: admin-nav-references }
   - assertVisible: { css: "[data-testid=admin-nav-references][aria-current=page]" }
-  - assertNotVisible: { css: "[data-testid=admin-nav-reference][aria-current=page]" }
-  - tapOn: { testId: admin-nav-reference }
-  - waitForVisible: { testId: reference-tabs }
-  - tapOn: { testId: reference-tab-countries }
+  - assertNotVisible: { css: "[data-testid=admin-nav-settings][aria-current=page]" }
+  - tapOn: { testId: admin-nav-settings }
+  - waitForVisible: { testId: settings-tabs }
+  - tapOn: { testId: settings-tab-countries }
   - waitForVisible: { css: "[data-testid=country-row][data-code=DE]" }
   # Print no longer has to be priced in tenge: euros and print together save.
   - scrollUntilVisible: { css: "[data-testid=country-row][data-code=DE] [data-testid=country-currency]", centerElement: true }
@@ -61,9 +61,8 @@ commands:
   - assertTrue: ${json(http.get(API + '/reference').body).countries.some((c) => c.code === 'DE' && c.currency === 'EUR' && c.print === true)}
 
   # A euro rate by hand (reports only), recorded in Activity (the page again, from its top).
-  - openLink: "${WEB}/admin/reference"
-  - waitForVisible: { testId: reference-tabs }
-  - tapOn: { testId: reference-tab-fx }
+  - openLink: "${WEB}/admin/settings?tab=fx"
+  - waitForVisible: { testId: settings-tabs }
   - waitForVisible: { testId: reference-fx }
   - tapOn: { css: "[data-testid=fx-row][data-currency=EUR] [data-testid=fx-manual]" }
   - inputText: "1,1x"
@@ -75,10 +74,12 @@ commands:
   - tapOn: { css: "[data-testid=fx-row][data-currency=EUR] [data-testid=fx-set]" }
   - waitForVisible: { css: "[data-testid=fx-row][data-currency=EUR][data-rate='1.1'][data-source=manual]" }
 
-  # Germany's own euro book prices: one form, in euros only.
-  - selectOption: { testId: admin-country, optionValue: DE }
-  - waitForVisible: { css: "[data-testid=admin-country][data-value=DE]" }
-  - assertUrl: { contains: "/admin/reference?country=DE" }
+  # Germany's own euro book prices, in Germany's workspace: one form, in euros only.
+  - tapOn: { testId: workspace-switcher }
+  - tapOn: { testId: workspace-option-DE }
+  - waitForVisible: { css: "[data-testid=workspace-switcher][data-value=DE]" }
+  - tapOn: { testId: admin-nav-prices }
+  - assertUrl: { contains: "/admin/prices?country=DE" }
   - tapOn: { testId: reference-tab-prices }
   - waitForVisible: { css: "[data-testid=reference-prices][data-currency=EUR]" }
   - assertNotVisible: { css: "[data-testid=reference-prices][data-currency=USD]" }
@@ -105,7 +106,7 @@ commands:
   - waitForVisible: { testId: reference-saved }
 
   # The square book at 19,90 € / 29,90 €, printed for 7 € / 11 €: the margin shows as typed.
-  - tapOn: { testId: reference-tab-formats }
+  - tapOn: { testId: admin-nav-print-formats }
   - waitForVisible: { css: "[data-testid=reference-country-formats][data-country=DE][data-currency=EUR]" }
   - tapOn: { testId: country-format-soft-square-210 }
   - inputText: "19,90"
@@ -121,7 +122,7 @@ commands:
   - waitForVisible: { testId: reference-saved }
 
   # Berlin, where the order goes.
-  - tapOn: { testId: reference-tab-cities }
+  - tapOn: { testId: admin-nav-cities }
   - waitForVisible: { css: "[data-testid=reference-cities][data-country=DE]" }
   - tapOn: { testId: city-add }
   - tapOn: { css: "[data-testid=city-row]:last-child [data-testid=city-ru]" }
@@ -302,7 +303,10 @@ commands:
   - tapOn: { testId: mock-login-email }
   - inputText: "${cmEmail}"
   - tapOn: { testId: mock-login-submit }
-  - waitForVisible: { css: "[data-testid=country-dashboard][data-countries=DE]", timeout: 15000 }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-country=DE]", timeout: 15000 }
+  # Germany's numbers are in its Overview, a link from its Inbox.
+  - tapOn: { testId: inbox-overview-link }
+  - waitForVisible: { css: "[data-testid=country-dashboard][data-countries=DE]" }
   # (Other flows may leave German orders behind: the euro line holds at least this one.)
   - waitForVisible: { testId: country-revenue-lines-EUR }
   - assertNotVisible: { testId: country-revenue-lines-KZT }

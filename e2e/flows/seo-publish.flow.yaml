@@ -29,7 +29,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "e2e-admin-password"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
   - tapOn: { testId: admin-nav-seo }
   - waitForVisible: { testId: seo-language-note }
   # Pick the language version, then the page.

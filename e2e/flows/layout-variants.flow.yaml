@@ -76,7 +76,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
   - openLink: "${WEB}/admin/books/${bookId}"
   - waitForVisible: { css: "[data-testid=render-qa][data-status=ok]" }
   - selectOption: { testId: pin-2, option: "Text below the picture" }

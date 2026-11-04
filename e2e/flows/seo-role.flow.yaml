@@ -46,7 +46,7 @@ commands:
   - request: { method: POST, url: "${API}/auth/logout", assert: { status: 200 } }
   - request: { url: "${API}/admin/seo/pages?lang=de", assert: { status: 401 } }
 
-  # In the browser: the SEO role lands on SEO and sees nothing else.
+  # In the browser: the SEO role lands on its Inbox, with SEO the only section.
   - launchApp: { appId: "${WEB}", clearState: true }
   - openLink: "${WEB}/admin"
   - waitForVisible: { testId: admin-login-keycloak }
@@ -56,20 +56,23 @@ commands:
   - inputText: "${browserEmail}"
   - check: { testId: mock-login-seo }
   - tapOn: { testId: mock-login-submit }
-  - waitForVisible: { testId: seo-language-note, timeout: 15000 }
-  - assertUrl: { contains: "/admin/seo" }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-loaded=true]", timeout: 15000 }
+  - assertVisible: { css: "[data-testid=workspace-switcher][data-value=all]" }
   - assertVisible: { testId: admin-nav-seo }
-  - assertNotVisible: { testId: admin-nav-dashboard }
+  - assertNotVisible: { testId: admin-nav-overview }
   - assertNotVisible: { testId: admin-nav-orders }
   - assertNotVisible: { testId: admin-nav-books }
-  - assertNotVisible: { testId: admin-nav-reference }
-  # Another section by its address: the 403 view, with the way back to SEO.
+  - assertNotVisible: { testId: admin-nav-settings }
+  - tapOn: { testId: admin-nav-seo }
+  - waitForVisible: { testId: seo-language-note, timeout: 15000 }
+  - assertUrl: { contains: "/admin/seo" }
+  # Another section by its address: the 403 view, with the way back to the Inbox.
   - openLink: "${WEB}/admin/orders"
   - waitForVisible: { testId: admin-forbidden, timeout: 15000 }
   - assertVisible: "403"
   - assertNotVisible: { testId: orders-table }
   - tapOn: { testId: admin-forbidden-home }
-  - waitForVisible: { testId: seo-language-note }
+  - waitForVisible: { css: "[data-testid=inbox-page][data-loaded=true]" }
   # The account menu on the site leads to the admin as well.
   - openLink: "${WEB}/catalog"
   - waitForVisible: { testId: auth-account, timeout: 15000 }

@@ -51,7 +51,7 @@ commands:
   - assertVisible: { testId: admin-nav-books }
   - assertVisible: { testId: admin-nav-methodologies }
   - assertVisible: { testId: admin-nav-themes }
-  - assertNotVisible: { testId: admin-nav-dashboard }
+  - assertNotVisible: { testId: admin-nav-overview }
   - assertNotVisible: { testId: admin-nav-orders }
   - assertNotVisible: { testId: admin-nav-catalog }
   - assertNotVisible: { testId: admin-nav-journal }

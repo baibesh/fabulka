@@ -155,7 +155,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
   - tapOn: { testId: admin-nav-orders }
   - waitForVisible: { testId: orders-table }
   - tapOn: { testId: order-history-toggle, index: 0 }

@@ -111,7 +111,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
   - tapOn: { testId: admin-nav-examples }
   - waitForVisible: { css: "[data-testid='example-${templatedExample}-countries'][data-loaded=true]" }
   - assertVisible: { testId: "example-${templatedExample}-countries-inherited", contains: "As its template" }
@@ -207,7 +207,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
   - openLink: "${WEB}/admin/examples"
   - waitForVisible: { testId: "example-${plainExample}-country-KZ" }
   - tapOn: { testId: "example-${plainExample}-country-remove-KZ" }

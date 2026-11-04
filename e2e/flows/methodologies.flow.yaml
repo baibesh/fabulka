@@ -25,7 +25,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
 
   # The seed methods are listed with what follows them.
   - tapOn: { testId: admin-nav-methodologies }

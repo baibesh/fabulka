@@ -20,7 +20,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "e2e-admin-password"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
   - tapOn: { testId: admin-nav-seo }
   - tapOn: { testId: seo-tab-settings }
   - waitForVisible: { testId: seo-settings }

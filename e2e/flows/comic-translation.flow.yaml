@@ -56,7 +56,7 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
-  - waitForVisible: { testId: pause-card }
+  - waitForVisible: { testId: admin-nav-inbox }
   - tapOn: { testId: admin-nav-examples }
   - waitForVisible: { testId: "example-${exampleId}" }
   - tapOn: { testId: "example-${exampleId}-translate-de" }
