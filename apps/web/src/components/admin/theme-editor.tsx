@@ -135,7 +135,7 @@ function ThemeEditor({ entry }: { entry: AdminTheme }) {
   };
 
   return (
-    <div className="flex flex-col gap-6" data-testid="theme-editor" data-id={id} data-status={entry.status} data-dirty={dirty}>
+    <div className="flex flex-col gap-6" data-testid="theme-editor" data-id={id} data-status={entry.status} data-dirty={dirty} data-pending={Boolean(entry.draft)}>
       <BackLink href={adminHref("/admin/themes")}>{t("admin.themeEditor.back")}</BackLink>
       <PageTitle
         aside={

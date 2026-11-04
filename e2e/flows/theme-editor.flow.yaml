@@ -96,7 +96,7 @@ commands:
       readOnly: true
       assert: { rows: 1, first: { live: "#fbf5ea" } }
   - tapOn: { testId: theme-publish }
-  - extendedWaitUntil: { notVisible: { testId: theme-pending-note }, timeout: 30000 }
+  - waitForVisible: { css: "[data-testid=theme-editor][data-pending=false]", timeout: 30000 }
   - sql:
       query: >-
         select theme->'palette'->>'paper' <> '#fbf5ea' as changed, draft is null as clean, (theme->>'version')::int as version
