@@ -101,7 +101,8 @@ jobs:
         run: |
           set +e
           config=$(./e2e/shard.sh ${{ matrix.shard }} 4)
-          tapstep test "e2e/.shard-${{ matrix.shard }}" --config "$config" --env-set ci --browser managed \
+          # A shared runner is slower than a laptop: waits get 12 s by default instead of 5 s.
+          tapstep test "e2e/.shard-${{ matrix.shard }}" --config "$config" --env-set ci --browser managed --wait-timeout 12000 \
             -e DATABASE_URL="$DATABASE_URL" --report junit --output reports/junit.xml
           code=$?
           # 1 = a flow failed (the product is red); 2 = tapstep could not run (infra).
