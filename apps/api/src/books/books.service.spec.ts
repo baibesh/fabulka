@@ -424,6 +424,108 @@ describe('BooksService', () => {
     ]);
   });
 
+  it('shortens a balloon left on a face, then moves it to a caption box in the last layout', async () => {
+    const models = new MockGateway(0);
+    const shortenText = jest.spyOn(models, 'shortenText');
+    const kid = { ...child, age: 10, language: 'en' as const };
+    const row: Record<string, unknown> = {
+      id: 'c2',
+      status: 'queued',
+      child: kid,
+      language: 'en',
+      pages: [],
+      layout: null,
+      createdAt: new Date(),
+    };
+    const update = jest.fn(({ data }: { data: Record<string, unknown> }) => {
+      Object.assign(row, data);
+      return Promise.resolve({ ...row });
+    });
+    // Balloon 1.2 stays on a face while it may only be a balloon; with caption boxes allowed it clears.
+    const render = jest.fn(
+      (
+        _id: string,
+        _book: unknown,
+        layout: BookLayout,
+        _pictures: unknown,
+        _hooks: unknown,
+        _cover: unknown,
+        _frames: unknown,
+        place: { captions?: boolean },
+      ) =>
+        Promise.resolve({
+          pdfPath: 'books/c2/book.pdf',
+          tones: {},
+          layout: {
+            ...layout,
+            qa: place.captions
+              ? {
+                  status: 'ok' as const,
+                  checkedAt: null,
+                  notes: [],
+                  issues: [],
+                }
+              : {
+                  status: 'blocked' as const,
+                  checkedAt: null,
+                  notes: [],
+                  issues: [
+                    {
+                      page: 'story-1',
+                      kind: 'face' as const,
+                      detail: '',
+                      element: '1:1.2',
+                    },
+                  ],
+                },
+          },
+        }),
+    );
+    const service = makeService(
+      {
+        book: {
+          create: jest.fn().mockImplementation(({ data }: { data: object }) => {
+            Object.assign(row, data);
+            return Promise.resolve({ ...row });
+          }),
+          update,
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        modelCall: { create: jest.fn().mockResolvedValue({}) },
+      },
+      models,
+      methodRows(),
+      {},
+      {
+        storage: {
+          url: () => null,
+          save: (path: string) => Promise.resolve(path),
+        },
+        pdf: { render },
+      },
+    );
+
+    await service.create(
+      { child: kid, methodology: 'comic-quest' },
+      'k',
+      false,
+    );
+    for (let i = 0; i < 100 && row.status !== 'done'; i++)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(row.status).toBe('done');
+    // Muse Spark shortens the line in both rounds (the mock keeps its first words), then the last layout moves it.
+    expect(shortenText).toHaveBeenCalledTimes(2);
+    expect(shortenText.mock.calls[0][0]).toMatchObject({ kind: 'speech' });
+    expect(render.mock.calls.map((c) => c[7])).toEqual([
+      { captions: false },
+      { captions: false },
+      { captions: false },
+      { captions: true },
+    ]);
+    expect((row.layout as BookLayout).qa.status).toBe('ok');
+  });
+
   it("sends the illustrators' references with the hero, each page and the cover, records them, and draws the cover", async () => {
     // Pages 1 and 2 of a 2-page growth-mindset book tell beats 1 and 4 (spread over the six beats).
     const theme = defaultThemeId(child.age);

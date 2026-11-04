@@ -78,6 +78,7 @@ import {
   lookSentence,
   type HeroPhotoRecord,
   type PhotoFallback,
+  type PlaceOptions,
 } from '@fabulka/shared';
 import { randomBytes } from 'node:crypto';
 import { basename } from 'node:path';
@@ -695,6 +696,7 @@ export class BooksService implements OnModuleInit {
     row: BookRow,
     layout = layoutOf(row.layout),
     hooks: RenderHooks = {},
+    place: PlaceOptions = { captions: true },
   ) {
     const book = storedBook(row);
     const labels = BOOK_LABELS[book.language];
@@ -731,7 +733,16 @@ export class BooksService implements OnModuleInit {
       : null;
     const result = await this.journal.run({ bookId: row.id }, () =>
       this.journal.step('layout.check', {}, () =>
-        this.pdf.render(row.id, book, checked, pictures, hooks, cover, frames),
+        this.pdf.render(
+          row.id,
+          book,
+          checked,
+          pictures,
+          hooks,
+          cover,
+          frames,
+          place,
+        ),
       ),
     );
     // The tones are measured once and kept with the frames (the pages are saved in today's shape).
@@ -1235,11 +1246,17 @@ export class BooksService implements OnModuleInit {
         coverSubject: cover.subject ? json(cover.subject) : Prisma.DbNull,
       }),
     });
-    let rendered = await this.renderPdf(row, layoutOf(row.layout), {
-      printing: () => step('pdf', { progress: 97 }),
-    });
-    // A balloon or caption that does not fit even at the smallest size is shortened by Muse Spark
-    // (the one text, not the page) and the book laid out again.
+    // While Muse Spark may still shorten a line, a balloon left on a face stays a balloon (render QA
+    // fails it); the last layout moves what still covers a face into a caption box.
+    const shortening = { captions: false };
+    let rendered = await this.renderPdf(
+      row,
+      layoutOf(row.layout),
+      { printing: () => step('pdf', { progress: 97 }) },
+      shortening,
+    );
+    // A balloon or caption that does not fit even at the smallest size, or that covers a face, is
+    // shortened by Muse Spark (the one text, not the page) and the book laid out again.
     for (let round = 0; round < SHORTEN_ROUNDS; round++) {
       const shortened = await this.shortenOverflow(
         rendered.pages,
@@ -1250,8 +1267,10 @@ export class BooksService implements OnModuleInit {
       );
       if (!shortened) break;
       row = await save({ pages: json(shortened), costUsd: spent.usd });
-      rendered = await this.renderPdf(row, rendered.layout);
+      rendered = await this.renderPdf(row, rendered.layout, {}, shortening);
     }
+    if (rendered.layout.qa.issues.some((i) => i.kind === 'face'))
+      rendered = await this.renderPdf(row, rendered.layout);
     await writes;
     await this.update(id, 'done', {
       pdfPath: rendered.pdfPath,
@@ -1268,9 +1287,10 @@ export class BooksService implements OnModuleInit {
   }
 
   /**
-   * Shortens every text render QA found overflowing on a panel page (each issue names its element),
-   * to the format's limit for its kind or three quarters of its words. Returns the pages with the
-   * new texts, or null when nothing was shortened. Picture book pages are left to the layout.
+   * Shortens every text render QA found overflowing or covering a face on a panel page (each issue
+   * names its element), to the format's limit for its kind or three quarters of its words. Returns
+   * the pages with the new texts, or null when nothing was shortened. Picture book pages are left to
+   * the layout.
    */
   async shortenOverflow(
     pages: StoredPage[],
@@ -1280,7 +1300,7 @@ export class BooksService implements OnModuleInit {
     spent: Spend,
   ): Promise<StoredPage[] | null> {
     const issues = layout.qa.issues.filter(
-      (i) => i.kind === 'overflow' && i.element,
+      (i) => (i.kind === 'overflow' || i.kind === 'face') && i.element,
     );
     if (!issues.length) return null;
     const next = pages.map((p) => ({

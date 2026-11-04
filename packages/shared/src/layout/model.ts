@@ -138,9 +138,18 @@ export const FocusSchema = z.object({ x: z.number().min(0).max(1), y: z.number()
 export type Focus = z.infer<typeof FocusSchema>;
 
 /**
- * A text of a panel page placed in its frame (placeFrameTexts): its box as shares of the frame, the
- * point its tail ends at (a balloon pointing at its speaker; null: no tail), its type size and a tilt.
- * `face` is true when no place kept clear of every face (render QA notes it).
+ * How a speech line is drawn: "ellipse" - the round balloon; "box" - a rounded box that hugs its
+ * lines (a crowded frame); "caption" - the line moved into a box along the frame's edge, its tail
+ * still toward the speaker (no balloon kept clear of every face).
+ */
+export const BALLOON_SHAPES = ["ellipse", "box", "caption"] as const;
+export type BalloonShape = (typeof BALLOON_SHAPES)[number];
+
+/**
+ * A text of a panel page placed in its frame (placeFrameTexts): its box as shares of the frame (a
+ * balloon may stand out of it over the border), the point its tail ends at (a balloon pointing at its
+ * speaker; null: no tail), its type size, a tilt and, for speech, its shape. `face` is true when no
+ * place kept clear of every face (render QA fails it).
  */
 export const PlacedTextSchema = z.object({
   id: z.string(),
@@ -151,6 +160,7 @@ export const PlacedTextSchema = z.object({
   pt: z.number().positive(),
   rotate: z.number().default(0),
   face: z.boolean().default(false),
+  shape: z.enum(BALLOON_SHAPES).default("ellipse"),
 });
 export type PlacedText = z.infer<typeof PlacedTextSchema>;
 
@@ -189,12 +199,15 @@ export const PageLayoutSchema = z.object({
 });
 export type PageLayout = z.infer<typeof PageLayoutSchema>;
 
-/** "cover-overlap": the cover's lettering, as rendered, lies over the hero SAM found on the cover art. */
-export const RENDER_ISSUE_KINDS = ["overflow", "fallback-font", "cover-overlap"] as const;
+/**
+ * "cover-overlap": the cover's lettering, as rendered, lies over the hero SAM found on the cover art.
+ * "face": a text of a panel page covers a face in its frame (its element names it, for the shortening).
+ */
+export const RENDER_ISSUE_KINDS = ["overflow", "fallback-font", "cover-overlap", "face"] as const;
 /**
  * Things render QA tells staff without blocking print: "crop" - a picture too narrow for the
- * format's layouts; "no-art" - a page whose picture was refused, laid out as a vignette page;
- * "face" - a panel where no place for a balloon kept clear of every face.
+ * format's layouts; "no-art" - a page whose picture was refused, laid out as a vignette page.
+ * "face" is kept for layouts checked before a balloon on a face failed render QA.
  */
 export const RENDER_NOTE_KINDS = ["crop", "no-art", "face"] as const;
 export const RenderIssueSchema = z.object({
@@ -202,7 +215,7 @@ export const RenderIssueSchema = z.object({
   page: z.string(),
   kind: z.enum(RENDER_ISSUE_KINDS),
   detail: z.string(),
-  /** The text element that overflows on a panel page ("1.2": frame 1, its second text), for the shortening. */
+  /** The text element that overflows or covers a face on a panel page ("3:1.2": page 3, frame 1, its second text), for the shortening. */
   element: z.string().optional(),
 });
 export type RenderIssue = z.infer<typeof RenderIssueSchema>;
