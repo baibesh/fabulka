@@ -184,7 +184,7 @@ fi
 # Holders of these realm roles get into fabulka.com/admin; each must set up an authenticator app.
 # They are the bootstrap: on sign-in the API gives them a staff row with the role of the same name
 # (admin = superadmin, seo = the SEO section). Everyone else is invited from the admin's Team
-# section, where roles, countries and new roles are managed too — no new lines here for that.
+# section, where roles, countries and new roles are managed too - no new lines here for that.
 grant_role() { # role, description, comma-separated emails
     local role=$1 description=$2 emails=$3 user uid
     if ! kc get "realms/$REALM/roles/$role" >/dev/null 2>&1; then
