@@ -405,7 +405,7 @@ describe("countries", () => {
     expect(countryFromIp("KZ", owners)).toBe("other");
     expect(countryFromIp(null, owners)).toBe("other");
     expect(countryFromIp(null, [])).toBe("other");
-    expect(countryInfo("KZ", owners)).toEqual({ languages: ["en", "es", "de", "ru"], currency: "USD", print: false, payment: "manual" });
+    expect(countryInfo("KZ", owners)).toEqual({ languages: ["en", "es", "de", "ru"], currency: "USD", print: false, payment: "manual", heroPhoto: false });
   });
 
   it("never lists Russia or Belarus, and prints only in Kazakhstan", () => {

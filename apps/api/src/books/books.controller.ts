@@ -35,6 +35,7 @@ import { ReferenceService } from '../reference/reference.service';
 import { QuotaService } from '../quota/quota.service';
 import { SettingsService } from '../settings/settings.service';
 import { BooksService } from './books.service';
+import { assertHeroPhotoAllowed } from '../photos/hero-photos.controller';
 
 @Controller('books')
 export class BooksController {
@@ -63,6 +64,9 @@ export class BooksController {
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
+    // The photo path: signed in, and on in the visitor's country (the upload checked it too).
+    if (body.heroPhoto)
+      await assertHeroPhotoAllowed(user, client, this.geo, this.reference);
     await this.quota.assertCanCreate(
       client.key,
       client.demoCode,

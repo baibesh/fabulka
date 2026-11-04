@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { AdminPermission } from "@fabulka/shared";
-import { BookOpen, Brush, GraduationCap, History, LayoutDashboard, LayoutGrid, Library, ListChecks, LogOut, Package, ScrollText, Palette, Search, ShieldAlert, Sparkles, TriangleAlert, Users } from "lucide-react";
+import { BookOpen, Brush, GraduationCap, History, LayoutDashboard, LayoutGrid, Library, ListChecks, LogOut, Package, ScrollText, Palette, Search, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
@@ -30,6 +30,7 @@ const NAV: NavItem[] = [
   { href: "/admin/themes", label: "admin.nav.themes", icon: Palette, permission: "themes" },
   { href: "/admin/references", label: "admin.nav.references", icon: Brush, permission: "references" },
   { href: "/admin/reference", label: "admin.nav.reference", icon: ListChecks, permission: "reference" },
+  { href: "/admin/consent", label: "admin.nav.consent", icon: ShieldCheck, permission: "consent" },
   { href: "/admin/journal", label: "admin.nav.journal", icon: ScrollText, permission: "journal" },
   { href: "/admin/activity", label: "admin.nav.audit", icon: History, permission: "audit" },
   { href: "/admin/seo", label: "admin.nav.seo", icon: Search, permission: "seo" },

@@ -16,6 +16,7 @@ import {
   type AdminStats,
   type AdminTemplate,
   type CountryStats,
+  HeroPhotoRecordSchema,
   type Answers,
   type ChildProfile,
   type Language,
@@ -297,6 +298,8 @@ export class AdminService {
         : null,
       costUsd: row.costUsd,
       clientKey: row.clientKey,
+      heroPhotoRecord:
+        HeroPhotoRecordSchema.safeParse(row.heroPhoto).data ?? null,
       print: printOf(row),
     };
   }

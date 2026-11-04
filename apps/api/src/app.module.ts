@@ -69,6 +69,19 @@ import { StatusController } from './settings/status.controller';
 import { StorageModule } from './storage/storage.service';
 import { TemplatesController } from './templates/templates.controller';
 import { ToysController, ToyUploadsCleaner } from './toy/toys.controller';
+import {
+  ConsentAdminController,
+  ConsentController,
+} from './consent/consent.controller';
+import { ConsentService } from './consent/consent.service';
+import {
+  HeroPhotosController,
+  TestHeroPhotosController,
+} from './photos/hero-photos.controller';
+import {
+  HeroPhotosCleaner,
+  HeroPhotosService,
+} from './photos/hero-photos.service';
 import { TemplatesService } from './templates/templates.service';
 import { ThemesController } from './themes/themes.controller';
 import { ThemesService } from './themes/themes.service';
@@ -111,6 +124,10 @@ class HealthController {
     GeoController,
     StatusController,
     ToysController,
+    HeroPhotosController,
+    TestHeroPhotosController,
+    ConsentController,
+    ConsentAdminController,
     AdminAuthController,
     AdminController,
     ExamplesAdminController,
@@ -142,6 +159,9 @@ class HealthController {
     FormatsService,
     SettingsService,
     ToyUploadsCleaner,
+    ConsentService,
+    HeroPhotosService,
+    HeroPhotosCleaner,
     AdminAuthService,
     AdminService,
     JournalAdminService,

@@ -5,6 +5,8 @@ import {
   encodeGrid,
   textRule,
   transliterate,
+  lookFromModel,
+  type ChildLook,
   type Language,
   type ModelCallKind,
   type PageSubject,
@@ -12,6 +14,7 @@ import {
   type Story,
   type StoryPage,
 } from '@fabulka/shared';
+import sharp from 'sharp';
 import { type CallJournal, NO_JOURNAL } from '../journal/journal.service';
 import type {
   FrameRequest,
@@ -230,6 +233,25 @@ const SLOW_SHEET_MS = 2500;
 const SLOW_PAGE_MS = 4000;
 const slowedBy = (prompt: string, ms: number) =>
   prompt.includes(SLOW_MARK) ? sleep(ms) : Promise.resolve();
+
+/**
+ * What the mock's Muse Spark "sees" in any photo of a child, as the model's raw JSON. It carries a
+ * field the schema does not know (the kind of thing a model might add): lookFromModel must drop it,
+ * so nothing but the closed look values ever reaches a prompt or the book.
+ */
+export const MOCK_CHILD_JSON = {
+  skin_tone_hex: '#d9a47f',
+  hair_color: 'red',
+  hair_length: 'shoulder',
+  hair_texture: 'curly',
+  eye_color: 'green',
+  face_shape: 'round',
+  glasses: true,
+  freckles: true,
+  ethnicity: 'must never get through',
+};
+/** A photo smaller than this on either side is refused by the mock, as Meta refuses a photo it will not read. */
+export const MOCK_PHOTO_MIN_SIDE = 32;
 
 /** Muse Image's safety refusal, as the SDK throws it. */
 export function mockRefusal(): Error {
@@ -469,15 +491,38 @@ export class MockGateway implements ModelGateway {
     };
   }
 
+  /** A tiny photo is refused (the E2E fallback); any other gets MOCK_CHILD_JSON, read as the real one is. */
+  async describeChild(
+    photo: Buffer,
+  ): Promise<{ look: ChildLook; costUsd: number }> {
+    const call = this.journal.start({ kind: 'hero-describe', model: 'mock' });
+    await sleep(this.delayMs);
+    const size = await sharp(photo)
+      .metadata()
+      .catch(() => ({ width: 0, height: 0 }));
+    if (
+      (size.width ?? 0) < MOCK_PHOTO_MIN_SIDE ||
+      (size.height ?? 0) < MOCK_PHOTO_MIN_SIDE
+    ) {
+      const error = mockRefusal();
+      call.fail(error);
+      throw error;
+    }
+    const look = lookFromModel(MOCK_CHILD_JSON)!;
+    call.ok({ costUsd: 0 });
+    return { look, costUsd: 0 };
+  }
+
   async drawHero(
     description = '',
     _style?: string,
     references: ReferenceImage[] = [],
+    photo?: { data: Buffer; look: string },
   ): Promise<GeneratedImage> {
     await slowedBy(description, SLOW_SHEET_MS);
     await this.pretend('hero', 1, 0, references);
     return {
-      data: placeholder('hero', '#FFFFFF'),
+      data: placeholder(photo ? 'hero (photo)' : 'hero', '#FFFFFF'),
       ext: 'svg',
       ref: 'mock-hero',
       costUsd: 0,

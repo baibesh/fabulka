@@ -331,6 +331,8 @@ export function formatEstimate(
 export const PIPELINE_STEP_IDS = [
   "toy.cutout",
   "toy.describe",
+  /** Muse Spark describes the child's look from the parent's photo (the photo path, with consent). */
+  "hero.describe",
   "story.write",
   "story.review",
   "sheet.hero",
@@ -370,11 +372,12 @@ export function pipelineFor(format: StoryFormatData): PipelineStep[] {
   const steps: PipelineStep[] = [
     { id: "toy.cutout", model: "sam", per: "book", after: [], params: { concept: "toy" }, optional: true },
     { id: "toy.describe", model: "muse-spark", per: "book", after: ["toy.cutout"], params: {}, optional: true },
+    { id: "hero.describe", model: "muse-spark", per: "book", after: [], params: {}, optional: true },
     {
       id: "story.write",
       model: "muse-spark",
       per: "book",
-      after: ["toy.describe"],
+      after: ["toy.describe", "hero.describe"],
       params: { pageCount: format.pageCount, grids: format.grids.map((g) => g.id), textRules: format.textRules, rules: format.rules },
       optional: false,
     },

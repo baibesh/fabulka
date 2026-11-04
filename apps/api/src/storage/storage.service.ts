@@ -15,9 +15,59 @@ import { dirname, join, resolve } from 'node:path';
 @Injectable()
 export class StorageService {
   readonly root: string;
+  /**
+   * Files that are never served (a child's photo for the hero, for minutes): a folder next to the
+   * public one, not under it, so no /files address reaches them.
+   */
+  readonly privateRoot: string;
 
   constructor(config: ConfigService) {
     this.root = resolve(config.get('STORAGE_DIR', './storage'));
+    this.privateRoot = resolve(
+      config.get('PRIVATE_STORAGE_DIR', `${this.root}-private`),
+    );
+  }
+
+  /** Saves a private file (never served); returns its path relative to the private root. */
+  async savePrivate(relativePath: string, data: Buffer): Promise<string> {
+    const full = join(this.privateRoot, relativePath);
+    await mkdir(dirname(full), { recursive: true });
+    await writeFile(full, data);
+    return relativePath;
+  }
+
+  readPrivate(relativePath: string): Promise<Buffer> {
+    return readFile(join(this.privateRoot, relativePath));
+  }
+
+  existsPrivate(relativePath: string): Promise<boolean> {
+    return stat(join(this.privateRoot, relativePath)).then(
+      (s) => s.isFile(),
+      () => false,
+    );
+  }
+
+  removePrivate(relativePath: string): Promise<void> {
+    return rm(join(this.privateRoot, relativePath), { force: true });
+  }
+
+  /** Deletes private files in a folder written more than `ageMs` ago; returns how many. */
+  async removePrivateOlderThan(
+    relativeDir: string,
+    ageMs: number,
+  ): Promise<number> {
+    const dir = join(this.privateRoot, relativeDir);
+    const names = await readdir(dir).catch(() => [] as string[]);
+    let removed = 0;
+    for (const name of names) {
+      const file = join(dir, name);
+      const { mtimeMs } = await stat(file);
+      if (Date.now() - mtimeMs > ageMs) {
+        await rm(file, { force: true });
+        removed++;
+      }
+    }
+    return removed;
   }
 
   /** Saves a file and returns its path relative to the storage root. */

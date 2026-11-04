@@ -70,6 +70,8 @@ export const AUDIT_ACTIONS = [
   "story_format.create",
   "story_format.update",
   "story_format.delete",
+  /** A new version of a consent text (the photo path), in one language. */
+  "consent.update",
   "seo.save",
   "seo.publish",
   "seo.revert",

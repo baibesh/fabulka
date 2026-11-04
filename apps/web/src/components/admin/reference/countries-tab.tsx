@@ -54,7 +54,15 @@ export function CountriesTab({ initial, blocked, prices }: { initial: CountryEnt
   const save = useMutation({
     mutationFn: async (next: CountryDraft[]) => {
       const parsed = CountriesSchema.safeParse(
-        next.map(({ code, languages, currency, print, payment }) => ({ code, languages, currency, print, ...(payment && payment !== "manual" && { payment }) })),
+        next.map(({ code, languages, currency, print, payment, heroPhoto }) => ({
+          code,
+          languages,
+          currency,
+          print,
+          ...(payment && payment !== "manual" && { payment }),
+          // On is the default and is left out; only a switched-off country says so.
+          ...(heroPhoto === false && { heroPhoto }),
+        })),
       );
       setProblems(parsed.success ? {} : issuesByPath(parsed.error.issues));
       return parsed.success ? saveCountries(parsed.data) : null;
@@ -160,6 +168,14 @@ export function CountriesTab({ initial, blocked, prices }: { initial: CountryEnt
                     <label className="flex cursor-pointer items-center gap-2 text-sm whitespace-nowrap">
                       <Checkbox data-testid="country-print" checked={country.print} onChange={(e) => update(i, () => ({ print: e.target.checked }))} />
                       {t("admin.reference.country.print")}
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm whitespace-nowrap" title={t("admin.reference.country.heroPhoto.hint")}>
+                      <Checkbox
+                        data-testid="country-hero-photo"
+                        checked={country.heroPhoto !== false}
+                        onChange={(e) => update(i, () => ({ heroPhoto: e.target.checked }))}
+                      />
+                      {t("admin.reference.country.heroPhoto")}
                     </label>
                   </span>
                   <label className="flex flex-col gap-1 text-sm">

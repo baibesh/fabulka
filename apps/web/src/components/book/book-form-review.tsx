@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useI18n } from "@/i18n/i18n";
 import { LOCALE_NAMES, type MessageKey } from "@/i18n/messages";
 import { splitInterests, type FormValues, type Step } from "./book-form-model";
+import { useLookSummary } from "./book-form-look";
 import { Button } from "../ui/button";
 
 /** Everything the parent filled in, step by step, each with a way back to change it. */
@@ -14,6 +15,7 @@ export function ReviewSummary({
   template,
   methodName,
   hasPhoto,
+  heroPhoto,
   stepName,
   onEdit,
 }: {
@@ -21,10 +23,13 @@ export function ReviewSummary({
   template?: Template;
   methodName?: string;
   hasPhoto: boolean;
+  /** The consent version accepted when the hero is drawn from a photo; null for a description. */
+  heroPhoto: number | null;
   stepName: (step: Step) => MessageKey;
   onEdit: (step: Step) => void;
 }) {
   const { t } = useI18n();
+  const lookSummary = useLookSummary();
   const none = t("wizard.review.none");
   const group = (step: Step, rows: ReactNode) => (
     <ReviewGroup title={t(stepName(step))} edit={t("wizard.edit")} step={step} onEdit={onEdit}>
@@ -43,6 +48,13 @@ export function ReviewSummary({
           <ReviewRow name={t("wizard.review.interests")} value={splitInterests(values.interests).join(", ")} />
           <ReviewRow name={t("form.city")} value={values.city} />
         </>,
+      )}
+      {group(
+        "look",
+        <ReviewRow
+          name={t("look.review.hero")}
+          value={heroPhoto !== null ? t("look.review.photo", { version: heroPhoto }) : lookSummary(values.look) || t("look.review.auto")}
+        />,
       )}
       {group(
         "story",

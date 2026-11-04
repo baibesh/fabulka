@@ -1,0 +1,165 @@
+# The consent texts in the admin (Global settings, «Consent»): the superadmin edits the English lead
+# line and adds a second required checkbox; saving makes a new version (in the history and in
+# Activity). The wizard then shows that version, needs both checkboxes, and the book keeps the
+# version, language and time the parent accepted. The English text goes back to the default at the
+# end (one more version).
+appId: ${WEB}
+tags: [admin, consent, photo]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  stamp: "${Date.now()}"
+  childName: "Consent ${stamp}"
+  email: "consent+${stamp}@e2e.test"
+  lead: "The photo goes to Meta once to draw the hero, then Fabulka deletes it (${stamp})."
+  extra: "I have read how the photo is used (${stamp})."
+  # The test-only admin account from e2e/start-stack.sh.
+  adminEmail: admin@e2e.test
+  adminPassword: e2e-admin-password
+http:
+  baseUrl: ${API}
+commands:
+  # Closed without a session.
+  - request:
+      url: /admin/consent
+      assert: { status: 401 }
+  # From the default English text, whatever an earlier run left (no new version when it is already).
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: PUT
+      url: /admin/consent/en
+      json:
+        clauses:
+          - { id: purpose, kind: info, text: "The photo is sent to Meta (Muse Spark and Muse Image) for one purpose: to describe your child's appearance and draw the hero. Fabulka deletes it right after the hero is created and does not store it." }
+          - { id: meta-terms, kind: info, text: "Meta processes the photo under its own terms and may keep requests for a limited time for safety checks.", link: { url: "https://dev.meta.ai/legal/acceptable-use-policy", label: "Meta's acceptable use policy" } }
+          - { id: guardian, kind: checkbox, text: "I am the parent or legal guardian of this child and I agree to this transfer." }
+      assert: { status: 200 }
+  - sql:
+      query: "select coalesce(max(version), 0)::text as v, (coalesce(max(version), 0) + 1)::text as n from \"ConsentText\" where key = 'hero_photo' and language = 'en'"
+      readOnly: true
+      extract: { before: "$[0].v", next: "$[0].n" }
+
+  # The superadmin opens Consent from the nav and edits the English text.
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/admin/login"
+  - waitForVisible: { testId: admin-login }
+  - tapOn: { testId: admin-email }
+  - inputText: "${adminEmail}"
+  - tapOn: { testId: admin-password }
+  - inputText: "${adminPassword}"
+  - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: pause-card }
+  - tapOn: { css: "nav a[href^='/admin/consent']" }
+  - waitForVisible: { testId: admin-consent }
+  - waitForVisible: { css: "[data-testid=consent-form][data-language=en][data-version='${before}']" }
+  - assertVisible: { css: "[data-testid=consent-clause-row]:first-child", containsDescendants: { text: "Lead line" } }
+  - tapOn: { css: "[data-testid=consent-clause-row]:first-child [data-testid=consent-clause-text]" }
+  - eraseText: 600
+  - inputText: "${lead}"
+  - tapOn: { testId: consent-clause-add }
+  - tapOn: { css: "[data-testid=consent-clause-row]:last-child [data-testid=consent-clause-text]" }
+  - inputText: "${extra}"
+  - selectOption: { css: "[data-testid=consent-clause-row]:last-child [data-testid=consent-clause-kind]", optionValue: checkbox }
+  # Moved up one: it comes before the guardian's checkbox.
+  - tapOn: { css: "[data-testid=consent-clause-row]:last-child [data-testid=consent-clause-up]" }
+  - tapOn: { testId: consent-save }
+  - waitForVisible: { css: "[data-testid=consent-form][data-language=en][data-version='${next}']", timeout: 10000 }
+  - assertVisible: { css: "[data-testid=consent-history-row][data-version='${next}']" }
+  - assertVisible: { css: "[data-testid=consent-history-row][data-version='${before}']" }
+  - sql:
+      query: >-
+        select "createdBy" as who, jsonb_array_length(clauses)::int as n, clauses->0->>'text' as lead, clauses->2->>'kind' as third
+        from "ConsentText" where key = 'hero_photo' and language = 'en' and version = $1::int
+      params: ["${next}"]
+      readOnly: true
+      extract: { savedLead: "$[0].lead" }
+      assert: { rows: 1, first: { who: admin@e2e.test, n: 4, third: checkbox } }
+  - assertTrue: { equals: ["${savedLead}", "${lead}"] }
+  # Activity has it.
+  - openLink: "${WEB}/admin/activity"
+  - waitForVisible: { testId: activity-table }
+  - selectOption: { testId: activity-filter-section, optionValue: consent }
+  - waitForVisible: { css: "[data-testid=activity-row][data-action='consent.update'][data-target=en]" }
+  # Countries offer the photo path by default, with a switch each.
+  - openLink: "${WEB}/admin/reference"
+  - waitForVisible: { testId: reference-tabs }
+  - tapOn: { testId: reference-tab-countries }
+  - waitForVisible: { css: "[data-testid=country-row][data-code=KZ] [data-testid=country-hero-photo]:checked", timeout: 15000 }
+
+  # A parent in English sees the new version and needs both checkboxes.
+  - runFlow: ../helpers/kazakhstan.helper.yaml
+  - openLink: "${WEB}/en/create"
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "boats"
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { css: "[data-step=look]" }
+  - tapOn: { testId: hero-mode-photo }
+  - waitForVisible: { testId: hero-photo-signin }
+  - tapOn: { testId: hero-photo-signin-button }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${email}"
+  - tapOn: { testId: mock-login-submit }
+  - waitForVisible: { css: "[data-testid=consent-panel][data-version='${next}'][data-language=en]", timeout: 15000 }
+  - assertVisible: { testId: consent-lead, contains: "${stamp}" }
+  - tapOn: { css: "[data-testid^=consent-check-c-]" }
+  - assertVisible: { testId: consent-accept, enabled: false }
+  - tapOn: { testId: consent-check-guardian }
+  - assertVisible: { testId: consent-accept, enabled: true }
+  - tapOn: { testId: consent-accept }
+  - uploadFile: { css: "[data-testid=hero-photo-input]", files: "${PWD}/e2e/fixtures/child.jpg" }
+  - waitForVisible: { testId: hero-photo-preview }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { testId: wizard-review }
+  - assertVisible: { contains: "From a photo (consent, version ${next})" }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "The book is ready", timeout: 40000 }
+  # The book keeps the version, the language and the time the parent accepted.
+  - sql:
+      query: >-
+        select b."heroPhoto"->'consent'->>'version' as version, b."heroPhoto"->'consent'->>'language' as lang,
+        (b."heroPhoto"->'consent'->>'acceptedAt')::timestamptz > now() - interval '10 minutes' as recent,
+        b."heroSource" as source
+        from "Book" b where b.child->>'name' = $1
+      params: ["${childName}"]
+      readOnly: true
+      extract: { version: "$[0].version" }
+      assert: { rows: 1, first: { lang: en, recent: true, source: photo } }
+  - assertTrue: { equals: ["${version}", "${next}"] }
+
+  # The English text back to the default (a new version again).
+  - request:
+      method: POST
+      url: /admin/login
+      json: { email: "${adminEmail}", password: "${adminPassword}" }
+      assert: { status: 204 }
+  - request:
+      method: PUT
+      url: /admin/consent/en
+      json:
+        clauses:
+          - { id: purpose, kind: info, text: "The photo is sent to Meta (Muse Spark and Muse Image) for one purpose: to describe your child's appearance and draw the hero. Fabulka deletes it right after the hero is created and does not store it." }
+          - { id: meta-terms, kind: info, text: "Meta processes the photo under its own terms and may keep requests for a limited time for safety checks.", link: { url: "https://dev.meta.ai/legal/acceptable-use-policy", label: "Meta's acceptable use policy" } }
+          - { id: guardian, kind: checkbox, text: "I am the parent or legal guardian of this child and I agree to this transfer." }
+      assert: { status: 200 }
+  # A clause list without a checkbox is refused.
+  - request:
+      method: PUT
+      url: /admin/consent/en
+      json: { clauses: [{ id: only, kind: info, text: "No box to tick" }] }
+      assert: { status: 400 }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }
+  - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${email}"] }

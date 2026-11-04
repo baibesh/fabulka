@@ -4,12 +4,17 @@ import {
   GRID,
   StorySchema,
   gridCell,
+  lookSentence,
   type ChildProfile,
 } from '@fabulka/shared';
 import { subjectGrid } from './meta.gateway';
-import { MockGateway } from './mock.gateway';
+import sharp from 'sharp';
+import { MOCK_CHILD_JSON, MockGateway } from './mock.gateway';
 import {
+  CHILD_LOOK_PROMPT,
   castPrompt,
+  heroFromPhotoPrompt,
+  referenceNotes,
   framePrompt,
   heroPrompt,
   methodPrompt,
@@ -355,5 +360,65 @@ describe('prompts', () => {
       'Favourite toy, called "Бусинка": a plush bunny with a red scarf',
     );
     expect(toyPrompt('a plush bunny')).toContain('reference photo');
+  });
+});
+
+describe('the hero from a photo (mock and prompts)', () => {
+  const SENSITIVE =
+    /ethnic|race|racial|asian|african|european|caucasian|hispanic|nationality|religio|disab|health|must never get through/i;
+  const image = (side: number) =>
+    sharp({
+      create: { width: side, height: side, channels: 3, background: '#c08060' },
+    })
+      .jpeg()
+      .toBuffer();
+
+  it('describes the look with closed values only, dropping the extra field the raw answer carries', async () => {
+    const { look } = await new MockGateway(0).describeChild(await image(64));
+    expect(MOCK_CHILD_JSON).toHaveProperty('ethnicity');
+    expect(look).not.toHaveProperty('ethnicity');
+    expect(JSON.stringify(look)).not.toMatch(SENSITIVE);
+    const sentence = lookSentence(look);
+    expect(sentence).toContain('curly red hair');
+    expect(sentence).not.toMatch(SENSITIVE);
+  });
+
+  it('refuses a photo too small to read, as Meta does', async () => {
+    await expect(
+      new MockGateway(0).describeChild(await image(16)),
+    ).rejects.toThrow('content management policy');
+  });
+
+  it('asks Spark for appearance only, never sensitive attributes, and puts the look into the story', () => {
+    expect(CHILD_LOOK_PROMPT).toContain('Never infer or mention ethnicity');
+    expect(CHILD_LOOK_PROMPT).toContain('"skin_tone_hex"');
+    const prompt = storyPrompt(
+      brief({
+        look: { hairColor: 'red', hairTexture: 'curly', glasses: true },
+      }),
+    );
+    expect(prompt).toContain(
+      'The hero looks like this: curly red hair, glasses. Keep exactly this look in "hero_description"',
+    );
+    expect(storyPrompt(brief())).not.toContain('The hero looks like this');
+  });
+
+  it('draws the hero from the photo as picture 1, with the references after it', () => {
+    const prompt = heroFromPhotoPrompt(
+      'a 6-year-old girl in a yellow raincoat',
+      'curly red hair',
+    );
+    expect(prompt).toContain('Attached picture 1 is a photo of the child');
+    expect(prompt).toContain('which is: curly red hair');
+    expect(prompt).toContain('not a photo');
+    expect(referenceNotes(['style'], 'hero', 1)).toContain(
+      'picture 2: style references',
+    );
+    expect(referenceNotes(['style'], 'hero', 1)).toContain(
+      'come only from picture 1',
+    );
+    expect(referenceNotes(['style'], 'hero')).toContain(
+      'picture 1: style references',
+    );
   });
 });

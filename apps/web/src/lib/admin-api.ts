@@ -1,5 +1,10 @@
 import {
   AdminBookRowSchema,
+  AdminConsentSchema,
+  AdminConsentVersionSchema,
+  type AdminConsent,
+  type AdminConsentVersion,
+  type ConsentClause,
   AdminLoginOptionsSchema,
   AdminBookSchema,
   AdminMethodologySchema,
@@ -631,4 +636,14 @@ export async function flagPage(id: string, flag: CreatePageFlag): Promise<PageFl
 
 export async function resolveFlag(id: string, resolved: boolean): Promise<PageFlag> {
   return PageFlagSchema.parse(await request(`/api/admin/flags/${id}`, json("PATCH", { resolved })));
+}
+
+/** Admin «Consent»: every language's current consent text and its versions. */
+export async function adminConsent(): Promise<AdminConsent> {
+  return AdminConsentSchema.parse(await request("/api/admin/consent"));
+}
+
+/** Saves one language's clauses as a new version (the same clauses add none); returns the version now shown. */
+export async function saveConsent(language: Language, clauses: ConsentClause[]): Promise<AdminConsentVersion> {
+  return AdminConsentVersionSchema.parse(await request(`/api/admin/consent/${language}`, json("PUT", { clauses })));
 }

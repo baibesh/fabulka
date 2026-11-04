@@ -18,6 +18,8 @@ export const GENERATION_STEPS = [
   "read",
   /** SAM 3.1 cuts the toy out of the photo, Muse Spark describes it for the story. */
   "toy",
+  /** Muse Spark describes the child's look from the parent's photo (the photo path only). */
+  "photo",
   /** Muse Spark writes the story. */
   "story",
   /** Muse Spark reads it again before any picture is drawn (safety and age). */
@@ -40,6 +42,7 @@ export type GenerationStep = z.infer<typeof GenerationStepSchema>;
 export const STEP_MODELS: Record<GenerationStep, string | null> = {
   read: null,
   toy: "SAM 3.1 · Muse Spark",
+  photo: "Muse Spark",
   story: "Muse Spark",
   review: "Muse Spark",
   hero: "Muse Image",
@@ -60,6 +63,10 @@ export const GenerationStateSchema = z.object({
   step: GenerationStepSchema,
   /** The parent sent a toy photo. */
   toy: z.boolean(),
+  /** The hero is drawn from the child's photo (the "photo" step runs). */
+  photo: z.boolean().default(false),
+  /** When the child's photo was deleted (ISO), once the hero sheet exists or the photo was given up. */
+  photoDeletedAt: z.string().nullable().default(null),
   /** The book has a pet sheet: the child's profile names a pet until the story says. */
   pet: z.boolean(),
   /** Pages planned, then as many as the story wrote. */
@@ -90,6 +97,9 @@ export const GenerationViewSchema = z.object({
   /** The book has a toy photo / a pet: which character sheets the "friends" step draws. */
   toy: z.boolean(),
   pet: z.boolean(),
+  /** The hero is drawn from the child's photo; `photoDeletedAt` once the photo is deleted. */
+  photo: z.boolean().default(false),
+  photoDeletedAt: z.string().nullable().default(null),
   pagesDone: z.number().int().min(0),
   pagesTotal: z.number().int().min(0),
   /** Pictures drawn of all the pages need (frames; a picture book has one a page). */
@@ -105,9 +115,10 @@ export const GenerationViewSchema = z.object({
 export type GenerationView = z.infer<typeof GenerationViewSchema>;
 
 /** The steps this book goes through, in order. */
-export function stepsFor(state: Pick<GenerationState, "toy" | "pet"> & { cast?: number }): GenerationStep[] {
+export function stepsFor(state: Pick<GenerationState, "toy" | "pet"> & { cast?: number; photo?: boolean }): GenerationStep[] {
   return GENERATION_STEPS.filter((step) => {
     if (step === "toy") return state.toy;
+    if (step === "photo") return state.photo === true;
     if (step === "friends") return state.toy || state.pet || (state.cast ?? 0) > 0;
     return true;
   });
@@ -143,6 +154,7 @@ export function statusOfStep(step: GenerationStep): BookStatus {
       return "queued";
     case "toy":
       return "toy";
+    case "photo":
     case "story":
     case "review":
       return "story";
@@ -202,6 +214,8 @@ export function stepSeconds(step: GenerationStep, state: Pick<GenerationState, "
       return 0;
     case "toy":
       return t.toyCutout + t.toyDescribe;
+    case "photo":
+      return t.toyDescribe;
     case "story":
       // A scenario of panels is longer to write than one text a page: it grows with the frames a page.
       return t.story * Math.max(1, framesOf(state) / Math.max(1, state.pages));
@@ -297,6 +311,8 @@ export function stateOfStatus(
   return {
     step: stepOfStatus(status),
     toy: book.toy,
+    photo: false,
+    photoDeletedAt: null,
     pet: book.pet,
     pages: book.pages,
     cast: 0,
@@ -324,6 +340,8 @@ export function generationView(
     step,
     toy: state.toy,
     pet: state.pet,
+    photo: state.photo,
+    photoDeletedAt: state.photoDeletedAt,
     pagesDone: Math.min(progress.pagesDone, state.pages),
     pagesTotal: state.pages,
     framesDone,

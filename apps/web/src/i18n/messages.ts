@@ -1,4 +1,5 @@
 import { LANGUAGES, LANGUAGE_NAMES } from "@fabulka/shared";
+import { PHOTO_MESSAGES } from "./messages-photo";
 
 /** The interface languages: the book languages, in the same order (English first, Russian last). */
 export const UI_LOCALES = LANGUAGES;
@@ -1551,6 +1552,7 @@ const ru = {
   "admin.book.speaker": "говорит: {speaker}",
   "admin.book.panels": "Страница из кадров: раскладка одна, по сетке",
   "admin.book.layout.note.face": "Облачко на лице",
+  ...PHOTO_MESSAGES.ru,
 } as const;
 
 export type MessageKey = keyof typeof ru;
@@ -3101,6 +3103,7 @@ const kk: Messages = {
   "admin.book.speaker": "сөйлейді: {speaker}",
   "admin.book.panels": "Кадрлардан тұратын бет: орналасуы біреу, тор бойынша",
   "admin.book.layout.note.face": "Бұлт бетті жауып тұр",
+  ...PHOTO_MESSAGES.kk,
 };
 
 const en: Messages = {
@@ -4649,6 +4652,7 @@ const en: Messages = {
   "admin.book.speaker": "says: {speaker}",
   "admin.book.panels": "A page of panels: one layout, its grid",
   "admin.book.layout.note.face": "A balloon over a face",
+  ...PHOTO_MESSAGES.en,
 };
 
 const es: Messages = {
@@ -6197,6 +6201,7 @@ const es: Messages = {
   "admin.book.speaker": "habla: {speaker}",
   "admin.book.panels": "Página de viñetas: un solo diseño, su cuadrícula",
   "admin.book.layout.note.face": "Un bocadillo sobre una cara",
+  ...PHOTO_MESSAGES.es,
 };
 
 const de: Messages = {
@@ -7745,6 +7750,7 @@ const de: Messages = {
   "admin.book.speaker": "spricht: {speaker}",
   "admin.book.panels": "Eine Seite aus Panels: ein Layout, ihr Raster",
   "admin.book.layout.note.face": "Eine Sprechblase über einem Gesicht",
+  ...PHOTO_MESSAGES.de,
 };
 
 export const MESSAGES: Record<UiLocale, Messages> = { ru, kk, en, es, de };

@@ -22,6 +22,9 @@ commands:
   - tapOn: { testId: child-interests }
   - inputText: "космос, лошади"
   - tapOn: { testId: wizard-next }
+  # The hero's look: by description, as picked (nothing), then on.
+  - waitForVisible: { css: "[data-step=look]" }
+  - tapOn: { testId: wizard-next }
   - tapOn: { testId: book-theme }
   - inputText: "боится темноты"
   - tapOn: { testId: wizard-next }

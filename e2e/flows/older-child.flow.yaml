@@ -22,6 +22,9 @@ commands:
   - tapOn: { testId: child-interests }
   - inputText: "скейтборд, роботы"
   - tapOn: { testId: wizard-next }
+  # The hero's look: by description, as picked (nothing), then on.
+  - waitForVisible: { css: "[data-step=look]" }
+  - tapOn: { testId: wizard-next }
   - waitForVisible: { css: "[data-step=story]" }
   # A method that covers 11 is offered.
   - selectOption: { testId: book-methodology, optionValue: growth-mindset }

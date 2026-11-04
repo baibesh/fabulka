@@ -11,13 +11,13 @@ commands:
   - openLink: "${WEB}/ru/create"
   # Voice input is on in e2e: the first step offers a recording, the link skips it.
   - waitForVisible: { css: "[data-step=voice]", timeout: 20000 }
-  - assertVisible: { contains: "Шаг 1 из 5", childOf: { testId: wizard-step } }
+  - assertVisible: { contains: "Шаг 1 из 6", childOf: { testId: wizard-step } }
   - assertVisible: "Мы не сохраняем запись - только распознаём текст."
   - tapOn: { testId: voice-manual }
 
   # About the child: nothing entered, Next stays on the step and names the missing fields.
   - waitForVisible: { css: "[data-step=child]" }
-  - assertVisible: { contains: "Шаг 2 из 5", childOf: { testId: wizard-step } }
+  - assertVisible: { contains: "Шаг 2 из 6", childOf: { testId: wizard-step } }
   - tapOn: { testId: wizard-next }
   - assertVisible: "Введите имя"
   - assertVisible: "Назовите хотя бы одно увлечение"
@@ -31,6 +31,11 @@ commands:
   - tapOn: { testId: child-interests }
   - inputText: "футбол"
   - pressKey: enter
+  # The hero's look comes next: by description by default, nothing picked; Next goes on.
+  - waitForVisible: { css: "[data-step=look]" }
+  - assertVisible: { contains: "Шаг 3 из 6", childOf: { testId: wizard-step } }
+  - assertVisible: { css: "[data-testid=look-step][data-mode=description]" }
+  - tapOn: { testId: wizard-next }
   - waitForVisible: { css: "[data-step=story]" }
   - assertVisible: { testId: book-theme }
 
@@ -38,6 +43,8 @@ commands:
   - tapOn: { testId: wizard-back }
   - waitForVisible: { css: "[data-step=child]" }
   - assertVisible: { testId: child-name, value: "Тимур" }
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { css: "[data-step=look]" }
   - tapOn: { testId: wizard-next }
   - tapOn: { testId: wizard-next }
   - waitForVisible: { css: "[data-step=toy]" }

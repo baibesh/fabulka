@@ -40,6 +40,12 @@ model Book {
   /// Muse Image response id of the hero character sheet; pages chain from it.
   heroResponseId  String?
   heroImagePath   String?
+  /// What the hero was drawn from: "photo" (the child's photo, by consent) or "description".
+  heroSource      String          @default("description")
+  /// The child's photo for the hero, when one was sent (HeroPhotoRecord in @fabulka/shared): the
+  /// consent (version, language, time), when it was described, drawn from and deleted, and why it
+  /// was not used. Never the photo itself.
+  heroPhoto       Json?
   /// The favourite toy: the parent's photo, SAM's cut-out, Spark's description, its character sheet.
   toyName         String?
   toyPhotoPath    String?
@@ -698,4 +704,40 @@ model PageFlag {
 
   @@index([resolved, createdAt])
   @@index([bookId])
+}
+
+/// A photo of the child uploaded for the hero (POST /hero-photos, signed in, with consent), waiting
+/// for its book. The file sits outside the public files; the row and the file are deleted right after
+/// the hero sheet is drawn, when the photo is given up, or an hour after upload at the latest.
+model HeroPhoto {
+  /// The upload id the book refers to (32 hex).
+  id              String   @id
+  userId          String
+  /// Relative to the private storage root (StorageService.savePrivate).
+  path            String
+  /// The consent text shown (ConsentText version and language) and when the parent accepted it.
+  consentVersion  Int
+  consentLanguage String
+  consentAt       DateTime @default(now())
+  /// The book that took it.
+  bookId          String?  @unique
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// A version of a consent text in one language (admin «Consent»): the clauses in order
+/// (ConsentClause[] in @fabulka/shared). Every save adds a version; the newest is shown.
+model ConsentText {
+  id        String   @id @default(cuid(2))
+  /// What it is for: "hero_photo".
+  key       String
+  language  String
+  version   Int
+  clauses   Json
+  /// Who saved it (an email); null for the seeded version 1.
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  @@unique([key, language, version])
 }

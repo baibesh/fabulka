@@ -6,10 +6,16 @@ import { useQuery } from "@/lib/query";
 import {
   CHILD_AGE_MAX,
   CHILD_AGE_MIN,
+  CONSENT_OUTDATED,
   GENERATION_PAUSED,
   LIMIT_REACHED,
+  PHOTO_REFUSALS,
+  PHOTO_REFUSED,
   answersProblem,
   fitsAge,
+  heroPhotoOffered,
+  type ChildLook,
+  type PhotoRefusal,
   type Template,
   type VoicePrefill,
 } from "@fabulka/shared";
@@ -17,12 +23,15 @@ import { ArrowLeft, ArrowRight, BookOpen, CirclePause } from "lucide-react";
 import { LocaleLink, useLocaleRouter } from "@/i18n/routing";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch, type FieldErrors, type FieldPath } from "react-hook-form";
-import { ApiError, createBook, getQuota, getStatus, uploadToy } from "@/lib/api";
+import { ApiError, createBook, getHeroConsent, getQuota, getStatus, uploadHeroPhoto, uploadToy } from "@/lib/api";
+import { loginUrl, useMe } from "@/lib/auth";
+import { photoProblem, readDataUrl, shrinkPhoto } from "@/lib/photo-file";
 import { toJpegDataUrl } from "@/lib/toy-photo";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { ages, FormSchema, STEP_FIELDS, STEPS, splitInterests, type FormValues, type Step } from "./book-form-model";
 import { ReviewSummary } from "./book-form-review";
 import { ChildStep, StoryStep, ToyStep } from "./book-form-steps";
+import { LookStep } from "./book-form-look";
 import { PriceTag } from "./price-tag";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/messages";
@@ -30,6 +39,30 @@ import { Paywall } from "./paywall";
 import { VoiceStep } from "./voice-step";
 import { ErrorText, Notice } from "../ui/notice";
 import { Button } from "../ui/button";
+
+/** Where the answers wait while the parent signs in for the photo path (this tab only). */
+const DRAFT_KEY = "fabulka.wizardDraft";
+
+/** The answers saved before sign-in for this form, once (they are removed as they are read). */
+function takeDraft(path: string): FormValues | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(DRAFT_KEY);
+    const draft = JSON.parse(raw) as { path?: string; values?: unknown };
+    if (draft.path !== path) return null;
+    const parsed = FormSchema.safeParse(draft.values);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The look the parent picked, without the fields left to the illustrator; undefined when none. */
+function pickedLook(look: ChildLook): ChildLook | undefined {
+  const picked = Object.fromEntries(Object.entries(look).filter(([, value]) => value !== undefined && value !== null));
+  return Object.keys(picked).length ? (picked as ChildLook) : undefined;
+}
 
 /**
  * A book of your own, or, with `template`, a catalog book with its questions - filled in step by
@@ -53,6 +86,8 @@ export function BookForm({ template }: { template?: Template }) {
       theme: "",
       toyName: "",
       answers: {},
+      heroMode: "description",
+      look: {},
     },
   });
   const age = Number(useWatch({ control: form.control, name: "age" }));
@@ -91,6 +126,75 @@ export function BookForm({ template }: { template?: Template }) {
     if (chosen) heading.current?.focus();
   }, [chosen]);
 
+  // ---- The hero's look: a description, or the child's photo (signed in, after the consent) ----
+  const me = useMe();
+  const signedIn = me.isPending ? null : Boolean(me.data?.user);
+  const offered = heroPhotoOffered(info);
+  const heroMode = useWatch({ control: form.control, name: "heroMode" });
+  const consent = useQuery({
+    queryKey: ["consent", "hero-photo", locale],
+    queryFn: () => getHeroConsent(locale),
+    enabled: heroMode === "photo" && signedIn === true,
+  });
+  // The consent version the parent accepted on this screen; a new version asks again.
+  const [accepted, setAccepted] = useState<number | null>(null);
+  const [heroPhoto, setHeroPhoto] = useState<File | null>(null);
+  const heroPreview = useMemo(() => (heroPhoto ? URL.createObjectURL(heroPhoto) : null), [heroPhoto]);
+  useEffect(() => () => void (heroPreview && URL.revokeObjectURL(heroPreview)), [heroPreview]);
+  const [heroProblem, setHeroProblem] = useState<PhotoRefusal | null>(null);
+  const [lookError, setLookError] = useState<string | null>(null);
+  const pickHeroPhoto = async (file: File | null) => {
+    setLookError(null);
+    if (!file) {
+      setHeroPhoto(null);
+      setHeroProblem(null);
+      return;
+    }
+    const shrunk = await shrinkPhoto(file);
+    const problem = photoProblem(shrunk);
+    setHeroProblem(problem);
+    setHeroPhoto(problem ? null : shrunk);
+  };
+  // Where sign-in comes back to; the answers so far wait in this tab meanwhile.
+  const returnPath = template ? `/catalog/${template.slug}` : "/create";
+  const signIn = () => {
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ path: returnPath, values: form.getValues() }));
+    } catch {
+      // Storage blocked: the parent fills the form in again.
+    }
+    window.location.href = loginUrl(returnPath, locale);
+  };
+  // Back from sign-in: the answers come back and the wizard opens on the look step.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    const draft = takeDraft(returnPath);
+    if (!draft) return;
+    form.reset(draft);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a one-time restore after the sign-in redirect
+    setChosen("look");
+  }, [form, returnPath]);
+  // The photo path is only for countries that offer it.
+  useEffect(() => {
+    if (!offered && form.getValues("heroMode") === "photo") form.setValue("heroMode", "description");
+  }, [form, offered]);
+  /** The look step is done: a description (anything goes), or a photo with the current consent. */
+  const lookReady = () => {
+    if (form.getValues("heroMode") !== "photo") return true;
+    const problem =
+      signedIn !== true
+        ? t("look.error.signin")
+        : !consent.data || accepted !== consent.data.version
+          ? t("look.error.consent")
+          : !heroPhoto
+            ? t("look.error.photo")
+            : null;
+    setLookError(problem);
+    return !problem;
+  };
+
   const [toyPhoto, setToyPhoto] = useState<File | null>(null);
   const toyPreview = useMemo(() => (toyPhoto ? URL.createObjectURL(toyPhoto) : null), [toyPhoto]);
   useEffect(() => () => void (toyPreview && URL.revokeObjectURL(toyPreview)), [toyPreview]);
@@ -122,10 +226,22 @@ export function BookForm({ template }: { template?: Template }) {
     }
     return lastUpload.current.upload;
   };
+  // The hero photo is sent only when the book starts (with the consent given for it), once per try.
+  const lastHero = useRef<{ file: File; version: number; upload: string } | null>(null);
+  const uploadedHero = async (file: File) => {
+    const text = consent.data!;
+    if (lastHero.current?.file !== file || lastHero.current.version !== text.version) {
+      const upload = await uploadHeroPhoto(await readDataUrl(file), { version: text.version, language: text.language, accepted: true });
+      lastHero.current = { file, version: text.version, upload };
+    }
+    return lastHero.current.upload;
+  };
 
   const create = useMutation({
-    mutationFn: async (values: FormValues) =>
-      createBook({
+    mutationFn: async (values: FormValues) => {
+      const fromPhoto = values.heroMode === "photo" && heroPhoto && consent.data;
+      const look = values.heroMode === "description" ? pickedLook(values.look) : undefined;
+      return createBook({
         child: {
           name: values.name,
           age: Number(values.age),
@@ -134,7 +250,9 @@ export function BookForm({ template }: { template?: Template }) {
           pet: values.pet || undefined,
           city: values.city,
           language: values.language,
+          ...(look && { look }),
         },
+        ...(fromPhoto && { heroPhoto: { upload: await uploadedHero(heroPhoto) } }),
         ...(toyPhoto && {
           toy: { upload: await uploadedToy(toyPhoto), name: values.toyName || undefined },
         }),
@@ -144,16 +262,31 @@ export function BookForm({ template }: { template?: Template }) {
               methodology: methods.some((m) => m.slug === values.methodology) ? values.methodology : undefined,
               theme: values.theme || undefined,
             }),
-      }),
+      });
+    },
     onSuccess: (book) => {
-      // The book has taken the photo; a next book uploads it again.
+      // The book has taken the photos; a next book uploads them again.
       lastUpload.current = null;
+      lastHero.current = null;
       void queryClient.invalidateQueries({ queryKey: ["quota"] });
       router.push(`/books/${book.id}`);
     },
     onError: (error) => {
       // Paused after the page loaded: show the notice instead of leaving a bare error.
       if (error instanceof ApiError && error.code === GENERATION_PAUSED) void queryClient.invalidateQueries({ queryKey: ["status"] });
+      // The consent text changed while the parent was filling in the form: read it again.
+      if (error instanceof ApiError && error.code === CONSENT_OUTDATED) {
+        setAccepted(null);
+        void consent.refetch();
+        setLookError(t("look.error.outdated"));
+        goTo("look");
+      }
+      if (error instanceof ApiError && error.code === PHOTO_REFUSED && heroPhoto) {
+        const reason = (error.body as { reason?: string } | undefined)?.reason;
+        setHeroProblem((PHOTO_REFUSALS as readonly string[]).includes(reason ?? "") ? (reason as PhotoRefusal) : "decode");
+        setHeroPhoto(null);
+        goTo("look");
+      }
     },
   });
 
@@ -173,6 +306,7 @@ export function BookForm({ template }: { template?: Template }) {
     const fields = STEP_FIELDS[step];
     if (fields.length && !(await form.trigger(fields, { shouldFocus: true }))) return;
     if (step === "story" && !answersGiven()) return;
+    if (step === "look" && !lookReady()) return;
     goTo(steps[index + 1]);
   };
 
@@ -182,6 +316,7 @@ export function BookForm({ template }: { template?: Template }) {
     if (broken) goTo(broken);
   };
   const submit = form.handleSubmit((values) => {
+    if (!lookReady()) return goTo("look");
     if (!answersGiven()) return goTo("story");
     create.mutate(values);
   }, backToProblem);
@@ -238,6 +373,33 @@ export function BookForm({ template }: { template?: Template }) {
 
       {step === "child" && <ChildStep form={form} ageOptions={ageOptions} languages={bookLanguages} heard={heard} />}
 
+      {step === "look" && (
+        <LookStep
+          form={form}
+          error={lookError}
+          path={{
+            offered,
+            signedIn,
+            onSignIn: signIn,
+            consent: consent.data,
+            consentError: consent.isError,
+            accepted,
+            onAccept: (version) => {
+              setAccepted(version);
+              setLookError(null);
+            },
+            onRevoke: () => {
+              setAccepted(null);
+              setHeroPhoto(null);
+            },
+            photo: heroPhoto,
+            preview: heroPreview,
+            onPhoto: (file) => void pickHeroPhoto(file),
+            problem: heroProblem,
+          }}
+        />
+      )}
+
       {step === "story" && <StoryStep form={form} template={template} methods={methods} />}
 
       {step === "toy" && <ToyStep form={form} photo={toyPhoto} preview={toyPreview} onPhoto={setToyPhoto} />}
@@ -250,6 +412,7 @@ export function BookForm({ template }: { template?: Template }) {
             template={template}
             methodName={method?.name}
             hasPhoto={Boolean(toyPhoto)}
+            heroPhoto={values.heroMode === "photo" && heroPhoto ? accepted : null}
             stepName={stepName}
             onEdit={goTo}
           />

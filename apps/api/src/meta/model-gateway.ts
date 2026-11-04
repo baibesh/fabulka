@@ -1,4 +1,5 @@
 import type {
+  ChildLook,
   Language,
   ModelCallKind,
   PageSubject,
@@ -78,13 +79,23 @@ export interface ModelGateway {
     style?: string,
   ): Promise<GeneratedImage>;
   /**
+   * Muse Spark describes the child's look from the parent's photo (the photo path, with consent):
+   * only the closed values of ChildLook, never anything sensitive. Throws when the model refuses the
+   * photo, finds no child or answers with nothing usable; the caller then draws from the description.
+   */
+  describeChild(photo: Buffer): Promise<{ look: ChildLook; costUsd: number }>;
+  /**
    * The hero character sheet every page is anchored on. `references`: the illustrators' style
-   * pictures and character guide, sent next to the prompt (never the child's look).
+   * pictures and character guide, sent next to the prompt. `photo` (the photo path): the child's
+   * photo, sent first as picture 1 so the hero looks like the child; `look` is what Muse Spark saw in
+   * it. Only this call and describeChild ever get the photo; every later picture chains from the
+   * drawn sheet.
    */
   drawHero(
     heroDescription: string,
     style?: string,
     references?: ReferenceImage[],
+    photo?: { data: Buffer; look: string },
   ): Promise<GeneratedImage>;
   /** The pet character sheet, chained from the hero sheet so both stay in the conversation. */
   drawPet(

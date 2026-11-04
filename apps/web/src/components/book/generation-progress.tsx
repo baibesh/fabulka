@@ -13,7 +13,7 @@ import {
   type GenerationView,
   type StepState,
 } from "@fabulka/shared";
-import { Check, Loader2, Pencil, Sparkles } from "lucide-react";
+import { Check, Loader2, Lock, Pencil, Sparkles } from "lucide-react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useState } from "react";
 import { useI18n } from "@/i18n/i18n";
@@ -125,7 +125,7 @@ export function GenerationBoard({ book }: { book: Book }) {
 }
 
 function Stepper({ view }: { view: GenerationView }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   return (
     <ol data-testid="generation-steps" aria-label={t("book.steps.label")} className="flex min-w-0 flex-col">
       {view.steps.map(({ id, state }, i) => (
@@ -152,6 +152,13 @@ function Stepper({ view }: { view: GenerationView }) {
             {id === "pages" && state !== "next" && view.framesTotal > view.pagesTotal && (
               <span data-testid="frames-count" className="text-sm text-muted">
                 {t("book.step.framesCount", { done: view.framesDone, total: view.framesTotal })}
+              </span>
+            )}
+            {/* The photo path: the child's photo is gone once the hero's sheet exists (or it was given up). */}
+            {view.photo && view.photoDeletedAt && id === "hero" && (
+              <span data-testid="photo-deleted" className="flex items-center gap-1 text-sm font-semibold text-success">
+                <Lock className="size-3.5" aria-hidden />
+                {t("book.photo.deleted", { time: new Date(view.photoDeletedAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) })}
               </span>
             )}
             {STEP_MODELS[id] && <span className="text-xs tracking-wide text-muted/80">{STEP_MODELS[id]}</span>}
