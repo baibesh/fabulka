@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { CATALOG_LAST_COUNTRY, SCOPE_FORBIDDEN, allowedFor, ruleShows, type AdminTemplate } from "@fabulka/shared";
 import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";

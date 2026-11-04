@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { LANGUAGES, LANGUAGE_NAMES, THEME_REFUSED, ThemeRefusalSchema, checksPass, isComicTheme, type AdminTheme, type Language, type ThemeCheck } from "@fabulka/shared";
 import { Check, Copy, EyeOff, Pencil, Sparkles, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -190,7 +191,7 @@ function ThemeCard({ entry, canEdit }: { entry: AdminTheme; canEdit: boolean }) 
                 size="sm"
                 variant={entry.editable ? "ghost" : "secondary"}
                 data-testid="theme-duplicate"
-                loading={duplicate.isPending}
+                loading={duplicate.isPending || duplicate.isSuccess}
                 icon={<Copy className="size-4" />}
                 onClick={() => duplicate.mutate()}
               >

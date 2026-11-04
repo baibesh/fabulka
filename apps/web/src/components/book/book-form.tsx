@@ -1,8 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useQuery } from "@/lib/query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@/lib/query";
 import {
   CHILD_AGE_MAX,
   CHILD_AGE_MIN,
@@ -25,7 +25,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch, type FieldErrors, type FieldPath } from "react-hook-form";
 import { ApiError, createBook, getHeroConsent, getQuota, getStatus, uploadHeroPhoto, uploadToy } from "@/lib/api";
 import { loginUrl, useMe } from "@/lib/auth";
-import { photoProblem, readDataUrl, shrinkPhoto } from "@/lib/photo-file";
+import { photoProblem, readDataUrl, shrinkHeroPhoto } from "@/lib/photo-file";
 import { toJpegDataUrl } from "@/lib/toy-photo";
 import { useMethodologies } from "@/lib/use-methodologies";
 import { ages, FormSchema, STEP_FIELDS, STEPS, splitInterests, type FormValues, type Step } from "./book-form-model";
@@ -150,7 +150,7 @@ export function BookForm({ template }: { template?: Template }) {
       setHeroProblem(null);
       return;
     }
-    const shrunk = await shrinkPhoto(file);
+    const shrunk = await shrinkHeroPhoto(file);
     const problem = photoProblem(shrunk);
     setHeroProblem(problem);
     setHeroPhoto(problem ? null : shrunk);
@@ -228,11 +228,18 @@ export function BookForm({ template }: { template?: Template }) {
   };
   // The hero photo is sent only when the book starts (with the consent given for it), once per try.
   const lastHero = useRef<{ file: File; version: number; upload: string } | null>(null);
+  // While the photo is on its way the button says so: on a slow phone network it takes a while.
+  const [sendingPhoto, setSendingPhoto] = useState(false);
   const uploadedHero = async (file: File) => {
     const text = consent.data!;
     if (lastHero.current?.file !== file || lastHero.current.version !== text.version) {
-      const upload = await uploadHeroPhoto(await readDataUrl(file), { version: text.version, language: text.language, accepted: true });
-      lastHero.current = { file, version: text.version, upload };
+      setSendingPhoto(true);
+      try {
+        const upload = await uploadHeroPhoto(await readDataUrl(file), { version: text.version, language: text.language, accepted: true });
+        lastHero.current = { file, version: text.version, upload };
+      } finally {
+        setSendingPhoto(false);
+      }
     }
     return lastHero.current.upload;
   };
@@ -417,8 +424,16 @@ export function BookForm({ template }: { template?: Template }) {
             onEdit={goTo}
           />
           <PriceTag kind={template ? "template" : "custom"} label={t("wizard.review.price")} testId="review-price" />
-          <Button type="submit" size="lg" data-testid="create-book" loading={create.isPending} disabled={paused} icon={<BookOpen className="size-5" />}>
-            {t("form.submit")}
+          <Button
+            type="submit"
+            size="lg"
+            data-testid="create-book"
+            // Busy from the photo upload until the book's page opens (a success only starts the move).
+            loading={create.isPending || create.isSuccess || sendingPhoto}
+            disabled={paused}
+            icon={<BookOpen className="size-5" />}
+          >
+            {sendingPhoto ? t("form.submit.photo") : t("form.submit")}
           </Button>
           {quota.data && (
             <p data-testid="quota" className="text-center text-sm text-muted">

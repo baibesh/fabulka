@@ -15,7 +15,8 @@ import {
   type SeoFields,
   type SeoHistoryEntry,
 } from "@fabulka/shared";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { AlertTriangle, ExternalLink, ImagePlus, Save, Send, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";

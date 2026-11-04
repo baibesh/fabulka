@@ -2,8 +2,7 @@
 
 import { useParams } from "next/navigation";
 
-import { useMutation } from "@tanstack/react-query";
-import { useQuery } from "@/lib/query";
+import { useQuery, useMutation } from "@/lib/query";
 import { type Book, type BookStatus } from "@fabulka/shared";
 import { AlertTriangle, Check, Download, Lock, MessageCircleQuestion, Printer, Sparkles } from "lucide-react";
 import { motion } from "motion/react";

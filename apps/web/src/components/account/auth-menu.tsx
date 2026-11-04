@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { BookHeart, LogIn, LogOut, Package, ShieldCheck, UserRound, X } from "lucide-react";
 import { AUTH_ERROR } from "@fabulka/shared";
 import { LocaleLink } from "@/i18n/routing";

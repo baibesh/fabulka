@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import {
   CreateMethodologySchema,
   METHODOLOGY_AGE_MAX,
@@ -251,7 +252,7 @@ export function MethodologyEditor({ initial }: { initial?: AdminMethodology }) {
               </Button>
             )}
             {canEdit && (
-              <Button type="submit" data-testid="methodology-save" loading={save.isPending} icon={<Save className="size-4" />}>
+              <Button type="submit" data-testid="methodology-save" loading={save.isPending || (!initial && Boolean(save.data))} icon={<Save className="size-4" />}>
                 {t("admin.save")}
               </Button>
             )}

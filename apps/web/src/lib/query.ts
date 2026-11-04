@@ -1,8 +1,21 @@
 "use client";
 
-import { hashKey, useQuery as useTanstackQuery, type DefaultError, type QueryKey, type UseQueryOptions, type UseQueryResult } from "@tanstack/react-query";
-import { createContext, useContext } from "react";
+import {
+  hashKey,
+  useMutation as useTanstackMutation,
+  useQuery as useTanstackQuery,
+  type DefaultError,
+  type QueryClient,
+  type QueryKey,
+  type UseMutateFunction,
+  type UseMutationOptions,
+  type UseMutationResult,
+  type UseQueryOptions,
+  type UseQueryResult,
+} from "@tanstack/react-query";
+import { createContext, useCallback, useContext, useRef } from "react";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { variablesKey } from "./mutation-key";
 
 export { useHydrated };
 
@@ -39,4 +52,31 @@ export function useQuery<TQueryFnData = unknown, TError = DefaultError, TData = 
     isRefetchError: false,
     isPlaceholderData: false,
   } as UseQueryResult<TData, TError>;
+}
+
+/**
+ * React Query's useMutation, but `mutate` ignores a call while the same call (the same variables) is
+ * still running: a double click or a form sent twice before the button re-renders as busy does the
+ * work once. Calls with other variables (another row, another choice) still go. Use it instead of
+ * @tanstack's useMutation.
+ */
+export function useMutation<TData = unknown, TError = DefaultError, TVariables = void, TOnMutateResult = unknown>(
+  options: UseMutationOptions<TData, TError, TVariables, TOnMutateResult>,
+  queryClient?: QueryClient,
+): UseMutationResult<TData, TError, TVariables, TOnMutateResult> {
+  const result = useTanstackMutation(options, queryClient);
+  const running = useRef(new Set<string>());
+  const { mutateAsync } = result;
+  const mutate = useCallback<UseMutateFunction<TData, TError, TVariables, TOnMutateResult>>(
+    (...args) => {
+      const key = variablesKey(args[0]);
+      if (running.current.has(key)) return;
+      running.current.add(key);
+      mutateAsync(...args)
+        .catch(() => {})
+        .finally(() => running.current.delete(key));
+    },
+    [mutateAsync],
+  );
+  return { ...result, mutate };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { CURRENCIES, SCOPE_FORBIDDEN, countryInfo, money, toInputString, type AdminReference, type BookKind, type BookPrices, type Currency } from "@fabulka/shared";
 import { RotateCcw } from "lucide-react";
 import { useState } from "react";

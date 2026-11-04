@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { EmailSchema, type BookKind } from "@fabulka/shared";
 import { KeyRound, ShoppingBag } from "lucide-react";
 import { useState } from "react";

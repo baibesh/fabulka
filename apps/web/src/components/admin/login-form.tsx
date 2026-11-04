@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { KeyRound, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";

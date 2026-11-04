@@ -1,4 +1,4 @@
-import { buttonClass } from "@/components/ui/button";
+import { buttonClass } from "@/components/ui/button-class";
 import { LocaleLink } from "@/i18n/routing";
 import { T } from "@/i18n/t";
 import { Logo } from "./logo";

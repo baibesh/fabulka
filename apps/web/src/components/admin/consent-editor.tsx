@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { CONSENT_LANGUAGES, ConsentClausesSchema, LANGUAGE_NAMES, type AdminConsentVersion, type ConsentClause, type Language } from "@fabulka/shared";
 import { Plus, ShieldCheck } from "lucide-react";
 import { useState } from "react";
@@ -10,7 +10,7 @@ import { Input, Select, Textarea } from "@/components/ui/input";
 import { QueryState } from "@/components/ui/query-state";
 import { Tabs, tabPanelProps, useTabsId } from "@/components/ui/tabs";
 import { adminConsent, saveConsent } from "@/lib/admin-api";
-import { useQuery } from "@/lib/query";
+import { useQuery, useMutation } from "@/lib/query";
 import { errorText, issuesByPath, nextKey, RowActions, SaveBar, useRows } from "./reference/shared";
 import { Card, PageTitle, useAdminI18n } from "./ui";
 

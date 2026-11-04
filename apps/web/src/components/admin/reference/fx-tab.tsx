@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { RateSchema, type AdminFx, type FxRateRow } from "@fabulka/shared";
 import { RefreshCw, RotateCcw, Save } from "lucide-react";
 import { useState } from "react";

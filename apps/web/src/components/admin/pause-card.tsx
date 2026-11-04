@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { Pause, Play } from "lucide-react";
 import { adminStats, setPaused } from "@/lib/admin-api";
 import { Button } from "@/components/ui/button";

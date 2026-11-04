@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { BASE_LANGUAGES, CURRENCIES, FormatsSchema, LANGUAGES, LANGUAGE_NAMES, money, toInputString, type Currency, type Language, type LocalizedText, type PrintFormat } from "@fabulka/shared";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";

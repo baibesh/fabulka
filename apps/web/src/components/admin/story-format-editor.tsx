@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import {
   BASE_LANGUAGES,
   CreateStoryFormatSchema,
@@ -284,7 +285,7 @@ export function StoryFormatEditor({ initial }: { initial?: AdminStoryFormat }) {
                 </Button>
               )}
               {canEdit && (
-                <Button type="submit" data-testid="story-format-save" loading={save.isPending} icon={<Save className="size-4" />}>
+                <Button type="submit" data-testid="story-format-save" loading={save.isPending || (!initial && Boolean(save.data))} icon={<Save className="size-4" />}>
                   {t("admin.save")}
                 </Button>
               )}

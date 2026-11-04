@@ -1,7 +1,8 @@
 "use client";
 
 import { DEFAULT_LANGUAGE, LanguageSchema, type AdminSeoPage, type Language } from "@fabulka/shared";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { Info, Send } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";

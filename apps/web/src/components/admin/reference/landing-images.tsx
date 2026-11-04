@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import {
   DEFAULT_LANDING_IMAGES,
   LANDING_IMAGE_MAX_BYTES,
