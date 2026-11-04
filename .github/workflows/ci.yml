@@ -100,8 +100,8 @@ jobs:
       - name: Run flows
         run: |
           set +e
-          flows=$(./e2e/shard.sh ${{ matrix.shard }} 4)
-          tapstep test "$flows" --config e2e/config.yaml --env-set ci --browser managed \
+          config=$(./e2e/shard.sh ${{ matrix.shard }} 4)
+          tapstep test "e2e/.shard-${{ matrix.shard }}" --config "$config" --env-set ci --browser managed \
             -e DATABASE_URL="$DATABASE_URL" --report junit --output reports/junit.xml
           code=$?
           # 1 = a flow failed (the product is red); 2 = tapstep could not run (infra).
