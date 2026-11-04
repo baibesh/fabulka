@@ -1,7 +1,7 @@
 import { LANGUAGES, type Language } from "../language";
 import { ageBand } from "../methodologies";
 import { AGE_LIMITS, type AgeGroup, type BookFormat, type BookLayout, type BookTheme, type LayoutBlock, type PageLayout, type TypeScale } from "./model";
-import { MAX_MEASURE } from "./plan";
+import { MAX_MEASURE, preferredVariants } from "./plan";
 import type { TemplateBlocks } from "./blocks";
 
 /**
@@ -66,6 +66,7 @@ const FAIRY: BookTheme = {
   minContrast: 4.5,
   palette: { paper: "#fbf5ea", ink: "#2e2018", accent: "#9b3d52", muted: "#8a7564", cover: "#f3e3cf", plate: "#fbf5ea" },
   variants: ["overlay-bottom", "overlay-top", "facing", "spread"],
+  overlayStyle: "plate",
   textSpace: "bottom",
   cover: "scene",
   ornament: "leaf",
@@ -90,6 +91,7 @@ const ADVENTURE: BookTheme = {
   minContrast: 4.5,
   palette: { paper: "#f5f2ea", ink: "#1d2a33", accent: "#d0632b", muted: "#6b7780", cover: "#e3ecef", plate: "#f5f2ea" },
   variants: ["spread", "overlay-top", "overlay-bottom", "split"],
+  overlayStyle: "plate",
   textSpace: "top",
   cover: "scene",
   ornament: "star",
@@ -114,6 +116,7 @@ const LITTLE: BookTheme = {
   minContrast: 4.5,
   palette: { paper: "#fffaf0", ink: "#2b2a4c", accent: "#ef8a5b", muted: "#8b86a8", cover: "#ffe9cc", plate: "#fffaf0" },
   variants: ["split", "facing", "overlay-bottom"],
+  overlayStyle: "plate",
   textSpace: "bottom",
   cover: "framed",
   ornament: "flower",
@@ -134,6 +137,7 @@ const CLASSIC: BookTheme = {
   minContrast: 4.5,
   palette: { paper: "#fffaf3", ink: "#2b2118", accent: "#e8833a", muted: "#7a6a5c", cover: "#fdf1e2", plate: "#fffaf3" },
   variants: ["split"],
+  overlayStyle: "none",
   textSpace: null,
   cover: "framed",
   ornament: "sparkle",
@@ -159,6 +163,7 @@ const COMIC: BookTheme = {
   minContrast: 4.5,
   palette: { paper: "#ffffff", ink: "#16161d", accent: "#d93025", muted: "#6b6b76", cover: "#ffe14d", plate: "#fff3a8" },
   variants: ["plate"],
+  overlayStyle: "plate",
   textSpace: null,
   cover: "scene",
   ornament: "star",
@@ -240,7 +245,7 @@ export const OVERLAY_VARIANTS = ["overlay-bottom", "overlay-top", "spread"] as c
  * pages whose picture happens to be calm, and the plate covers the rest.
  */
 export function calmSpace(theme: BookTheme): "top" | "bottom" | null {
-  return (OVERLAY_VARIANTS as readonly string[]).includes(theme.variants[0]) ? theme.textSpace : null;
+  return (OVERLAY_VARIANTS as readonly string[]).includes(preferredVariants(theme)[0]) ? theme.textSpace : null;
 }
 
 /** The optional blocks a parent may add when the template says nothing. */

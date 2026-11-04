@@ -78,6 +78,21 @@ export interface PlannedPage {
 
 export const isLeft = (index: number) => index % 2 === 1;
 
+/** Layouts that print the text beside the picture, on paper. */
+export const BESIDE_VARIANTS: readonly PageVariant[] = ["split", "facing"];
+
+/**
+ * The theme's layouts in the order the chooser tries them: as listed, or - when the theme's text over
+ * pictures is "avoid" - the ones with the text beside the picture first, split added when the theme
+ * lacks it (it fits on any page, facing only on a left one).
+ */
+export function preferredVariants(theme: Pick<BookTheme, "variants" | "overlayStyle">): PageVariant[] {
+  if (theme.overlayStyle !== "avoid") return [...theme.variants];
+  const beside = theme.variants.filter((v) => BESIDE_VARIANTS.includes(v));
+  if (!beside.includes("split")) beside.push("split");
+  return [...beside, ...theme.variants.filter((v) => !beside.includes(v))];
+}
+
 /** What the variant of a story page is when it starts at `index`; skips what cannot go there. */
 export function pickVariant(theme: BookTheme, state: PageLayout | undefined, index: number): PageVariant {
   // A page without its picture is a vignette page, whatever was pinned or picked; a panel page has
@@ -95,7 +110,7 @@ export function pickVariant(theme: BookTheme, state: PageLayout | undefined, ind
 export function availableVariants(theme: BookTheme, state: PageLayout | undefined, index: number, limit = 3): PageVariant[] {
   if (state?.noArt || state?.panels) return ["plate"];
   const full = new Set(state?.tooFull ?? []);
-  const options: PageVariant[] = state?.options.length ? state.options : [...theme.variants, "plate"];
+  const options: PageVariant[] = state?.options.length ? state.options : [...preferredVariants(theme), "plate"];
   const usable = options.filter((v) => (!isTwoPage(v) || isLeft(index)) && !full.has(v));
   if (!usable.includes("plate")) usable.push("plate");
   const choice = state?.choice;

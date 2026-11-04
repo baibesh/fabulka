@@ -32,6 +32,9 @@ import {
   GRID,
   type PageSubject,
   type PageTone,
+  type PageVariant,
+  preferredVariants,
+  blankPage,
 } from "./index";
 
 /** A hero in the middle of the picture, nothing in its bottom third. */
@@ -316,5 +319,73 @@ describe("renderBook", () => {
     const doc = bookDocument(rendered, { title: "x", language: "kk", fontCss: "@font-face{}" });
     expect(doc).toContain('<html lang="kk">');
     expect(doc).toContain("@page { size: 210mm 210mm; margin: 0; }");
+  });
+});
+
+describe("text over a picture", () => {
+  /** Fairy with `style`, story page 1 (a right page) pinned to `first`, page 2 (a left page) to `second`. */
+  const pinned = (style: BookLayout["theme"]["overlayStyle"], first: PageVariant, second: PageVariant = "split"): BookLayout => {
+    const layout = newLayout({ ...BOOK_THEMES.fairy, overlayStyle: style }, 6);
+    layout.pages["1"] = { ...blankPage(), pin: first, ink: { "overlay-bottom": "light" } };
+    layout.pages["2"] = { ...blankPage(), pin: second, spreadSide: "left" };
+    return layout;
+  };
+  const html = (layout: BookLayout, key: string) => renderBook(book(), layout).pages.find((p) => p.key === key)!.html;
+  /** The text box over the bottom third of a square page, as books were printed before the setting. */
+  const TODAY = 'class="fb-box fb-text fb-ink-light fb-bottom" data-fit-box style="left:12mm;top:138.6mm;width:186mm;height:59.4mm"';
+
+  it("puts a plate behind text over the picture, in ink, by default", () => {
+    expect(BOOK_THEMES.fairy.overlayStyle).toBe("plate");
+    const story = html(pinned("plate", "overlay-bottom"), "story-1");
+    expect(story).toContain('class="fb-box fb-text fb-ink-light fb-bottom fb-over-plate" data-fit-box');
+    expect(BOOK_CSS).toMatch(/\.fb-over-plate \.fb-flow::before \{[^}]*background: color-mix\(in srgb, var\(--plate\) 88%/);
+    expect(BOOK_CSS).toMatch(/\.fb-over-plate, \.fb-over-fade \{ color: var\(--ink\)/);
+  });
+
+  it("keeps the text box where and as big as it was, so render QA measures the same text", () => {
+    const box = (layout: BookLayout) => html(layout, "story-1").match(/data-fit-box style="([^"]*?)"/)![1];
+    const today = box(pinned("none", "overlay-bottom"));
+    expect(box(pinned("plate", "overlay-bottom"))).toBe(today);
+    expect(box(pinned("fade", "overlay-bottom")).startsWith(`${today};--over:`)).toBe(true);
+  });
+
+  it("draws no plate behind text beside the picture or on the plate layout", () => {
+    const layout = pinned("plate", "overlay-bottom");
+    expect(html(layout, "story-2")).toContain('class="fb-box fb-text fb-ink-dark fb-on-paper"');
+    expect(html(layout, "story-2")).not.toContain("fb-over-");
+    expect(html(pinned("plate", "plate"), "story-1")).not.toContain("fb-over-");
+  });
+
+  it("keeps today's output with none, and for books whose theme copy predates the setting", () => {
+    const none = renderBook(book(), pinned("none", "overlay-bottom"));
+    expect(none.pages.find((p) => p.key === "story-1")!.html).toContain(TODAY);
+    expect(none.pages.map((p) => p.html).join("")).not.toContain("fb-over-");
+    const stored = JSON.parse(JSON.stringify(pinned("plate", "overlay-bottom")));
+    delete stored.theme.overlayStyle;
+    const old = BookLayoutSchema.parse(stored);
+    expect(old.theme.overlayStyle).toBe("none");
+    expect(renderBook(book(), old).pages.map((p) => p.html)).toEqual(none.pages.map((p) => p.html));
+  });
+
+  it("fades the paper from the page edge into the picture, thinning out at a spread's fold", () => {
+    const story = html(pinned("fade", "overlay-bottom"), "story-1");
+    // Out to the trim and the bleed below and at the sides, 16 mm up into the picture.
+    expect(story).toContain("fb-bottom fb-over-fade");
+    expect(story).toContain(";--over:-16mm -15mm -15mm -15mm");
+    const spread = html(pinned("fade", "split", "spread"), "story-2");
+    // Text on the left page: the fold is on its right, where the fade reaches the edge and no further.
+    expect(spread).toContain("fb-over-fade fb-gutter-right");
+    expect(spread).toContain(";--over:-16mm -12mm -15mm -15mm");
+  });
+
+  it("with avoid, tries layouts with the text beside the picture first, and still plates the rest", () => {
+    const avoid = { ...BOOK_THEMES.fairy, overlayStyle: "avoid" as const };
+    expect(preferredVariants(avoid)).toEqual(["facing", "split", "overlay-bottom", "overlay-top", "spread"]);
+    expect(preferredVariants(BOOK_THEMES.fairy)).toEqual(BOOK_THEMES.fairy.variants);
+    expect(calmSpace(avoid)).toBeNull();
+    const layout = newLayout(avoid, 6);
+    const judged = judgePage(layout, { page: 1, words: 12, subject: MOCK_SUBJECT_LIKE, tone: calmTone });
+    expect(judged.options.slice(0, 2)).toEqual(["facing", "split"]);
+    expect(html(pinned("avoid", "overlay-bottom"), "story-1")).toContain("fb-bottom fb-over-plate");
   });
 });

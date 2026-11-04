@@ -483,8 +483,13 @@ function story(
 ): string {
   const variant = planned.variant as PageVariant;
   const ink = state?.ink?.[variant] ?? "dark";
-  const text = (rect: Rect, cls = "") =>
-    `<div class="fb-box fb-text fb-ink-${ink} ${cls}" data-fit-box style="${place(rect)}"><div class="fb-flow"><p data-qa-text>${body(page.text)}</p></div></div>`;
+  const text = (rect: Rect, cls = "", style = "") =>
+    `<div class="fb-box fb-text fb-ink-${ink} ${cls}" data-fit-box style="${place(rect)}${style}"><div class="fb-flow"><p data-qa-text>${body(page.text)}</p></div></div>`;
+  // Text over the picture, set off from it as the theme says (the box itself stays where it is).
+  const over = (rect: Rect, anchor: "top" | "bottom", gutter?: "left" | "right") => {
+    const set = overText(layout, rect, anchor, gutter);
+    return text(rect, set.cls ? `fb-${anchor} ${set.cls}` : `fb-${anchor}`, set.style);
+  };
   const box = artRect(variant, layout.format);
   const art = (cls = "fb-art", style = "") => image(page.image, cls, crop(state, box.w / box.h), style);
   const rect = textRect(variant, layout.format, state);
@@ -492,7 +497,7 @@ function story(
   switch (variant) {
     case "overlay-top":
     case "overlay-bottom":
-      return art("fb-art", full) + text(rect, variant === "overlay-top" ? "fb-top" : "fb-bottom");
+      return art("fb-art", full) + over(rect, variant === "overlay-top" ? "top" : "bottom");
     case "split":
       return art("fb-art", full || `${place(box)};`) + text(rect, "fb-on-paper");
     case "facing":
@@ -503,11 +508,35 @@ function story(
       const side = state?.spreadSide ?? "right";
       const shifted = { ...box, x: left ? 0 : -layout.format.widthMm };
       const pic = art("fb-art fb-spread-art", bleedArt(shifted) || (left ? "left:0" : "left:-100%"));
-      return pic + ((left ? "left" : "right") === side ? text(rect, "fb-bottom") : "");
+      // The fold is on the right of the left page and on the left of the right one.
+      return pic + ((left ? "left" : "right") === side ? over(rect, "bottom", left ? "right" : "left") : "");
     }
     case "plate":
       return art("fb-art", full) + text(rect, `fb-plate ${state?.plateBand === "top" ? "fb-top" : "fb-bottom"}`);
   }
+}
+
+/** How far the fade runs from its solid part into the picture, beyond the text (mm). */
+const FADE_MM = 16;
+
+/**
+ * The class and box style that set text over a picture off from it (BookTheme.overlayStyle). The
+ * plate and the fade are drawn by the text's flow (::before) outside the text box, which keeps its
+ * place and size, so render QA measures the text exactly as without them. The fade reaches the page
+ * edges (into the bleed) on every side but the one it fades out on, and a spread's fold (`gutter`),
+ * where it thins out. "none" adds nothing: the page renders as before the setting.
+ */
+function overText(layout: BookLayout, rect: Rect, anchor: "top" | "bottom", gutter?: "left" | "right"): { cls: string; style: string } {
+  const style = layout.theme.overlayStyle ?? "none";
+  if (style === "none") return { cls: "", style: "" };
+  if (style !== "fade") return { cls: "fb-over-plate", style: "" };
+  const { widthMm: w, heightMm: h, bleedMm: bleed } = layout.format;
+  const top = anchor === "top" ? rect.y + bleed : FADE_MM;
+  const bottom = anchor === "bottom" ? h - rect.y - rect.h + bleed : FADE_MM;
+  const left = rect.x + (gutter === "left" ? 0 : bleed);
+  const right = w - rect.x - rect.w + (gutter === "right" ? 0 : bleed);
+  const reach = [top, right, bottom, left].map((n) => `-${mm(n)}`).join(" ");
+  return { cls: `fb-over-fade${gutter ? ` fb-gutter-${gutter}` : ""}`, style: `;--over:${reach}` };
 }
 
 const ORNAMENT_SVG: Record<BookTheme["ornament"], string> = {
@@ -595,6 +624,26 @@ export const BOOK_CSS = `
 .fb-plate { color: var(--ink); text-shadow: none; }
 .fb-plate .fb-flow { background: color-mix(in srgb, var(--plate) 90%, transparent); border-radius: 5mm; padding: 4mm 5mm;
   box-shadow: 0 .6mm 2.4mm rgba(0,0,0,.12); }
+/* Text over a picture set off from it (the theme's overlayStyle): drawn by the flow's ::before outside
+   the text box, so the box and what render QA measures stay as they are; the clip keeps the old
+   overflow clipping a little way out, around the plate or the fade. Ink on the theme's own paper
+   color, so it reads on light and dark themes alike. */
+.fb-over-plate, .fb-over-fade { color: var(--ink); overflow: visible; }
+.fb-over-plate .fb-flow, .fb-over-fade .fb-flow { position: relative; isolation: isolate; }
+.fb-over-plate .fb-flow::before, .fb-over-fade .fb-flow::before { content: ""; position: absolute; z-index: -1; pointer-events: none; }
+.fb-over-plate { text-shadow: none; clip-path: inset(-7mm -8mm); }
+.fb-over-plate .fb-flow::before { inset: -4mm -5mm; border-radius: 5mm; background: color-mix(in srgb, var(--plate) 88%, transparent);
+  box-shadow: 0 .6mm 2.4mm rgba(0,0,0,.12), 0 0 0 .25mm color-mix(in srgb, var(--ink) 6%, transparent); }
+.fb-over-fade { text-shadow: 0 0 .8mm color-mix(in srgb, var(--paper) 80%, transparent); clip-path: inset(var(--over));
+  --fade: color-mix(in srgb, var(--paper) 92%, transparent) 0, color-mix(in srgb, var(--paper) 86%, transparent) calc(100% - ${FADE_MM}mm),
+    color-mix(in srgb, var(--paper) 55%, transparent) calc(100% - ${FADE_MM * 0.55}mm),
+    color-mix(in srgb, var(--paper) 18%, transparent) calc(100% - ${FADE_MM * 0.2}mm), transparent 100%; }
+.fb-over-fade .fb-flow::before { inset: var(--over); background: linear-gradient(to top, var(--fade)); }
+.fb-over-fade.fb-top .fb-flow::before { background: linear-gradient(to bottom, var(--fade)); }
+.fb-over-fade.fb-gutter-left .fb-flow::before { -webkit-mask-image: linear-gradient(to right, transparent, #000 10mm);
+  mask-image: linear-gradient(to right, transparent, #000 10mm); }
+.fb-over-fade.fb-gutter-right .fb-flow::before { -webkit-mask-image: linear-gradient(to left, transparent, #000 10mm);
+  mask-image: linear-gradient(to left, transparent, #000 10mm); }
 .fb-ornament { color: var(--accent); line-height: 0; margin-bottom: 4mm; text-align: center; }
 .fb-ornament svg { display: inline-block; }
 .fb-ornament .fb-ornament-img { display: inline-block; width: 22mm; height: 22mm; object-fit: contain; mix-blend-mode: multiply; }

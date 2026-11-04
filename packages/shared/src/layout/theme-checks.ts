@@ -72,6 +72,7 @@ export function themeFromProposal(id: string, proposal: ProposedTheme): BookThem
     minContrast: MIN_OVERLAY_CONTRAST,
     palette: ThemePaletteSchema.parse(proposal.palette),
     variants: [...new Set(proposal.variants.filter((v) => v !== "plate"))].length ? [...new Set(proposal.variants.filter((v) => v !== "plate"))] : ["split"],
+    overlayStyle: "plate",
     textSpace: proposal.textSpace,
     cover: proposal.cover,
     ornament: proposal.ornament,

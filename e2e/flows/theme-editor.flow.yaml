@@ -49,6 +49,12 @@ commands:
   - selectOption: { testId: theme-preview-language, optionValue: kk }
   - waitForVisible: { css: "[data-testid=theme-preview][data-language=kk]" }
 
+  # Text over the picture: a paper plate by default, a fade when picked, both live in the preview.
+  - assertVisible: { css: "[data-testid=theme-overlay][data-style=plate]" }
+  - assertVisible: { css: "[data-testid=theme-preview-page] .fb-over-plate" }
+  - tapOn: { testId: theme-overlay-fade }
+  - waitForVisible: { css: "[data-testid=theme-preview-page] .fb-over-fade" }
+
   # Pale text: the contrast pairs and the live check say so next to the colors.
   - tapOn: { testId: theme-color-ink }
   - eraseText: 10
@@ -99,11 +105,12 @@ commands:
   - waitForVisible: { css: "[data-testid=theme-editor][data-pending=false]", timeout: 30000 }
   - sql:
       query: >-
-        select theme->'palette'->>'paper' <> '#fbf5ea' as changed, draft is null as clean, (theme->>'version')::int as version
+        select theme->'palette'->>'paper' <> '#fbf5ea' as changed, draft is null as clean, (theme->>'version')::int as version,
+        theme->>'overlayStyle' as overlay
         from "Theme" where id = $1
       params: ["${copyId}"]
       readOnly: true
-      assert: { rows: 1, first: { changed: true, clean: true, version: 4 } }
+      assert: { rows: 1, first: { changed: true, clean: true, version: 4, overlay: fade } }
 
   # Every change is in Activity, with the history in the editor.
   - assertVisible: { css: "[data-testid=theme-history-entry][data-action=duplicate]" }
