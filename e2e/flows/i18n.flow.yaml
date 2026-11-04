@@ -68,6 +68,9 @@ commands:
   - waitForVisible: { testId: ui-country, contains: "Another country" }
   - waitForVisible: { testId: want-print }
   - assertNotVisible: { testId: order-print }
+  # The country picker left the page at the footer, below the button. A plain tap scrolls up only until
+  # the button peeks in at the top edge, under the sticky header, and the tap lands on the header.
+  - scrollUntilVisible: { testId: want-print, direction: up, centerElement: true }
   - tapOn: { testId: want-print }
   - waitForVisible: { testId: want-print-thanks }
   - sql:
