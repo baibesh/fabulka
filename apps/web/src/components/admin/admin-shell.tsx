@@ -43,6 +43,7 @@ import { LanguagePicker } from "@/components/layout/locale-pickers";
 import { ReloadButton } from "@/components/layout/new-version";
 import { cx } from "@/components/ui/cx";
 import { CommandPalette, ShortcutHint, usePaletteShortcut } from "./command-palette";
+import { ColorToggle } from "./color-toggle";
 import { useAdminI18n } from "./ui";
 import { useWorkingCountry, WorkingCountryNotice, WorkingCountryProvider } from "./working-country";
 import { WorkspaceSwitcher } from "./workspace-switcher";
@@ -168,7 +169,10 @@ function Frame({ children }: { children: ReactNode }) {
           </button>
           <AdminNav groups={groups} pathname={pathname} href={href} />
           <div className="flex flex-col gap-1 border-t border-border pt-3">
-            <LanguagePicker scope="admin" testId="admin-language" optionPrefix="admin-lang-" className="mx-1 mb-1 self-start" />
+            <div className="mx-1 mb-1 flex items-center gap-2">
+              <LanguagePicker scope="admin" testId="admin-language" optionPrefix="admin-lang-" className="self-start" />
+              <ColorToggle />
+            </div>
             <button
               type="button"
               data-testid="admin-logout"

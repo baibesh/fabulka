@@ -55,14 +55,26 @@
   --font-sans: var(--font-nunito);
 }
 
+/* Dark: the visitor's system setting, or the admin's own switch (<html data-color>, ColorToggle). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-color="light"]) {
     --background: #1c1712;
     --foreground: #f4ece2;
     --muted: #b3a493;
     --card: #262019;
     --border: #3d3329;
   }
+}
+:root[data-color="dark"] {
+  --background: #1c1712;
+  --foreground: #f4ece2;
+  --muted: #b3a493;
+  --card: #262019;
+  --border: #3d3329;
+  color-scheme: dark;
+}
+:root[data-color="light"] {
+  color-scheme: light;
 }
 
 body {
