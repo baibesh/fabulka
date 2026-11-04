@@ -27,6 +27,15 @@ import {
   JournalCallsQuerySchema,
   ThemeBriefSchema,
   type ThemeBrief,
+  ThemeCheckRequestSchema,
+  ThemeOrnamentUploadSchema,
+  ThemeRefineSchema,
+  ThemeSaveSchema,
+  checksPass,
+  editOf,
+  type BookTheme,
+  type ThemeRefine,
+  type ThemeSave,
   JournalPeriodQuerySchema,
   MethodologyPreviewSchema,
   PauseSchema,
@@ -100,6 +109,17 @@ function parseBody<T>(schema: ZodType<T>, body: unknown): T {
 function countryParam(value: string | undefined): string | null {
   const code = value?.trim().toUpperCase();
   return code && /^[A-Z]{2}$/.test(code) ? code : null;
+}
+
+/** What Activity compares of a theme: the fields staff edit, its version and the languages it covers. */
+function themeFields(theme: BookTheme | null) {
+  return theme
+    ? {
+        ...editOf(theme),
+        version: theme.version,
+        languages: theme.languages,
+      }
+    : null;
 }
 
 @Controller('admin')
@@ -380,12 +400,125 @@ export class AdminController {
     return theme;
   }
 
+  /**
+   * The editor's fields checked without saving: fonts, contrast, sizes and every letter of all five
+   * languages (the sample book through render QA runs on save).
+   */
+  @Post('themes/check')
+  @RequirePermission('themes')
+  @NoAudit()
+  @HttpCode(200)
+  checkTheme(@Body(new ZodPipe(ThemeCheckRequestSchema)) body: ThemeSave) {
+    return this.themes.check(body.theme);
+  }
+
+  /** A stored theme for the editor (curated ones are not stored: duplicate one to edit it). */
+  @Get('themes/:id')
+  @RequirePermission('themes', 'catalog', 'themes.read')
+  theme(@Param('id') id: string) {
+    return this.themes.adminTheme(id);
+  }
+
+  @Get('themes/:id/history')
+  @RequirePermission('themes', 'catalog', 'themes.read')
+  themeHistory(@Param('id') id: string) {
+    return this.themes.history(id);
+  }
+
+  /** An editable copy of a curated or stored theme, checked and kept as a draft. */
+  @Post('themes/:id/duplicate')
+  @RequirePermission('themes')
+  @Audit('theme.duplicate', { target: 'theme' })
+  async duplicateTheme(
+    @Param('id') id: string,
+    @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
+  ) {
+    const { entry } = await this.themes.duplicate(id, session.who);
+    trail.target('theme', entry.theme.id).note({ from: id });
+    return entry;
+  }
+
+  /**
+   * Saves an edit and checks it through (fonts, contrast, sizes, glyphs, a sample book in every
+   * language). A published theme keeps what books use: the edit waits as pending changes.
+   */
+  @Put('themes/:id')
+  @RequirePermission('themes')
+  @Audit('theme.update', { target: 'theme' })
+  async saveTheme(
+    @Param('id') id: string,
+    @Body(new ZodPipe(ThemeSaveSchema)) body: ThemeSave,
+    @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
+  ) {
+    const { entry, before, after } = await this.themes.save(
+      id,
+      body.theme,
+      session.who,
+    );
+    trail.diff(themeFields(before), themeFields(after)).note({
+      ok: checksPass(entry.draft?.checks ?? entry.checks),
+      pending: entry.status === 'published',
+    });
+    return entry;
+  }
+
+  /** Muse Spark adjusts the editor's theme to the owner's words; nothing is saved. */
+  @Post('themes/:id/refine')
+  @RequirePermission('themes')
+  @Audit('theme.refine', { target: 'theme' })
+  @HttpCode(200)
+  async refineTheme(
+    @Param('id') id: string,
+    @Body(new ZodPipe(ThemeRefineSchema)) body: ThemeRefine,
+    @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
+  ) {
+    // Paid models on staff's behalf: within the person's daily cap (429 staff_cap_reached).
+    await this.caps.assert(session, null);
+    const refined = await this.themes.refine(
+      id,
+      body.comment,
+      body.theme,
+      StaffCapsService.context(session, null),
+    );
+    trail.note({
+      comment: body.comment,
+      changed: refined.changes.map((c) => c.path),
+    });
+    return refined;
+  }
+
+  /** An ornament uploaded for a theme; it takes effect when the theme is saved with it. */
+  @Post('themes/:id/ornament')
+  @RequirePermission('themes')
+  @NoAudit()
+  uploadThemeOrnament(
+    @Param('id') id: string,
+    @Body(new ZodPipe(ThemeOrnamentUploadSchema))
+    body: z.infer<typeof ThemeOrnamentUploadSchema>,
+  ) {
+    return this.themes.uploadOrnament(id, body.image);
+  }
+
+  /** Publishes a theme or its pending changes; 422 theme_refused when a check failed. */
   @Post('themes/:id/publish')
   @RequirePermission('themes')
   @Audit('theme.publish', { target: 'theme' })
   @HttpCode(200)
-  publishTheme(@Param('id') id: string) {
-    return this.themes.publish(id, true);
+  async publishTheme(
+    @Param('id') id: string,
+    @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
+  ) {
+    const { entry, before, after } = await this.themes.publish(
+      id,
+      true,
+      session.who,
+    );
+    trail.diff(themeFields(before), themeFields(after));
+    return entry;
   }
 
   /** Takes a published theme back: no longer offered; books keep theirs, catalog books pick by age. */
@@ -393,8 +526,23 @@ export class AdminController {
   @RequirePermission('themes')
   @Audit('theme.unpublish', { target: 'theme' })
   @HttpCode(200)
-  unpublishTheme(@Param('id') id: string) {
-    return this.themes.publish(id, false);
+  async unpublishTheme(@Param('id') id: string) {
+    return (await this.themes.publish(id, false)).entry;
+  }
+
+  /** Drops a published theme's pending changes. */
+  @Post('themes/:id/discard')
+  @RequirePermission('themes')
+  @Audit('theme.discard', { target: 'theme' })
+  @HttpCode(200)
+  async discardTheme(
+    @Param('id') id: string,
+    @CurrentAdmin() session: AdminSession,
+    @Trail() trail: AuditTrail,
+  ) {
+    const { entry, before, after } = await this.themes.discard(id, session.who);
+    trail.diff(themeFields(before), themeFields(after));
+    return entry;
   }
 
   @Delete('themes/:id')

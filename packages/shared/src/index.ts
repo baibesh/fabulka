@@ -1095,10 +1095,30 @@ export const AdminThemeSchema = z.object({
   checks: z.array(ThemeCheckSchema),
   previews: z.partialRecord(LanguageSchema, z.array(z.string())),
   createdAt: z.string().nullable(),
+  /** Staff may edit it (AI themes and copies); curated ones are duplicated to edit. */
+  editable: z.boolean().default(false),
+  /** The theme this one was duplicated from; null: proposed by Muse Spark (or curated). */
+  basedOn: z.string().nullable().default(null),
+  /**
+   * A published theme's saved edits waiting to be published, with their checks and previews; books
+   * and pickers keep the published version until then. Null: none.
+   */
+  draft: z
+    .object({
+      theme: BookThemeSchema,
+      checks: z.array(ThemeCheckSchema),
+      previews: z.partialRecord(LanguageSchema, z.array(z.string())),
+    })
+    .nullable()
+    .default(null),
+  updatedAt: z.string().nullable().default(null),
 });
 export type AdminTheme = z.infer<typeof AdminThemeSchema>;
 
-/** Body of a 422 from POST /admin/themes: the proposal failed a check; `checks` says which and why. */
+/**
+ * Body of a 422 from POST /admin/themes (a proposal), or from publishing a theme (or its pending
+ * changes) that failed a check; `checks` says which and why.
+ */
 export const THEME_REFUSED = "theme_refused";
 export const ThemeRefusalSchema = z.object({ code: z.literal(THEME_REFUSED), message: z.string(), checks: z.array(ThemeCheckSchema) });
 export type ThemeRefusal = z.infer<typeof ThemeRefusalSchema>;

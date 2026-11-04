@@ -29,6 +29,15 @@ import {
   type PrintFormat,
   AdminThemeSchema,
   type AdminTheme,
+  ThemeCheckSchema,
+  ThemeHistoryEntrySchema,
+  ThemeOrnamentResultSchema,
+  ThemeRefinementSchema,
+  type ThemeCheck,
+  type ThemeEdit,
+  type ThemeHistoryEntry,
+  type ThemeOrnamentResult,
+  type ThemeRefinement,
   ModelCallDetailSchema,
   ModelCallPageSchema,
   ModelCallSchema,
@@ -504,6 +513,44 @@ export async function unpublishTheme(id: string): Promise<AdminTheme> {
 }
 
 export const deleteTheme = (id: string) => request(`/api/admin/themes/${id}`, { method: "DELETE" });
+
+/** A stored theme for the editor (404 for a curated one: duplicate it to edit). */
+export async function adminTheme(id: string): Promise<AdminTheme> {
+  return AdminThemeSchema.parse(await request(`/api/admin/themes/${encodeURIComponent(id)}`));
+}
+
+/** An editable copy of a curated or stored theme, checked and kept as a draft. */
+export async function duplicateTheme(id: string): Promise<AdminTheme> {
+  return AdminThemeSchema.parse(await request(`/api/admin/themes/${encodeURIComponent(id)}/duplicate`, { method: "POST" }));
+}
+
+/** Saves an edit and checks it through; a published theme holds it as pending changes. */
+export async function saveTheme(id: string, theme: ThemeEdit): Promise<AdminTheme> {
+  return AdminThemeSchema.parse(await request(`/api/admin/themes/${encodeURIComponent(id)}`, json("PUT", { theme })));
+}
+
+/** The checks that need no renderer, for fields not saved yet. */
+export async function checkTheme(theme: ThemeEdit): Promise<ThemeCheck[]> {
+  return ThemeCheckSchema.array().parse(await request("/api/admin/themes/check", json("POST", { theme })));
+}
+
+/** Muse Spark adjusts the theme to the owner's words; nothing is saved. */
+export async function refineTheme(id: string, comment: string, theme: ThemeEdit): Promise<ThemeRefinement> {
+  return ThemeRefinementSchema.parse(await request(`/api/admin/themes/${encodeURIComponent(id)}/refine`, json("POST", { comment, theme })));
+}
+
+/** Drops a published theme's pending changes. */
+export async function discardTheme(id: string): Promise<AdminTheme> {
+  return AdminThemeSchema.parse(await request(`/api/admin/themes/${encodeURIComponent(id)}/discard`, { method: "POST" }));
+}
+
+export async function uploadThemeOrnament(id: string, image: string): Promise<ThemeOrnamentResult> {
+  return ThemeOrnamentResultSchema.parse(await request(`/api/admin/themes/${encodeURIComponent(id)}/ornament`, json("POST", { image })));
+}
+
+export async function themeHistory(id: string): Promise<ThemeHistoryEntry[]> {
+  return ThemeHistoryEntrySchema.array().parse(await request(`/api/admin/themes/${encodeURIComponent(id)}/history`));
+}
 
 export async function saveFormats(formats: PrintFormat[]): Promise<PrintFormat[]> {
   return PrintFormatSchema.array().parse(await request("/api/admin/reference/formats", json("PUT", formats)));

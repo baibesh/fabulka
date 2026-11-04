@@ -11,6 +11,7 @@ import {
   lookFromModel,
   type ChildLook,
   type PageSubject,
+  type ProposedTheme,
   type Language,
   type ModelCallKind,
   type SamConcept,
@@ -70,6 +71,7 @@ import {
   ornamentPrompt,
   themeInstructions,
   themePrompt,
+  themeRefinePrompt,
   toyPrompt,
   petPrompt,
   SCENE_REWRITE_INSTRUCTIONS,
@@ -408,6 +410,7 @@ export class MetaGateway implements ModelGateway {
   /** Muse Spark proposes a theme as JSON; a reply that is not a valid proposal is asked for again. */
   async proposeTheme(
     brief: string,
+    current?: ProposedTheme,
   ): Promise<{ proposal: unknown; costUsd: number }> {
     const fonts = Object.entries(BOOK_FONTS);
     const instructions = themeInstructions({
@@ -421,7 +424,7 @@ export class MetaGateway implements ModelGateway {
     let error = '';
     for (let attempt = 0; attempt < STORY_ATTEMPTS; attempt++) {
       const input =
-        themePrompt(brief) +
+        (current ? themeRefinePrompt(brief, current) : themePrompt(brief)) +
         (error ? `\nYour previous output was invalid: ${error}` : '');
       const call = this.journal.start({
         kind: 'theme',

@@ -64,6 +64,14 @@ export const AUDIT_ACTIONS = [
   "theme.publish",
   "theme.unpublish",
   "theme.delete",
+  /** An editable copy of a curated or stored theme. */
+  "theme.duplicate",
+  /** A theme saved from the editor (a published one's edit waits as pending changes). */
+  "theme.update",
+  /** Muse Spark adjusted a theme to the owner's words (not saved). */
+  "theme.refine",
+  /** A published theme's pending changes dropped. */
+  "theme.discard",
   "methodology.create",
   "methodology.update",
   "methodology.delete",

@@ -507,9 +507,10 @@ model ClientError {
   @@index([createdAt])
 }
 
-/// A book theme Muse Spark proposed from the owner's brief (admin «Темы»). Curated themes live in
-/// code; these are checked in code (contrast, sizes, glyphs, a sample book in every language through
-/// render QA) before they are stored, and become selectable once staff publish them.
+/// A book theme Muse Spark proposed from the owner's brief, or a copy staff made to edit (admin
+/// «Темы»). Curated themes live in code; these are checked in code (contrast, sizes, glyphs, a sample
+/// book in every language through render QA) on every save, and become selectable once staff publish
+/// them (only when every check passed).
 model Theme {
   id        String   @id
   /// BookTheme (@fabulka/shared), source "ai".
@@ -521,10 +522,33 @@ model Theme {
   checks    Json     @default("[]")
   /// Sample page PNGs by language: { ru: ["themes/…/ru-0.png", …], … }.
   previews  Json     @default("{}")
+  /// A published theme's saved edits waiting to be published: { theme, checks, previews }. Books and
+  /// pickers keep `theme` until staff publish them; null: none.
+  draft     Json?
+  /// The theme this one was duplicated from (a curated id or another theme's); null: proposed.
+  basedOn   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([published, createdAt])
+}
+
+/// What happened to a theme in the admin (made, copied, saved, published, changes dropped), with the
+/// theme as it was after it and how its checks went: the editor loads an old version from here.
+model ThemeHistory {
+  id        String   @id @default(cuid())
+  themeId   String
+  /// create, duplicate, save, publish or discard (THEME_HISTORY_ACTIONS).
+  action    String
+  version   Int
+  /// BookTheme (@fabulka/shared) after the action.
+  theme     Json
+  /// ThemeCheck[] (@fabulka/shared).
+  checks    Json     @default("[]")
+  who       String?
+  createdAt DateTime @default(now())
+
+  @@index([themeId, createdAt])
 }
 
 /// SEO of one public page in one language (admin «SEO»). Staff edit the draft; publishing copies it

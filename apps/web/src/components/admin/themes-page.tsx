@@ -1,8 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LANGUAGES, LANGUAGE_NAMES, THEME_REFUSED, ThemeRefusalSchema, type AdminTheme, type Language, type ThemeCheck } from "@fabulka/shared";
-import { Check, EyeOff, Sparkles, Trash2, X } from "lucide-react";
+import { LANGUAGES, LANGUAGE_NAMES, THEME_REFUSED, ThemeRefusalSchema, checksPass, isComicTheme, type AdminTheme, type Language, type ThemeCheck } from "@fabulka/shared";
+import { Check, Copy, EyeOff, Pencil, Sparkles, Trash2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,21 +11,32 @@ import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/input";
 import { ErrorText } from "@/components/ui/notice";
 import { QueryState } from "@/components/ui/query-state";
-import { adminThemes, deleteTheme, proposeTheme, publishTheme, unpublishTheme } from "@/lib/admin-api";
+import { adminThemes, deleteTheme, duplicateTheme, proposeTheme, publishTheme, unpublishTheme } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
 import { StaffBudgetNote, useCapError, useRefreshBudget } from "./staff-budget";
 import { themeName } from "@/lib/themes";
 import { Card, PageTitle, useAdminI18n } from "./ui";
-import { useCan } from "./working-country";
+import { useAdminHref, useCan } from "./working-country";
 
 const QUERY = ["admin", "themes"];
 
 /**
- * /admin/themes: the curated themes (read-only) and the ones Muse Spark proposed. The owner types a
- * brief; the proposal is checked in code (fonts, contrast, sizes, glyphs, a sample book in all five
- * languages) and either refused with the reasons or kept as a draft with its page previews, which
- * the owner publishes - then staff and parents can pick it - takes back again, or deletes.
+ * /admin/themes: the curated themes (read-only, duplicated to edit a copy) and the stored ones: those
+ * Muse Spark proposed and the copies. The owner types a brief; the proposal is checked in code (fonts,
+ * contrast, sizes, glyphs, a sample book in all five languages) and either refused with the reasons
+ * or kept as a draft with its page previews. A stored theme opens in the editor; the owner publishes
+ * it once every check passes - then staff and parents can pick it - takes it back again, or deletes it.
  */
+/** A theme's name by its id (a copy names the theme it came from), or the id while the list loads. */
+export function useThemeNameById(): (id: string) => string {
+  const { t, locale } = useAdminI18n();
+  const themes = useQuery({ queryKey: QUERY, queryFn: adminThemes });
+  return (id) => {
+    const found = themes.data?.find((entry) => entry.theme.id === id);
+    return found ? themeName(found.theme, t, locale) : id;
+  };
+}
+
 export function ThemesPage() {
   const { t } = useAdminI18n();
   const themes = useQuery({ queryKey: QUERY, queryFn: adminThemes });
@@ -108,7 +120,7 @@ function ProposeCard() {
 }
 
 /** What was checked and how it went; a failed check says what to fix. */
-function Checks({ checks }: { checks: ThemeCheck[] }) {
+export function Checks({ checks }: { checks: ThemeCheck[] }) {
   const { t } = useAdminI18n();
   return (
     <ul data-testid="theme-checks" className="flex flex-col gap-1 text-sm">
@@ -131,17 +143,30 @@ function Checks({ checks }: { checks: ThemeCheck[] }) {
 function ThemeCard({ entry, canEdit }: { entry: AdminTheme; canEdit: boolean }) {
   const { t, locale, date } = useAdminI18n();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const adminHref = useAdminHref();
   const { theme } = entry;
   const ai = theme.source === "ai";
+  const editHref = adminHref(`/admin/themes/${encodeURIComponent(theme.id)}`);
+  const nameOf = useThemeNameById();
   const [language, setLanguage] = useState<Language>(locale);
   const [confirm, setConfirm] = useState(false);
   const refresh = () => void queryClient.invalidateQueries({ queryKey: QUERY });
   const publish = useMutation({ mutationFn: () => publishTheme(theme.id), onSuccess: refresh });
   const unpublish = useMutation({ mutationFn: () => unpublishTheme(theme.id), onSuccess: refresh });
   const remove = useMutation({ mutationFn: () => deleteTheme(theme.id), onSuccess: refresh });
+  // A copy to edit: checked like any save, then opened in the editor.
+  const duplicate = useMutation({
+    mutationFn: () => duplicateTheme(theme.id),
+    onSuccess: (copy) => {
+      refresh();
+      router.push(adminHref(`/admin/themes/${encodeURIComponent(copy.theme.id)}`));
+    },
+  });
+  const publishable = checksPass(entry.checks);
   const previews = entry.previews[language] ?? [];
   return (
-    <li data-testid="theme-card" data-id={theme.id} data-source={theme.source} data-status={entry.status}>
+    <li data-testid="theme-card" data-id={theme.id} data-source={theme.source} data-status={entry.status} data-editable={entry.editable} data-pending={!!entry.draft}>
       <Card
         title={themeName(theme, t, locale)}
         action={
@@ -149,8 +174,38 @@ function ThemeCard({ entry, canEdit }: { entry: AdminTheme; canEdit: boolean }) 
             <Badge tone={entry.status === "published" ? "success" : "warning"}>
               {ai ? t(`admin.themes.status.${entry.status}`) : t("admin.themes.curated")}
             </Badge>
+            {isComicTheme(theme) && <Badge tone="neutral">{t("admin.themes.comic")}</Badge>}
+            {entry.draft && (
+              <Badge tone="accent" data-testid="theme-pending">
+                {t("admin.themes.pending")}
+              </Badge>
+            )}
+            {canEdit && entry.editable && (
+              <Button size="sm" variant="secondary" data-testid="theme-edit" icon={<Pencil className="size-4" />} onClick={() => router.push(editHref)}>
+                {t("admin.themes.edit")}
+              </Button>
+            )}
+            {canEdit && (
+              <Button
+                size="sm"
+                variant={entry.editable ? "ghost" : "secondary"}
+                data-testid="theme-duplicate"
+                loading={duplicate.isPending}
+                icon={<Copy className="size-4" />}
+                onClick={() => duplicate.mutate()}
+              >
+                {t("admin.themes.duplicate")}
+              </Button>
+            )}
             {canEdit && ai && entry.status === "draft" && (
-              <Button size="sm" data-testid="theme-publish" loading={publish.isPending} onClick={() => publish.mutate()}>
+              <Button
+                size="sm"
+                data-testid="theme-publish"
+                loading={publish.isPending}
+                disabled={!publishable}
+                title={publishable ? undefined : t("admin.themes.publish.blocked")}
+                onClick={() => publish.mutate()}
+              >
                 {t("admin.themes.publish")}
               </Button>
             )}
@@ -186,6 +241,8 @@ function ThemeCard({ entry, canEdit }: { entry: AdminTheme; canEdit: boolean }) 
             {t("admin.themes.unpublish.hint")}
           </p>
         )}
+        {duplicate.isPending && <p className="-mt-2 text-sm text-muted">{t("admin.themes.duplicate.pending")}</p>}
+        {entry.basedOn && <p className="-mt-2 text-sm text-muted">{t("admin.themes.copyOf", { name: nameOf(entry.basedOn) })}</p>}
         {entry.brief && (
           <p className="-mt-2 text-sm text-muted">
             «{entry.brief}»{entry.createdAt && ` · ${date(entry.createdAt)}`}
@@ -233,7 +290,9 @@ function ThemeCard({ entry, canEdit }: { entry: AdminTheme; canEdit: boolean }) 
             </ol>
           </div>
         )}
-        {(publish.isError || unpublish.isError || remove.isError) && <ErrorText>{(publish.error ?? unpublish.error ?? remove.error)?.message}</ErrorText>}
+        {(publish.isError || unpublish.isError || remove.isError || duplicate.isError) && (
+          <ErrorText>{(publish.error ?? unpublish.error ?? remove.error ?? duplicate.error)?.message}</ErrorText>
+        )}
       </Card>
     </li>
   );
