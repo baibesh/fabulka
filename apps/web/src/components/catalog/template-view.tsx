@@ -108,7 +108,7 @@ function SampleBook({ book, template }: { book: Book; template: Template }) {
           <mark className="rounded bg-accent/20 px-1 font-semibold text-foreground underline decoration-accent decoration-dotted underline-offset-4">
             {book.childName}
           </mark>{" "}
-          — {t("sample.legend")}
+          - {t("sample.legend")}
         </p>
         {book.language !== locale && (
           <p data-testid="sample-language" data-language={book.language} className="text-sm text-muted">
@@ -130,7 +130,7 @@ function Changes({ template, method }: { template: Template; method?: string }) 
     { icon: Heart, text: t("template.changes.interests") },
     { icon: PawPrint, text: t("template.changes.pet") },
     { icon: Camera, text: t("template.changes.toy") },
-    ...template.questions.map((q) => ({ icon: MessageCircleQuestion, text: `«${q.label}» — ${t("template.changes.answer")}` })),
+    ...template.questions.map((q) => ({ icon: MessageCircleQuestion, text: `«${q.label}» - ${t("template.changes.answer")}` })),
   ];
 
   return (

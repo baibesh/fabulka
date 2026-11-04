@@ -42,7 +42,7 @@ export function parseEcb(xml: string): FxQuote {
 
 /**
  * The National Bank of Kazakhstan's official rates (rss/rates_all.xml): tenge for `quant` units of
- * each currency. Gives KZT (dollars per tenge) — the ECB does not list the tenge.
+ * each currency. Gives KZT (dollars per tenge) - the ECB does not list the tenge.
  */
 export function parseNbk(xml: string): FxQuote {
   const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(

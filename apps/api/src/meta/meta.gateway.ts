@@ -28,6 +28,13 @@ import {
 import { cutout, type Segment } from '../toy/cutout';
 import { jpegSize } from '../toy/jpeg-size';
 import { sanitizePrefill } from '../voice/prefill';
+
+/**
+ * The site uses a plain hyphen, never the em dash; Muse Spark likes em dashes (and starts Russian
+ * dialogue with one), so the words it writes for a book get plain hyphens before they are read.
+ * Safe on the raw JSON: an em dash is never JSON syntax.
+ */
+export const plainDashes = (text: string) => text.replace(/\u2014/g, '-');
 import {
   type BookTranslation,
   BookTranslationSchema,
@@ -165,7 +172,9 @@ export class MetaGateway implements ModelGateway {
       );
       costUsd += tokenCost(response);
       try {
-        const story = StorySchema.parse(JSON.parse(response.output_text));
+        const story = StorySchema.parse(
+          JSON.parse(plainDashes(response.output_text)),
+        );
         call.ok(spend(response));
         return { story, costUsd };
       } catch (problem) {
@@ -642,7 +651,7 @@ export class MetaGateway implements ModelGateway {
     );
     let raw: unknown = {};
     try {
-      raw = JSON.parse(response.output_text || '{}');
+      raw = JSON.parse(plainDashes(response.output_text || '{}'));
       call.ok(spend(response));
     } catch (problem) {
       // Unreadable JSON fills in nothing; the transcript is still shown.
@@ -684,7 +693,7 @@ export class MetaGateway implements ModelGateway {
       costUsd += tokenCost(response);
       try {
         const translation = BookTranslationSchema.parse(
-          JSON.parse(response.output_text),
+          JSON.parse(plainDashes(response.output_text)),
         );
         const problem = translationProblem(brief, translation);
         if (problem) throw new Error(problem);
@@ -726,7 +735,7 @@ export class MetaGateway implements ModelGateway {
       }),
     );
     const parsed = ShortenSchema.safeParse(
-      safeJson(response.output_text || '{}'),
+      safeJson(plainDashes(response.output_text || '{}')),
     );
     if (!parsed.success) {
       const problem = new Error('Muse Spark returned no shortened page');

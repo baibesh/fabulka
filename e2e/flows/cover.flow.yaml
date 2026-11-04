@@ -1,5 +1,5 @@
 # The real cover: a mock book gets its own cover illustration with the child's name lettered on it,
-# a back cover with the blurb, and — in a hardcover order's print file — the cover wrap with a
+# a back cover with the blurb, and - in a hardcover order's print file - the cover wrap with a
 # lettered spine as wide as the book is thick.
 appId: ${WEB}
 tags: [book, cover, print]

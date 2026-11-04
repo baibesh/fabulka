@@ -71,7 +71,7 @@ describe('the translation of an example book', () => {
       title: 'Тайна снежного барса',
       pages: [
         { page: 1, text: 'Тимур проснулся рано.' },
-        { page: 2, text: '«Пойдём в горы!» — сказал Тимур.' },
+        { page: 2, text: '«Пойдём в горы!» - сказал Тимур.' },
       ],
       talkQuestions: ['Что ты увидел?', 'Кого ты встретил?'],
       dedication: 'Тимуру от мамы',

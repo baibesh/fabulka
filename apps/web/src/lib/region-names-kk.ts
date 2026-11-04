@@ -178,7 +178,7 @@ export const KK_REGION_NAMES: Readonly<Record<string, string>> = {
   PA: "Панама",
   PE: "Перу",
   PF: "Француз Полинезиясы",
-  PG: "Папуа — Жаңа Гвинея",
+  PG: "Папуа - Жаңа Гвинея",
   PH: "Филиппин аралдары",
   PK: "Пәкістан",
   PL: "Польша",

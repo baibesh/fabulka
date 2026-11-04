@@ -20,7 +20,7 @@ const isAction = (code: string): code is AuditAction => (AUDIT_ACTIONS as readon
 
 /** A stored value in a line: strings as they are, the rest as compact JSON, nothing as a dash. */
 function show(value: unknown): string {
-  if (value === undefined || value === null) return "—";
+  if (value === undefined || value === null) return "-";
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
@@ -162,7 +162,7 @@ function EventRow({ event }: { event: AuditEvent }) {
         <td className="w-6 text-muted">{open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}</td>
         <td className="whitespace-nowrap text-muted">{date(event.at)}</td>
         <td className="max-w-48 truncate" title={event.actorEmail ?? undefined}>
-          {event.actorEmail ?? "—"}
+          {event.actorEmail ?? "-"}
         </td>
         <td>
           <span data-testid="activity-text" className="font-semibold">

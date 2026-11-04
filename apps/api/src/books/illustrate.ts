@@ -11,7 +11,7 @@ import { isSafetyRefusal } from '../meta/refusal';
 
 /**
  * How a page's picture was drawn: as the story wrote the scene, in its gentler form (softenScene),
- * rewritten by Muse Spark, or not at all — every version was refused, so the page is laid out
+ * rewritten by Muse Spark, or not at all - every version was refused, so the page is laid out
  * without a picture of its own (a vignette page, see PageLayout.noArt).
  */
 export type ArtOutcome = 'drawn' | 'softened' | 'rewritten' | 'refused';
@@ -52,7 +52,7 @@ const logger = new Logger('illustratePage');
  * 2. refused: the same scene in a gentler form (softenScene: a wider shot, a wobble for a fall);
  * 3. refused again: Muse Spark rewrites the scene from the page text and the refusal (the same
  *    beat, characters and place, in a calm safe pose), and it is drawn once more;
- * 4. refused again, or the rewrite failed: no picture — the page is laid out as a vignette page.
+ * 4. refused again, or the rewrite failed: no picture - the page is laid out as a vignette page.
  * Any other error (the network, a 5xx) is thrown as before. Every call is in the journal.
  */
 export async function illustratePage(

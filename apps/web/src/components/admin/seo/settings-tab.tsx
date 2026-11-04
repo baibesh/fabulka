@@ -14,7 +14,7 @@ import { adminSeoSettings, saveSeoSettings, seoHistory } from "@/lib/admin-api";
 import { Card, useAdminI18n } from "../ui";
 import { HistoryList } from "./shared";
 
-/** «Настройки»: what is the same for every language and country — verification, analytics, robots.txt, the sitemap. */
+/** «Настройки»: what is the same for every language and country - verification, analytics, robots.txt, the sitemap. */
 export function SettingsTab() {
   const settings = useQuery({ queryKey: ["admin", "seo", "settings"], queryFn: adminSeoSettings });
   if (!settings.data) return <QueryState error={settings.error} scope="admin" />;

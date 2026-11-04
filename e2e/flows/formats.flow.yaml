@@ -1,7 +1,7 @@
 # Print formats in the reference data: the owner changes the A4 price in «Справочники» → «Форматы»;
 # the parent picks A4 landscape in the order form, the book is laid out again at 297×210 mm (render QA
 # notes the spread layout it drops because it would crop the picture too much) and the total follows
-# the owner's price; the order freezes that format, and the admin downloads the print file — a PDF
+# the owner's price; the order freezes that format, and the admin downloads the print file - a PDF
 # with bleed and crop marks around the trimmed page and TrimBox / BleedBox set (mock models).
 appId: ${WEB}
 tags: [order, layout, admin]

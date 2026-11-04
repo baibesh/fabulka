@@ -14,8 +14,8 @@ const TABS = ["people", "roles", "caps"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
- * /admin/team (superadmin only): who may open the admin — invite by email (Fabulka ID sends the
- * set-up email), edit roles, countries and daily caps, disable — the roles themselves, and the
+ * /admin/team (superadmin only): who may open the admin - invite by email (Fabulka ID sends the
+ * set-up email), edit roles, countries and daily caps, disable - the roles themselves, and the
  * default daily caps on staff generation.
  */
 export function TeamPage() {

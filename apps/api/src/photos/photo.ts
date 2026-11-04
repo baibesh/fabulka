@@ -43,7 +43,7 @@ export function photoType(data: Buffer): 'jpeg' | 'png' | 'heic' | null {
 /**
  * The parent's photo made safe to store and print: only JPEG, PNG or HEIC (by its bytes), at most
  * PHOTO_MAX_BYTES; turned upright by its EXIF orientation, scaled to PHOTO_MAX_SIDE and re-encoded as
- * a JPEG with no metadata at all — EXIF (location included), XMP, ICC and comments are dropped —
+ * a JPEG with no metadata at all - EXIF (location included), XMP, ICC and comments are dropped -
  * at a quality that keeps it under PHOTO_MAX_STORED. It is never sent to any model.
  */
 export async function cleanPhoto(

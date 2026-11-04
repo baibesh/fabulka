@@ -65,7 +65,7 @@ export type DefaultPrices = z.infer<typeof DefaultPricesSchema>;
 const CountryKeySchema = z.string().regex(/^[A-Z]{2}$/);
 
 /**
- * Body of PUT /admin/reference/prices: book prices in one currency — that currency's default (no
+ * Body of PUT /admin/reference/prices: book prices in one currency - that currency's default (no
  * ?country=) or one country's own (?country=XX, in the country's currency only).
  */
 export const BookPricesSchema = z
@@ -578,7 +578,7 @@ export function languageFor(country: Country, language: Language, countries: rea
 
 /**
  * The country a catalog list is for (GET /templates?country=, GET /books/examples?country=): an ISO
- * code, upper-cased; null for "other", a missing or an unknown one — such visitors get only the
+ * code, upper-cased; null for "other", a missing or an unknown one - such visitors get only the
  * books listed everywhere.
  */
 export function catalogCountry(param: string | null | undefined): string | null {
@@ -1107,8 +1107,8 @@ export const DEFAULT_FAQ: FaqItem[] = [
       de: "Was kostet ein Buch?",
     },
     a: {
-      ru: "Первые книги — бесплатно. Дальше книга из каталога стоит {templatePrice}, своя история — {customPrice}. Цены в тенге; печатная книга оплачивается отдельно.",
-      kk: "Алғашқы кітаптар — тегін. Одан кейін каталогтағы кітап — {templatePrice}, өз ертегіңіз — {customPrice}. Бағалар теңгемен; басылған кітап бөлек төленеді.",
+      ru: "Первые книги - бесплатно. Дальше книга из каталога стоит {templatePrice}, своя история - {customPrice}. Цены в тенге; печатная книга оплачивается отдельно.",
+      kk: "Алғашқы кітаптар - тегін. Одан кейін каталогтағы кітап - {templatePrice}, өз ертегіңіз - {customPrice}. Бағалар теңгемен; басылған кітап бөлек төленеді.",
       en: "Your first books are free. After that a catalog book is {templatePrice} and a story of your own {customPrice}. Prices are in tenge; a printed copy is paid for separately.",
       es: "Los primeros libros son gratis. Después, un libro del catálogo cuesta {templatePrice} y una historia propia, {customPrice}. Los precios están en tenges; el libro impreso se paga aparte.",
       de: "Die ersten Bücher sind kostenlos. Danach kostet ein Buch aus dem Katalog {templatePrice}, eine eigene Geschichte {customPrice}. Die Preise sind in Tenge angegeben; ein gedrucktes Exemplar wird separat bezahlt.",
@@ -1125,8 +1125,8 @@ export const DEFAULT_FAQ: FaqItem[] = [
       de: "Was kostet ein Buch?",
     },
     a: {
-      ru: "Первые книги — бесплатно. Дальше книга из каталога стоит {templatePrice}, своя история — {customPrice}. Цены указаны в валюте вашей страны.",
-      kk: "Алғашқы кітаптар — тегін. Одан кейін каталогтағы кітап — {templatePrice}, өз ертегіңіз — {customPrice}. Бағалар еліңіздің валютасында көрсетілген.",
+      ru: "Первые книги - бесплатно. Дальше книга из каталога стоит {templatePrice}, своя история - {customPrice}. Цены указаны в валюте вашей страны.",
+      kk: "Алғашқы кітаптар - тегін. Одан кейін каталогтағы кітап - {templatePrice}, өз ертегіңіз - {customPrice}. Бағалар еліңіздің валютасында көрсетілген.",
       en: "Your first books are free. After that a catalog book is {templatePrice} and a story of your own {customPrice}. Prices are shown in your country's currency.",
       es: "Los primeros libros son gratis. Después, un libro del catálogo cuesta {templatePrice} y una historia propia, {customPrice}. Los precios se muestran en la moneda de tu país.",
       de: "Die ersten Bücher sind kostenlos. Danach kostet ein Buch aus dem Katalog {templatePrice}, eine eigene Geschichte {customPrice}. Die Preise werden in der Währung deines Landes angezeigt.",
@@ -1143,8 +1143,8 @@ export const DEFAULT_FAQ: FaqItem[] = [
       de: "Was passiert mit den Daten meines Kindes?",
     },
     a: {
-      ru: "Героя рисуют по описанию — фотография ребёнка для этого не нужна. Если хотите, можно добавить в книгу отдельную страницу с фото ребёнка: это фото не передаётся моделям ИИ, хранится только для этой книги и удаляется вместе со страницей или книгой. Фото игрушки — тоже по желанию. Всё удалим по запросу на hello@fabulka.com.",
-      kk: "Кейіпкер сипаттама бойынша салынады — бұл үшін баланың фотосы керек емес. Қаласаңыз, кітапқа баланың фотосы бар жеке бет қосуға болады: ол фото жасанды интеллект модельдеріне жіберілмейді, тек осы кітап үшін сақталады және бетпен не кітаппен бірге өшіріледі. Ойыншықтың фотосы да — қалауыңыз бойынша. Сұрауыңыз бойынша бәрін өшіреміз: hello@fabulka.com.",
+      ru: "Героя рисуют по описанию - фотография ребёнка для этого не нужна. Если хотите, можно добавить в книгу отдельную страницу с фото ребёнка: это фото не передаётся моделям ИИ, хранится только для этой книги и удаляется вместе со страницей или книгой. Фото игрушки - тоже по желанию. Всё удалим по запросу на hello@fabulka.com.",
+      kk: "Кейіпкер сипаттама бойынша салынады - бұл үшін баланың фотосы керек емес. Қаласаңыз, кітапқа баланың фотосы бар жеке бет қосуға болады: ол фото жасанды интеллект модельдеріне жіберілмейді, тек осы кітап үшін сақталады және бетпен не кітаппен бірге өшіріледі. Ойыншықтың фотосы да - қалауыңыз бойынша. Сұрауыңыз бойынша бәрін өшіреміз: hello@fabulka.com.",
       en: "The hero is drawn from a description, so no photo of your child is needed. If you like, you can add a separate page with your child's photo to the book: that photo is never sent to AI models, is kept only for that book and is deleted along with the page or the book. A photo of the toy is optional too. We delete everything on request at hello@fabulka.com.",
       es: "El protagonista se dibuja a partir de una descripción, así que no hace falta ninguna foto de tu hijo. Si quieres, puedes añadir al libro una página aparte con su foto: esa foto nunca se envía a modelos de IA, se guarda solo para ese libro y se borra junto con la página o el libro. La foto del juguete también es opcional. Si nos lo pides en hello@fabulka.com, lo borramos todo.",
       de: "Der Held wird nach einer Beschreibung gezeichnet, ein Foto deines Kindes ist dafür nicht nötig. Wenn du möchtest, kannst du dem Buch eine eigene Seite mit einem Foto deines Kindes hinzufügen: Dieses Foto geht an kein KI-Modell, wird nur für dieses Buch gespeichert und zusammen mit der Seite oder dem Buch gelöscht. Ein Foto vom Spielzeug ist ebenfalls freiwillig. Auf Anfrage an hello@fabulka.com löschen wir alles.",
@@ -1161,8 +1161,8 @@ export const DEFAULT_FAQ: FaqItem[] = [
       de: "Wie bekomme ich ein gedrucktes Buch?",
     },
     a: {
-      ru: "На странице готовой книги нажмите «Заказать печатную книгу». Мягкая обложка — {softCover}, твёрдая — {hardCover}. Бесплатная доставка: {freeCities}; в другие города — {delivery}.",
-      kk: "Дайын кітаптың бетінде «Басылған кітапқа тапсырыс» батырмасын басыңыз. Жұмсақ мұқаба — {softCover}, қатты мұқаба — {hardCover}. Тегін жеткізу: {freeCities}; басқа қалаларға — {delivery}.",
+      ru: "На странице готовой книги нажмите «Заказать печатную книгу». Мягкая обложка - {softCover}, твёрдая - {hardCover}. Бесплатная доставка: {freeCities}; в другие города - {delivery}.",
+      kk: "Дайын кітаптың бетінде «Басылған кітапқа тапсырыс» батырмасын басыңыз. Жұмсақ мұқаба - {softCover}, қатты мұқаба - {hardCover}. Тегін жеткізу: {freeCities}; басқа қалаларға - {delivery}.",
       en: "On the finished book's page, press “Order a printed book”. A soft cover is {softCover}, a hard cover {hardCover}. Free delivery to {freeCities}; to other cities, {delivery}.",
       es: "En la página del libro terminado, pulsa «Pedir el libro impreso». Tapa blanda: {softCover}; tapa dura: {hardCover}. Envío gratis a {freeCities}; a otras ciudades, {delivery}.",
       de: "Wähle auf der Seite des fertigen Buches „Gedrucktes Buch bestellen“. Softcover: {softCover}, Hardcover: {hardCover}. Kostenlose Lieferung nach {freeCities}, in andere Städte: {delivery}.",
@@ -1179,8 +1179,8 @@ export const DEFAULT_FAQ: FaqItem[] = [
       de: "Kann ich ein gedrucktes Buch bestellen?",
     },
     a: {
-      ru: "К сожалению, в вашей стране печатные книги пока недоступны, но мы планируем открыть печать и в других странах. А пока готовую книгу можно скачать в PDF и распечатать самим. Нажмите «Хочу печатную книгу» на странице книги — и мы сообщим, когда печать заработает у вас.",
-      kk: "Өкінішке қарай, сіздің еліңізде басылған кітаптар әзірге қолжетімсіз, бірақ біз басып шығаруды басқа елдерде де іске қосуды жоспарлап отырмыз. Әзірге дайын кітапты PDF түрінде жүктеп, өзіңіз басып шығара аласыз. Кітап бетінде «Басылған кітап керек» батырмасын басыңыз — басып шығару сіздің еліңізде іске қосылғанда хабарлаймыз.",
+      ru: "К сожалению, в вашей стране печатные книги пока недоступны, но мы планируем открыть печать и в других странах. А пока готовую книгу можно скачать в PDF и распечатать самим. Нажмите «Хочу печатную книгу» на странице книги - и мы сообщим, когда печать заработает у вас.",
+      kk: "Өкінішке қарай, сіздің еліңізде басылған кітаптар әзірге қолжетімсіз, бірақ біз басып шығаруды басқа елдерде де іске қосуды жоспарлап отырмыз. Әзірге дайын кітапты PDF түрінде жүктеп, өзіңіз басып шығара аласыз. Кітап бетінде «Басылған кітап керек» батырмасын басыңыз - басып шығару сіздің еліңізде іске қосылғанда хабарлаймыз.",
       en: "Unfortunately, printed books aren't available in your country yet, but we plan to bring printing to more countries. Meanwhile you can download the finished book as a PDF and print it yourself. Press “I want a printed book” on the book's page and we'll let you know when printing reaches you.",
       es: "Lamentablemente, todavía no imprimimos libros en tu país, pero queremos llevar la impresión a más países. Mientras tanto, puedes descargar el libro terminado en PDF e imprimirlo en casa. Pulsa «Quiero un libro impreso» en la página del libro y te avisaremos cuando la impresión llegue a tu país.",
       de: "Leider gibt es in deinem Land noch keine gedruckten Bücher, aber wir möchten den Druck bald in weitere Länder bringen. Bis dahin kannst du das fertige Buch als PDF herunterladen und selbst ausdrucken. Wähle auf der Seite des Buches „Ich möchte ein gedrucktes Buch“ – wir sagen dir Bescheid, sobald der Druck bei dir verfügbar ist.",
@@ -1215,8 +1215,8 @@ export const DEFAULT_FAQ: FaqItem[] = [
       de: "Und wenn mir das Buch nicht gefällt?",
     },
     a: {
-      ru: "Сделайте новую: поменяйте ответы, тему или методику. Если что-то пошло не так, напишите нам на hello@fabulka.com — разберёмся.",
-      kk: "Жаңасын жасаңыз: жауаптарды, тақырыпты не әдістемені өзгертіңіз. Бірдеңе дұрыс болмаса, hello@fabulka.com мекенжайына жазыңыз — көмектесеміз.",
+      ru: "Сделайте новую: поменяйте ответы, тему или методику. Если что-то пошло не так, напишите нам на hello@fabulka.com - разберёмся.",
+      kk: "Жаңасын жасаңыз: жауаптарды, тақырыпты не әдістемені өзгертіңіз. Бірдеңе дұрыс болмаса, hello@fabulka.com мекенжайына жазыңыз - көмектесеміз.",
       en: "Make another one: change the answers, the topic or the method. If something went wrong, write to hello@fabulka.com and we'll sort it out.",
       es: "Haz otro: cambia las respuestas, la temática o el método. Si hubo algún problema, escríbenos a hello@fabulka.com y lo solucionamos.",
       de: "Erstell einfach ein neues: Ändere die Antworten, das Thema oder die Methode. Wenn etwas schiefgelaufen ist, schreib uns an hello@fabulka.com – wir kümmern uns darum.",

@@ -6,7 +6,7 @@ import { Providers } from "../providers";
 
 export const metadata: Metadata = {
   ...siteMetadata,
-  title: "Admin — Fabulka",
+  title: "Admin - Fabulka",
   robots: { index: false, follow: false },
 };
 

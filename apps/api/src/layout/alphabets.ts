@@ -7,7 +7,7 @@ const upper = (from: string, to: string) =>
 const LATIN = upper('A', 'Z') + upper('a', 'z');
 const CYRILLIC = upper('А', 'я') + 'Ёё';
 const DIGITS = '0123456789';
-const COMMON = '.,:;!?-–—…()\'"%·';
+const COMMON = '.,:;!?-–-…()\'"%·';
 
 /** Every letter and the punctuation a book in each language may print. */
 export const ALPHABETS: Record<Language, string> = {

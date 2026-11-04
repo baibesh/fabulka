@@ -264,7 +264,7 @@ export function chooseLayout(layout: BookLayout, pages: PageAnalysis[]): BookLay
 
 /**
  * Render QA's note for a page whose picture is too narrow for some of the theme's layouts in this
- * format (they would keep less than MIN_VISIBLE of it), so the chooser left them out — and fell back
+ * format (they would keep less than MIN_VISIBLE of it), so the chooser left them out - and fell back
  * to the plate when none was left. Null when every layout keeps enough picture.
  */
 export function cropNote(layout: BookLayout, page: PageAnalysis): string | null {
@@ -303,7 +303,7 @@ export function countBreaks(text: string): number {
 
 /**
  * A page's text as the book prints it: intended line breaks (a caption, then lines of dialogue) are
- * kept, everything else around them is tidied — Windows line ends, spaces at line ends, more than
+ * kept, everything else around them is tidied - Windows line ends, spaces at line ends, more than
  * one empty line in a row, and breaks at the very start or end.
  */
 export function pageText(text: string): string {

@@ -26,7 +26,7 @@ export function Pricing() {
   const templatePrice = useBookPrice("template");
   const customPrice = useBookPrice("custom");
   const points = (...keys: MessageKey[]) => keys.map((key) => t(key));
-  const money = (price: Money | null) => (price ? formatPrice(price, locale) : "—");
+  const money = (price: Money | null) => (price ? formatPrice(price, locale) : "-");
   const plans: Plan[] = [
     {
       testId: "price-template",

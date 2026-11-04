@@ -85,7 +85,7 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
         <ul data-testid="render-issues" className="flex flex-col gap-1 text-sm">
           {layout.qa.issues.map((issue, i) => (
             <li key={i} className="text-danger">
-              <span className="font-semibold">{issue.page}</span> — {t(`admin.book.layout.issue.${issue.kind}`)}
+              <span className="font-semibold">{issue.page}</span> - {t(`admin.book.layout.issue.${issue.kind}`)}
               <span className="block text-xs text-muted">{issue.detail}</span>
             </li>
           ))}
@@ -95,7 +95,7 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
         <ul data-testid="render-notes" className="flex flex-col gap-1 text-sm">
           {layout.qa.notes.map((note, i) => (
             <li key={i} data-kind={note.kind} className="text-warning">
-              <span className="font-semibold">{note.page}</span> — {t(`admin.book.layout.note.${note.kind}`)}
+              <span className="font-semibold">{note.page}</span> - {t(`admin.book.layout.note.${note.kind}`)}
               <span className="block text-xs text-muted">{note.detail}</span>
             </li>
           ))}
@@ -134,8 +134,8 @@ function BookLayoutCard({ book }: { book: AdminBook }) {
 }
 
 /**
- * The book among the home page's examples: which example it is the version of, or — for a finished
- * book — «Make an example» (a new one with this book) and «Add as <language> version to an
+ * The book among the home page's examples: which example it is the version of, or - for a finished
+ * book - «Make an example» (a new one with this book) and «Add as <language> version to an
  * example…», listing the examples with no version in the book's language.
  */
 function ExampleActions({ book }: { book: AdminBook }) {
@@ -333,12 +333,12 @@ export function BookDetail() {
       }),
     ],
     [t("admin.book.interests"), b.child.interests.join(", ")],
-    [t("admin.book.pet"), b.child.pet ?? "—"],
+    [t("admin.book.pet"), b.child.pet ?? "-"],
     [t("admin.book.method"), methodName(b.methodology)],
     [t("admin.book.template"), b.template ?? t("admin.books.custom")],
-    [t("admin.book.theme"), b.theme ?? "—"],
+    [t("admin.book.theme"), b.theme ?? "-"],
     [t("admin.book.language"), b.language.toUpperCase()],
-    [t("admin.book.country"), b.country ?? "—"],
+    [t("admin.book.country"), b.country ?? "-"],
     [t("admin.book.spend"), formatSpendUsd(b.costUsd)],
     [t("admin.book.created"), date(b.createdAt)],
   ];

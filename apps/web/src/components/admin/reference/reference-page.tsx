@@ -47,8 +47,8 @@ const TAB_RIGHT: Record<Tab, AdminRight> = {
  * /admin/reference. Per-country data (prices, delivery, print formats' offer and prices, cities,
  * the landing with its FAQ) follows the working-country switcher: the superadmin edits the global
  * defaults ("All countries") or one country's own; a country manager only their selected country's.
- * Global data — the countries list, blocked countries, format specs, the shared FAQ and the global
- * defaults — is the superadmin's alone.
+ * Global data - the countries list, blocked countries, format specs, the shared FAQ and the global
+ * defaults - is the superadmin's alone.
  */
 export function ReferencePage() {
   const { t } = useAdminI18n();

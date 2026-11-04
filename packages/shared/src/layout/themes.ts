@@ -166,9 +166,9 @@ const halfPoint = (pt: number) => Math.round(pt * 2) / 2;
 
 /**
  * A theme's type sizes for one age band at a format. A theme's sizes are for the square book; on
- * another format type grows or shrinks with the safe area — by its fourth root, so an A5 page gets
+ * another format type grows or shrinks with the safe area - by its fourth root, so an A5 page gets
  * smaller type and fewer words (rather than relying on render QA's shrink) and an A4 page bigger type
- * (rather than looking tiny) — kept within the age band's limits. The words a page may hold follow
+ * (rather than looking tiny) - kept within the age band's limits. The words a page may hold follow
  * the room for text: the safe area with the line length capped (MAX_MEASURE), at the new size.
  */
 export function formatTypeScale(theme: BookTheme, group: AgeGroup, format: BookFormat = BOOK_FORMATS[DEFAULT_FORMAT]): TypeScale {
@@ -207,7 +207,7 @@ export const OVERLAY_VARIANTS = ["overlay-bottom", "overlay-top", "spread"] as c
 /**
  * Where page pictures are asked to leave calm space for text: only when the theme's first-choice
  * layout prints text over the picture. A theme that puts text beside the picture first (split, facing)
- * gets full pictures — asking anyway left an empty faded band in them; its overlays are still used on
+ * gets full pictures - asking anyway left an empty faded band in them; its overlays are still used on
  * pages whose picture happens to be calm, and the plate covers the rest.
  */
 export function calmSpace(theme: BookTheme): "top" | "bottom" | null {

@@ -9,7 +9,7 @@ import { type CoverWrap, coverArtRect, coverBandRect, coverNameMm, coverTextRect
 /**
  * The one book renderer. It turns a book and its layout into fixed-size HTML pages (millimetres,
  * points): the site shows them as spreads, scaled to fit, and the API prints the same pages to PDF
- * with headless Chromium. Same markup, same CSS, same font files, same soft hyphens — so what the
+ * with headless Chromium. Same markup, same CSS, same font files, same soft hyphens - so what the
  * parent sees is what is printed. Paged.js was considered: it flows one long document into pages,
  * which a picture book with a fixed layout per page does not need, and it rewrites the DOM in a way
  * that fights React; so pages are laid out here directly and checked by render QA.
@@ -263,8 +263,8 @@ function cover(
 
 /**
  * The designed front cover: the cover's own illustration (the hero in a scene from the story), the
- * child's name in big lettering in the theme's heading font — outlined and set at a slight tilt, like
- * hand lettering on a picture book — the rest of the title around it and a small subtitle. Where it
+ * child's name in big lettering in the theme's heading font - outlined and set at a slight tilt, like
+ * hand lettering on a picture book - the rest of the title around it and a small subtitle. Where it
  * goes comes from the layout (chooseCover, from SAM's mask): over a calm band of the picture, or on a
  * band of the cover color with the picture beside it.
  */
@@ -345,7 +345,7 @@ const FABULKA_MARK =
  * A story page whose picture Muse Image refused in every version (PageLayout.noArt): a vignette page
  * in the theme's colors. The hero's character sheet (drawn on white for every book) stands small on
  * the paper, its white multiplied away as on the scene cover, and the text sits below it where a
- * plate would — so the book still has a picture on every page and keeps its rhythm. Without a sheet
+ * plate would - so the book still has a picture on every page and keeps its rhythm. Without a sheet
  * the theme's ornament stands in.
  */
 function vignette(

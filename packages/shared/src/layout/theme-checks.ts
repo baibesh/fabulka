@@ -32,7 +32,7 @@ export const ProposedThemeSchema = z.object({
 });
 export type ProposedTheme = z.infer<typeof ProposedThemeSchema>;
 
-/** Body of POST /admin/themes: the owner's brief — mood, age, palette words. */
+/** Body of POST /admin/themes: the owner's brief - mood, age, palette words. */
 export const ThemeBriefSchema = z.object({ brief: z.string().trim().min(3).max(300) });
 export type ThemeBrief = z.infer<typeof ThemeBriefSchema>;
 

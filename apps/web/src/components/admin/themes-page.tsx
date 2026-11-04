@@ -23,7 +23,7 @@ const QUERY = ["admin", "themes"];
  * /admin/themes: the curated themes (read-only) and the ones Muse Spark proposed. The owner types a
  * brief; the proposal is checked in code (fonts, contrast, sizes, glyphs, a sample book in all five
  * languages) and either refused with the reasons or kept as a draft with its page previews, which
- * the owner publishes — then staff and parents can pick it — takes back again, or deletes.
+ * the owner publishes - then staff and parents can pick it - takes back again, or deletes.
  */
 export function ThemesPage() {
   const { t } = useAdminI18n();
@@ -120,7 +120,7 @@ function Checks({ checks }: { checks: ThemeCheck[] }) {
               {t(`admin.themes.check.${check.check}`)}
               {check.language && ` · ${LANGUAGE_NAMES[check.language]}`}
             </span>
-            <span className="text-muted"> — {check.detail}</span>
+            <span className="text-muted"> - {check.detail}</span>
           </span>
         </li>
       ))}

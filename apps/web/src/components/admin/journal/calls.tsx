@@ -109,7 +109,7 @@ export function Calls({ period }: { period: JournalPeriod }) {
                       {t("admin.journal.open")}
                     </Link>
                   ) : (
-                    <span className="text-muted">—</span>
+                    <span className="text-muted">-</span>
                   )}
                 </td>
               </tr>

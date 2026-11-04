@@ -172,8 +172,8 @@ function GlobalDashboard() {
 
   if (!stats.data) return <QueryState error={stats.error} scope="admin" />;
   const s: AdminStats = stats.data;
-  const success = s.books.successRate === null ? "—" : percent(s.books.successRate);
-  const avg = s.books.avgSeconds === null ? "—" : t("admin.seconds", { n: Math.round(s.books.avgSeconds) });
+  const success = s.books.successRate === null ? "-" : percent(s.books.successRate);
+  const avg = s.books.avgSeconds === null ? "-" : t("admin.seconds", { n: Math.round(s.books.avgSeconds) });
   const regionNames = new Intl.DisplayNames([intlLocale(locale)], { type: "region" });
   const region = (code: string) => regionNames.of(code) ?? code;
 

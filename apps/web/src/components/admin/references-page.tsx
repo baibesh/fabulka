@@ -51,8 +51,8 @@ function useReferenceError() {
 }
 
 /**
- * /admin/references: the pictures illustrators prepare for Muse Image — a theme's style, a method
- * beat's staging sketch, the character proportion guide — and the pages they flagged in review.
+ * /admin/references: the pictures illustrators prepare for Muse Image - a theme's style, a method
+ * beat's staging sketch, the character proportion guide - and the pages they flagged in review.
  * Generation sends the enabled pictures of a slot in their order; they guide style and composition
  * only, never the child's face or clothes.
  */

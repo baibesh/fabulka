@@ -329,7 +329,7 @@ export class TeamService {
   /**
    * Before `row` stops being an active superadmin (disabled or demoted): a Keycloak realm admin
    * stays one whatever the row says, so that is refused rather than silently ignored; and someone
-   * must remain — the last active superadmin cannot be disabled or demoted, not even by themself.
+   * must remain - the last active superadmin cannot be disabled or demoted, not even by themself.
    */
   private async checkStaysSuper(row: StaffMember) {
     if (row.realmRoles.includes(SUPER_ROLE)) {

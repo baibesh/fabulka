@@ -7,7 +7,7 @@ import { z } from "zod";
 // models (2026-11-03) kept these kinds:
 // - style: the theme's palette, line and brush texture, on the hero sheet, every page and the cover;
 // - composition: a rough staging sketch per method beat (camera distance, where figures stand), on
-//   the pages that tell that beat — it worked only when sent first and with few other pictures;
+//   the pages that tell that beat - it worked only when sent first and with few other pictures;
 // - character_guide: body proportions for every hero sheet (the face and clothes still come from the
 //   story's description).
 // A cover layout sketch was tried and left out: Muse Image ignored it; the cover's lettering is placed

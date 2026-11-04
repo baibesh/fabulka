@@ -105,7 +105,7 @@ export function FaqTab({ initial, countries }: { initial: FaqItem[]; countries: 
         : row.audience === "noPrint"
           ? t("admin.reference.faq.withoutPrint")
           : t(row.audience === "only" ? "admin.reference.faq.only" : "admin.reference.faq.except", {
-              countries: row.countries.map((code) => countryName(code)).join(", ") || "—",
+              countries: row.countries.map((code) => countryName(code)).join(", ") || "-",
             });
 
   return (

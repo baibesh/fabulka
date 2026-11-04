@@ -424,7 +424,7 @@ export class PdfService {
    * spine as wide as the book is thick, front cover), then every page between the covers with the
    * format's bleed (pictures run on past the trim), each on a sheet with crop marks and a label
    * outside the bleed, with TrimBox and BleedBox set for the print shop's preflight. Nothing is chosen or checked
-   * again — the layout, its page picks and its shrink are the ones the order froze. Written to
+   * again - the layout, its page picks and its shrink are the ones the order froze. Written to
    * `outPath` (a storage path); returns it.
    */
   async renderPrint(

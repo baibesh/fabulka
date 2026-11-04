@@ -96,7 +96,7 @@ function RoleCard({ role, roles }: { role: StaffRole; roles: readonly StaffRole[
           <ChoiceLabel>
             <Checkbox data-testid="role-scoped" checked={scoped} onChange={(e) => setScoped(e.target.checked)} />
             <span>
-              <span className="font-semibold">{t("admin.team.roles.scoped")}</span> — <span className="text-muted">{t("admin.team.roles.scopedHint")}</span>
+              <span className="font-semibold">{t("admin.team.roles.scoped")}</span> - <span className="text-muted">{t("admin.team.roles.scopedHint")}</span>
             </span>
           </ChoiceLabel>
           <div className="flex flex-wrap gap-2">
@@ -170,7 +170,7 @@ function NewRole() {
         <ChoiceLabel>
           <Checkbox data-testid="role-new-scoped" checked={scoped} onChange={(e) => setScoped(e.target.checked)} />
           <span>
-            <span className="font-semibold">{t("admin.team.roles.scoped")}</span> — <span className="text-muted">{t("admin.team.roles.scopedHint")}</span>
+            <span className="font-semibold">{t("admin.team.roles.scoped")}</span> - <span className="text-muted">{t("admin.team.roles.scopedHint")}</span>
           </span>
         </ChoiceLabel>
         <div>

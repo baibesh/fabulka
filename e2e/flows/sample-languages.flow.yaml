@@ -129,7 +129,7 @@ commands:
   # In English the page shows the English sample with its words marked and explained in English.
   - openLink: "${WEB}/catalog/${slug}?lang=en"
   - waitForVisible: { testId: sample-book }
-  - assertVisible: "This is what the book looks like — yours will be your own"
+  - assertVisible: "This is what the book looks like - yours will be your own"
   - assertVisible: { contains: "This one was made for a child named ${enName}" }
   - assertNotVisible: { testId: sample-language }
   - tapOn: { testId: template-start }
@@ -147,7 +147,7 @@ commands:
   - waitForVisible: { testId: sample-book }
   - assertVisible: { contains: "${ruName}" }
   - assertVisible: { css: "[data-testid=sample-language][data-language=ru]" }
-  - assertVisible: { contains: "Бұл үлгінің тілі — «Русский»" }
+  - assertVisible: { contains: "Бұл үлгінің тілі - «Русский»" }
 
   # In Spanish (offered in another country, not in Kazakhstan) the English one, with the note in
   # Spanish.

@@ -70,8 +70,8 @@ export function RedirectsTab() {
           </Field>
           <Field label={t("admin.seo.field.status")}>
             <Select data-testid="redirect-status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value === "302" ? 302 : 301 })}>
-              <option value="301">301 — {t("admin.seo.redirect.permanent")}</option>
-              <option value="302">302 — {t("admin.seo.redirect.temporary")}</option>
+              <option value="301">301 - {t("admin.seo.redirect.permanent")}</option>
+              <option value="302">302 - {t("admin.seo.redirect.temporary")}</option>
             </Select>
           </Field>
           <ChoiceLabel className="md:pb-2.5">

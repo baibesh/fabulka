@@ -12,7 +12,7 @@ commands:
   # Voice input is on in e2e: the first step offers a recording, the link skips it.
   - waitForVisible: { css: "[data-step=voice]", timeout: 20000 }
   - assertVisible: { contains: "Шаг 1 из 5", childOf: { testId: wizard-step } }
-  - assertVisible: "Мы не сохраняем запись — только распознаём текст."
+  - assertVisible: "Мы не сохраняем запись - только распознаём текст."
   - tapOn: { testId: voice-manual }
 
   # About the child: nothing entered, Next stays on the step and names the missing fields.

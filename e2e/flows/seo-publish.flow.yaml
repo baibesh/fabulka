@@ -12,7 +12,7 @@ params:
 env:
   SITE: https://fabulka.com
   TITLE: "E2E Kinderbuch-Katalog"
-  DEFAULT_TITLE: "Katalog personalisierter Kinderbücher — Fabulka"
+  DEFAULT_TITLE: "Katalog personalisierter Kinderbücher - Fabulka"
 before:
   - sql: { exec: "delete from \"PageSeo\" where page = 'catalog' and language = 'de'" }
   - sql: { exec: "delete from \"SeoHistory\" where target = 'catalog@de'" }
@@ -77,7 +77,7 @@ commands:
   - assertTrue: { contains: ["${response.body}", "<loc>${SITE}/catalog</loc>"] }
   - assertTrue: { contains: ["${response.body}", "<loc>${SITE}/ru/catalog</loc>"] }
 
-  # History: newest first — publish, save (noindex), publish, save (the title). Reverting the first
+  # History: newest first - publish, save (noindex), publish, save (the title). Reverting the first
   # save puts the defaults back; publishing makes them live.
   - waitForVisible: { testId: seo-history-3 }
   - assertVisible: { text: "admin@e2e.test", index: 0 }

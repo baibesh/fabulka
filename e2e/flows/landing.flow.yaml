@@ -38,8 +38,8 @@ commands:
   - openLink: "${WEB}/ru"
   # The hero's covers render only after hydration.
   - waitForVisible: { testId: hero-covers }
-  - assertVisible: "Книга, где ваш ребёнок — главный герой"
-  - assertVisible: { contains: "Первые книги — бесплатно, дальше — от 1 900 ₸" }
+  - assertVisible: "Книга, где ваш ребёнок - главный герой"
+  - assertVisible: { contains: "Первые книги - бесплатно, дальше - от 1 900 ₸" }
   - assertVisible: { testId: trust }
   - assertVisible: "Как это работает"
   - assertVisible: "Расскажите о ребёнке"
@@ -65,9 +65,9 @@ commands:
   # priced from the reference data.
   - assertNotVisible: { testId: faq-item-print-abroad }
   - tapOn: "Как заказать печатную книгу?"
-  - waitForVisible: { contains: "Бесплатная доставка: Алматы, Астана; в другие города — 1 500 ₸" }
+  - waitForVisible: { contains: "Бесплатная доставка: Алматы, Астана; в другие города - 1 500 ₸" }
   - tapOn: "Сколько стоит книга?"
-  - waitForVisible: { contains: "книга из каталога стоит 1 900 ₸, своя история — 2 900 ₸" }
+  - waitForVisible: { contains: "книга из каталога стоит 1 900 ₸, своя история - 2 900 ₸" }
 
   # The catalog has a page of its own.
   - tapOn: { testId: nav-catalog }
@@ -138,8 +138,8 @@ commands:
   - assertVisible: { testId: custom-price, text: "5,90 $" }
   - openLink: "${WEB}/ru"
   - waitForVisible: { testId: hero-covers }
-  - assertVisible: { contains: "Первые книги — бесплатно, дальше — от 3,90 $" }
-  - assertVisible: "В вашей стране печати пока нет — мы планируем её открыть. А PDF легко распечатать самим."
+  - assertVisible: { contains: "Первые книги - бесплатно, дальше - от 3,90 $" }
+  - assertVisible: "В вашей стране печати пока нет - мы планируем её открыть. А PDF легко распечатать самим."
   # Outside Kazakhstan the FAQ says print is not there yet, and prices are in dollars.
   - assertNotVisible: { contains: "доставкой по Казахстану" }
   - assertNotVisible: { testId: faq-item-print-kz }
@@ -147,7 +147,7 @@ commands:
   - tapOn: "Можно ли заказать печатную книгу?"
   - waitForVisible: { contains: "К сожалению, в вашей стране печатные книги пока недоступны" }
   - tapOn: "Сколько стоит книга?"
-  - waitForVisible: { contains: "книга из каталога стоит 3,90 $, своя история — 5,90 $" }
+  - waitForVisible: { contains: "книга из каталога стоит 3,90 $, своя история - 5,90 $" }
   - tapOn: "На каких языках можно сделать книгу?"
   - waitForVisible: { contains: "Язык книги выбирается в форме: English, Español, Deutsch, Русский" }
 
@@ -174,7 +174,7 @@ commands:
   - tapOn: { testId: free-books }
   - assertVisible: { text: "$3.90", childOf: { testId: price-template } }
   - assertVisible: { text: "Soon", childOf: { testId: price-print } }
-  - assertVisible: { testId: price-print, containsDescendants: { text: "Printing isn't available in your country yet — we plan to bring it" } }
+  - assertVisible: { testId: price-print, containsDescendants: { text: "Printing isn't available in your country yet - we plan to bring it" } }
   - assertNotVisible: { contains: "₸" }
   - assertNotVisible: { testId: faq-item-print-kz }
   - tapOn: "Can I get a printed book?"

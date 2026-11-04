@@ -328,15 +328,15 @@ export const DEFAULT_METHODOLOGIES: readonly MethodologyData[] = [
     texts: {
       ru: {
         name: "Мышление роста",
-        summary: "Не получилось — пока. Герой пробует, ошибается, ищет способ и добивается своего трудом.",
+        summary: "Не получилось - пока. Герой пробует, ошибается, ищет способ и добивается своего трудом.",
       },
       kk: {
         name: "Даму ойлауы",
-        summary: "Әзірге шықпай тұр — тек әзірге. Кейіпкер талпынады, қателеседі, жол іздейді және еңбегімен мақсатына жетеді.",
+        summary: "Әзірге шықпай тұр - тек әзірге. Кейіпкер талпынады, қателеседі, жол іздейді және еңбегімен мақсатына жетеді.",
       },
       en: {
         name: "Growth mindset",
-        summary: "Can't do it — yet. The hero tries, makes mistakes, finds a way and gets there through effort.",
+        summary: "Can't do it - yet. The hero tries, makes mistakes, finds a way and gets there through effort.",
       },
       es: {
         name: "Mentalidad de crecimiento",

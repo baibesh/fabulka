@@ -17,7 +17,7 @@ commands:
   - openLink: "${WEB}/ru"
   # The hero's covers render only after hydration, when the switches start working.
   - waitForVisible: { testId: hero-covers }
-  - assertVisible: "Книга, где ваш ребёнок — главный герой"
+  - assertVisible: "Книга, где ваш ребёнок - главный герой"
 
   - tapOn: { testId: ui-language }
   - waitForVisible: { testId: ui-language-option-kk }

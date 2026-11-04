@@ -87,7 +87,7 @@ export function StoryStep({ form, template, methods }: { form: Form; template?: 
           <Field key={q.key} label={q.label} optional={!q.required && t("common.optional")}>
             {q.kind === "choice" ? (
               <Select data-testid={`answer-${q.key}`} {...form.register(`answers.${q.key}`)}>
-                <option value="">—</option>
+                <option value="">-</option>
                 {q.options?.map((option) => (
                   <option key={option} value={option}>
                     {option}
@@ -113,7 +113,7 @@ export function StoryStep({ form, template, methods }: { form: Form; template?: 
           <option value="">{t("form.method.auto")}</option>
           {methods.map((m) => (
             <option key={m.slug} value={m.slug}>
-              {m.name} — {m.summary}
+              {m.name} - {m.summary}
             </option>
           ))}
         </Select>

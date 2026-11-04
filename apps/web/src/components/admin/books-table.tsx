@@ -91,7 +91,7 @@ export function BooksTable() {
                 </td>
                 <td className="text-muted">{methodName(book.methodology)}</td>
                 <td className="uppercase text-muted">{book.language}</td>
-                <td className="text-muted">{book.country ?? "—"}</td>
+                <td className="text-muted">{book.country ?? "-"}</td>
                 <td className="text-right tabular-nums">{formatSpendUsd(book.costUsd)}</td>
                 <td className="whitespace-nowrap text-muted">{date(book.createdAt)}</td>
               </tr>

@@ -24,7 +24,7 @@ export function Summary({ period }: { period: JournalPeriod }) {
         />
         <Stat
           label={t("admin.journal.errorShare")}
-          value={s ? (s.calls ? percent(s.errors / s.calls, 1) : "—") : "…"}
+          value={s ? (s.calls ? percent(s.errors / s.calls, 1) : "-") : "…"}
           hint={s ? t("admin.journal.errors", { count: number(s.errors) }) : undefined}
         />
         <Stat label={t("admin.journal.spend")} value={s ? formatSpendUsd(s.costUsd) : "…"} />

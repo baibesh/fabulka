@@ -594,7 +594,7 @@ export class BooksService implements OnModuleInit {
     const { child } = input;
     if (child.age < template.ageMin || child.age > template.ageMax) {
       throw new BadRequestException(
-        `«${template.title}» — для возраста ${template.ageMin}–${template.ageMax} лет`,
+        `«${template.title}» - для возраста ${template.ageMin}–${template.ageMax} лет`,
       );
     }
     const asked = questions(template);
@@ -605,7 +605,7 @@ export class BooksService implements OnModuleInit {
       throw new BadRequestException(
         problem.reason === 'required'
           ? `Ответьте на вопрос «${question.label}»`
-          : `«${answer}» — нет такого варианта в вопросе «${question.label}»`,
+          : `«${answer}» - нет такого варианта в вопросе «${question.label}»`,
       );
     }
     // A theme the template names, if it still covers the book's language; else by age.

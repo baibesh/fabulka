@@ -67,7 +67,7 @@ commands:
   - openLink: "${WEB}/ru/catalog/${slug}"
   # The sample arrives only after hydration, by when the page has saved the language.
   - waitForVisible: { testId: sample-book }
-  - assertVisible: "Так выглядит книга — у вас будет своя"
+  - assertVisible: "Так выглядит книга - у вас будет своя"
   # The button in the header leads down to the form (tapped first: lower down the sticky header
   # covers it).
   - tapOn: { testId: template-start }
@@ -83,9 +83,9 @@ commands:
       testId: template-changes
       containsDescendants:
         - "Что изменится в книге"
-        - { contains: "Город — история случится там, где вы живёте" }
-        - { contains: "«Лучший друг, который отправится в путь вместе с героем» — в книге будет ваш ответ" }
-        - { contains: "Не меняется: сюжет и методика — Приключение." }
+        - { contains: "Город - история случится там, где вы живёте" }
+        - { contains: "«Лучший друг, который отправится в путь вместе с героем» - в книге будет ваш ответ" }
+        - { contains: "Не меняется: сюжет и методика - Приключение." }
   # The page text marks the city too.
   - tapOn: { testId: reader-next }
   - tapOn: { testId: reader-next }

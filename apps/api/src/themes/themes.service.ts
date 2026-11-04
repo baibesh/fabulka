@@ -64,8 +64,8 @@ const PreviewsSchema = z.partialRecord(z.enum(LANGUAGES), z.array(z.string()));
 
 /**
  * The themes books can be laid out in: the curated ones in code, and the ones Muse Spark proposed
- * that staff published. A proposal is checked in code before it is stored — fonts from the vetted
- * list, contrast, sizes within the age limits, every letter of all five languages in both fonts —
+ * that staff published. A proposal is checked in code before it is stored - fonts from the vetted
+ * list, contrast, sizes within the age limits, every letter of all five languages in both fonts -
  * then its ornament is drawn and a sample book in each language goes through render QA, with every
  * page kept as a preview. A theme failing any check is refused, saying which and why.
  */

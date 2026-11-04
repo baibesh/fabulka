@@ -57,7 +57,7 @@ function saveConsent(value: "granted" | "denied") {
 }
 
 /**
- * Analytics (GTM, GA4, Yandex Metrika, Meta Pixel — the ids from the admin's SEO settings) on the
+ * Analytics (GTM, GA4, Yandex Metrika, Meta Pixel - the ids from the admin's SEO settings) on the
  * public site only: the admin has a root layout of its own and never renders this. Nothing loads
  * until the visitor accepts the banner; non-essential cookies are declined until then. The answer is
  * kept in a cookie (CONSENT_COOKIE) for a year and can be changed from the footer.

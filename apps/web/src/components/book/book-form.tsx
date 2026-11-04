@@ -32,7 +32,7 @@ import { ErrorText, Notice } from "../ui/notice";
 import { Button } from "../ui/button";
 
 /**
- * A book of your own, or, with `template`, a catalog book with its questions — filled in step by
+ * A book of your own, or, with `template`, a catalog book with its questions - filled in step by
  * step, each step checked before the next, and everything shown once more before the book starts.
  */
 export function BookForm({ template }: { template?: Template }) {

@@ -15,7 +15,7 @@ export function useUsage() {
   const { t, number } = useAdminI18n();
   return (call: ModelCall) => {
     if (call.images) return t("admin.journal.images", { count: call.images });
-    if (call.inputTokens === null && call.outputTokens === null) return "—";
+    if (call.inputTokens === null && call.outputTokens === null) return "-";
     return `${number(call.inputTokens ?? 0)} → ${number(call.outputTokens ?? 0)}`;
   };
 }

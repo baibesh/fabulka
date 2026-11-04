@@ -268,15 +268,15 @@ export function referenceNotes(
   const notes = [' Attached reference pictures, in order:'];
   if (where('composition'))
     notes.push(
-      ` ${where('composition')}: a rough staging sketch — follow only its camera distance, angle and where the figures stand in the frame; its blank figures are placeholders for this scene's characters.`,
+      ` ${where('composition')}: a rough staging sketch - follow only its camera distance, angle and where the figures stand in the frame; its blank figures are placeholders for this scene's characters.`,
     );
   if (where('style'))
     notes.push(
-      ` ${where('style')}: style references — follow their palette, line, brush texture and lighting, never copy a figure, face, animal, object or scene from them.`,
+      ` ${where('style')}: style references - follow their palette, line, brush texture and lighting, never copy a figure, face, animal, object or scene from them.`,
     );
   if (where('character_guide'))
     notes.push(
-      ` ${where('character_guide')}: a character proportion guide — follow only its body proportions (head size, height in heads, hands); draw one child, not its several views.`,
+      ` ${where('character_guide')}: a character proportion guide - follow only its body proportions (head size, height in heads, hands); draw one child, not its several views.`,
     );
   notes.push(
     target === 'hero'

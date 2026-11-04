@@ -18,8 +18,8 @@ import { TRANSLATION_CLIENT_KEY } from '../examples/translation';
 
 /**
  * A content pack: finished books made somewhere else (a local stack with the real models) and what
- * they are on the site — catalog samples per country, the home page's examples, a country's landing
- * texts and pictures — with their files, to be put into another database and storage by stable keys:
+ * they are on the site - catalog samples per country, the home page's examples, a country's landing
+ * texts and pictures - with their files, to be put into another database and storage by stable keys:
  * catalog books by slug, books and examples by their own (globally unique) ids, countries by code.
  * Importing the same pack again changes nothing. This file is the format and the planning; the
  * reading and writing are in export.ts and import.ts.

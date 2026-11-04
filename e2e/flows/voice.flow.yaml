@@ -6,14 +6,14 @@ commands:
   - launchApp: { appId: "${WEB}", clearState: true }
   - openLink: "${WEB}/ru/catalog/first-day-kindergarten?voiceTest=1"
   - waitForVisible: { css: "[data-step=voice]", timeout: 20000 }
-  - assertVisible: "Мы не сохраняем запись — только распознаём текст."
+  - assertVisible: "Мы не сохраняем запись - только распознаём текст."
   - assertVisible: { testId: voice-start }
   - tapOn: { testId: voice-sample }
 
   # The fields it named are filled in, and the parent is taken to check them.
   - waitForVisible: { css: "[data-step=child]", timeout: 15000 }
   - assertVisible: { testId: voice-transcript }
-  - assertVisible: "Проверьте поля — мы могли что-то расслышать неправильно."
+  - assertVisible: "Проверьте поля - мы могли что-то расслышать неправильно."
   - assertVisible: { testId: child-name, value: "Алия" }
   - assertVisible: { testId: child-interests, value: "динозавры, рисование" }
   - assertVisible: { testId: child-city, value: "Алматы" }

@@ -57,7 +57,7 @@ export function sourceRow(patch: Partial<BookRow> = {}): BookRow {
       },
       {
         page: 2,
-        text: '«Пойдём в горы!» — сказал Тимур.',
+        text: '«Пойдём в горы!» - сказал Тимур.',
         scenePrompt: 'the hero in the mountains',
         imagePath: 'books/src/page-2.jpeg',
         subject: null,

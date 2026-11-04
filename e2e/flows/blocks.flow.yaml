@@ -35,7 +35,7 @@ commands:
       extract: { bookId: "$[0].id", browserKey: "$[0].key" }
       assert: { rows: 1 }
 
-  # Between the covers: dedication, 4 story pages, «поговорим», a drawing page, the end — 8 pages,
+  # Between the covers: dedication, 4 story pages, «поговорим», a drawing page, the end - 8 pages,
   # no padding; with the front and back covers the book has 10.
   - waitForVisible: { testId: book-blocks }
   - assertVisible: { css: "[data-testid=page-count][data-count='10'][data-fillers='0']" }

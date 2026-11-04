@@ -244,7 +244,7 @@ export class MethodologiesService implements OnModuleInit {
         code: METHODOLOGY_IN_USE,
         message:
           `Методику нельзя удалить: её используют ${users.join(' и ')}. ` +
-          'Снимите её с публикации — тогда её перестанут предлагать родителям.',
+          'Снимите её с публикации - тогда её перестанут предлагать родителям.',
         templates,
         books,
       });

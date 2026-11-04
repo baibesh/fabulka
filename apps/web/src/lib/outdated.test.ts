@@ -31,7 +31,7 @@ describe("outdated responses", () => {
     vi.stubGlobal("document", { documentElement: { lang: "" } });
     const error = schemaFailure();
     humanizeError(error);
-    expect(error.message).toBe("This page is out of date — reload it to continue.");
+    expect(error.message).toBe("This page is out of date - reload it to continue.");
     const api = new Error("Generation is paused");
     humanizeError(api);
     expect(api.message).toBe("Generation is paused");

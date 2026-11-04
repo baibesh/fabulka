@@ -110,7 +110,7 @@ export interface PlannableBook {
 
 /**
  * The book's pages in order: the blocks as the layout orders them (a drawing block is one page),
- * each story page in its variant, then — just before the end — blank drawing pages so the pages
+ * each story page in its variant, then - just before the end - blank drawing pages so the pages
  * between the covers are a multiple of 4 (the inside of a printed book is folded sheets; the front
  * and the back cover are printed apart, on the cover wrap with the spine). Those are marked
  * `filler`: the reader shows them as padding. The padding comes after the story, so it never moves

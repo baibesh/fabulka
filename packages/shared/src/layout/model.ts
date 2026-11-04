@@ -164,8 +164,8 @@ export type PageLayout = z.infer<typeof PageLayoutSchema>;
 /** "cover-overlap": the cover's lettering, as rendered, lies over the hero SAM found on the cover art. */
 export const RENDER_ISSUE_KINDS = ["overflow", "fallback-font", "cover-overlap"] as const;
 /**
- * Things render QA tells staff without blocking print: "crop" — a picture too narrow for the
- * format's layouts; "no-art" — a page whose picture was refused, laid out as a vignette page.
+ * Things render QA tells staff without blocking print: "crop" - a picture too narrow for the
+ * format's layouts; "no-art" - a page whose picture was refused, laid out as a vignette page.
  */
 export const RENDER_NOTE_KINDS = ["crop", "no-art"] as const;
 export const RenderIssueSchema = z.object({

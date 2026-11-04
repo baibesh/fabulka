@@ -23,7 +23,7 @@ Things noticed while using tapstep on Fabulka. Version: 0.13.11.
 7. **`childOf` failing on a nested element says only "not visible".** `childOf` is the direct parent
    (as documented), so `{ text: "Books in English", childOf: { testId: trust } }` never matches an
    item two levels down, while the screenshot clearly shows it. A hint such as "found inside
-   testId=trust, but not as a direct child — use containsDescendants" would have saved three runs.
+   testId=trust, but not as a direct child - use containsDescendants" would have saved three runs.
 8. **`${var}` is not filled in an `assert.json` expected value.** `json: { "$[0].id": "${orderId}" }`
    compares against the literal `${orderId}` (the failure reads "expected ${orderId}"), while the
    same variable works in `url`, `headers` and `params`. Workaround: `extract` the value and compare
@@ -37,7 +37,7 @@ Things noticed while using tapstep on Fabulka. Version: 0.13.11.
    with the same message, and `timeout:` should replace the screen limit as documented.
 10. **`uploadFile` with a relative path attaches a file the page cannot read.** `files: ../fixtures/child.jpg`
     passes validation and the step (the file is found next to the flow), and the input gets a file
-    with the right name and type — but `FileReader` fails on it, as if Chromium got the relative path
+    with the right name and type - but `FileReader` fails on it, as if Chromium got the relative path
     unresolved. An absolute path works: `files: "${PWD}/e2e/fixtures/child.jpg"` (run from the repo
     root). The step should hand Chromium the path it resolved.
 11. **`scroll` sometimes hangs for 90 s with "the page looks stuck" while the page is idle.** With

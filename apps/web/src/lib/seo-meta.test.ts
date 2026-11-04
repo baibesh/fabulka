@@ -32,7 +32,7 @@ describe("resolveSeo", () => {
   it("builds a catalog book's defaults from its title, summary and cover", () => {
     const subject = { key: "template:bath-time", label: "Baden", summary: "Über das Bad", coverUrl: "/catalog/bath-time.jpg" };
     const seo = resolveSeo("de", subject, null);
-    expect(seo.title).toBe("Baden — personalisiertes Buch · Fabulka");
+    expect(seo.title).toBe("Baden - personalisiertes Buch · Fabulka");
     expect(seo.description).toBe("Über das Bad");
     expect(seo).toMatchObject({ image: "/catalog/bath-time.jpg", source: { image: "cover" } });
     // Without a summary, a sentence with the title.
@@ -41,7 +41,7 @@ describe("resolveSeo", () => {
 
   it("names an example book by its title, with its cover", () => {
     const seo = resolveSeo("ru", { key: "book:abc", label: "Тим и луна", coverUrl: "/files/books/abc/hero.png" }, null);
-    expect(seo.title).toBe("Тим и луна — пример книги · Fabulka");
+    expect(seo.title).toBe("Тим и луна - пример книги · Fabulka");
     expect(seo.image).toBe("/files/books/abc/hero.png");
   });
 

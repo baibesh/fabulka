@@ -2,6 +2,7 @@ import {
   isMissingReference,
   isSafetyRefusal,
   MetaGateway,
+  plainDashes,
 } from './meta.gateway';
 import { softenScene } from './prompts';
 
@@ -171,6 +172,14 @@ describe('MetaGateway pages the safety filter refused', () => {
         refusal: 'refused',
       }),
     ).rejects.toThrow('no rewritten scene');
+  });
+});
+
+describe('plainDashes', () => {
+  it('gives the words Muse Spark writes plain hyphens', () => {
+    expect(plainDashes('{"text":"\u2014 Привет! \u2014 сказал он"}')).toBe(
+      '{"text":"- Привет! - сказал он"}',
+    );
   });
 });
 

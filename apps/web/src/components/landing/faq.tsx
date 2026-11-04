@@ -35,7 +35,7 @@ export function Faq() {
   // Print as the country offers it, in its currency: its formats, delivery fee and cities.
   const formats = pricing ? offeredFormats(country, pricing) : [];
   const delivery = pricing ? deliveryFor(country, pricing) : null;
-  const money = (price: Money | null) => (price ? formatPrice(price, locale) : "—");
+  const money = (price: Money | null) => (price ? formatPrice(price, locale) : "-");
   const vars: Partial<Record<FaqPlaceholder, string>> =
     reference && pricing
       ? {

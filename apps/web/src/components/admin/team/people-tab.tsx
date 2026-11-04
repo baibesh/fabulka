@@ -181,7 +181,7 @@ export function PeopleTab({ me }: { me: string | null }) {
                     </td>
                     <td>
                       <div className="flex flex-wrap gap-1.5" data-testid="team-countries" data-value={m.countries.join(" ")}>
-                        {m.countries.length === 0 && <span className="text-muted">—</span>}
+                        {m.countries.length === 0 && <span className="text-muted">-</span>}
                         {m.countries.map((code) => (
                           <span key={code} className="flex items-center gap-1 text-sm" title={countryName(code)}>
                             <Flag code={code} />

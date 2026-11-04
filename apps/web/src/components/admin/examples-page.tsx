@@ -71,8 +71,8 @@ export function exampleRule(example: AdminExample) {
 
 /**
  * «Examples»: the stories on the home page, in its order, those shown in the working country. Each
- * shows its version in the admin's language (else the first finished one), a chip per language —
- * finished, being translated, failed or missing, with «Translate» for the missing ones —, the
+ * shows its version in the admin's language (else the first finished one), a chip per language -
+ * finished, being translated, failed or missing, with «Translate» for the missing ones -, the
  * countries it shows in, and ways to move or remove it. An example shown outside the session's
  * countries is read-only for a country manager. While a translation runs the list refreshes itself.
  */

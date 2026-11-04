@@ -207,7 +207,7 @@ export const SEED_TRANSLATIONS: Record<
     kk: {
       title: 'Мен үйренемін!',
       summary:
-        'Әзірге шықпай тұр — тек әзірге. Жаттығу мен жақындардың көмегі «білмеймін» дегенді «білемін» дегенге қалай айналдыратыны туралы кітап.',
+        'Әзірге шықпай тұр - тек әзірге. Жаттығу мен жақындардың көмегі «білмеймін» дегенді «білемін» дегенге қалай айналдыратыны туралы кітап.',
       questions: {
         skill: {
           label: 'Бала қазір не үйреніп жүр?',
@@ -237,7 +237,7 @@ export const SEED_TRANSLATIONS: Record<
     en: {
       title: 'I Will Learn!',
       summary:
-        'Can\'t do it — yet. A book about how practice and help from loved ones turn "I can\'t" into "I can".',
+        'Can\'t do it - yet. A book about how practice and help from loved ones turn "I can\'t" into "I can".',
       questions: {
         skill: {
           label: 'What is your child learning right now?',

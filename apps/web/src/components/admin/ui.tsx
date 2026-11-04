@@ -36,8 +36,8 @@ export function useAdminI18n() {
     percent: (share: number, digits = 0) =>
       share.toLocaleString(intlLocale(locale), { style: "percent", minimumFractionDigits: digits, maximumFractionDigits: digits }),
     seconds: (seconds: number) => t("admin.seconds", { n: decimal(seconds) }),
-    /** 850 → "850 мс", 2300 → "2,3 с"; null → "—". */
-    ms: (ms: number | null) => (ms === null ? "—" : ms < 1000 ? t("admin.ms", { n: Math.round(ms) }) : t("admin.seconds", { n: decimal(ms / 1000) })),
+    /** 850 → "850 мс", 2300 → "2,3 с"; null → "-". */
+    ms: (ms: number | null) => (ms === null ? "-" : ms < 1000 ? t("admin.ms", { n: Math.round(ms) }) : t("admin.seconds", { n: decimal(ms / 1000) })),
     bookStatus: (status: BookStatus) => t(`admin.bookStatus.${status}`),
     orderStatus: (status: OrderStatus) => t(`admin.orderStatus.${status}`),
   };
