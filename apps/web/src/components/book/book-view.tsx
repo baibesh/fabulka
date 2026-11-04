@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@/lib/query";
 import { type Book, type BookStatus } from "@fabulka/shared";
-import { AlertTriangle, Check, Download, MessageCircleQuestion, Printer, Sparkles } from "lucide-react";
+import { AlertTriangle, Check, Download, Lock, MessageCircleQuestion, Printer, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import { LocaleLink } from "@/i18n/routing";
 import { useI18n } from "@/i18n/i18n";
@@ -28,7 +28,7 @@ const finished = (status: BookStatus | undefined) => status === "done" || status
 
 export function BookView() {
   const { id } = useParams<{ id: string }>();
-  const { t, info } = useI18n();
+  const { t, info, locale } = useI18n();
   const { data: book, error } = useQuery({
     queryKey: ["book", id],
     queryFn: () => getBook(id),
@@ -110,6 +110,16 @@ export function BookView() {
       {done && book.editable && <BookDesign book={book} />}
 
       {done && <SavePrompt bookId={book.id} />}
+
+      {done && book.heroPhoto?.deletedAt && (
+        <Notice data-testid="hero-photo-note" data-source={book.heroSource} tone="success" icon={<Lock className="size-5 shrink-0 text-success" />}>
+          <p>
+            {t(book.heroSource === "photo" ? "book.photo.note" : "book.photo.fallback", {
+              time: new Date(book.heroPhoto.deletedAt).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }),
+            })}
+          </p>
+        </Notice>
+      )}
 
       {book.toy && done && <ToyPipeline toy={book.toy} />}
 

@@ -18,6 +18,7 @@ import { CountriesModeSchema } from "./country-rules";
 import { GenerationViewSchema } from "./generation";
 import { FrameRectSchema, PipelineStepIdSchema, TextKindSchema } from "./formats";
 import type { RenderablePage } from "./layout";
+import { ChildLookSchema, HeroPhotoIdSchema, HeroPhotoRecordSchema, PHOTO_FALLBACKS } from "./hero-photo";
 
 export * from "./language";
 export * from "./methodologies";
@@ -37,6 +38,7 @@ export * from "./references";
 export * from "./formats";
 export * from "./scenario";
 export * from "./inbox";
+export * from "./hero-photo";
 
 /** Ages a book is written for (the form's picker, catalog books' ranges, the voice prefill). */
 export const CHILD_AGE_MIN = 2;
@@ -51,6 +53,8 @@ export const ChildProfileSchema = z.object({
   pet: z.string().trim().max(60).optional(),
   city: z.string().trim().min(1).max(60),
   language: LanguageSchema.default("ru"),
+  /** The hero's look the parent picked with buttons, or Muse Spark described from the photo. */
+  look: ChildLookSchema.optional(),
 });
 export type ChildProfile = z.infer<typeof ChildProfileSchema>;
 
@@ -155,6 +159,11 @@ export const CreateBookSchema = z.object({
       name: z.string().trim().max(40).optional(),
     })
     .optional(),
+  /**
+   * The child's photo from POST /hero-photos (signed in, with consent): Muse Spark describes the
+   * look and Muse Image draws the hero from it, then it is deleted. Left out: drawn from `child.look`.
+   */
+  heroPhoto: z.object({ upload: HeroPhotoIdSchema }).optional(),
 });
 export type CreateBookInput = z.infer<typeof CreateBookSchema>;
 
@@ -204,6 +213,13 @@ export const BookSchema = z.object({
   coverImageUrl: z.string().nullable().default(null),
   /** The back cover's two sentences, in the book's language; null for books made before it. */
   blurb: z.string().nullable().default(null),
+  /** What the hero was drawn from: the child's photo, or the description (older APIs leave it out). */
+  heroSource: z.enum(["photo", "description"]).default("description"),
+  /** The parent's photo of the child for the hero, when one was sent: when it was deleted, or why it was not used. Never the photo. */
+  heroPhoto: z
+    .object({ deletedAt: z.string().nullable(), fallback: z.enum(PHOTO_FALLBACKS).nullable() })
+    .nullable()
+    .default(null),
   /** The toy photo the parent sent, the toy SAM cut out of it, and its character sheet. */
   toy: z
     .object({
@@ -739,6 +755,8 @@ export const PrintWrapSchema = z.object({
 
 export const AdminBookSchema = BookSchema.extend({
   child: ChildProfileSchema,
+  /** The photo path's record: the consent (version, language, time) and the photo's timeline (older APIs leave it out). */
+  heroPhotoRecord: HeroPhotoRecordSchema.nullable().optional(),
   theme: z.string().nullable(),
   answers: AnswersSchema.nullable(),
   country: z.string().nullable(),
@@ -907,6 +925,10 @@ export const MODEL_CALL_KINDS = [
   "cover-mask",
   /** Muse Image draws a side character's sheet (a story format with cast sheets), chained from the hero's. */
   "cast",
+  /** Muse Spark describes the child's look from the parent's photo (the photo path, with consent). */
+  "hero-describe",
+  /** Not a model: the parent's photo deleted right after the hero sheet (or the fallback), with its time. */
+  "photo-delete",
 ] as const;
 export const ModelCallKindSchema = z.enum(MODEL_CALL_KINDS);
 export type ModelCallKind = z.infer<typeof ModelCallKindSchema>;

@@ -1,0 +1,179 @@
+# The hero from the child's photo (mock models). The look step offers "By photo" and "By description";
+# the photo path asks a signed-out parent to sign in (the answers so far come back), then shows the
+# consent: the lead line first, the guardian's checkbox required (the wizard does not go on without
+# it). With it ticked and a photo picked the book is made: Muse Spark described the look, Muse Image
+# drew the hero with the photo, and the photo (file and row) is gone right after the hero sheet - the
+# book, the journal and the API say when. A photo the model refuses falls back to the description and
+# is deleted too; the book is made all the same.
+appId: ${WEB}
+tags: [book, photo, consent]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  stamp: "${Date.now()}"
+  childName: "Фотогерой ${stamp}"
+  fallbackName: "Запасной ${stamp}"
+  email: "hero-photo+${stamp}@e2e.test"
+http:
+  baseUrl: ${API}
+commands:
+  # Signed out, from Kazakhstan (the photo path is on there).
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - runFlow: ../helpers/kazakhstan.helper.yaml
+  - openLink: "${WEB}/ru/create"
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "кораблики"
+  - tapOn: { testId: wizard-next }
+
+  # The look step: by description unless the parent picks the photo.
+  - waitForVisible: { css: "[data-step=look]" }
+  - assertVisible: { css: "[data-testid=look-step][data-mode=description]" }
+  - assertVisible: { testId: look-picker }
+  - tapOn: { testId: hero-mode-photo }
+  - waitForVisible: { css: "[data-testid=look-step][data-mode=photo]" }
+  # Signed out: sign in first; the form waits in this tab.
+  - waitForVisible: { testId: hero-photo-signin }
+  - tapOn: { testId: wizard-next }
+  - assertVisible: { testId: look-error, contains: "войдите" }
+  - tapOn: { testId: hero-photo-signin-button }
+  - waitForVisible: { testId: mock-login-email, timeout: 10000 }
+  - tapOn: { testId: mock-login-email }
+  - inputText: "${email}"
+  - tapOn: { testId: mock-login-submit }
+
+  # Back on the look step, signed in, with the answers kept: the consent screen.
+  - waitForVisible: { testId: consent-panel, timeout: 15000 }
+  - assertVisible: { css: "[data-step=look]" }
+  - assertVisible: { testId: consent-lead, contains: "Фото отправляется в Meta (Muse Spark и Muse Image) с одной целью" }
+  - assertVisible: { testId: consent-clause, contains: "Meta обрабатывает фото по своим правилам" }
+  - assertVisible: { css: "[data-testid=consent-panel] a[href='https://dev.meta.ai/legal/acceptable-use-policy']" }
+  - assertVisible: { testId: consent-check-guardian }
+  - assertVisible: { contains: "Я родитель или законный представитель этого ребёнка" }
+  - sql:
+      query: "select max(version)::text as v from \"ConsentText\" where key = 'hero_photo' and language = 'ru'"
+      readOnly: true
+      extract: { consentVersion: "$[0].v" }
+  - assertVisible: { css: "[data-testid=consent-panel][data-version='${consentVersion}'][data-language=ru]" }
+  # Without the checkbox: nothing to press and no way on.
+  - assertVisible: { testId: consent-accept, enabled: false }
+  - tapOn: { testId: wizard-next }
+  - assertVisible: { testId: look-error, contains: "Отметьте согласие" }
+  - assertVisible: { css: "[data-step=look]" }
+  # Ticked: the photo can be chosen.
+  - tapOn: { testId: consent-check-guardian }
+  - assertVisible: { testId: consent-accept, enabled: true }
+  - tapOn: { testId: consent-accept }
+  - waitForVisible: { css: "[data-testid=hero-photo-step][data-has-photo=false]" }
+  - assertVisible: { testId: consent-given, contains: "Согласие дано" }
+  - tapOn: { testId: wizard-next }
+  - assertVisible: { testId: look-error, contains: "Выберите фото" }
+  # An absolute path: tapstep hands a relative one to Chromium as is (TAPSTEP_NOTES 10).
+  - uploadFile: { css: "[data-testid=hero-photo-input]", files: "${PWD}/e2e/fixtures/child.jpg" }
+  - waitForVisible: { testId: hero-photo-preview }
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { css: "[data-step=story]" }
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { css: "[data-step=toy]" }
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { testId: wizard-review }
+  - assertVisible: { text: "${childName}" }
+  - assertVisible: { contains: "По фото (согласие, версия ${consentVersion})" }
+  - tapOn: { testId: create-book }
+
+  # The progress screen says when the photo was deleted, the finished book says it again.
+  - waitForVisible: { text: "Книга готова", timeout: 40000 }
+  - assertVisible: { css: "[data-testid=hero-photo-note][data-source=photo]" }
+  - assertVisible: { contains: "Герой нарисован по вашему фото" }
+  - sql:
+      query: >-
+        select b.id, b."heroSource" as source, b."heroPhoto"->>'upload' as upload,
+        (b."heroPhoto"->>'deletedAt') is not null as deleted, b."heroPhoto"->>'fallback' as fallback,
+        b."heroPhoto"->'consent'->>'language' as lang, (b."heroPhoto"->'consent'->>'version')::int as version,
+        (b."heroPhoto"->>'describedAt') is not null as described, (b."heroPhoto"->>'drawnAt') is not null as drawn,
+        b.child->'look'->>'hairColor' as hair, b.child::text ~* 'ethnic' as sensitive
+        from "Book" b where b.child->>'name' = $1
+      params: ["${childName}"]
+      readOnly: true
+      extract: { bookId: "$[0].id", upload: "$[0].upload", version: "$[0].version" }
+      assert:
+        rows: 1
+        first: { source: photo, deleted: true, fallback: null, lang: ru, described: true, drawn: true, hair: red, sensitive: false }
+  - assertTrue: { equals: ["${version}", "${consentVersion}"] }
+  # No copy is left: no row, no file (the API's test view of its private storage).
+  - sql:
+      query: 'select count(*)::int as n from "HeroPhoto" where id = $1 or "bookId" = $2'
+      params: ["${upload}", "${bookId}"]
+      readOnly: true
+      assert: { first: { n: 0 } }
+  - request:
+      url: /test/hero-photos/${upload}
+      assert: { status: 200, json: { "$.file": false, "$.row": false } }
+  # The journal: Spark described the photo, the deletion is logged right after the hero sheet and
+  # before any page was drawn.
+  - sql:
+      query: >-
+        select
+          (select count(*)::int from "ModelCall" where "bookId" = $1 and kind = 'hero-describe' and status = 'ok') as described,
+          (select count(*)::int from "ModelCall" where "bookId" = $1 and kind = 'photo-delete' and step = 'sheet.hero') as deletions,
+          (select max("createdAt") from "ModelCall" where "bookId" = $1 and kind = 'hero') <= (select min("createdAt") from "ModelCall" where "bookId" = $1 and kind = 'photo-delete') as after_hero,
+          (select min("createdAt") from "ModelCall" where "bookId" = $1 and kind = 'photo-delete') <= (select min("createdAt") from "ModelCall" where "bookId" = $1 and kind = 'page') as before_pages
+      params: ["${bookId}"]
+      readOnly: true
+      assert: { first: { described: 1, deletions: 1, after_hero: true, before_pages: true } }
+  # The API says the same about the book: from the photo, deleted.
+  - request:
+      url: /books/${bookId}
+      extract: { deletedAt: "$.heroPhoto.deletedAt" }
+      assert: { status: 200, json: { "$.heroSource": photo } }
+  - assertTrue: { contains: ["${deletedAt}", "T"] }
+
+  # A photo the model refuses (the mock refuses one smaller than 32 px): the book is made from the
+  # description and the photo is deleted all the same.
+  - openLink: "${WEB}/ru/create"
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
+  - tapOn: { testId: child-name }
+  - inputText: "${fallbackName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "облака"
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { css: "[data-step=look]" }
+  - tapOn: { testId: hero-mode-photo }
+  - waitForVisible: { testId: consent-panel }
+  - tapOn: { testId: consent-check-guardian }
+  - tapOn: { testId: consent-accept }
+  - uploadFile: { css: "[data-testid=hero-photo-input]", files: "${PWD}/e2e/fixtures/tiny-photo.jpg" }
+  - waitForVisible: { testId: hero-photo-preview }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "Книга готова", timeout: 40000 }
+  - assertVisible: { css: "[data-testid=hero-photo-note][data-source=description]" }
+  - sql:
+      query: >-
+        select b."heroSource" as source, b."heroPhoto"->>'fallback' as fallback, b."heroPhoto"->>'upload' as upload,
+        (b."heroPhoto"->>'deletedAt') is not null as deleted, b."heroImagePath" is not null as hero
+        from "Book" b where b.child->>'name' = $1
+      params: ["${fallbackName}"]
+      readOnly: true
+      extract: { fallbackUpload: "$[0].upload" }
+      assert: { rows: 1, first: { source: description, fallback: describe_refused, deleted: true, hero: true } }
+  - request:
+      url: /test/hero-photos/${fallbackUpload}
+      assert: { status: 200, json: { "$.file": false, "$.row": false } }
+
+  # The API takes a photo only from a signed-in parent.
+  - request:
+      method: POST
+      url: /hero-photos
+      json: { image: "data:image/jpeg;base64,AAAA", consent: { version: 1, language: ru, accepted: true } }
+      assert: { status: 401, json: { "$.code": hero_photo_sign_in } }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' in ($1, $2)", params: ["${childName}", "${fallbackName}"] }
+  - sql: { exec: "delete from \"User\" where sub = $1", params: ["mock:${email}"] }

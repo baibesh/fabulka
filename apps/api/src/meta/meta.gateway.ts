@@ -8,6 +8,8 @@ import {
   ProposedThemeSchema,
   StorySchema,
   encodeGrid,
+  lookFromModel,
+  type ChildLook,
   type PageSubject,
   type Language,
   type ModelCallKind,
@@ -56,6 +58,8 @@ import {
   translatePrompt,
   STORY_INSTRUCTIONS,
   TOY_DESCRIPTION_PROMPT,
+  CHILD_LOOK_PROMPT,
+  heroFromPhotoPrompt,
   type Companions,
   type StoryBrief,
   castPrompt,
@@ -493,20 +497,71 @@ export class MetaGateway implements ModelGateway {
     heroDescription: string,
     style?: string,
     references: ReferenceImage[] = [],
+    photo?: { data: Buffer; look: string },
   ): Promise<GeneratedImage> {
     return this.draw(
       'hero',
-      heroPrompt(heroDescription, style) +
+      (photo
+        ? heroFromPhotoPrompt(heroDescription, photo.look, style)
+        : heroPrompt(heroDescription, style)) +
         referenceNotes(
           references.map((r) => r.kind),
           'hero',
+          photo ? 1 : 0,
         ),
       '1024x1024',
       undefined,
-      undefined,
+      photo?.data,
       {},
       references,
     );
+  }
+
+  /**
+   * Muse Spark (vision) on the child's photo: JSON read strictly into ChildLook (lookFromModel drops
+   * anything but the closed values). The photo is not kept in the journal: only the prompt text of a
+   * failed call is.
+   */
+  async describeChild(
+    photo: Buffer,
+  ): Promise<{ look: ChildLook; costUsd: number }> {
+    const call = this.journal.start({
+      kind: 'hero-describe',
+      model: this.options.storyModel,
+      prompt: CHILD_LOOK_PROMPT,
+    });
+    const response = await call.request(
+      this.client.responses.create({
+        model: this.options.storyModel,
+        input: [
+          {
+            role: 'user',
+            content: [
+              { type: 'input_text', text: CHILD_LOOK_PROMPT },
+              {
+                type: 'input_image',
+                image_url: dataUrl(photo),
+                detail: 'auto',
+              },
+            ],
+          },
+        ],
+        text: { format: { type: 'json_object' } },
+        reasoning: { effort: 'low' },
+      }),
+    );
+    const look = lookFromModel(safeJson(response.output_text));
+    if (!look) {
+      const error = new Error('Muse Spark did not describe the photo');
+      call.fail(error, {
+        ...spend(response),
+        code: 'no_description',
+        output: response.output_text,
+      });
+      throw error;
+    }
+    call.ok(spend(response));
+    return { look, costUsd: tokenCost(response) };
   }
 
   drawPet(

@@ -8,6 +8,7 @@ import {
   ageBand,
   talkQuestionKinds,
   type ChildProfile,
+  lookSentence,
   type Language,
   type MethodologyData,
   type TemplateQuestion,
@@ -123,6 +124,7 @@ export function storyPrompt(brief: StoryBrief): string {
   return [
     `Write a ${pageCount}-page ${formatName(brief.format)} in ${LANGUAGE_MODEL_NAMES[child.language]}.`,
     `Hero: ${child.name}, a ${child.age}-year-old ${child.gender}.`,
+    ...lookLines(child),
     `Interests: ${child.interests.join(', ')}.`,
     child.pet ? `Pet: ${child.pet}.` : 'No pet.',
     ...toyLines(brief),
@@ -268,6 +270,15 @@ export function methodPrompt(
   ].join('\n');
 }
 
+/** The hero's look the parent picked (or Muse Spark saw in the photo), for "hero_description". */
+function lookLines(child: ChildProfile): string[] {
+  const look = lookSentence(child.look);
+  if (!look) return [];
+  return [
+    `The hero looks like this: ${look}. Keep exactly this look in "hero_description" and add only the age and clothes with colors.`,
+  ];
+}
+
 function toyLines({ toy }: StoryBrief): string[] {
   if (!toy) return [];
   const name = toy.name ? `, called "${toy.name}"` : '';
@@ -300,6 +311,48 @@ export function heroPrompt(heroDescription: string, style = ART_STYLE): string {
     `full body, front view, friendly expression, plain white background, centered, ${style}`
   );
 }
+
+/**
+ * The hero's sheet drawn with the child's photo attached as picture 1 (the photo path): the likeness
+ * comes from the photo, the look sentence (closed values only) keeps the colours right, and the
+ * result is an illustration in the book's style, never a copy of the photo.
+ */
+export function heroFromPhotoPrompt(
+  heroDescription: string,
+  look: string,
+  style = ART_STYLE,
+): string {
+  return (
+    `an original children's book character sheet of the hero: ${heroDescription}. ` +
+    'Attached picture 1 is a photo of the child, sent by the parent: draw this same child as a storybook ' +
+    "character - keep the child's likeness (face shape, hairstyle and hair colour, eye colour, skin tone, " +
+    `glasses and freckles if any)${look ? `, which is: ${look}` : ''}. ` +
+    'Draw an illustration, not a photo: do not copy the photo, its background, pose or clothes. ' +
+    `Full body, front view, friendly expression, plain white background, centered, ${style}`
+  );
+}
+
+/**
+ * Muse Spark looks at the parent's photo of the child and describes only what an illustrator draws,
+ * as JSON (ModelLookSchema in @fabulka/shared reads it; anything else is dropped).
+ */
+export const CHILD_LOOK_PROMPT = `This is a photo of a child, sent by their parent so that an illustrator can draw the child as the hero of a picture book.
+Describe only the visible appearance an illustrator needs, as JSON of this exact shape:
+{
+  "skin_tone_hex": "#RRGGBB",
+  "hair_color": "black" | "dark-brown" | "brown" | "light-brown" | "blond" | "red",
+  "hair_length": "very-short" | "short" | "chin" | "shoulder" | "long",
+  "hair_texture": "straight" | "wavy" | "curly" | "coily",
+  "eye_color": "dark-brown" | "brown" | "hazel" | "green" | "blue" | "gray",
+  "face_shape": "round" | "oval" | "heart" | "square" | "long",
+  "glasses": boolean,
+  "freckles": boolean
+}
+"skin_tone_hex" is the colour of the skin on the cheek as a hex colour, nothing more.
+Leave out a field you cannot see. Never infer or mention ethnicity, race, nationality, religion,
+health, disability or any other sensitive attribute, and never guess who the child is.
+If there is no single child clearly visible, return {"refused": true}.
+Return only the JSON.`;
 
 export function petPrompt(petDescription: string, style = ART_STYLE): string {
   return (
@@ -362,11 +415,13 @@ export function coverPrompt(
 export function referenceNotes(
   kinds: readonly ReferenceKind[],
   target: 'hero' | 'page' | 'cover',
+  /** Pictures sent before the references (the child's photo on the hero sheet: 1). */
+  offset = 0,
 ): string {
   if (!kinds.length) return '';
   const where = (kind: ReferenceKind) => {
     const at = kinds
-      .map((k, i) => (k === kind ? i + 1 : 0))
+      .map((k, i) => (k === kind ? i + 1 + offset : 0))
       .filter((i) => i > 0);
     if (!at.length) return '';
     return at.length === 1
@@ -387,9 +442,11 @@ export function referenceNotes(
       ` ${where('character_guide')}: a character proportion guide - follow only its body proportions (head size, height in heads, hands); draw one child, not its several views.`,
     );
   notes.push(
-    target === 'hero'
-      ? " The references guide style and proportions only: the child's face, hair, skin and clothes come only from the description above."
-      : " The references guide style and composition only: the hero's face, hair, skin, body and clothes come only from the hero character sheet shown earlier, never from the reference pictures.",
+    target === 'hero' && offset > 0
+      ? " The references guide style and proportions only: the child's face, hair and skin come only from picture 1 and the description above."
+      : target === 'hero'
+        ? " The references guide style and proportions only: the child's face, hair, skin and clothes come only from the description above."
+        : " The references guide style and composition only: the hero's face, hair, skin, body and clothes come only from the hero character sheet shown earlier, never from the reference pictures.",
   );
   return notes.join('');
 }

@@ -74,6 +74,10 @@ import {
   type CreateBookInput,
   type Language,
   type MyBook,
+  HeroPhotoRecordSchema,
+  lookSentence,
+  type HeroPhotoRecord,
+  type PhotoFallback,
 } from '@fabulka/shared';
 import { randomBytes } from 'node:crypto';
 import { basename } from 'node:path';
@@ -96,6 +100,7 @@ import { toyUploadPath } from '../toy/toys.controller';
 import { layoutOf, withHeadingCheck } from '../layout/layout';
 import { PdfService, type RenderHooks } from '../pdf/pdf.service';
 import { cleanPhoto, PhotoRefused } from '../photos/photo';
+import { HeroPhotosService } from '../photos/hero-photos.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReferenceService } from '../reference/reference.service';
 import { StorageService } from '../storage/storage.service';
@@ -177,6 +182,8 @@ interface Job {
   style?: string;
   /** The uploaded toy photo, when the parent sent one. */
   toyUpload?: string;
+  /** The child's photo for the hero (the photo path) and its record, which generation fills in. */
+  heroPhoto?: PhotoTrack;
   /** The printed size the book is laid out at (its frames' shapes decide the pictures' sizes). */
   printFormat?: BookFormat;
 }
@@ -202,6 +209,7 @@ export class BooksService implements OnModuleInit {
     private readonly themes: ThemesService,
     private readonly references: ReferencesService,
     private readonly formats: FormatsService,
+    private readonly heroPhotos: HeroPhotosService,
     config: ConfigService,
   ) {
     this.pageCount = Number(config.get('PAGE_COUNT', 10));
@@ -269,6 +277,23 @@ export class BooksService implements OnModuleInit {
       });
       job.toyUpload = input.toy.upload;
     }
+    // The photo path: the photo must be this parent's (the controller checked sign-in and country).
+    if (input.heroPhoto) {
+      if (!userId)
+        throw new BadRequestException('Sign in to draw the hero from a photo');
+      const { consent, uploadedAt } = await this.heroPhotos.consentOf(
+        input.heroPhoto.upload,
+        userId,
+      );
+      job.heroPhoto = {
+        upload: input.heroPhoto.upload,
+        record: HeroPhotoRecordSchema.parse({
+          consent,
+          uploadedAt,
+          upload: input.heroPhoto.upload,
+        }),
+      };
+    }
     const row = await this.prisma.book.create({
       data: {
         child,
@@ -286,6 +311,7 @@ export class BooksService implements OnModuleInit {
         demo,
         country,
         toyName: input.toy?.name || null,
+        ...(job.heroPhoto && { heroPhoto: json(job.heroPhoto.record) }),
         generation: json(
           firstState(
             !!job.toyUpload,
@@ -293,11 +319,25 @@ export class BooksService implements OnModuleInit {
             job.brief.pageCount,
             new Date(),
             expectedFrames(story, job.brief.pageCount),
+            !!job.heroPhoto,
           ),
         ),
       },
       include: withTemplate,
     });
+    // Another book may have taken the same photo a moment earlier: this one draws from the description.
+    // (That photo is the other book's to delete, so this one forgets it.)
+    if (
+      job.heroPhoto &&
+      !(await this.heroPhotos.claim(job.heroPhoto.upload, row.id))
+    ) {
+      const record = { ...job.heroPhoto.record, fallback: 'missing' as const };
+      job.heroPhoto = undefined;
+      await this.prisma.book.update({
+        where: { id: row.id },
+        data: { heroPhoto: json(record) },
+      });
+    }
     // Generation runs in the background, a few books at a time; the client polls GET /books/:id.
     // Inside journal.run every model call is recorded against this book.
     const spent: Spend = { usd: 0 };
@@ -307,8 +347,32 @@ export class BooksService implements OnModuleInit {
           this.generate(row.id, job, spent),
         ),
       )
-      .catch((error: unknown) => this.fail(row.id, error, spent.usd));
+      .catch((error: unknown) => this.fail(row.id, error, spent.usd))
+      // Whatever happened, the child's photo does not outlive the generation.
+      .finally(() => job.heroPhoto && this.dropPhoto(row.id, job.heroPhoto));
     return this.toDto(row);
+  }
+
+  /**
+   * The safety net after a generation: a photo still stored (the book failed before its hero) is
+   * deleted, and the book's record says when. Never throws.
+   */
+  private async dropPhoto(id: string, track: PhotoTrack): Promise<void> {
+    try {
+      const at = await this.heroPhotos.remove(
+        track.upload,
+        'the book stopped before its hero was drawn',
+        id,
+      );
+      if (!at) return;
+      track.record.deletedAt = at.toISOString();
+      await this.prisma.book.updateMany({
+        where: { id },
+        data: { heroPhoto: json(track.record) },
+      });
+    } catch (error) {
+      this.logger.error(`book ${id}: could not drop the hero photo`, error);
+    }
   }
 
   /** A book of your own: the parent's method (or the age's), its format, the format's theme or the age's. */
@@ -736,7 +800,14 @@ export class BooksService implements OnModuleInit {
 
   private async generate(
     id: string,
-    { brief, style: templateStyle, toyUpload, theme, printFormat }: Job,
+    {
+      brief,
+      style: templateStyle,
+      toyUpload,
+      theme,
+      printFormat,
+      heroPhoto: photoTrack,
+    }: Job,
     spent: Spend,
   ): Promise<void> {
     const { child, format } = brief;
@@ -759,6 +830,7 @@ export class BooksService implements OnModuleInit {
       brief.pageCount,
       new Date(),
       expectedFrames(format, brief.pageCount),
+      !!photoTrack,
     );
     gen.startedAt = gen.stepAt;
     let writes: Promise<unknown> = Promise.resolve();
@@ -813,6 +885,55 @@ export class BooksService implements OnModuleInit {
           description: described.description,
         },
       };
+    }
+
+    // The photo path: Muse Spark describes the child's look from the photo (closed values only); the
+    // story and the hero's sheet follow it. Any refusal or failure gives the photo up at once (it is
+    // deleted) and the hero is drawn from the description: the book never fails because of the photo.
+    let photo: Buffer | null = null;
+    const giveUpPhoto = async (reason: PhotoFallback) => {
+      photo = null;
+      const record = photoTrack!.record;
+      record.fallback = reason;
+      const at = await this.heroPhotos.remove(
+        photoTrack!.upload,
+        `given up (${reason}); the hero is drawn from the description`,
+        id,
+      );
+      record.deletedAt = (at ?? new Date()).toISOString();
+      gen.photoDeletedAt = record.deletedAt;
+      await save({ heroPhoto: json(record), heroSource: 'description' });
+    };
+    if (photoTrack) {
+      await step('photo');
+      photo =
+        photoTrack.record.fallback === null
+          ? await this.heroPhotos.read(photoTrack.upload)
+          : null;
+      if (!photo) await giveUpPhoto(photoTrack.record.fallback ?? 'missing');
+      else {
+        const sent: Buffer = photo;
+        try {
+          const described = await inStep('hero.describe', () =>
+            this.models.describeChild(sent),
+          );
+          spent.usd += described.costUsd;
+          brief = { ...brief, child: { ...brief.child, look: described.look } };
+          photoTrack.record.describedAt = new Date().toISOString();
+          await save({
+            child: json(brief.child),
+            heroPhoto: json(photoTrack.record),
+            costUsd: spent.usd,
+          });
+        } catch (error) {
+          this.logger.warn(
+            `book ${id}: the photo was not described (${error instanceof Error ? error.message : String(error)}); drawing from the description`,
+          );
+          await giveUpPhoto(
+            isSafetyRefusal(error) ? 'describe_refused' : 'describe_failed',
+          );
+        }
+      }
     }
 
     await step('story');
@@ -874,9 +995,57 @@ export class BooksService implements OnModuleInit {
 
     await step('hero');
     const heroRefs = await references.for({ kind: 'hero' });
-    const hero = await inStep('sheet.hero', () =>
-      this.models.drawHero(story.hero_description, style, heroRefs),
-    );
+    // The look the parent picked (or Spark saw) is said again next to the story's description, so
+    // the sheet every page copies has exactly those colours.
+    const look = lookSentence(brief.child.look);
+    const drawHero = (withPhoto?: { data: Buffer; look: string }) =>
+      inStep('sheet.hero', () =>
+        this.models.drawHero(
+          look && !withPhoto
+            ? `${story.hero_description.replace(/[.\s]+$/, '')}; exact look: ${look}`
+            : story.hero_description,
+          style,
+          heroRefs,
+          withPhoto,
+        ),
+      );
+    let hero: GeneratedImage;
+    const sendPhoto: Buffer | null = photo;
+    if (photoTrack && sendPhoto) {
+      // The photo's last use: the sheet is drawn with it as a reference, then it is deleted at once,
+      // whatever the outcome; a refused or failed drawing is then drawn again from the description.
+      const record = photoTrack.record;
+      let drawn: GeneratedImage | null = null;
+      try {
+        drawn = await drawHero({ data: sendPhoto, look });
+        record.drawnAt = new Date().toISOString();
+      } catch (error) {
+        this.logger.warn(
+          `book ${id}: the hero was not drawn from the photo (${error instanceof Error ? error.message : String(error)}); drawing from the description`,
+        );
+        record.fallback = isSafetyRefusal(error)
+          ? 'draw_refused'
+          : 'draw_failed';
+      } finally {
+        photo = null;
+        const at = await this.heroPhotos.remove(
+          photoTrack.upload,
+          record.fallback
+            ? `given up (${record.fallback}); the hero is drawn from the description`
+            : 'the hero sheet is drawn; later pictures chain from the sheet, never the photo',
+          id,
+        );
+        record.deletedAt = (at ?? new Date()).toISOString();
+        gen.photoDeletedAt = record.deletedAt;
+        await save({
+          heroPhoto: json(record),
+          heroSource: record.fallback ? 'description' : 'photo',
+        });
+      }
+      hero = drawn ?? (await drawHero());
+    } else {
+      hero = await drawHero();
+    }
     spent.usd += hero.costUsd;
     const heroImagePath = await this.storage.save(
       `books/${id}/hero.${hero.ext}`,
@@ -1310,6 +1479,8 @@ export class BooksService implements OnModuleInit {
       error: row.error,
       layout: layoutOf(row.layout),
       editable,
+      heroSource: row.heroSource === 'photo' ? 'photo' : 'description',
+      heroPhoto: heroPhotoView(row.heroPhoto),
       generation: this.generationOf(row, pages),
       createdAt: row.createdAt.toISOString(),
     };
@@ -1359,10 +1530,13 @@ function firstState(
   pages: number,
   now: Date,
   frames = pages,
+  photo = false,
 ): GenerationState {
   return {
     step: 'read',
     toy,
+    photo,
+    photoDeletedAt: null,
     pet,
     pages,
     frames,
@@ -1496,6 +1670,20 @@ function json(value: unknown): Prisma.InputJsonValue {
 /** Spend so far, shared with the failure handler so a failed book still records it. */
 interface Spend {
   usd: number;
+}
+
+/** The child's photo of a book being made: its upload id and the record kept on the book. */
+interface PhotoTrack {
+  upload: string;
+  record: HeroPhotoRecord;
+}
+
+/** What the book's DTO says about the photo: when it was deleted and why it was not used; never the photo. */
+function heroPhotoView(value: Prisma.JsonValue | null): Book['heroPhoto'] {
+  const record = HeroPhotoRecordSchema.safeParse(value);
+  return record.success
+    ? { deletedAt: record.data.deletedAt, fallback: record.data.fallback }
+    : null;
 }
 
 /** Runs at most `limit` tasks at once; the rest wait in order. */

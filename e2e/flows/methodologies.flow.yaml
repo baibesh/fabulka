@@ -107,6 +107,9 @@ commands:
   - tapOn: { testId: child-interests }
   - inputText: "мячи"
   - tapOn: { testId: wizard-next }
+  # The hero's look: by description, as picked (nothing), then on.
+  - waitForVisible: { css: "[data-step=look]" }
+  - tapOn: { testId: wizard-next }
   - waitForVisible: { css: "[data-step=story]" }
   - selectOption: { testId: book-methodology, optionValue: "${slug}" }
   - tapOn: { testId: wizard-next }

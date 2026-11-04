@@ -511,9 +511,11 @@ export interface CountryInfo {
   print: boolean;
   /** How orders and purchases are paid there; left out: by hand ("manual"). */
   payment?: PaymentProviderKey;
+  /** The photo path is offered there (heroPhotoOffered); left out: on. */
+  heroPhoto?: boolean;
 }
 
-export const OTHER_COUNTRY_INFO: CountryInfo = { languages: ["en", "es", "de", "ru"], currency: "USD", print: false, payment: "manual" };
+export const OTHER_COUNTRY_INFO: CountryInfo = { languages: ["en", "es", "de", "ru"], currency: "USD", print: false, payment: "manual", heroPhoto: false };
 
 /** The payment provider of a country (by hand when none is set). */
 export function paymentProviderOf(info: Pick<CountryInfo, "payment">): PaymentProviderKey {
@@ -534,6 +536,8 @@ export const CountryEntrySchema = z.object({
   print: z.boolean(),
   /** Superadmin only (the Countries tab); left out: by hand. */
   payment: PaymentProviderSchema.optional(),
+  /** The hero can be drawn from the child's photo (signed in, with consent); left out: on. */
+  heroPhoto: z.boolean().optional(),
 });
 export type CountryEntry = z.infer<typeof CountryEntrySchema>;
 

@@ -98,8 +98,7 @@ export const GLOBAL_NAV: readonly NavGroup[] = [
       { id: "team", href: "/admin/team", label: "admin.ws.nav.team", icon: "team", rights: ["team"] },
       { id: "activity", href: "/admin/activity", label: "admin.nav.audit", icon: "activity", rights: ["audit"] },
       { id: "settings", href: "/admin/settings", label: "admin.ws.nav.settings", icon: "settings", rights: ["reference", "team", "dashboard"] },
-      // The consent texts page (/admin/consent) comes with the child-photo consent work.
-      { id: "consent", href: "/admin/consent", label: "admin.ws.nav.consent", icon: "consent", rights: [], superOnly: true },
+      { id: "consent", href: "/admin/consent", label: "admin.ws.nav.consent", icon: "consent", rights: ["consent"] },
     ],
   },
 ];
@@ -182,7 +181,7 @@ const ROUTES: { href: string; rights: readonly AdminRight[]; superOnly?: boolean
   { href: "/admin/cities", rights: ["reference.cities"] },
   { href: "/admin/faq", rights: ["reference"] },
   { href: "/admin/settings", rights: ["reference", "team", "dashboard"] },
-  { href: "/admin/consent", rights: [], superOnly: true },
+  { href: "/admin/consent", rights: ["consent"] },
   // The old Reference data page: it only sends to where its tabs went (see ReferenceRedirect).
   {
     href: "/admin/reference",

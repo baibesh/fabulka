@@ -27,6 +27,9 @@ commands:
   - tapOn: { testId: child-interests }
   - inputText: "машинки"
   - tapOn: { testId: wizard-next }
+  # The hero's look: by description, as picked (nothing), then on.
+  - waitForVisible: { css: "[data-step=look]" }
+  - tapOn: { testId: wizard-next }
   # A required answer is missing: the questions step stops and says which one.
   - waitForVisible: { testId: template-questions }
   - tapOn: { testId: wizard-next }

@@ -50,6 +50,8 @@ commands:
   - tapOn: { testId: child-interests }
   - inputText: "space"
   - tapOn: { testId: wizard-next }
+  # The hero's look: by description, as picked (nothing), then on.
+  - tapOn: { testId: wizard-next }
   - tapOn: { testId: wizard-next }
   - tapOn: { testId: wizard-next }
   - waitForVisible: { testId: wizard-review }
@@ -147,6 +149,8 @@ commands:
   - inputText: "${childName} ES"
   - tapOn: { testId: child-interests }
   - inputText: "dinosaurios"
+  - tapOn: { testId: wizard-next }
+  # The hero's look: by description, as picked (nothing), then on.
   - tapOn: { testId: wizard-next }
   - tapOn: { testId: wizard-next }
   - tapOn: { testId: wizard-next }

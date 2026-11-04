@@ -18,6 +18,9 @@ commands:
   - assertVisible: { testId: child-interests, value: "динозавры, рисование" }
   - assertVisible: { testId: child-city, value: "Алматы" }
   - tapOn: { testId: wizard-next }
+  # The hero's look: by description, as picked (nothing), then on.
+  - waitForVisible: { css: "[data-step=look]" }
+  - tapOn: { testId: wizard-next }
 
   # A choice question gets the option the recording named (the mock picks the first one).
   - waitForVisible: { testId: template-questions }

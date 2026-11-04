@@ -352,6 +352,24 @@ export function BookDetail() {
     [t("admin.book.country"), b.country ?? "-"],
     [t("admin.book.spend"), formatSpendUsd(b.costUsd)],
     [t("admin.book.created"), date(b.createdAt)],
+    [
+      t("admin.book.hero"),
+      <span key="hero" data-testid="admin-book-hero" data-source={b.heroSource}>
+        {b.heroSource === "photo" ? t("admin.book.hero.photo") : t("admin.book.hero.description")}
+        {b.heroPhotoRecord && (
+          <span className="block text-xs text-muted">
+            {t("admin.book.hero.consent", {
+              version: b.heroPhotoRecord.consent.version,
+              language: b.heroPhotoRecord.consent.language.toUpperCase(),
+              date: date(b.heroPhotoRecord.consent.acceptedAt),
+            })}
+            {" · "}
+            {b.heroPhotoRecord.deletedAt ? t("admin.book.hero.deleted", { date: date(b.heroPhotoRecord.deletedAt) }) : t("admin.book.hero.kept")}
+            {b.heroPhotoRecord.fallback && ` · ${t("admin.book.hero.fallback", { reason: b.heroPhotoRecord.fallback })}`}
+          </span>
+        )}
+      </span>,
+    ],
   ];
 
   return (

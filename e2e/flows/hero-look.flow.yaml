@@ -1,0 +1,68 @@
+# The hero by description, picked with buttons (mock models): skin tone, hair colour, length and
+# type, eyes, glasses and freckles; tapping a choice again unpicks it. The review lists the look, the
+# book keeps it on the child's profile and the hero is drawn from it; no photo, no consent, no
+# description of a photo. A book with nothing picked is drawn as before (the other flows).
+appId: ${WEB}
+tags: [book, look]
+db: ${DATABASE_URL}
+params:
+  DATABASE_URL:
+    required: true
+    description: Postgres DSN of the e2e database (e2e/.env)
+env:
+  childName: "Look ${Date.now()}"
+commands:
+  - launchApp: { appId: "${WEB}", clearState: true }
+  - openLink: "${WEB}/en/create"
+  - runFlow: ../helpers/fill-by-hand.helper.yaml
+  - tapOn: { testId: child-name }
+  - inputText: "${childName}"
+  - tapOn: { testId: child-interests }
+  - inputText: "kites"
+  - tapOn: { testId: wizard-next }
+
+  - waitForVisible: { css: "[data-step=look]" }
+  - assertVisible: { contains: "Step 3 of 6" }
+  - assertVisible: { css: "[data-testid=look-step][data-mode=description]" }
+  - tapOn: { testId: look-skin-brown }
+  - tapOn: { testId: look-hairColor-red }
+  - tapOn: { testId: look-hairLength-shoulder }
+  - tapOn: { testId: look-hairTexture-curly }
+  - tapOn: { testId: look-eyes-green }
+  - tapOn: { testId: look-glasses }
+  - tapOn: { testId: look-freckles }
+  # Tapped again: freckles are left to the illustrator.
+  - tapOn: { testId: look-freckles }
+  - assertVisible: { css: "[data-testid=look-hairColor-red][aria-pressed=true]" }
+  - assertVisible: { css: "[data-testid=look-freckles][aria-pressed=false]" }
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { css: "[data-step=story]" }
+  - tapOn: { testId: wizard-next }
+  - tapOn: { testId: wizard-next }
+  - waitForVisible: { testId: wizard-review }
+  - assertVisible: { contains: "Skin tone 6 of 8, Red, Shoulder-length, Curly, Eyes: Green, Glasses" }
+  - tapOn: { testId: create-book }
+  - waitForVisible: { text: "The book is ready", timeout: 30000 }
+  - assertNotVisible: { testId: hero-photo-note }
+  - sql:
+      query: >-
+        select b.id, b.child->'look' as look, b."heroSource" as source, b."heroPhoto" is null as no_photo,
+        (select count(*)::int from "ModelCall" m where m."bookId" = b.id and m.kind in ('hero-describe', 'photo-delete')) as photo_calls
+        from "Book" b where b.child->>'name' = $1
+      params: ["${childName}"]
+      readOnly: true
+      assert:
+        rows: 1
+        first: { source: description, no_photo: true, photo_calls: 0 }
+  - sql:
+      query: >-
+        select b.child->'look'->>'skin' as skin, b.child->'look'->>'hairColor' as hair, b.child->'look'->>'hairLength' as length,
+        b.child->'look'->>'hairTexture' as texture, b.child->'look'->>'eyes' as eyes, (b.child->'look'->>'glasses')::boolean as glasses,
+        b.child->'look' ? 'freckles' as freckles
+        from "Book" b where b.child->>'name' = $1
+      params: ["${childName}"]
+      readOnly: true
+      assert:
+        first: { skin: brown, hair: red, length: shoulder, texture: curly, eyes: green, glasses: true, freckles: false }
+after:
+  - sql: { exec: "delete from \"Book\" where child->>'name' = $1", params: ["${childName}"] }

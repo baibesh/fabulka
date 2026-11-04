@@ -1,3 +1,5 @@
+import sharp from 'sharp';
+import { BadRequestException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
@@ -13,7 +15,7 @@ import {
 } from '@fabulka/shared';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { MockGateway } from '../meta/mock.gateway';
+import { MockGateway, mockRefusal } from '../meta/mock.gateway';
 import type { FrameRequest, ModelGateway } from '../meta/model-gateway';
 import { MethodologiesService } from '../methodologies/methodologies.service';
 import { JournalService } from '../journal/journal.service';
@@ -23,6 +25,7 @@ import type { ReferenceService } from '../reference/reference.service';
 import type { FormatsService } from '../formats/formats.service';
 import { curatedThemes } from '../themes/curated.testing';
 import type { StorageService } from '../storage/storage.service';
+import type { HeroPhotosService } from '../photos/hero-photos.service';
 import { SEED_TEMPLATES } from '../templates/catalog';
 import { SEED_TRANSLATIONS } from '../templates/catalog-i18n';
 import type { TemplatesService } from '../templates/templates.service';
@@ -70,6 +73,7 @@ function makeService(
     pdf?: unknown;
     format?: string;
     references?: unknown;
+    heroPhotos?: unknown;
   } = {},
 ) {
   const templates = {
@@ -104,6 +108,7 @@ function makeService(
       forBook: () => Promise.resolve(NO_REFERENCES),
     }) as ReferencesService,
     fakeFormats(),
+    (files.heroPhotos ?? {}) as HeroPhotosService,
     { get: () => 2 } as unknown as ConfigService,
   );
 }
@@ -1176,5 +1181,318 @@ describe('toyInScene', () => {
   it('draws the toy only where the scene names it', () => {
     expect(toyInScene('the hero hugs the toy')).toBe(true);
     expect(toyInScene('the hero sees a toyshop')).toBe(false);
+  });
+});
+
+describe('the hero from a photo', () => {
+  const SENSITIVE =
+    /ethnic|race|racial|asian|african|european|caucasian|hispanic|nationality|religio|disab|health|must never get through/i;
+  const consent = {
+    version: 3,
+    language: 'en' as const,
+    acceptedAt: '2026-11-04T10:00:00.000Z',
+  };
+
+  /**
+   * A whole book made with a photo, with a fake photo store and a log of what happened in order:
+   * every model call (and whether the photo went with it) and the photo's deletion.
+   */
+  async function makeWithPhoto(models: ModelGateway = new MockGateway(0)) {
+    const log: string[] = [];
+    const photo = await sharp({
+      create: { width: 64, height: 64, channels: 3, background: '#c08060' },
+    })
+      .jpeg()
+      .toBuffer();
+    let stored = true;
+    const heroPhotos = {
+      consentOf: jest.fn().mockResolvedValue({
+        consent,
+        uploadedAt: '2026-11-04T10:00:01.000Z',
+      }),
+      claim: jest.fn().mockResolvedValue(true),
+      read: jest.fn(() => Promise.resolve(stored ? photo : null)),
+      remove: jest.fn((_upload: string, why: string) => {
+        if (!stored) return Promise.resolve(null);
+        stored = false;
+        log.push(`photo deleted: ${why}`);
+        return Promise.resolve(new Date('2026-11-04T10:01:00.000Z'));
+      }),
+    };
+    const watch = <K extends keyof ModelGateway>(name: K) => {
+      const original = models[name].bind(models) as (
+        ...args: unknown[]
+      ) => Promise<unknown>;
+      (models as unknown as Record<string, unknown>)[name] = (
+        ...args: unknown[]
+      ) => {
+        const withPhoto = args.some(
+          (a) =>
+            a === photo ||
+            (typeof a === 'object' &&
+              a !== null &&
+              (a as { data?: unknown }).data === photo),
+        );
+        log.push(`${name}${withPhoto ? ' (with the photo)' : ''}`);
+        return original(...args);
+      };
+    };
+    for (const name of [
+      'describeChild',
+      'writeStory',
+      'drawHero',
+      'drawFrame',
+      'drawCover',
+    ] as const)
+      watch(name);
+    const briefs: unknown[] = [];
+    const writeStory = models.writeStory.bind(models);
+    models.writeStory = (brief) => {
+      briefs.push(brief);
+      return writeStory(brief);
+    };
+    const row: Record<string, unknown> = {
+      id: 'bp',
+      status: 'queued',
+      child,
+      language: 'ru',
+      pages: [],
+      layout: null,
+      heroSource: 'description',
+      heroPhoto: null,
+      createdAt: new Date(),
+    };
+    const write = ({ data }: { data: Record<string, unknown> }) => {
+      Object.assign(row, data);
+      return Promise.resolve({ ...row });
+    };
+    const service = makeService(
+      {
+        book: {
+          create: jest.fn().mockImplementation(write),
+          update: jest.fn().mockImplementation(write),
+          updateMany: jest.fn().mockImplementation(write),
+        },
+        modelCall: { create: jest.fn().mockResolvedValue({}) },
+      },
+      models,
+      methodRows(),
+      {},
+      {
+        storage: { url: () => null, save: (p: string) => Promise.resolve(p) },
+        pdf: {
+          render: jest.fn((_id: string, _book: unknown, layout: BookLayout) =>
+            Promise.resolve({
+              pdfPath: 'books/bp/book.pdf',
+              layout,
+              tones: {},
+            }),
+          ),
+        },
+        heroPhotos,
+      },
+    );
+    await service.create(
+      { child, heroPhoto: { upload: 'a'.repeat(32) } },
+      'k',
+      false,
+      'KZ',
+      'user-1',
+    );
+    for (
+      let i = 0;
+      i < 100 && !['done', 'failed'].includes(row.status as string);
+      i++
+    )
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    return { row, log, heroPhotos, briefs, dto: service.toDto(row as never) };
+  }
+
+  it('describes the child from the photo, draws the hero with it, then deletes it before any page', async () => {
+    const { row, log, heroPhotos, briefs, dto } = await makeWithPhoto();
+    expect(row.status).toBe('done');
+    expect(heroPhotos.consentOf).toHaveBeenCalledWith('a'.repeat(32), 'user-1');
+    expect(heroPhotos.claim).toHaveBeenCalledWith('a'.repeat(32), 'bp');
+    const deleted = log.findIndex((l) => l.startsWith('photo deleted'));
+    expect(log.slice(0, deleted + 1)).toEqual([
+      'describeChild (with the photo)',
+      'writeStory',
+      'drawHero (with the photo)',
+      'photo deleted: the hero sheet is drawn; later pictures chain from the sheet, never the photo',
+    ]);
+    // Every later picture chains from the drawn hero; none gets the photo.
+    expect(log.slice(deleted + 1).length).toBeGreaterThan(0);
+    expect(log.slice(deleted + 1).every((l) => !l.includes('photo'))).toBe(
+      true,
+    );
+    // Deleted once; the safety net after the book finds nothing left.
+    expect(log.filter((l) => l.startsWith('photo deleted'))).toHaveLength(1);
+    // The book keeps the consent and the photo's timeline, never the photo.
+    expect(row.heroSource).toBe('photo');
+    expect(row.heroPhoto).toMatchObject({
+      consent,
+      deletedAt: '2026-11-04T10:01:00.000Z',
+      fallback: null,
+    });
+    expect((row.heroPhoto as { describedAt: string }).describedAt).toBeTruthy();
+    expect((row.heroPhoto as { drawnAt: string }).drawnAt).toBeTruthy();
+    expect(dto.heroSource).toBe('photo');
+    expect(dto.heroPhoto).toEqual({
+      deletedAt: '2026-11-04T10:01:00.000Z',
+      fallback: null,
+    });
+    // The look Spark saw goes to the story as closed values only: nothing sensitive.
+    const brief = briefs[0] as { child: { look: Record<string, unknown> } };
+    expect(brief.child.look).toMatchObject({ hairColor: 'red', glasses: true });
+    expect(JSON.stringify(brief.child)).not.toMatch(SENSITIVE);
+    expect(JSON.stringify(row.child)).not.toMatch(SENSITIVE);
+  });
+
+  it('falls back to the description when Muse Spark refuses the photo, deleting it at once', async () => {
+    const models = new MockGateway(0);
+    models.describeChild = () => Promise.reject(mockRefusal());
+    const { row, log } = await makeWithPhoto(models);
+    expect(row.status).toBe('done');
+    expect(log.slice(0, 3)).toEqual([
+      'describeChild (with the photo)',
+      'photo deleted: given up (describe_refused); the hero is drawn from the description',
+      'writeStory',
+    ]);
+    expect(log).toContain('drawHero');
+    expect(log).not.toContain('drawHero (with the photo)');
+    expect(row.heroSource).toBe('description');
+    expect(row.heroPhoto).toMatchObject({
+      fallback: 'describe_refused',
+      describedAt: null,
+      drawnAt: null,
+      deletedAt: '2026-11-04T10:01:00.000Z',
+    });
+  });
+
+  it('falls back to the description when Muse Image refuses the photo, deleting it before drawing again', async () => {
+    const models = new MockGateway(0);
+    const draw = models.drawHero.bind(models);
+    models.drawHero = (description, style, references, photo) =>
+      photo
+        ? Promise.reject(mockRefusal())
+        : draw(description, style, references);
+    const { row, log } = await makeWithPhoto(models);
+    expect(row.status).toBe('done');
+    const at = log.indexOf('drawHero (with the photo)');
+    expect(log.slice(at, at + 3)).toEqual([
+      'drawHero (with the photo)',
+      'photo deleted: given up (draw_refused); the hero is drawn from the description',
+      'drawHero',
+    ]);
+    expect(row.heroSource).toBe('description');
+    expect(row.heroPhoto).toMatchObject({
+      fallback: 'draw_refused',
+      drawnAt: null,
+    });
+    expect(row.heroImagePath).toBeTruthy();
+  });
+
+  it('deletes the photo even when the book fails before its hero', async () => {
+    const models = new MockGateway(0);
+    models.reviewStory = () =>
+      Promise.resolve({ safe: false, reason: 'no', costUsd: 0 });
+    const { row, log, heroPhotos } = await makeWithPhoto(models);
+    expect(row.status).toBe('failed');
+    expect(heroPhotos.remove).toHaveBeenCalledTimes(1);
+    expect(log.at(-1)).toBe(
+      'photo deleted: the book stopped before its hero was drawn',
+    );
+    expect(log).not.toContain('drawHero (with the photo)');
+  });
+
+  it('refuses a photo that is not this parent’s or not signed in, before any book is made', async () => {
+    const create = jest.fn();
+    const service = makeService(
+      { book: { create } },
+      new MockGateway(0),
+      methodRows(),
+      {},
+      {
+        heroPhotos: {
+          consentOf: jest
+            .fn()
+            .mockRejectedValue(new BadRequestException('upload it again')),
+        },
+      },
+    );
+    await expect(
+      service.create(
+        { child, heroPhoto: { upload: 'b'.repeat(32) } },
+        'k',
+        false,
+        'KZ',
+        'user-2',
+      ),
+    ).rejects.toThrow('upload it again');
+    await expect(
+      service.create(
+        { child, heroPhoto: { upload: 'b'.repeat(32) } },
+        'k',
+        false,
+        'KZ',
+        null,
+      ),
+    ).rejects.toThrow('Sign in');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('draws the hero from the look the parent picked, said next to the story description', async () => {
+    const models = new MockGateway(0);
+    const drawHero = jest.spyOn(models, 'drawHero');
+    const writeStory = jest.spyOn(models, 'writeStory');
+    const row: Record<string, unknown> = {
+      id: 'bl',
+      status: 'queued',
+      child,
+      pages: [],
+      layout: null,
+      createdAt: new Date(),
+    };
+    const write = ({ data }: { data: Record<string, unknown> }) => {
+      Object.assign(row, data);
+      return Promise.resolve({ ...row });
+    };
+    const service = makeService(
+      {
+        book: {
+          create: jest.fn().mockImplementation(write),
+          update: jest.fn().mockImplementation(write),
+          updateMany: jest.fn(),
+        },
+        modelCall: { create: jest.fn().mockResolvedValue({}) },
+      },
+      models,
+      methodRows(),
+      {},
+      {
+        storage: { url: () => null, save: (p: string) => Promise.resolve(p) },
+        pdf: {
+          render: jest.fn((_id: string, _b: unknown, layout: BookLayout) =>
+            Promise.resolve({ pdfPath: 'x.pdf', layout, tones: {} }),
+          ),
+        },
+      },
+    );
+    const look = {
+      skin: 'brown',
+      hairColor: 'black',
+      hairTexture: 'coily',
+      glasses: true,
+    } as const;
+    await service.create({ child: { ...child, look } }, 'k', false);
+    for (let i = 0; i < 100 && row.status !== 'done'; i++)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(row.status).toBe('done');
+    expect(writeStory.mock.calls[0][0].child.look).toEqual(look);
+    expect(drawHero.mock.calls[0][0]).toContain(
+      'exact look: brown skin tone (#8A5536), coily black hair, glasses',
+    );
+    expect(drawHero.mock.calls[0][3]).toBeUndefined();
   });
 });

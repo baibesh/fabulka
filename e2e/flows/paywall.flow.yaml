@@ -28,6 +28,8 @@ commands:
         - tapOn: { testId: child-interests }
         - inputText: "мячи"
         - tapOn: { testId: wizard-next }
+        # The hero's look: by description, as picked (nothing), then on.
+        - tapOn: { testId: wizard-next }
         - tapOn: { testId: wizard-next }
         - tapOn: { testId: wizard-next }
         # The quota line sits next to the button that spends it.
@@ -40,6 +42,8 @@ commands:
   - inputText: "${childName}"
   - tapOn: { testId: child-interests }
   - inputText: "мячи"
+  - tapOn: { testId: wizard-next }
+  # The hero's look: by description, as picked (nothing), then on.
   - tapOn: { testId: wizard-next }
   - tapOn: { testId: wizard-next }
   - tapOn: { testId: wizard-next }

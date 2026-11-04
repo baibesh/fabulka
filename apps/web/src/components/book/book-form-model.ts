@@ -1,4 +1,4 @@
-import { LANGUAGES } from "@fabulka/shared";
+import { ChildLookSchema, LANGUAGES } from "@fabulka/shared";
 import type { FieldPath } from "react-hook-form";
 import { z } from "zod";
 
@@ -15,17 +15,22 @@ export const FormSchema = z.object({
   theme: z.string().trim().max(200),
   toyName: z.string().trim().max(40),
   answers: z.record(z.string(), z.string()),
+  /** How the hero is drawn: from the child's photo (signed in, with consent) or a description. */
+  heroMode: z.enum(["description", "photo"]),
+  /** The look picked with buttons (the description path); empty: the illustrator decides. */
+  look: ChildLookSchema,
 });
 export type FormValues = z.infer<typeof FormSchema>;
 
-/** The wizard's steps in order; "voice" is offered only while voice input is on. */
-export const STEPS = ["voice", "child", "story", "toy", "review"] as const;
+/** The wizard's steps in order; "voice" is offered only while voice input is on. "look" comes before the hero is drawn. */
+export const STEPS = ["voice", "child", "look", "story", "toy", "review"] as const;
 export type Step = (typeof STEPS)[number];
 
 /** Fields each step checks before moving on; answers to a template's questions are checked apart. */
 export const STEP_FIELDS: Record<Step, FieldPath<FormValues>[]> = {
   voice: [],
   child: ["name", "age", "gender", "language", "interests", "city"],
+  look: [],
   story: ["theme", "methodology"],
   toy: ["pet", "toyName"],
   review: [],

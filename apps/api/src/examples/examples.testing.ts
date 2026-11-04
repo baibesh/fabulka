@@ -38,6 +38,8 @@ export function sourceRow(patch: Partial<BookRow> = {}): BookRow {
     heroDescription: 'a 6-year-old boy in a red jacket',
     heroResponseId: 'resp-hero',
     heroImagePath: 'books/src/hero.jpeg',
+    heroSource: 'description',
+    heroPhoto: null,
     toyName: 'Бусинка',
     toyPhotoPath: 'books/src/toy-photo.jpg',
     toyCutoutPath: 'books/src/toy-cutout.jpg',

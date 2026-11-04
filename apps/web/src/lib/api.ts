@@ -13,6 +13,10 @@ import {
   TemplateSchema,
   TemplateSummarySchema,
   ToyUploadResultSchema,
+  ConsentTextSchema,
+  HeroPhotoUploadResultSchema,
+  type ConsentAccept,
+  type ConsentText,
   VoicePrefillSchema,
   type Book,
   type Country,
@@ -127,6 +131,20 @@ export async function request(path: string, init?: RequestInit): Promise<unknown
 
 export async function createBook(input: CreateBookInput): Promise<Book> {
   return BookSchema.parse(await request("/api/books", { method: "POST", body: JSON.stringify(input) }));
+}
+
+/** The consent the photo path shows now, in the page's language (its newest version). */
+export async function getHeroConsent(lang: Language): Promise<ConsentText> {
+  return ConsentTextSchema.parse(await request(`/api/consent/hero-photo?lang=${lang}`));
+}
+
+/**
+ * Sends the child's photo for the hero (signed in) with the consent the parent gave for it; the
+ * book then refers to it by the returned id. 409 consent_outdated when the text changed meanwhile.
+ */
+export async function uploadHeroPhoto(image: string, consent: ConsentAccept): Promise<string> {
+  const body = JSON.stringify({ image, consent });
+  return HeroPhotoUploadResultSchema.parse(await request("/api/hero-photos", { method: "POST", body })).upload;
 }
 
 /** Sends the toy photo (a JPEG data URL); the book then refers to it by the returned id. */
