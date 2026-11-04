@@ -53,9 +53,11 @@ const FLIP_EASE = [0.45, 0, 0.25, 1] as const;
  * renderer as the PDF (useRenderedBook), shown as two-page spreads on wide screens and one page at a
  * time on phones. Pages turn with a 3D flip that only animates while turning, so the page is idle
  * between turns. Arrow keys, clicks on either half and swipes turn pages. With `highlights`, the
- * words that came from the parent are marked and explained (a sample book).
+ * words that came from the parent are marked and explained (a sample book). `printNotes` marks the
+ * drawing pages added for printing; a showcase (an example, a catalog sample) leaves the note out,
+ * since a visitor has no print to plan and the note only makes the page look missing.
  */
-export function BookReader({ book, highlights }: { book: Book; highlights?: Highlight[] }) {
+export function BookReader({ book, highlights, printNotes = true }: { book: Book; highlights?: Highlight[]; printNotes?: boolean }) {
   const { t } = useI18n();
   const rendered = useRenderedBook(book, highlights);
   const { widthMm, heightMm } = book.layout.format;
@@ -70,7 +72,7 @@ export function BookReader({ book, highlights }: { book: Book; highlights?: High
   const pages = rendered.pages.map((p) => (
     <div key={p.key} data-page-key={p.key} className="relative h-full w-full">
       <BookPage html={p.html} widthMm={widthMm} heightMm={heightMm} />
-      {p.filler && (
+      {p.filler && printNotes && (
         <span
           data-testid="filler-badge"
           className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold whitespace-nowrap text-white"

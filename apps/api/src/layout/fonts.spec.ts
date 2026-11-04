@@ -36,7 +36,8 @@ describe('book fonts', () => {
           labels.madeFor('Name') +
           labels.end +
           labels.talk +
-          labels.drawing;
+          labels.drawing +
+          labels.drawingTitle;
         expect(missingGlyphs(theme.fonts.body, text)).toEqual([]);
         expect(missingGlyphs(theme.fonts.heading, text)).toEqual([]);
       });

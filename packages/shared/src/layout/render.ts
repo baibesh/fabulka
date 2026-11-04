@@ -170,7 +170,8 @@ export function renderBook(book: RenderableBook, layout: BookLayout, options: Re
         inner = photoPage(layout, asset, ornament, title);
         break;
       case "drawing":
-        inner = `<div class="fb-drawing-frame"></div><p class="fb-drawing-label" data-qa-text>${escapeHtml(labels.drawing)}</p>`;
+        inner = `<h2 class="fb-drawing-title" data-qa-text>${escapeHtml(labels.drawingTitle)}</h2>
+  <div class="fb-drawing-frame">${CRAYONS}</div><p class="fb-drawing-label" data-qa-text>${escapeHtml(labels.drawing)}</p>`;
         break;
       case "end":
         inner = `<div class="fb-box fb-center" data-fit-box style="${place(paperRect(layout))}"><div class="fb-flow">
@@ -412,6 +413,14 @@ const ORNAMENT_SVG: Record<BookTheme["ornament"], string> = {
  * The theme's ornament: an AI theme's drawn one (multiplied onto the paper, so a white background
  * the image model could not make transparent disappears), else the SVG shape in the accent color.
  */
+/** Two crayons and a doodled sun in a drawing page's corner, so the empty frame reads as an invitation. */
+const CRAYONS = `<svg class="fb-crayons" viewBox="0 0 100 70" aria-hidden="true">
+<g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".55">
+<circle cx="22" cy="20" r="9"/><path d="M22 4v4M22 32v4M6 20h4M34 20h4M10.7 8.7l2.8 2.8M30.5 28.5l2.8 2.8M10.7 31.3l2.8-2.8M30.5 11.5l2.8-2.8"/></g>
+<g transform="rotate(-28 70 45)"><rect x="40" y="38" width="48" height="10" rx="2" fill="currentColor"/><path d="M40 38 30 43 40 48z" fill="#f3d9b1"/><path d="M33.5 41.3 30 43l3.5 1.7z" fill="currentColor"/></g>
+<g transform="rotate(-8 72 60)"><rect x="46" y="55" width="44" height="9" rx="2" fill="#6aa6c9"/><path d="M46 55 37 59.5 46 64z" fill="#f3d9b1"/><path d="M40 58 37 59.5 40 61z" fill="#6aa6c9"/></g>
+</svg>`;
+
 function ornamentHtml(theme: BookTheme, asset: (path: string) => string): string {
   if (theme.ornamentImage) return `<img class="fb-ornament-img" src="${escapeHtml(asset(theme.ornamentImage))}" alt="">`;
   return `<svg viewBox="0 0 24 24" width="12mm" height="12mm" fill="currentColor" aria-hidden="true">${ORNAMENT_SVG[theme.ornament]}</svg>`;
@@ -566,8 +575,11 @@ export const BOOK_CSS = `
 .fb-photo { display: block; border-radius: 2mm; }
 .fb-photo-caption { margin-top: 5mm; font-family: var(--heading); font-weight: var(--heading-weight);
   font-size: calc(var(--heading-size) * .8 * var(--fit)); line-height: 1.25; color: var(--ink); }
-.fb-drawing-frame { position: absolute; inset: calc(var(--safe) + 4mm); bottom: calc(var(--safe) + 16mm);
+.fb-drawing-title { position: absolute; left: var(--safe); right: var(--safe); top: calc(var(--safe) + 2mm); text-align: center;
+  font-family: var(--heading); font-weight: var(--heading-weight); font-size: var(--heading-size); line-height: 1.15; color: var(--ink); }
+.fb-drawing-frame { position: absolute; inset: calc(var(--safe) + 4mm); top: calc(var(--safe) + 20mm); bottom: calc(var(--safe) + 16mm);
   border: .6mm dashed color-mix(in srgb, var(--muted) 60%, transparent); border-radius: 6mm; }
+.fb-crayons { position: absolute; right: 5mm; bottom: 5mm; width: 42mm; height: auto; color: var(--accent); }
 .fb-drawing-label { position: absolute; left: var(--safe); right: var(--safe); bottom: calc(var(--safe) + 2mm); text-align: center;
   font-size: 11pt; color: var(--muted); }
 .fb-mark { background: color-mix(in srgb, var(--accent) 20%, transparent); color: inherit; border-radius: .2em; padding: 0 .1em;

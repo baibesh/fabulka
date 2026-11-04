@@ -23,7 +23,7 @@ export function LiveExample() {
   if (book?.status !== "done") return null;
   return (
     <Section id="example" testId="live-example" title={t("landing.example.title")} lead={t("landing.example.lead")}>
-      <BookReader book={book} />
+      <BookReader book={book} printNotes={false} />
       <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm font-semibold text-accent">
         <LocaleLink href={`/books/${book.id}`}>{t("landing.example.open")} →</LocaleLink>
         <a href="#examples" className="flex items-center gap-1">

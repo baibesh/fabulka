@@ -116,7 +116,7 @@ function SampleBook({ book, template }: { book: Book; template: Template }) {
           </p>
         )}
       </SectionHeader>
-      <BookReader book={book} highlights={highlights} />
+      <BookReader book={book} highlights={highlights} printNotes={false} />
     </section>
   );
 }
