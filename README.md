@@ -112,7 +112,11 @@ for canned output, so tests and CI never call the API.
 - **Restricted countries** from Meta's [Geographic Use Policy](https://dev.meta.ai/legal/geographic-use-policy)
   get HTTP 451 before any model is called (`apps/api/src/geo`, country from the
   [DB-IP](https://db-ip.com) database, CC BY 4.0).
-- **Children's data** of Kazakh citizens stays in Kazakhstan, as the local personal data law requires.
+- **Stored data stays in Kazakhstan.** Accounts, orders and books live in the database on the server
+  in Kazakhstan, as the local personal data law requires for Kazakh citizens.
+- **What goes to Meta.** To make a book, what the parent enters (name, age, interests, the toy photo)
+  is sent to the Meta Model API. The child's photo is sent only with the guardian's consent, once, and
+  is deleted from our storage right after the hero sheet is drawn.
 
 ## Built to run
 
