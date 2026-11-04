@@ -3,7 +3,7 @@ import { BOOK_LABELS } from "../labels";
 import type { FrameRect, TextKind } from "../formats";
 import type { FrameCast } from "../scenario";
 import type { BookLayout, BookTheme, CoverLayout, PageLayout, PageVariant, PlacedText } from "./model";
-import { frameBox, letteringFont } from "./panels";
+import { frameBox, frameInner, letteringBox, letteringFont } from "./panels";
 import { BOOK_FONTS, formatTypeScale } from "./themes";
 import { type PlannedPage, type Rect, artRect, interiorPages, planBook, textRect } from "./plan";
 import { contrast, luminance, objectPosition, pageText } from "./choose";
@@ -392,9 +392,10 @@ function vignette(
 /**
  * A panel page: each frame in its box with an ink border, its picture cropped to keep SAM's figures
  * in view (or the hero's sheet small on paper when every version of it was refused), and its texts
- * where the layout placed them - balloons (an SVG ellipse and tail, ink stroke under a paper fill, so
- * a balloon and its tail read as one shape), caption boxes and sound effects. Every text is a fit box
- * render QA measures; `data-el` names it, so the one that overflows can be shortened.
+ * where the layout placed them, measured inside the border - balloons (an SVG ellipse or box and its
+ * tail, ink stroke under a paper fill, so a balloon and its tail read as one shape; it may stand out
+ * over the border), caption boxes and sound effects. Every text is a fit box render QA measures;
+ * `data-el` names it, so the one that overflows can be shortened.
  */
 function panelPage(
   number: number,
@@ -408,7 +409,8 @@ function panelPage(
   const border = layout.panels?.borderMm ?? 0.8;
   return (page.frames ?? [])
     .map((frame) => {
-      const box = frameBox(layout.format, frame.rect, gutter);
+      const outer = frameBox(layout.format, frame.rect, gutter);
+      const box = frameInner(outer, border);
       const crop = state.frames[String(frame.frame)];
       const position = crop ? objectPosition(crop.focus, crop.aspect, box.w / box.h) : undefined;
       const picture = frame.image
@@ -430,7 +432,7 @@ function panelPage(
           const el = ` data-el="${number}:${escapeHtml(b.id)}"`;
           const size = `font-size:calc(${b.pt}pt * var(--fit))`;
           if (b.kind === "speech") {
-            const inner = { x: r.x + r.w * 0.1, y: r.y + r.h * 0.12, w: r.w * 0.8, h: r.h * 0.76 };
+            const inner = letteringBox(b.shape, r, b.pt);
             return `<div class="fb-box fb-say" data-fit-box${el} style="${place(inner)};${size}"><div class="fb-flow"><p data-qa-text>${body(text.text)}</p></div></div>`;
           }
           if (b.kind === "sfx") {
@@ -439,12 +441,12 @@ function panelPage(
           return `<div class="fb-box fb-caption${b.kind === "narration" ? " fb-caption-wide" : ""}" data-fit-box${el} style="${place(r)};${size}"><div class="fb-flow"><p data-qa-text>${body(text.text)}</p></div></div>`;
         })
         .join("");
-      return `<div class="fb-panel" data-frame="${frame.frame}" style="${place(box)};border-width:${mm(border)}">${picture}${svg}${letters}</div>`;
+      return `<div class="fb-panel" data-frame="${frame.frame}" style="${place(outer)};border-width:${mm(border)}">${picture}${svg}${letters}</div>`;
     })
     .join("");
 }
 
-/** A balloon's ellipse and its tail toward the speaker, in the frame's millimetres. */
+/** A balloon (an ellipse, a rounded box or a caption box) and its tail toward the speaker, in the frame's millimetres. */
 function balloonShape(b: PlacedText, box: Rect): string {
   const rx = (b.box.w * box.w) / 2;
   const ry = (b.box.h * box.h) / 2;
@@ -462,7 +464,10 @@ function balloonShape(b: PlacedText, box: Rect): string {
     const py = Math.cos(angle) * half;
     tail = `<path d="M${round(bx + px)},${round(by + py)} L${round(tx)},${round(ty)} L${round(bx - px)},${round(by - py)} Z"/>`;
   }
-  return `<ellipse cx="${round(cx)}" cy="${round(cy)}" rx="${round(rx)}" ry="${round(ry)}"/>${tail}`;
+  if (b.shape === "ellipse") return `<ellipse cx="${round(cx)}" cy="${round(cy)}" rx="${round(rx)}" ry="${round(ry)}"/>${tail}`;
+  // A box's corners round like a balloon's; a caption box keeps them square.
+  const corner = b.shape === "box" ? Math.min(ry, rx, b.pt * 0.25) : 0.4;
+  return `<rect x="${round(cx - rx)}" y="${round(cy - ry)}" width="${round(rx * 2)}" height="${round(ry * 2)}" rx="${round(corner)}"/>${tail}`;
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -687,7 +692,7 @@ export const BOOK_CSS = `
   font-size: 11pt; color: var(--muted); }
 /* Panel pages: frames with an ink border, balloons (an ink stroke under a paper fill), caption boxes, sound effects. */
 .fb-panels { background: var(--paper); }
-.fb-panel { position: absolute; overflow: hidden; border-style: solid; border-color: var(--ink); background: color-mix(in srgb, var(--muted) 18%, var(--paper)); }
+.fb-panel { position: absolute; overflow: visible; border-style: solid; border-color: var(--ink); background: color-mix(in srgb, var(--muted) 18%, var(--paper)); }
 .fb-panel .fb-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .fb-panel-vignette { position: absolute; object-fit: contain; mix-blend-mode: multiply; }
 .fb-balloons { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }

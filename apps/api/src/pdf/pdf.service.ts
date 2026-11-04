@@ -19,6 +19,7 @@ import {
   frameKey,
   layoutPanels,
   type PanelPageInput,
+  type PlaceOptions,
   printDocument,
   printPageSize,
   type PageSubject,
@@ -39,6 +40,7 @@ import { bookFontCss } from '../layout/fonts';
 import { hyphenatorFor } from '../layout/hyphenate';
 import { StorageService } from '../storage/storage.service';
 import { withPrintBoxes } from './print-boxes';
+import { printPictures } from './print-images';
 
 /** Renders with each page's text made to fit; story pages that still overflow try another layout. */
 const ROUNDS = 3;
@@ -57,6 +59,8 @@ export interface PageCheck {
   coverText?: Rect | null;
   /** The lettering lies over the hero on the cover art even in the banner (should never happen). */
   coverOverlap?: { page: string; detail: string }[];
+  /** Texts of panel pages that cover a face, by element ("3:2.1"), for the shortening. */
+  faces?: { page: string; detail: string; element: string }[];
 }
 
 export interface RenderResult {
@@ -132,6 +136,7 @@ export class PdfService {
     hooks: RenderHooks = {},
     cover: CoverPicture | null = null,
     frames: FramePicture[] = [],
+    place: PlaceOptions = { captions: true },
   ): Promise<RenderResult> {
     const call = this.journal.start({ kind: 'render', model: 'chromium' });
     const browser = await chromium.launch();
@@ -152,9 +157,15 @@ export class PdfService {
         pictures,
         cover,
         frames,
+        place,
       );
       await hooks.printing?.();
-      // The PDF is printed from the page as checked: the shrink is already applied there.
+      // The PDF is printed from the page as checked: the shrink is already applied there. Its
+      // pictures are swapped for copies cut and scaled to their printed size (the site keeps its own).
+      await printPictures(
+        page,
+        join(this.storage.root, `books/${bookId}/print`),
+      );
       const pdf = await page.pdf({
         width: `${current.format.widthMm}mm`,
         height: `${current.format.heightMm}mm`,
@@ -207,6 +218,7 @@ export class PdfService {
     pictures: PagePicture[],
     cover: CoverPicture | null = null,
     frames: FramePicture[] = [],
+    place: PlaceOptions = { captions: true },
   ) {
     const hyphenate = hyphenatorFor(book.language);
     const tones = await measureTones(
@@ -236,6 +248,7 @@ export class PdfService {
           : null,
     };
     const notes: LayoutQa['notes'] = [];
+    const faces: NonNullable<PageCheck['faces']> = [];
     if (pictures.length) {
       const analyses = pictures.map((p) => {
         const page = book.pages.find((b) => b.page === p.page);
@@ -297,17 +310,17 @@ export class PdfService {
           });
         }
       }
-      current = layoutPanels(current, panels);
+      current = layoutPanels(current, panels, place);
+      // A text left on a face fails render QA: Muse Spark shortens it, then it moves to a caption box.
       for (const panel of panels) {
-        const covered = current.pages[String(panel.page)]?.balloons.filter(
-          (b) => b.face,
-        );
-        if (covered?.length)
-          notes.push({
+        for (const b of current.pages[String(panel.page)]?.balloons ?? []) {
+          if (!b.face) continue;
+          faces.push({
             page: `story-${panel.page}`,
-            kind: 'face',
-            detail: `no room clear of every face for ${covered.map((b) => b.id).join(', ')}`,
+            detail: `${b.kind} ${b.id} covers a face: no place, shape or size kept clear of every face`,
+            element: `${panel.page}:${b.id}`,
           });
+        }
       }
     }
     let check: PageCheck = { fits: {}, overflow: [], fallback: [] };
@@ -331,6 +344,7 @@ export class PdfService {
       });
       await page.evaluate(() => document.fonts.ready);
       check = await checkPages(page, current.theme.minFit);
+      check.faces = faces;
       // The lettering as rendered must not lie over the hero: over the picture, it moves to its own band.
       const overlap =
         current.cover && check.coverText
@@ -522,6 +536,10 @@ export class PdfService {
         waitUntil: 'load',
       });
       await page.evaluate(() => document.fonts.ready);
+      await printPictures(
+        page,
+        join(this.storage.root, `books/${bookId}/print`),
+      );
       const size = printPageSize(layout.format);
       const pdf = await page.pdf({
         width: `${size.widthMm}mm`,
@@ -627,6 +645,7 @@ export function verdict(
       ...c,
       kind: 'cover-overlap' as const,
     })),
+    ...(check.faces ?? []).map((f) => ({ ...f, kind: 'face' as const })),
   ];
   const status = issues.length
     ? 'blocked'

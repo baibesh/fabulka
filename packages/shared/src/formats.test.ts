@@ -13,10 +13,13 @@ import {
   formatEstimate,
   frameBox,
   frameImageSize,
+  frameInner,
   gridFor,
   isPanelPage,
   layoutPanels,
+  letteringBox,
   letteringSize,
+  MIN_LETTERING_PT,
   newLayout,
   normalizePage,
   normalizePages,
@@ -28,6 +31,7 @@ import {
   samConceptsFor,
   storedPageFrom,
   type PageSubject,
+  type PlacedText,
   type RenderableBook,
   type StoryPage,
 } from "./index";
@@ -359,5 +363,151 @@ describe("panel pages", () => {
     // The lettering font is the theme's.
     expect(page.html).toContain("--letter:'Nunito'");
     expect(page.variant).toBe("plate");
+  });
+});
+
+describe("balloons in tight panels", () => {
+  /** A strip panel the size of a comic's half-width frame (mm), its picture as wide as the frame. */
+  const W = 89;
+  const H = 52;
+  const box = { x: 0, y: 0, w: W, h: H };
+  type Box = { x: number; y: number; w: number; h: number };
+  /** SAM's answer as it comes for a frame: figures, their faces and the mask of the figures. */
+  const subjectOf = (people: Box[], faces: Box[]): PageSubject => ({
+    box: people[0] ?? null,
+    grid: encodeGrid(
+      Array.from({ length: GRID * GRID }, (_, i) => {
+        const x = ((i % GRID) + 0.5) / GRID;
+        const y = (Math.floor(i / GRID) + 0.5) / GRID;
+        return people.some((p) => x > p.x && x < p.x + p.w && y > p.y && y < p.y + p.h);
+      }),
+    ),
+    people: people.map((b) => ({ concept: "person" as const, box: b })),
+    faces,
+  });
+  const frameOf = (subject: PageSubject) => ({
+    frame: 1,
+    box,
+    aspect: W / H,
+    focus: { x: 0.5, y: 0.5 },
+    subject,
+    cast: [
+      { id: "hero", at: "left" as const },
+      { id: "timur", at: "right" as const },
+    ],
+    reach: { left: 1.9, top: 3.8, right: 1.9, bottom: 1.9 },
+  });
+  /** The share of a face (a box, as a share of the frame) under a placed text's shape, measured on its own. */
+  const covered = (b: PlacedText, face: Box) => {
+    const [cx, cy, rx, ry] = [b.box.x + b.box.w / 2, b.box.y + b.box.h / 2, b.box.w / 2, b.box.h / 2];
+    let hit = 0;
+    for (let i = 0; i < 10; i++)
+      for (let j = 0; j < 10; j++) {
+        const x = face.x + ((i + 0.5) / 10) * face.w;
+        const y = face.y + ((j + 0.5) / 10) * face.h;
+        const inside =
+          b.kind === "speech" && b.shape === "ellipse"
+            ? ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1
+            : x >= b.box.x && x <= b.box.x + b.box.w && y >= b.box.y && y <= b.box.y + b.box.h;
+        if (inside) hit++;
+      }
+    return hit / 100;
+  };
+  const lines = [
+    { id: "2.1", kind: "speech" as const, frame: 1, speaker: "hero", text: "Wind smells like apples and adventure here!" },
+    { id: "2.2", kind: "speech" as const, frame: 1, speaker: "timur", text: "I smell like dried apricots now!" },
+  ];
+
+  it("keep two long lines off both faces when the heads fill the top of a strip panel", () => {
+    // Two children side by side, their faces in the upper middle: the old placement put the first line on a face.
+    const faces = [
+      { x: 0.2, y: 0.18, w: 0.17, h: 0.32 },
+      { x: 0.6, y: 0.14, w: 0.17, h: 0.32 },
+    ];
+    const subject = subjectOf(
+      [
+        { x: 0.12, y: 0.15, w: 0.32, h: 0.85 },
+        { x: 0.52, y: 0.1, w: 0.34, h: 0.9 },
+      ],
+      faces,
+    );
+    const placed = placeFrameTexts(frameOf(subject), lines, 9.5);
+    expect(placed.map((p) => p.id)).toEqual(["2.1", "2.2"]);
+    for (const b of placed) {
+      expect(b.face).toBe(false);
+      for (const f of faces) expect(covered(b, f)).toBe(0);
+      // The lettering stays inside the frame even where the balloon stands out over the border.
+      const inner = letteringBox(b.shape, { x: b.box.x * W, y: b.box.y * H, w: b.box.w * W, h: b.box.h * H }, b.pt);
+      expect(inner.x).toBeGreaterThanOrEqual(0);
+      expect(inner.y).toBeGreaterThanOrEqual(0);
+      expect(inner.x + inner.w).toBeLessThanOrEqual(W + 1e-6);
+      expect(inner.y + inner.h).toBeLessThanOrEqual(H + 1e-6);
+      expect(b.pt).toBeGreaterThanOrEqual(MIN_LETTERING_PT);
+    }
+    // Reading order: the first line reads first (higher, or on the left beside the second).
+    const [a, b] = placed.map((p) => p.box);
+    const beside = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 0.4 * Math.min(a.h, b.h);
+    if (beside) expect(a.x + a.w / 2).toBeLessThan(b.x + b.w / 2);
+    else expect(a.y + a.h / 2).toBeLessThan(b.y + b.h / 2);
+    // Each tail points toward its own speaker's head and stops outside the face.
+    for (const [i, p] of placed.entries()) {
+      const face = faces[i];
+      const head = { x: face.x + face.w / 2, y: face.y };
+      const centre = { x: p.box.x + p.box.w / 2, y: p.box.y + p.box.h / 2 };
+      const tip = p.tail!;
+      expect(Math.hypot((tip.x - head.x) * W, (tip.y - head.y) * H)).toBeLessThan(Math.hypot((centre.x - head.x) * W, (centre.y - head.y) * H));
+      expect(tip.x > face.x && tip.x < face.x + face.w && tip.y > face.y && tip.y < face.y + face.h).toBe(false);
+    }
+  });
+
+  it("wrap, box or letter a line smaller rather than cover a face in a crowd", () => {
+    // A crowd: faces across the top and one big face in the middle leave only odd corners.
+    const faces = [0.02, 0.2, 0.38, 0.56, 0.74].map((x) => ({ x, y: 0.06, w: 0.13, h: 0.24 })).concat([{ x: 0.3, y: 0.38, w: 0.4, h: 0.3 }]);
+    const subject = subjectOf([{ x: 0.25, y: 0.35, w: 0.5, h: 0.65 }], faces);
+    const placed = placeFrameTexts(frameOf(subject), lines, 9.5);
+    expect(placed).toHaveLength(2);
+    for (const b of placed) {
+      expect(b.face).toBe(false);
+      for (const f of faces) expect(covered(b, f)).toBe(0);
+    }
+  });
+
+  it("let a line no balloon can carry clear of faces fail QA, then move it into a caption box at the edge", () => {
+    // Faces everywhere but a strip along the top one line high: only a box as wide as the frame fits there.
+    const faces: Box[] = [];
+    for (let x = 0; x < 1; x += 0.125) for (let y = 0.13; y < 0.99; y += 0.18) faces.push({ x: x + 0.005, y, w: 0.115, h: 0.17 });
+    const subject = subjectOf([{ x: 0, y: 0.13, w: 1, h: 0.87 }], faces);
+    const line = [{ id: "1.1", kind: "speech" as const, frame: 1, speaker: "hero", text: "Up, up and away! Beanie Airlines boarding!" }];
+    const [balloon] = placeFrameTexts(frameOf(subject), line, 9.5);
+    expect(balloon.face).toBe(true);
+    const [moved] = placeFrameTexts(frameOf(subject), line, 9.5, { captions: true });
+    expect(moved.shape).toBe("caption");
+    expect(moved.face).toBe(false);
+    for (const f of faces) expect(covered(moved, f)).toBe(0);
+    // Along the frame's top edge, its tail still toward the speaker.
+    expect(moved.box.y).toBeLessThanOrEqual(0.02);
+    expect(moved.tail).not.toBeNull();
+  });
+
+  it("draw a boxed line as a rect, measured inside the frame's border", () => {
+    const layout = { ...newLayout(BOOK_THEMES.comic, 10, "square-210"), panels: { gutterMm: 3, borderMm: 0.8 } };
+    const grid = PRESET_GRIDS.find((g) => g.id === "big-top-2")!;
+    const texts = [{ id: "2.1", kind: "speech" as const, frame: 2, speaker: "hero", text: "Look!" }];
+    const laidOut = layoutPanels(layout, [{ page: 1, frames: grid.frames.map((rect, i) => ({ frame: i + 1, rect, subject: null, aspect: 1.5, cast: [] })), texts }]);
+    const state = laidOut.pages["1"];
+    state.balloons = state.balloons.map((b) => ({ ...b, shape: "box" as const }));
+    const book: RenderableBook = {
+      title: "Comic",
+      childName: "Alia",
+      language: "en",
+      heroImage: null,
+      pages: [{ page: 1, text: "", image: null, frames: grid.frames.map((rect, i) => ({ frame: i + 1, rect, image: `page-1-${i + 1}.jpeg` })), texts }],
+      talkQuestions: [],
+    };
+    const html = renderBook(book, laidOut).pages.find((p) => p.key === "story-1")!.html;
+    expect(html).toContain("<rect");
+    expect(html).not.toContain("<ellipse");
+    const inner = frameInner(frameBox(layout.format, grid.frames[1], 3), 0.8);
+    expect(html).toContain(`viewBox="0 0 ${Math.round(inner.w * 100) / 100} ${Math.round(inner.h * 100) / 100}"`);
   });
 });

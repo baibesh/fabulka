@@ -348,6 +348,26 @@ describe('render QA verdict', () => {
     ).toBe('blocked');
   });
 
+  it('fails a balloon left on a face, naming its element for the shortening', () => {
+    const qa = verdict({
+      fits: {},
+      overflow: [],
+      fallback: [],
+      faces: [
+        {
+          page: 'story-3',
+          detail: 'speech 2.1 covers a face',
+          element: '3:2.1',
+        },
+      ],
+    });
+    expect(qa.status).toBe('blocked');
+    expect(qa.issues).toEqual([
+      expect.objectContaining({ kind: 'face', element: '3:2.1' }),
+    ]);
+    expect(qa.notes).toEqual([]);
+  });
+
   it('never demotes a page staff pinned', () => {
     const layout = newLayout('fairy');
     layout.pages['1'] = {
