@@ -146,8 +146,12 @@ commands:
   # The country lives in a cookie: picked once, it is there after a reload, prices included.
   - openLink: "${WEB}/de/catalog"
   - waitForVisible: "Buchkatalog"
-  - tapOn: { testId: ui-country }
-  - waitForVisible: { testId: ui-country-search }
+  # A tap before the page has hydrated opens nothing: tap again until the dialog is there.
+  - retry:
+      maxRetries: 4
+      commands:
+        - tapOn: { testId: ui-country }
+        - waitForVisible: { testId: ui-country-search, timeout: 3000 }
   - tapOn: { testId: ui-country-search }
   - inputText: "Deutschland"
   - tapOn: { testId: ui-country-option-DE }
