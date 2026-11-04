@@ -34,7 +34,8 @@ export const FILES_DIR = 'files';
 export const CONTENT_CLIENT_KEY = 'staff:content-pack';
 
 const CodeSchema = z.string().regex(/^[A-Z]{2}$/);
-const IdSchema = z.string().regex(/^[a-z0-9]{10,40}$/);
+// Ids are cuids; examples made before the examples table carry an "ex-" prefix (ex-<book id>).
+const IdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{9,44}$/);
 const SlugSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,80}$/);
 
 /** A stored file a pack may carry: a book's (books/<id>/…) or a landing picture (landing/XX/…). */
