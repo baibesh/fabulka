@@ -276,6 +276,8 @@ commands:
   - tapOn: { testId: admin-password }
   - inputText: "${adminPassword}"
   - tapOn: { testId: admin-submit }
+  - waitForVisible: { testId: admin-nav-overview, timeout: 15000 }
+  - tapOn: { testId: admin-nav-overview }
   - waitForVisible: { testId: sales, timeout: 15000 }
   - assertVisible: { testId: revenue-orders-EUR }
   - assertVisible: { testId: revenue-orders-KZT }

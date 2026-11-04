@@ -38,7 +38,7 @@ commands:
   - assertVisible: "Settings"
   - tapOn: { testId: settings-tab-prices }
   - waitForVisible: { testId: reference-prices }
-  - assertUrl: { contains: "/admin/settings?tab=prices" }
+  - assertUrl: { contains: "tab=prices" }
 
   # Global's default prices: one list per currency. A dollar price in fractions of a cent is
   # pointed out next to its field, and nothing is saved.

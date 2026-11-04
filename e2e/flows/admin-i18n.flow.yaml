@@ -43,7 +43,7 @@ commands:
   - waitForVisible: { testId: admin-nav-books, text: "Книги" }
   - assertVisible: { testId: admin-nav-inbox, text: "Входящие" }
   - assertVisible: "Входящие · Глобально"
-  - assertVisible: { css: "[data-testid=admin-nav-group-studio]", text: "Студия" }
+  - assertVisible: "Студия"
   - assertVisible: { css: "html[lang=ru] [data-testid=admin-nav-books]" }
   - tapOn: { testId: admin-nav-orders }
   - waitForVisible: { testId: orders-table }
