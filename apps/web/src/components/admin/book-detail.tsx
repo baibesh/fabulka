@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, ExternalLink, Flag, Sparkles, Trash2 } from "lucide-react";
+import { Download, ExternalLink, Flag, Sparkles, Trash2, Workflow } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
@@ -327,6 +327,7 @@ export function BookDetail() {
   const formatName = useStoryFormatName();
   const canManage = useCan("books");
   const canExamples = useCan("examples");
+  const canTrace = useCan("journal", "books");
   const canFlag = useCan("books.review");
   const [confirming, setConfirming] = useState(false);
   const remove = useMutation({ mutationFn: () => deleteBook(id), onSuccess: () => router.replace(adminHref("/admin/books")), onSettled: () => setConfirming(false) });
@@ -382,6 +383,12 @@ export function BookDetail() {
               <ExternalLink className="size-4" />
               {t("admin.book.open")}
             </Link>
+            {canTrace && (
+              <Link href={adminHref(`/admin/pipeline?book=${encodeURIComponent(b.id)}`)} data-testid="book-trace" className={buttonClass({ variant: "secondary" })}>
+                <Workflow className="size-4" />
+                {t("admin.pipeline.trace.button")}
+              </Link>
+            )}
             {canExamples && <ExampleActions book={b} />}
             {b.pdfUrl && (
               <a href={b.pdfUrl} download className={buttonClass({ variant: "secondary" })}>

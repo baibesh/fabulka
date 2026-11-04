@@ -47,6 +47,14 @@ describe("canOpen", () => {
     expect(canOpen(ILLUSTRATOR, "/admin/references")).toBe(true);
     expect(canOpen(ILLUSTRATOR, "/admin/reference")).toBe(false);
   });
+
+  it("opens the Pipeline to global format or journal staff, first in Studio", () => {
+    expect(navFor(SUPER, null).find((group) => group.id === "studio")?.items[0].id).toBe("pipeline");
+    expect(canOpen(SUPER, "/admin/pipeline")).toBe(true);
+    expect(canOpen(DE, "/admin/pipeline")).toBe(false);
+    expect(canOpen(ILLUSTRATOR, "/admin/pipeline")).toBe(false);
+    expect(workspaceOf("/admin/pipeline")).toBe("global");
+  });
 });
 
 describe("workspaceOf and switchTarget", () => {

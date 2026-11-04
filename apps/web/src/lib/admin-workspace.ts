@@ -19,6 +19,7 @@ export type NavIcon =
   | "catalog"
   | "methods"
   | "formats"
+  | "pipeline"
   | "themes"
   | "references"
   | "seo"
@@ -72,8 +73,9 @@ export const GLOBAL_NAV: readonly NavGroup[] = [
   {
     id: "studio",
     label: "admin.ws.group.studio",
-    // A "Pipeline" page (the generation graph) goes here when it exists.
     items: [
+      // The generation graph per format, its live stats from the journal and one book's trace.
+      { id: "pipeline", href: "/admin/pipeline", label: "admin.ws.nav.pipeline", icon: "pipeline", rights: ["story_formats", "story_formats.read", "journal"] },
       { id: "catalog", href: "/admin/catalog", label: "admin.nav.catalog", icon: "catalog", rights: ["catalog"] },
       { id: "methodologies", href: "/admin/methodologies", label: "admin.nav.methodologies", icon: "methods", rights: ["methodologies", "methodologies.read"] },
       { id: "story-formats", href: "/admin/story-formats", label: "admin.nav.story_formats", icon: "formats", rights: ["story_formats", "story_formats.read"] },
@@ -142,6 +144,7 @@ export const COUNTRY_ONLY = ["/admin/landing", "/admin/prices", "/admin/print-fo
 export const GLOBAL_ONLY = [
   "/admin/books",
   "/admin/journal",
+  "/admin/pipeline",
   "/admin/methodologies",
   "/admin/story-formats",
   "/admin/themes",
@@ -172,6 +175,7 @@ const ROUTES: { href: string; rights: readonly AdminRight[]; superOnly?: boolean
   { href: "/admin/themes", rights: ["themes", "themes.read"] },
   { href: "/admin/references", rights: ["references"] },
   { href: "/admin/journal", rights: ["journal"] },
+  { href: "/admin/pipeline", rights: ["story_formats", "story_formats.read", "journal"] },
   { href: "/admin/activity", rights: ["audit"] },
   { href: "/admin/seo", rights: ["seo"] },
   { href: "/admin/team", rights: ["team"] },

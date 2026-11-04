@@ -29,6 +29,7 @@ import {
   Store,
   TriangleAlert,
   Users,
+  Workflow,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -56,6 +57,7 @@ const ICONS: Record<NavIcon, typeof BookOpen> = {
   catalog: Library,
   methods: GraduationCap,
   formats: LayoutGrid,
+  pipeline: Workflow,
   themes: Palette,
   references: Brush,
   seo: Search,

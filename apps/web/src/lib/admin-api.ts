@@ -102,6 +102,13 @@ import {
   type StaffRole,
   type UpdateStaff,
   type UpdateStaffRole,
+  PipelineStatsSchema,
+  PipelineTraceSchema,
+  TraceBookSchema,
+  type PipelinePeriod,
+  type PipelineStats,
+  type PipelineTrace,
+  type TraceBook,
   AuditPageSchema,
   CountryStatsSchema,
   StaffBudgetSchema,
@@ -364,6 +371,23 @@ export async function journalErrors(period: JournalPeriod): Promise<ClientErrorG
 /** A book's model calls in the order they were made. */
 export async function bookCalls(id: string): Promise<ModelCall[]> {
   return ModelCallSchema.array().parse(await request(`/api/admin/books/${id}/calls`));
+}
+
+/** Each pipeline node's calls, cost, latency, errors and refusals for books of a format. */
+export async function pipelineStats(format: string, period: PipelinePeriod): Promise<PipelineStats> {
+  const params = new URLSearchParams({ format, period });
+  return PipelineStatsSchema.parse(await request(`/api/admin/pipeline/stats?${params}`));
+}
+
+/** Books to trace by title, child's name or id; the latest without a query. */
+export async function pipelineBooks(q: string, format?: string): Promise<TraceBook[]> {
+  const params = new URLSearchParams({ q, ...(format && { format }) });
+  return TraceBookSchema.array().parse(await request(`/api/admin/pipeline/books?${params}`));
+}
+
+/** One book's run on the pipeline graph. */
+export async function pipelineTrace(bookId: string): Promise<PipelineTrace> {
+  return PipelineTraceSchema.parse(await request(`/api/admin/pipeline/trace/${encodeURIComponent(bookId)}`));
 }
 
 /** Prices, delivery cities and blocked countries (Meta's read-only list and the owner's extras). */

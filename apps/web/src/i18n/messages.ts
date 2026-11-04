@@ -1,5 +1,6 @@
 import { LANGUAGES, LANGUAGE_NAMES } from "@fabulka/shared";
 import { PHOTO_MESSAGES } from "./messages-photo";
+import { PIPELINE_MESSAGES } from "./messages-pipeline";
 
 /** The interface languages: the book languages, in the same order (English first, Russian last). */
 export const UI_LOCALES = LANGUAGES;
@@ -1627,6 +1628,7 @@ const ru = {
   "admin.palette.more": "Введите ещё одну букву, чтобы искать книги и заказы",
   "admin.palette.keys": "↑ ↓ - выбор · Enter - открыть · Esc - закрыть",
   ...PHOTO_MESSAGES.ru,
+  ...PIPELINE_MESSAGES.ru,
 } as const;
 
 export type MessageKey = keyof typeof ru;
@@ -3252,6 +3254,7 @@ const kk: Messages = {
   "admin.palette.more": "Кітаптар мен тапсырыстарды іздеу үшін тағы бір әріп жазыңыз",
   "admin.palette.keys": "↑ ↓ - таңдау · Enter - ашу · Esc - жабу",
   ...PHOTO_MESSAGES.kk,
+  ...PIPELINE_MESSAGES.kk,
 };
 
 const en: Messages = {
@@ -4875,6 +4878,7 @@ const en: Messages = {
   "admin.palette.more": "Type one more letter to search books and orders",
   "admin.palette.keys": "↑ ↓ to move · Enter to open · Esc to close",
   ...PHOTO_MESSAGES.en,
+  ...PIPELINE_MESSAGES.en,
 };
 
 const es: Messages = {
@@ -6498,6 +6502,7 @@ const es: Messages = {
   "admin.palette.more": "Escribe una letra más para buscar libros y pedidos",
   "admin.palette.keys": "↑ ↓ para moverte · Enter para abrir · Esc para cerrar",
   ...PHOTO_MESSAGES.es,
+  ...PIPELINE_MESSAGES.es,
 };
 
 const de: Messages = {
@@ -8121,6 +8126,7 @@ const de: Messages = {
   "admin.palette.more": "Noch einen Buchstaben, um Bücher und Bestellungen zu suchen",
   "admin.palette.keys": "↑ ↓ zum Wechseln · Enter zum Öffnen · Esc zum Schließen",
   ...PHOTO_MESSAGES.de,
+  ...PIPELINE_MESSAGES.de,
 };
 
 export const MESSAGES: Record<UiLocale, Messages> = { ru, kk, en, es, de };
