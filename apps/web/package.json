@@ -11,6 +11,7 @@
     "test": "vitest run src"
   },
   "dependencies": {
+    "@dagrejs/dagre": "3.1.1",
     "@fabulka/shared": "workspace:*",
     "@fontsource/andika": "^5.3.0",
     "@fontsource/comfortaa": "^5.3.0",
@@ -21,6 +22,7 @@
     "@fontsource/rubik": "^5.3.0",
     "@hookform/resolvers": "^5.9.2",
     "@tanstack/react-query": "^5.105.0",
+    "@xyflow/react": "12.12.0",
     "flag-icons": "7.5.0",
     "hyphen": "^1.14.1",
     "lucide-react": "^1.62.0",

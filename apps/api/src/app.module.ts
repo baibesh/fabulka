@@ -13,6 +13,8 @@ import { AdminAuthService } from './admin/admin-auth.service';
 import { AdminAuthController, AdminController } from './admin/admin.controller';
 import { InboxController } from './admin/inbox.controller';
 import { InboxService } from './admin/inbox.service';
+import { PipelineController } from './pipeline/pipeline.controller';
+import { PipelineService } from './pipeline/pipeline.service';
 import { AdminService } from './admin/admin.service';
 import { AuditController } from './audit/audit.controller';
 import { AuditInterceptor } from './audit/audit.interceptor';
@@ -133,6 +135,7 @@ class HealthController {
     AdminAuthController,
     AdminController,
     InboxController,
+    PipelineController,
     ExamplesAdminController,
     ReferencesController,
     TeamController,
@@ -168,6 +171,7 @@ class HealthController {
     AdminAuthService,
     AdminService,
     InboxService,
+    PipelineService,
     JournalAdminService,
     AuthService,
     StaffAccessService,
