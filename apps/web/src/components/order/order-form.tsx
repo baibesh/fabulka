@@ -1,8 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useQuery } from "@/lib/query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@/lib/query";
 import { CreateOrderSchema, cityName, formatName, type Book, type CreateOrderInput } from "@fabulka/shared";
 import { Printer } from "lucide-react";
 import { useParams } from "next/navigation";
@@ -202,7 +202,7 @@ export function OrderForm() {
         type="submit"
         size="lg"
         data-testid="place-order"
-        loading={order.isPending}
+        loading={order.isPending || order.isSuccess}
         disabled={!price || reformat.isPending}
         icon={<Printer className="size-5" />}
       >

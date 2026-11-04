@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   BLOCK_LIMITS,
   BOOK_LABELS,
@@ -23,7 +23,7 @@ import { Button, IconButton } from "../ui/button";
 import { Input, Textarea } from "../ui/input";
 import { useI18n } from "@/i18n/i18n";
 import { ApiError, getThemes, updateLayout, uploadPhoto } from "@/lib/api";
-import { useQuery } from "@/lib/query";
+import { useQuery, useMutation } from "@/lib/query";
 import { themeName, themeNote } from "@/lib/themes";
 import { PHOTO_ACCEPT, photoProblem, readDataUrl, shrinkPhoto } from "@/lib/photo-file";
 import { Card } from "../ui/card";

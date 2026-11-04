@@ -73,13 +73,19 @@ export function VoiceStep({
     await send(recordingToWav(recording.chunks, recording.sampleRate, MAX_SECONDS));
   };
 
+  // A second tap while the browser asks for the microphone does not start a second recorder.
+  const starting = useRef(false);
   const start = async () => {
+    if (starting.current || recorder.current) return;
     if (!canRecord()) return setState({ kind: "problem", message: "voice.error.unsupported" });
+    starting.current = true;
     try {
       recorder.current = await startRecording();
     } catch (error) {
       const denied = error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "SecurityError");
       return setState({ kind: "problem", message: denied ? "voice.error.denied" : "voice.error.unsupported" });
+    } finally {
+      starting.current = false;
     }
     startedAt.current = Date.now();
     setState({ kind: "recording", left: MAX_SECONDS });
@@ -152,7 +158,7 @@ export function VoiceStep({
             size="sm"
             data-testid="voice-sample"
             disabled={state.kind === "sending" || state.kind === "recording"}
-            onClick={() => void send(encodeWav(new Float32Array(2 * VOICE_SAMPLE_RATE), VOICE_SAMPLE_RATE))}
+            onClick={() => send(encodeWav(new Float32Array(2 * VOICE_SAMPLE_RATE), VOICE_SAMPLE_RATE))}
             className="text-muted"
           >
             {t("voice.sample")}

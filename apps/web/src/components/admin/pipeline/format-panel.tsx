@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import {
   FORMAT_PAGES_MAX,
   FORMAT_PAGES_MIN,

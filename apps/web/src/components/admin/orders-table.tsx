@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { ORDER_STATUSES, type OrderStatus } from "@fabulka/shared";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";

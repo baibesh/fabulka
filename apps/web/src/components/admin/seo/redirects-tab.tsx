@@ -1,7 +1,8 @@
 "use client";
 
 import { REDIRECT_INVALID, REDIRECT_PROBLEMS, type Redirect, type RedirectInput, type RedirectProblem } from "@fabulka/shared";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button, IconButton } from "@/components/ui/button";

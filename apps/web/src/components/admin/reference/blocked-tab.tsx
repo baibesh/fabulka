@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { COUNTRY_POLICY_BLOCKED, CountryCodeSchema, type AdminReference, type BlockedCountries } from "@fabulka/shared";
 import { ExternalLink, Plus, X } from "lucide-react";
 import { useState } from "react";

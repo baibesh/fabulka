@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import {
   BASE_LANGUAGES,
   CITY_ID_TAKEN,

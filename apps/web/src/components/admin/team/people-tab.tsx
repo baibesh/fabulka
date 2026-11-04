@@ -1,7 +1,8 @@
 "use client";
 
 import { SUPER_ROLE, type InviteResult, type StaffMember, type StaffRole } from "@fabulka/shared";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@/lib/query";
 import { MailPlus, Pencil, Send, UserCheck, UserX } from "lucide-react";
 import { useState } from "react";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
@@ -228,6 +229,7 @@ export function PeopleTab({ me }: { me: string | null }) {
                             size="sm"
                             variant="ghost"
                             data-testid="team-enable"
+                            loading={toggle.isPending && toggle.variables?.id === m.id}
                             icon={<UserCheck className="size-3.5" />}
                             onClick={() => toggle.mutate({ id: m.id, enabled: true })}
                           >
