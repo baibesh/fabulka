@@ -21,8 +21,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { GraphEdgeKind, GraphNodeId, NodeStats, PipelineGraph, PipelineGraphNode, PipelineStage, TraceNode } from "@fabulka/shared";
-import { Clock, Coins, ShieldAlert, TriangleAlert } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "@/components/ui/cx";
 import { formatSpendUsd, useAdminI18n } from "../ui";
 import { NODE_H, NODE_W, layoutGraph, type LayoutMode, type RoutedEdge } from "./layout";
@@ -49,6 +48,31 @@ interface PipeData extends Record<string, unknown> {
 }
 type PipeEdge = Edge<PipeData, "pipe">;
 
+/** Where each card's handles sit (see layout.ts for which edge uses which). */
+const handle = (id: string, type: "source" | "target", position: Position, fx: number, fy: number) => ({ id, type, position, x: fx * NODE_W - 0.5, y: fy * NODE_H - 0.5, width: 1, height: 1 });
+const HANDLES = [
+  handle("l", "target", Position.Left, 0, 0.5),
+  handle("t", "target", Position.Top, 0.5, 0),
+  handle("bt", "target", Position.Bottom, 0.35, 1),
+  handle("rt", "target", Position.Right, 1, 0.3),
+  handle("r", "source", Position.Right, 1, 0.5),
+  handle("b", "source", Position.Bottom, 0.65, 1),
+  handle("ls", "source", Position.Left, 0, 0.7),
+];
+
+/** Room around the fitted graph in pixels; more at the bottom for the minimap and the replay bar. */
+const FIT_PADDING = { top: 28, left: 28, right: 28, bottom: 112 };
+/** Room on the right while the side panel is open. */
+const PANEL_ROOM = 436;
+
+/** The box the laid-out graph takes, stage frames included. */
+function boundsOf(placed: ReturnType<typeof layoutGraph>) {
+  const boxes = [...Object.values(placed.positions).map((p) => ({ x: p!.x, y: p!.y, w: NODE_W, h: NODE_H })), ...placed.stages];
+  const x = Math.min(...boxes.map((b) => b.x));
+  const y = Math.min(...boxes.map((b) => b.y));
+  return { x, y, w: Math.max(...boxes.map((b) => b.x + b.w)) - x, h: Math.max(...boxes.map((b) => b.y + b.h)) - y };
+}
+
 const hidden = "!size-2 !min-w-0 !border-0 !bg-transparent";
 
 function StepCard({ data, selected }: NodeProps<StepNode>) {
@@ -66,7 +90,7 @@ function StepCard({ data, selected }: NodeProps<StepNode>) {
       data-state={state ?? undefined}
       style={{ width: NODE_W, height: NODE_H, ["--model" as string]: model.color }}
       className={cx(
-        "pipeline-card group relative flex flex-col gap-1.5 overflow-hidden rounded-2xl border bg-card px-3.5 py-3 text-left shadow-sm transition-[opacity,box-shadow,border-color] duration-300",
+        "pipeline-card group relative flex flex-col gap-1 overflow-hidden rounded-2xl border bg-card px-3.5 py-2.5 text-left shadow-sm transition-[opacity,box-shadow,border-color] duration-300",
         node.optional ? "border-dashed" : "border-solid",
         selected ? "border-[var(--model)] ring-2 ring-[var(--model)]/40" : "border-border hover:border-[var(--model)]/60",
         skipped && "opacity-35",
@@ -79,6 +103,7 @@ function StepCard({ data, selected }: NodeProps<StepNode>) {
       <Handle type="target" position={Position.Left} id="l" className={hidden} />
       <Handle type="target" position={Position.Top} id="t" className={hidden} />
       <Handle type="target" position={Position.Bottom} id="bt" className={hidden} style={{ left: "35%" }} />
+      <Handle type="target" position={Position.Right} id="rt" className={hidden} style={{ top: "30%" }} />
       <Handle type="source" position={Position.Right} id="r" className={hidden} />
       <Handle type="source" position={Position.Bottom} id="b" className={hidden} style={{ left: "65%" }} />
       <Handle type="source" position={Position.Left} id="ls" className={hidden} style={{ top: "70%" }} />
@@ -89,55 +114,53 @@ function StepCard({ data, selected }: NodeProps<StepNode>) {
         </span>
         <span className="truncate font-semibold text-muted">{t(`admin.pipeline.per.${node.per}`)}</span>
       </div>
-      <p className="truncate text-[15px] leading-tight font-extrabold">{t(`admin.pipeline.node.${node.id}`)}</p>
-      <div className="mt-auto flex items-center gap-2.5 text-[11px] text-muted tabular-nums">
+      <p className="truncate pb-0.5 text-[15px] leading-snug font-extrabold">{t(`admin.pipeline.node.${node.id}`)}</p>
+      <div className="mt-auto">
         {trace ? (
           ran ? (
-            <>
-              <span className="font-bold text-foreground">{t("admin.pipeline.trace.calls", { n: `${calls}/${ran.calls}` })}</span>
-              <span className="inline-flex items-center gap-0.5">
-                <Coins className="size-3" />
-                {formatSpendUsd(ran.costUsd)}
-              </span>
-              <span className="inline-flex items-center gap-0.5">
-                <Clock className="size-3" />
-                {ms(ran.latencyMs)}
-              </span>
-              {ran.refusals > 0 && (
-                <span className="inline-flex items-center gap-0.5 font-bold text-danger">
-                  <ShieldAlert className="size-3" />
-                  {ran.refusals}
-                </span>
-              )}
-            </>
+            <Figures
+              cells={[
+                { label: t("admin.pipeline.stat.calls"), value: `${calls}/${ran.calls}`, strong: true },
+                { label: t("admin.pipeline.stat.cost"), value: formatSpendUsd(ran.costUsd) },
+                { label: t("admin.pipeline.stat.latency"), value: ms(ran.latencyMs) },
+                { label: t("admin.pipeline.stat.refusals"), value: String(ran.refusals), tone: ran.refusals ? "danger" : undefined },
+              ]}
+            />
           ) : (
-            <span>{t(`admin.pipeline.when.${node.when}`)}</span>
+            <p className="truncate text-[11px] text-muted">{t(`admin.pipeline.when.${node.when}`)}</p>
           )
         ) : stats ? (
-          <>
-            <span className="font-bold text-foreground">
-              {number(stats.calls)} {t("admin.pipeline.stat.calls")}
-            </span>
-            <span className="inline-flex items-center gap-0.5">
-              <Coins className="size-3" />
-              {formatSpendUsd(stats.avgCostUsd)}
-            </span>
-            <span className="inline-flex items-center gap-0.5">
-              <Clock className="size-3" />
-              {ms(stats.avgLatencyMs)}
-            </span>
-            {stats.errors > 0 && (
-              <span className={cx("inline-flex items-center gap-0.5 font-bold", stats.errorRate >= 0.1 ? "text-danger" : "text-warning")}>
-                <TriangleAlert className="size-3" />
-                {percent(stats.errorRate, stats.errorRate < 0.1 ? 1 : 0)}
-              </span>
-            )}
-          </>
+          <Figures
+            cells={[
+              { label: t("admin.pipeline.stat.calls"), value: number(stats.calls), strong: true },
+              { label: t("admin.pipeline.stat.avgCost"), value: formatSpendUsd(stats.avgCostUsd) },
+              { label: t("admin.pipeline.stat.latency"), value: ms(stats.avgLatencyMs) },
+              {
+                label: t("admin.pipeline.stat.errors"),
+                value: percent(stats.errorRate, stats.errorRate > 0 && stats.errorRate < 0.1 ? 1 : 0),
+                tone: stats.errorRate >= 0.1 ? "danger" : stats.errors ? "warning" : undefined,
+              },
+            ]}
+          />
         ) : (
-          <span className="truncate">{node.optional ? t(`admin.pipeline.when.${node.when}`) : t("admin.pipeline.stat.none")}</span>
+          <p className="truncate text-[11px] text-muted">{node.optional ? t(`admin.pipeline.when.${node.when}`) : t("admin.pipeline.stat.none")}</p>
         )}
       </div>
     </div>
+  );
+}
+
+/** A card's four numbers: each value over its small label. */
+function Figures({ cells }: { cells: { label: string; value: string; strong?: boolean; tone?: "danger" | "warning" }[] }) {
+  return (
+    <dl className="grid grid-cols-4 gap-1.5 border-t border-border pt-1.5">
+      {cells.map((c) => (
+        <div key={c.label} className="flex min-w-0 flex-col-reverse">
+          <dt className="truncate text-[9.5px] text-muted">{c.label}</dt>
+          <dd className={cx("truncate text-[12px] leading-tight font-bold tabular-nums", c.tone === "danger" ? "text-danger" : c.tone === "warning" ? "text-warning" : c.strong ? "text-foreground" : "text-foreground/80")}>{c.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -219,11 +242,31 @@ export function GraphCanvas(props: GraphCanvasProps) {
 
 function Canvas({ graph, layout, selected, onSelect, stats, trace }: GraphCanvasProps) {
   const placed = useMemo(() => layoutGraph(graph, layout), [graph, layout]);
-  const { fitView } = useReactFlow();
+  const { setViewport } = useReactFlow();
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const panelOpen = selected !== null;
   useEffect(() => {
-    const id = requestAnimationFrame(() => void fitView({ padding: 0.08, duration: 400 }));
-    return () => cancelAnimationFrame(id);
-  }, [placed, fitView]);
+    const el = box.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  // Fit the graph to the canvas from the layout itself (no measuring): on load, on resize, when the
+  // layout changes, and with the side panel open the graph moves left of it so no card hides under it.
+  useEffect(() => {
+    if (!size) return;
+    const bounds = boundsOf(placed);
+    const pad = { ...FIT_PADDING, right: panelOpen ? PANEL_ROOM : FIT_PADDING.right };
+    const w = Math.max(100, size.w - pad.left - pad.right);
+    const h = Math.max(100, size.h - pad.top - pad.bottom);
+    const zoom = Math.min(w / bounds.w, h / bounds.h, 1.1);
+    void setViewport(
+      { x: pad.left + (w - bounds.w * zoom) / 2 - bounds.x * zoom, y: pad.top + (h - bounds.h * zoom) / 2 - bounds.y * zoom, zoom },
+      { duration: 300 },
+    );
+  }, [size, placed, panelOpen, setViewport]);
 
   const nodes = useMemo<(StepNode | StageNode)[]>(() => {
     const stages: StageNode[] = placed.stages.map((s) => ({
@@ -244,6 +287,8 @@ function Canvas({ graph, layout, selected, onSelect, stats, trace }: GraphCanvas
       position: placed.positions[node.id] ?? { x: 0, y: 0 },
       width: NODE_W,
       height: NODE_H,
+      // Handles are given, not measured: edges stay put while the replay redraws the cards.
+      handles: HANDLES,
       selected: node.id === selected,
       data: {
         node,
@@ -275,6 +320,7 @@ function Canvas({ graph, layout, selected, onSelect, stats, trace }: GraphCanvas
   );
 
   return (
+    <div ref={box} className="size-full">
     <ReactFlow
       nodes={nodes}
       edges={edges}
@@ -287,18 +333,17 @@ function Canvas({ graph, layout, selected, onSelect, stats, trace }: GraphCanvas
       onPaneClick={() => onSelect(null)}
       minZoom={0.2}
       maxZoom={1.6}
-      fitView
-      fitViewOptions={{ padding: 0.08 }}
       proOptions={{ hideAttribution: true }}
       className="pipeline-flow-root"
       style={{ ["--chain" as string]: MODEL_STYLE["muse-image"].color }}
     >
       <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="var(--border)" />
-      <Controls showInteractive={false} position="bottom-right" />
+      <Controls showInteractive={false} position="bottom-left" />
       <MiniMap
         pannable
         zoomable
-        position="top-right"
+        position="bottom-right"
+        style={{ width: 168, height: 96 }}
         className="!rounded-xl !border !border-border !bg-card"
         maskColor="color-mix(in oklab, var(--background) 70%, transparent)"
         nodeColor={(n) => (n.type === "stage" ? "transparent" : MODEL_STYLE[(n.data as StepData).node.model].color)}
@@ -306,5 +351,6 @@ function Canvas({ graph, layout, selected, onSelect, stats, trace }: GraphCanvas
         nodeBorderRadius={6}
       />
     </ReactFlow>
+    </div>
   );
 }

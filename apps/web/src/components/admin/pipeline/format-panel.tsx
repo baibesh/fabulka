@@ -107,6 +107,8 @@ export function FormatParams({ node, format, references }: { node: PipelineGraph
     onSuccess: (next) => {
       queryClient.setQueryData(["admin", "story-format", next.slug], next);
       void queryClient.invalidateQueries({ queryKey: ["admin", "story-formats"] });
+      // The panel stays open on the saved values (the graph redraws from the refetched format).
+      setDraft(bodyOf(next));
       setSaved(true);
     },
     onError: (error: Error) => setProblem(error.message),

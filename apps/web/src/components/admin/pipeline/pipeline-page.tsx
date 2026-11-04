@@ -143,6 +143,7 @@ export function PipelinePage() {
       {mode === "trace" && <BookPicker bookId={bookId} trace={trace.data} formatName={formatName} onPick={(id) => (setSelected(null), setParams({ book: id, mode: "trace" }))} />}
       {mode === "trace" && trace.error && <QueryState error={trace.error} scope="admin" />}
 
+      <Legend />
       <Board
         key={`${mode}-${bookId ?? ""}`}
         mode={mode}
@@ -218,7 +219,7 @@ function Board({
   };
 
   return (
-    <div className="relative min-h-[560px] flex-1 overflow-hidden rounded-[1.5rem] border border-border bg-card" style={{ height: "calc(100vh - 15rem)" }}>
+    <div className="relative min-h-[560px] flex-1 overflow-hidden rounded-[1.5rem] border border-border bg-card" style={{ height: "calc(100vh - 17rem)" }}>
       {mode === "trace" && !trace ? (
         <div className="flex h-full items-center justify-center p-8 text-center text-muted" data-testid="pipeline-trace-empty">
           {t("admin.pipeline.trace.pick")}
@@ -234,10 +235,10 @@ function Board({
         />
       )}
 
-      <Legend />
-
       {trace && length > 0 && (
-        <div className="absolute bottom-4 left-1/2 z-10 flex w-[min(40rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-3 rounded-2xl border border-border bg-card/95 px-4 py-2.5 shadow-lg backdrop-blur" data-testid="pipeline-replay">
+        <div
+          style={{ left: node ? "calc((100% - 26rem) / 2)" : "50%" }}
+          className="absolute bottom-4 z-10 flex w-[min(40rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-3 rounded-2xl border border-border bg-card/95 px-4 py-2.5 shadow-lg backdrop-blur" data-testid="pipeline-replay">
           {playing ? (
             <IconButton size="sm" variant="secondary" label={t("admin.pipeline.trace.pause")} data-testid="pipeline-pause" onClick={() => setPlaying(false)}>
               <Pause className="size-4" />
@@ -325,7 +326,7 @@ function Board({
                 )}
                 <section className="flex flex-col gap-2">
                   <h3 className="text-sm font-bold">{t("admin.pipeline.panel.params")}</h3>
-                  <FormatParams key={`${format.slug}-${node.id}-${format.updatedAt}`} node={node} format={format} references={stats?.references ?? []} />
+                  <FormatParams key={`${format.slug}-${node.id}`} node={node} format={format} references={stats?.references ?? []} />
                   <p className="text-[11px] text-muted">{t("admin.pipeline.panel.shape")}</p>
                   <FormatLink slug={format.slug} />
                 </section>
@@ -360,16 +361,16 @@ const LEGEND: { kind: GraphEdgeKind; color: string; dash?: string; width: number
 function Legend() {
   const { t } = useAdminI18n();
   return (
-    <div className="pointer-events-none absolute top-4 left-4 z-10 hidden max-w-[16rem] flex-col gap-2 rounded-2xl border border-border bg-card/95 px-3.5 py-3 text-[11px] shadow-sm backdrop-blur md:flex" data-testid="pipeline-legend">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 text-xs" data-testid="pipeline-legend">
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {(Object.keys(MODEL_STYLE) as (keyof typeof MODEL_STYLE)[]).map((m) => (
-          <span key={m} className="inline-flex items-center gap-1 font-semibold">
-            <span className="size-2 rounded-full" style={{ background: MODEL_STYLE[m].color }} />
+          <span key={m} className="inline-flex items-center gap-1.5 font-semibold">
+            <span className="size-2.5 rounded-full" style={{ background: MODEL_STYLE[m].color }} />
             {MODEL_STYLE[m].name}
           </span>
         ))}
       </div>
-      <ul className="flex flex-col gap-1 text-muted">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-muted">
         {LEGEND.map((l) => (
           <li key={l.kind} className="flex items-center gap-2">
             <svg width="28" height="6" aria-hidden className="shrink-0">

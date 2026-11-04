@@ -18,16 +18,23 @@ describe("layoutGraph", () => {
     });
   }
 
-  it("reads left to right by stage and keeps side steps beside their anchor", () => {
+  it("reads left to right in five columns, each stage framed, and routes edges by where cards sit", () => {
     const { positions, stages, edges } = layoutGraph(graph, "stages");
     expect(stages.map((s) => s.stage)).toEqual(["wizard", "inputs", "story", "sheets", "pictures", "layout", "after"]);
+    expect(new Set(graph.nodes.map((n) => positions[n.id]!.x)).size).toBe(5);
     expect(positions["story.write"]!.x).toBeGreaterThan(positions["toy.cutout"]!.x);
     expect(positions["frame.draw"]!.x).toBeGreaterThan(positions["sheet.cast"]!.x);
-    expect(positions["photo.delete"]!.y).toBe(positions["sheet.hero"]!.y);
-    expect(positions["photo.delete"]!.x).toBeGreaterThan(positions["sheet.hero"]!.x);
+    expect(positions["voice.transcribe"]!.x).toBe(positions["hero.describe"]!.x);
+    // Every card sits inside its stage's frame.
+    for (const node of graph.nodes) {
+      const box = stages.find((s) => s.stage === node.stage)!;
+      const p = positions[node.id]!;
+      expect(p.x >= box.x && p.x + NODE_W <= box.x + box.w && p.y >= box.y && p.y + NODE_H <= box.y + box.h).toBe(true);
+    }
     const route = (s: string, t: string) => edges.find((e) => e.source === s && e.target === t);
     expect(route("sheet.hero", "sheet.pet")).toMatchObject({ sourceHandle: "b", targetHandle: "t" });
     expect(route("story.review", "sheet.hero")).toMatchObject({ sourceHandle: "r", targetHandle: "l" });
-    expect(route("frame.rewrite", "frame.draw")).toMatchObject({ sourceHandle: "b", targetHandle: "bt" });
+    expect(route("frame.rewrite", "frame.draw")).toMatchObject({ sourceHandle: "r", targetHandle: "rt" });
+    expect(route("frame.draw", "frame.mask")).toMatchObject({ sourceHandle: "ls", targetHandle: "l" });
   });
 });

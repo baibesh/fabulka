@@ -40,7 +40,7 @@ export function TracePanel({ node, trace }: { node: GraphNodeId; trace: Pipeline
         {(
           [
             [t("admin.pipeline.stat.calls"), number(share.calls)],
-            [t("admin.journal.cost"), formatSpendUsd(share.costUsd)],
+            [t("admin.pipeline.stat.cost"), formatSpendUsd(share.costUsd)],
             [t("admin.pipeline.trace.modelTime"), ms(share.latencyMs)],
             [t("admin.pipeline.stat.refusals"), number(share.refusals)],
           ] as const
@@ -51,7 +51,7 @@ export function TracePanel({ node, trace }: { node: GraphNodeId; trace: Pipeline
           </div>
         ))}
       </dl>
-      {pictures.length > 0 && node !== "book.pdf" && (
+      {pictures.length > 0 && !frames.length && node !== "book.pdf" && (
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-bold">{t("admin.pipeline.trace.pictures")}</h3>
           <div className="grid grid-cols-3 gap-2">
