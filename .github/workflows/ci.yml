@@ -46,9 +46,15 @@ jobs:
         run: tapstep validate e2e/flows
 
   e2e:
-    name: E2E (tapstep, mock models)
+    name: E2E (tapstep, mock models) ${{ matrix.shard }}/4
     needs: check
     runs-on: ubuntu-latest
+    # Four shards, each with its own Postgres and stack: flows change shared settings, so they
+    # cannot run concurrently on one database. e2e/shard.sh balances the flows by size.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     services:
       postgres:
         image: postgres:17
@@ -94,7 +100,8 @@ jobs:
       - name: Run flows
         run: |
           set +e
-          tapstep test e2e/flows --config e2e/config.yaml --env-set ci --browser managed \
+          flows=$(./e2e/shard.sh ${{ matrix.shard }} 4)
+          tapstep test "$flows" --config e2e/config.yaml --env-set ci --browser managed \
             -e DATABASE_URL="$DATABASE_URL" --report junit --output reports/junit.xml
           code=$?
           # 1 = a flow failed (the product is red); 2 = tapstep could not run (infra).
@@ -105,12 +112,12 @@ jobs:
         uses: mikepenz/action-junit-report@v5
         with:
           report_paths: reports/junit.xml
-          check_name: E2E flows
+          check_name: E2E flows ${{ matrix.shard }}/4
       - name: Upload evidence
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-evidence
+          name: e2e-evidence-${{ matrix.shard }}
           path: |
             reports/
             e2e/*.log
