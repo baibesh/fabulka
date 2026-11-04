@@ -51,7 +51,6 @@ commands:
   - waitForVisible: { testId: pipeline-trace-book }
   - assertVisible: { contains: "${childName}", childOf: { testId: pipeline-trace-book } }
   - waitForVisible: { css: "[data-testid='pipeline-node-frame.draw'][data-state=done]" }
-  - scrollUntilVisible: { testId: pipeline-play }
   - tapOn: { testId: pipeline-play }
   # A mock run lasts seconds, so the replay may already be over: the bar itself is the check.
   - waitForVisible: { testId: pipeline-replay }
