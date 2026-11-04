@@ -35,9 +35,12 @@ const NAV: NavItem[] = [
   { href: "/admin/team", label: "admin.nav.team", icon: Users, permission: "team" },
 ];
 
+/** Whether a path is a section's address or under it; /admin/reference is not under /admin/references. */
+const isUnder = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
 /** The section a path belongs to: the nav entry whose address it is or is under. */
 export function sectionOf(pathname: string): AdminPermission {
-  const found = NAV.filter(({ href }) => href !== "/admin").find(({ href }) => pathname === href || pathname.startsWith(`${href}/`));
+  const found = NAV.filter(({ href }) => href !== "/admin").find(({ href }) => isUnder(pathname, href));
   return found?.permission ?? "dashboard";
 }
 
@@ -112,12 +115,13 @@ function AdminNav({ items, pathname }: { items: NavItem[]; pathname: string }) {
   return (
     <nav className="flex flex-1 basis-full gap-1 overflow-x-auto md:basis-auto md:flex-col">
       {items.map(({ href, label, icon: Icon }) => {
-        const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
+        const active = href === "/admin" ? pathname === href : isUnder(pathname, href);
         return (
           <Link
             key={href}
             href={keep(href)}
             data-testid={`admin-nav-${href.split("/")[2] ?? "dashboard"}`}
+            aria-current={active ? "page" : undefined}
             className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold whitespace-nowrap ${
               active ? "bg-accent/15 text-accent" : "text-muted hover:text-foreground"
             }`}

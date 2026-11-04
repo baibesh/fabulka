@@ -40,6 +40,14 @@ commands:
   - waitForVisible: { testId: pause-card, timeout: 15000 }
   - tapOn: { testId: admin-nav-reference }
   - waitForVisible: { testId: reference-tabs }
+  # Only the open section is marked: "reference" must not also light up "references".
+  - assertVisible: { css: "[data-testid=admin-nav-reference][aria-current=page]" }
+  - assertNotVisible: { css: "[data-testid=admin-nav-references][aria-current=page]" }
+  - tapOn: { testId: admin-nav-references }
+  - assertVisible: { css: "[data-testid=admin-nav-references][aria-current=page]" }
+  - assertNotVisible: { css: "[data-testid=admin-nav-reference][aria-current=page]" }
+  - tapOn: { testId: admin-nav-reference }
+  - waitForVisible: { testId: reference-tabs }
   - tapOn: { testId: reference-tab-countries }
   - waitForVisible: { css: "[data-testid=country-row][data-code=DE]" }
   # Print no longer has to be priced in tenge: euros and print together save.
