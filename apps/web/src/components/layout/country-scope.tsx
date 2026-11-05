@@ -1,7 +1,7 @@
 "use client";
 
 import { OTHER_COUNTRY, type Country, type CountryEntry } from "@fabulka/shared";
-import { HydrationBoundary, type DehydratedState } from "@tanstack/react-query";
+import { HydrationBoundary, hydrate, useQueryClient, type DehydratedState } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { CountryContext, adoptCountryList, adoptUnsavedCountry, countryChosen, migrateSettings, setCountry } from "@/i18n/i18n";
 import { whereAmI } from "@/lib/api";
@@ -53,9 +53,15 @@ export function CountryScope({
   // Taken over once, before the children render, so the client's first look at the list (and, with
   // no cookie yet, at the country) matches the server's (a newer list from GET /reference replaces
   // it later).
+  const queryClient = useQueryClient();
   useState(() => {
     adoptCountryList(countries);
     if (saved === null) adoptUnsavedCountry(country);
+    // On the server the page's Suspense fallback (the same page without this data) has already made
+    // these queries, empty. HydrationBoundary leaves queries that already exist to an effect, and
+    // effects never run on the server, so the HTML would lack what the browser then hydrates with
+    // (React #418, the page re-rendered). The browser has no such queries yet and fills them at once.
+    if (typeof window === "undefined") hydrate(queryClient, state);
   });
   useEffect(() => settleCountry(detected), [detected]);
   const value = useMemo(() => ({ country, countries }), [country, countries]);
